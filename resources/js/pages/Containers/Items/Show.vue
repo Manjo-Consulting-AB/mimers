@@ -11,6 +11,7 @@ import ItemIcon from '../../../components/ItemIcon.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
+import ItemOverviewCover from '../../../components/ItemOverviewCover.vue';
 import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
 import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
@@ -210,6 +211,14 @@ const props = defineProps({
      * ritas därför bara när varianten står i den här tabellen.
      */
     variants: { type: Object, required: true },
+    /*
+     * Itemets omslagsbild på översikten (issue 307 · [[M35 Itemets ikon och
+     * kartans kort]] § 307): `{ulid, variants}` ur
+     * App\Actions\Item\ResolveItemCover, eller null när itemet saknar bild.
+     * Varianterna har samma form som `variants` ovan, och adressen byggs av
+     * `coverUrl(cover, 'medium')` — `medium` när den finns, originalet annars.
+     */
+    cover: { type: Object, default: null },
     /*
      * Sant när användarfiler levereras från en egen origin (issue 61b
      * § Beslut 2). Är den falsk är allt `attachment`, och då ritas varken
@@ -903,12 +912,24 @@ function toggleFavorite() {
                 </dl>
 
                 <!--
-                    Snabbfakta (issue 154). Komponenten ritar ingenting när
+                    Omslagsbilden och snabbfakta (issue 307 · [[M35 Itemets
+                    ikon och kartans kort]] § 307): bilden till vänster och
+                    snabbfakta till höger från `md:`, och bilden ovanför
+                    under `md:`. Raden ritas bara när itemet har en bild —
+                    utan bild finns ingen ram, ingen platshållare och ingen
+                    tom flexrad, och snabbfakta tar hela bredden. Ett item
+                    med bild men utan snabbfakta visar bara bilden.
+
+                    Snabbfakta (issue 154): komponenten ritar ingenting när
                     ingen av de tre uppgifterna har ett värde — ingen
                     rubrik över en tom lista — och urvalet bor i
                     itemPresentation.js så att regeln går att pröva i node.
                 -->
-                <ItemQuickFacts :item="item" :locale="locale" />
+                <div v-if="cover" class="flex flex-col gap-6 md:flex-row md:items-start">
+                    <ItemOverviewCover :cover="cover" :alt="item.name" class="md:w-64 md:shrink-0" />
+                    <ItemQuickFacts :item="item" :locale="locale" class="md:flex-1" />
+                </div>
+                <ItemQuickFacts v-else :item="item" :locale="locale" />
 
                 <!--
                     Vägen till resten av fälten (issue 154). Adressen är

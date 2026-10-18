@@ -4,6 +4,7 @@ use App\Actions\Item\ResolveItemCover;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -594,4 +595,164 @@ it('har ingen ny kolumn på attachment', function () {
         'updated_at',
         'uploaded_by_user_id',
     ]);
+});
+
+/*
+ * Klart när (issue 307): ett item med en vald bild visar den på översikten.
+ *
+ * Detaljvyn får den upplösta bilden som `{ulid, variants}`, BREDVID
+ * `ItemResource` (samma linje som `variants` i issue 61b) — inte som en
+ * ULID eller ett resursfält. Valet är den NYASTE bilden med flit: steg 2
+ * hade valt den äldsta, så testet hade varit grönt även om valet ignorerades.
+ */
+it('skickar den valda bilden som omslag till detaljvyn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = omslagKontext();
+    $item = omslagItem($container);
+    omslagBilaga($item, 'gammal.jpg');
+    $ny = omslagBilaga($item, 'ny.jpg');
+
+    omslagVal($item, $ny);
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$item->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Show')
+            ->where('cover.ulid', $ny->ulid)
+            ->where('cover.variants', [])
+        );
+});
+
+/*
+ * Klart när (issue 307): ett item med bilder men utan val visar den äldsta.
+ *
+ * Samma regel som listan — upplösningen är App\Actions\Item\ResolveItemCover
+ * och inte en egen i kontrollern.
+ */
+it('skickar den äldsta bilden när inget val är gjort', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = omslagKontext();
+    $item = omslagItem($container);
+    $aldsta = omslagBilaga($item, 'gammal.jpg');
+    omslagBilaga($item, 'ny.jpg');
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$item->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('cover.ulid', $aldsta->ulid)
+        );
+});
+
+/*
+ * Klart när (issue 307): ett item utan bild får `cover: null` — vyn ritar då
+ * ingen ram och ingen platshållare. Ett dokument är inte en bild, samma urval
+ * som listan.
+ */
+it('skickar inget omslag när itemet saknar bild', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = omslagKontext();
+    $item = omslagItem($container);
+    omslagBilaga($item, 'manual.pdf', 'document');
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$item->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('cover', null)
+        );
+});
+
+/*
+ * Klart när (issue 307): `medium` används när varianten finns och annars
+ * originalet.
+ *
+ * Formen är densamma som `variants`-proppen: de varianter som FINNS, i
+ * modulens sorterade ordning. Vilken variant som väljs ur listan är
+ * `coverUrl`s regel och prövas i tests/Feature/Frontend/ContainerbildvyTest.
+ */
+it('skickar varianterna för omslagsbilagan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = omslagKontext();
+    $item = omslagItem($container);
+    $bild = omslagBilaga($item, 'foto.jpg');
+
+    ImageDerivative::factory()->create([
+        'stored_file_id' => $bild->stored_file_id,
+        'variant' => 'medium',
+    ]);
+    ImageDerivative::factory()->create([
+        'stored_file_id' => $bild->stored_file_id,
+        'variant' => 'thumb',
+    ]);
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$item->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('cover.ulid', $bild->ulid)
+            ->where('cover.variants', ['medium', 'thumb'])
+        );
+});
+
+/*
+ * Klart när (issue 307): antalet frågor för itemets sida ökar med högst en.
+ *
+ * Omslaget löses med EN fråga, och varianterna läses ur de bilagor sidan redan
+ * hämtat — alltså växer antalet frågor inte med antalet bilder eller derivat.
+ * Provet jämför en sida med en bild mot en med fem bilder och tio derivat:
+ * lika många frågor bevisar att ingen av dem kostar en egen fråga per rad.
+ */
+it('frågar inte mer för fler bilder eller derivat', function () {
+    // Tiden fryst: varje fil som räknar frågor med DB::listen gör det, se
+    // tests/Feature/Testinfrastruktur/FragerakningTest.php (issue 477).
+    Carbon::setTestNow(now());
+
+    withoutVite();
+
+    [, $anvandare, $container] = omslagKontext();
+
+    $enkel = omslagItem($container, 'En bild');
+    omslagBilaga($enkel, 'foto.jpg');
+
+    $rik = omslagItem($container, 'Fem bilder');
+    foreach (range(1, 5) as $nummer) {
+        $bilaga = omslagBilaga($rik, "foto-{$nummer}.jpg");
+
+        foreach (['medium', 'thumb'] as $variant) {
+            ImageDerivative::factory()->create([
+                'stored_file_id' => $bilaga->stored_file_id,
+                'variant' => $variant,
+            ]);
+        }
+    }
+
+    // Den första förfrågan i ett prov värmer upp ramverket och kostar några
+    // frågor som de följande inte gör. Den mäts därför inte.
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$enkel->ulid}")
+        ->assertOk();
+
+    $räkna = function (Item $item) use ($anvandare, $container): int {
+        $antal = 0;
+
+        DB::listen(function () use (&$antal) {
+            $antal++;
+        });
+
+        actingAs($anvandare)
+            ->get("/containers/{$container->ulid}/items/{$item->ulid}")
+            ->assertOk();
+
+        return $antal;
+    };
+
+    expect($räkna($rik))->toBe($räkna($enkel));
+
+    Carbon::setTestNow();
 });

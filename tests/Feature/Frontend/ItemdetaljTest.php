@@ -615,3 +615,88 @@ it('ritar itemets ikon före rubriken i storleken 24', function () {
 
     expect(strpos($vyn, '<ItemIcon'))->toBeLessThan(strpos($vyn, '<h1'));
 });
+
+/*
+ * Klart när (issue 307): omslagsbilden ritas med `object-contain` inom en ruta
+ * med fast maxhöjd och beskärs aldrig.
+ *
+ * `max-h-64` håller höjden och `object-contain` skalar hela bilden inom rutan.
+ * `object-cover` är förbjudet här: det fyller rutan men klipper bilden, och
+ * itemets foto ska synas i sin helhet (till skillnad från containerns bild,
+ * som är en dekorativ yta).
+ */
+it('ritar omslagsbilden med object-contain i en ruta med fast maxhöjd', function () {
+    $bilden = itemdetaljKomponent('components/ItemOverviewCover.vue');
+
+    expect($bilden)->toContain('max-h-64')
+        ->and($bilden)->toContain('object-contain')
+        ->and($bilden)->not->toContain('object-cover')
+        ->and($bilden)->not->toContain('object-none');
+});
+
+/*
+ * Klart när (issue 307): `medium` används när varianten finns och annars
+ * originalet.
+ *
+ * Adressen byggs av `coverUrl(cover, 'medium')` ur coverPresentation.js —
+ * aldrig av en egen variantkedja i komponenten. Regeln (begärd variant om den
+ * finns i `cover.variants`, annars originalet) prövas i
+ * tests/Feature/Frontend/ContainerbildvyTest där den bor.
+ */
+it('ber om medium och faller tillbaka på originalet', function () {
+    $bilden = itemdetaljKomponent('components/ItemOverviewCover.vue');
+
+    expect($bilden)->toContain("import { coverUrl } from './coverPresentation.js'")
+        ->and($bilden)->toContain("coverUrl(props.cover, 'medium')")
+        ->and($bilden)->not->toContain('includes');
+});
+
+/*
+ * Klart när (issue 307): `alt` är itemets namn.
+ *
+ * Bilden står ensam på smala skärmar och bär därför itemets namn; en tom
+ * alt-text hade gömt den för en skärmläsare.
+ */
+it('ger omslagsbilden itemets namn som alt-text', function () {
+    $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
+
+    $bilden = itemdetaljTagg($vy, 'ItemOverviewCover');
+
+    expect($bilden)->toContain(':cover="cover"')
+        ->and($bilden)->toContain(':alt="item.name"');
+});
+
+/*
+ * Klart när (issue 307): från `md:` står bilden till vänster om *Quick facts*
+ * och under `md:` ovanför.
+ *
+ * Ordningen i DOM:en ger vänster/höger i `md:flex-row`; `flex-col` staplar
+ * dem under `md:` med bilden först. Komponenterna äger ingen egen placering.
+ */
+it('ställer bilden till vänster om snabbfakta från md och ovanför under md', function () {
+    $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
+
+    expect($vy)->toContain("import ItemOverviewCover from '../../../components/ItemOverviewCover.vue'")
+        ->and($vy)->toContain('v-if="cover"')
+        ->and($vy)->toContain('flex-col gap-6 md:flex-row md:items-start');
+
+    expect(strpos($vy, '<ItemOverviewCover'))->toBeLessThan(strpos($vy, '<ItemQuickFacts'));
+
+    // Utan bild ritas ingen flexrad alls; då står snabbfakta ensam i hela
+    // bredden (`v-else`), inte i en tom tvåkolumnsrad.
+    expect($vy)->toContain('<ItemQuickFacts v-else');
+});
+
+/*
+ * Klart när (issue 307): utan bild ritas ingen ram och ingen platshållare.
+ *
+ * Hela komponenten är en `<img v-if="url">` — ingen wrapper och ingen neutral
+ * yta. `coverUrl` svarar null utan `cover`, så villkoret räcker.
+ */
+it('ritar ingen ram eller platshållare utan bild', function () {
+    $bilden = itemdetaljKomponent('components/ItemOverviewCover.vue');
+
+    expect($bilden)->toContain('v-if="url"')
+        ->and($bilden)->not->toContain('<div')
+        ->and($bilden)->not->toContain('bg-surface-sunken');
+});

@@ -656,7 +656,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover): Response
     {
         Gate::authorize('view', $item);
 
@@ -747,6 +747,19 @@ class ItemController extends Controller
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
+
+        // Bilagans ULID → de varianter som faktiskt finns (issue 61b
+        // § Beslut 1). Räknas EN gång och bärs av både `variants` och
+        // `cover` nedan.
+        $variants = $this->variants($attachments);
+
+        // Översiktens omslagsbild (issue 307 · [[M35 Itemets ikon och
+        // kartans kort]] § 307). Upplösningen är samma Action som listan
+        // använder — vald bilaga, annars den äldsta bilden, annars ingen —
+        // och kostar EN fråga. Varianterna läses ur `$variants` och inte ur
+        // den upplösta bilagan, så inga derivat frågas per bilaga: sidan
+        // hade redan hämtat dem med `storedFile.derivatives` ovan.
+        $cover = $resolveItemCover->handle($item);
 
         // Schemana kommer med detaljvyns props och aldrig ur ett eget anrop
         // (issue 63a § Beslut 1 och 9). Sorteringen är `title` stigande — den
@@ -875,7 +888,17 @@ class ItemController extends Controller
             // § Beslut 1). Ligger BREDVID resursen och inte i den: vilka
             // varianter som finns är vyens fråga, och AttachmentResource är
             // `/api`:s format som den här issuen inte rör.
-            'variants' => $this->variants($attachments),
+            'variants' => $variants,
+
+            // Itemets omslagsbild på översikten (issue 307):
+            // `{ulid, variants}` eller null, med samma form och samma regel
+            // som `variants` ovan. Ligger BREDVID resursen av samma skäl —
+            // `ItemResource` är `/api`:s format och har inte bett om fältet
+            // (samma linje som `cover` i redigeringsvyn, issue 93).
+            'cover' => $cover === null ? null : [
+                'ulid' => $cover->ulid,
+                'variants' => $variants[$cover->ulid] ?? [],
+            ],
 
             // Schemana ur App\Http\Resources\ScheduleResource — samma format
             // och samma sortering som `Api\ScheduleController::index()` — och
