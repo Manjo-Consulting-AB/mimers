@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ItemIcon from './ItemIcon.vue';
 import ItemTagList from './ItemTagList.vue';
 import UiIcon from './UiIcon.vue';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
@@ -18,8 +19,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  * föräldraväljaren (issue 153) ritar trädet som förut.
  *
  * **Containern är rotraden** (§ 2). Den har containerns namn och ingenting i
- * de andra kolumnerna, och trädets rötter står under den. Raden är öppen från
- * början, så trädet ser ut som i dag tills någon fäller upp en gren.
+ * de andra kolumnerna, och trädets rötter står under den. Raden fälls aldrig
+ * ihop ([[ADR-0060 Itemets ikon]] § 10): i stället för en fällknapp bär den
+ * containerns ikon, och trädets rötter syns alltid. Ikonen står i samma
+ * 44 px-kolumn som rötternas fällknappar, så att toppnivåns items står i
+ * linje under den.
+ *
+ * **Itemraden bär itemets ikon** ([[ADR-0060 Itemets ikon]] § 6 och 10).
+ * `ItemIcon` med `tile` står mellan fällknappen — eller platshållaren för
+ * ett löv — och namnet, i storleken 20. Ikonen kommer ur radens celler
+ * tillsammans med de övriga kolumnerna, så vyn ritar den utan att slå upp
+ * något själv.
  *
  * **Noderna är förekomster och inte items**, samma regel som i
  * `ItemStructureTree.vue`: ett item med två föräldrar står på båda ställena.
@@ -46,17 +56,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Tillståndet bor i den här instansen.** `open` nycklas på ledet, så samma
  * item på två ställen fälls upp var för sig — samma val som
- * `ItemStructureTree` gjorde. `containerOpen` är rotradens egen flagga och
- * börjar sann.
+ * `ItemStructureTree` gjorde.
  *
  * **`expandAll` är *Expand all* i filterraden** (issue 295 · [[ADR-0058
  * Trädet som tabell]] § 6). Flaggan ägs av vyn och kommer hit som en propp,
  * eftersom knappen står i filterraden och inte i tabellen. När den slås på
  * är varje gren öppen som standard; ett eget tryck på en fällknapp vinner
  * fortfarande över flaggan. Varje växling av flaggan glömmer de egna
- * trycken, så att en andra tryckning landar i utgångsläget — rotraden öppen
- * och, med filter, grenarna till träffarna — och inte i en blandning av
- * gamla tryck.
+ * trycken, så att en andra tryckning landar i utgångsläget — och, med
+ * filter, grenarna till träffarna — och inte i en blandning av gamla tryck.
+ * Rötterna rörs inte: de syns alltid, och rotraden har ingen fällknapp att
+ * växla.
  *
  * **Smal skärm** (§ 8): under `md:` ritas bara namnet, med kategorin som
  * undertext. Kolumnerna kommer fram från `md:`; tabellen skrollar aldrig i
@@ -66,9 +76,9 @@ const props = defineProps({
     /* Trädets rötter ur `structure`-proppen: `{ulid, name, match, children}`. */
     nodes: { type: Array, required: true },
     /*
-     * Item-ULID → `{category, tags, documents, tasks, updated_at}`, ur
-     * App\Actions\Item\ResolveItemTreeRows. Samma form som sidans `treeRows`-
-     * propp; vyn räknar ingenting själv.
+     * Item-ULID → `{category, tags, documents, tasks, updated_at, icon,
+     * icon_color}`, ur App\Actions\Item\ResolveItemTreeRows. Samma form som
+     * sidans `treeRows`-propp; vyn räknar ingenting själv.
      */
     treeRows: { type: Object, default: () => ({}) },
     containerUlid: { type: String, required: true },
@@ -89,9 +99,6 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const { eventDate } = useRelativeDate();
-
-/* Rotradens gren: öppen från början (§ 2). */
-const containerOpen = ref(true);
 
 /* Den här instansens fällda grenar, nycklade på ledet. */
 const open = ref({});
@@ -115,13 +122,13 @@ function isOpen(key) {
 
 /*
  * En växling av *Expand all* nollställer de egna trycken: påslagen öppnar
- * flaggan allt, och avslagen lämnar den utgångsläget kvar — rotraden öppen
- * och, med filter, grenarna till träffarna (§ 6). Utan nollställningen hade
- * en andra tryckning återvänt till en blandning av tryck gjorda däremellan.
+ * flaggan allt, och avslagen lämnar den utgångsläget kvar — med filter
+ * grenarna till träffarna (§ 6). Utan nollställningen hade en andra tryckning
+ * återvänt till en blandning av tryck gjorda däremellan. Rotraden rörs inte:
+ * rötterna syns alltid ([[ADR-0060 Itemets ikon]] § 10).
  */
 watch(() => props.expandAll, () => {
     open.value = {};
-    containerOpen.value = true;
 });
 
 function toggle(key) {
@@ -148,8 +155,8 @@ function walk(nodes, trail, depth, rows) {
     return rows;
 }
 
-/* Rotradens gren: är den stängd ritas inga itemrader alls. */
-const visibleRows = computed(() => (containerOpen.value ? walk(props.nodes, [], 0, []) : []));
+/* Rötterna syns alltid: rotraden har ingen gren att fälla (§ 10). */
+const visibleRows = computed(() => walk(props.nodes, [], 0, []));
 
 function nodeHref(row) {
     return `/containers/${props.containerUlid}/items/${row.node.ulid}?path=${row.key}`;
@@ -202,29 +209,17 @@ function isMatch(node) {
 
         <tbody>
             <!--
-                Containern som rotrad (§ 2): namn, ingen länk och ingenting i
-                de andra kolumnerna. Fällknappen styr trädets rötter och bär
-                samma etiketter som trädets övriga knappar.
+                Containern som rotrad (§ 2, [[ADR-0060 Itemets ikon]] § 10):
+                namn, ingen länk, ingen fällknapp och ingenting i de andra
+                kolumnerna. Ikonen står i samma 44 px-kolumn som itemradernas
+                fällknappar, så att toppnivåns items står i linje under den.
             -->
             <tr class="border-b border-border bg-surface-muted">
                 <td class="py-1 pr-4 text-body">
                     <div class="flex items-center gap-1">
-                        <button
-                            type="button"
-                            :aria-expanded="containerOpen ? 'true' : 'false'"
-                            :aria-label="containerOpen
-                                ? t('item.structure.collapse', { name: containerName })
-                                : t('item.structure.expand', { name: containerName })"
-                            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                            @click="containerOpen = ! containerOpen"
-                        >
-                            <UiIcon
-                                name="chevron-right"
-                                :size="16"
-                                class="h-4 w-4"
-                                :class="containerOpen ? 'rotate-90' : ''"
-                            />
-                        </button>
+                        <span class="inline-flex min-w-11 shrink-0 items-center justify-center">
+                            <UiIcon name="container" :size="20" tile="neutral" />
+                        </span>
 
                         <span class="inline-flex min-h-11 items-center px-2 font-semibold text-ink">
                             {{ containerName }}
@@ -275,6 +270,19 @@ function isMatch(node) {
 
                         <!-- Håller namnet i linje med de rader som har en knapp. -->
                         <span v-else class="inline-block min-w-11 shrink-0" aria-hidden="true"></span>
+
+                        <!--
+                            Itemets ikon mellan fällknappen (eller platshållaren)
+                            och namnet ([[ADR-0060 Itemets ikon]] § 6 och 10).
+                            Ett item utan ikon ritar den neutrala i samma ruta.
+                        -->
+                        <ItemIcon
+                            :name="cells(row.node).icon"
+                            :color="cells(row.node).icon_color"
+                            :size="20"
+                            tile
+                            class="shrink-0"
+                        />
 
                         <div class="flex min-w-0 flex-col">
                             <Link

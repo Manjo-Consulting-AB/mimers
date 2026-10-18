@@ -444,8 +444,10 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
 
     <!--
         Trädläget (issue 154, tabell sedan issue 294 · [[ADR-0058 Trädet som
-        tabell]]): containerns struktur som tabell, med containern som öppen
-        rotrad och kolumnerna ur `treeRows`. Sedan issue 293 tar trädet samma
+        tabell]]): containerns struktur som tabell, med containern som rotrad
+        och kolumnerna ur `treeRows`. Rotraden fälls aldrig ihop
+        ([[ADR-0060 Itemets ikon]] § 10): den bär containerns ikon och
+        rötterna syns alltid. Sedan issue 293 tar trädet samma
         filter som listan (§ 5): servern skickar träffarna och vägen ned till
         dem, och varje nod bär `match`. Varje led är en länk till sitt item
         (`?path=` följer med, se ItemTreeTable.vue).

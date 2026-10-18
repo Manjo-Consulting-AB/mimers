@@ -13,8 +13,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Kolumnerna till trädtabellen — item-ULID → `{category, tags, documents,
- * tasks, updated_at}` för exakt de items som står i trädet, se
- * [[ADR-0058 Trädet som tabell]] § 1, 3 och 4 och issue 292.
+ * tasks, updated_at, icon, icon_color}` för exakt de items som står i trädet,
+ * se [[ADR-0058 Trädet som tabell]] § 1, 3 och 4, [[ADR-0060 Itemets ikon]]
+ * § 6 och 10 och issue 292 och 304.
  *
  * **Räkningen görs på trädet och aldrig på containern.** Trädet kommer ur
  * App\Actions\Item\ResolveItemTree och är redan omfångsfiltrerat
@@ -47,6 +48,8 @@ class ResolveItemTreeRows
      *     documents: int,
      *     tasks: int,
      *     updated_at: string,
+     *     icon: string|null,
+     *     icon_color: string|null,
      * }>
      */
     public function handle(Container $container, ItemTree $tree): array
@@ -65,7 +68,7 @@ class ResolveItemTreeRows
             ->with(['category', 'tags'])
             ->orderBy('name')
             ->orderBy('id')
-            ->get(['id', 'ulid', 'name', 'category_id', 'updated_at']);
+            ->get(['id', 'ulid', 'name', 'category_id', 'updated_at', 'icon', 'icon_color']);
 
         if ($items->isEmpty()) {
             return [];
@@ -85,6 +88,8 @@ class ResolveItemTreeRows
                 'documents' => (int) ($documents[$item->id] ?? 0),
                 'tasks' => (int) ($tasks[$item->id] ?? 0),
                 'updated_at' => $item->updated_at->toIso8601String(),
+                'icon' => $item->icon,
+                'icon_color' => $item->icon_color,
             ];
         }
 

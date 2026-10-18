@@ -23,8 +23,8 @@ use function Pest\Laravel\withoutVite;
  * index() och [[ADR-0058 Trädet som tabell]] § 1, 3 och 4.
  *
  * Filen prövar svaret, inte upplösningens inre: `treeRows` är item-ULID →
- * `{category, tags, documents, tasks, updated_at}` för exakt de items som
- * står i `structure`, och `null` i list- och kartläget.
+ * `{category, tags, documents, tasks, updated_at, icon, icon_color}` för
+ * exakt de items som står i `structure`, och `null` i list- och kartläget.
  *
  * De två talen följer ADR-0028:s omfång: en mottagare med en itemgrant får
  * bara poster för de items trädet bär. Den regeln — och att räkningen aldrig
@@ -305,6 +305,33 @@ it('räknar aktiva förekomster på itemets egna levande scheman', function () {
         fn (AssertableInertia $page) => $page
             ->where('treeRows.'.$item->ulid.'.tasks', 2)
             ->where('treeRows.'.$barnet->ulid.'.tasks', 1)
+    );
+});
+
+/*
+ * Klart när (issue 304 · [[ADR-0060 Itemets ikon]] § 6 och 10): `icon` och
+ * `icon_color` står i radens celler, med `null` när itemet inte valt någon.
+ *
+ * Fälten hämtas i samma fråga som de övriga kolumnerna, så trädets
+ * frågekostnad är oförändrad — det prövas av provet nedanför.
+ */
+it('ger itemets ikon och färg i radens celler', function () {
+    withoutVite();
+
+    [$container, $anvandare] = tradradKontext();
+
+    $medIkon = tradradItem($container, 'Motorn', [
+        'icon' => 'droplet',
+        'icon_color' => 'blue',
+    ]);
+    $utanIkon = tradradItem($container, 'Masten');
+
+    actingAs($anvandare)->get(tradradUrl($container, 'view=tree'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('treeRows.'.$medIkon->ulid.'.icon', 'droplet')
+            ->where('treeRows.'.$medIkon->ulid.'.icon_color', 'blue')
+            ->where('treeRows.'.$utanIkon->ulid.'.icon', null)
+            ->where('treeRows.'.$utanIkon->ulid.'.icon_color', null)
     );
 });
 
