@@ -1,6 +1,6 @@
 # ADR-0062 Kartans luft, listans ruta och den löpande sökningen
 
-**Status:** Antagen 2026-10-18 · Ändrar [[ADR-0061 Kartans kort och kanter]] § 3 (öppna-ikonen och plusmenyn), § 5 (inga pilspetsar) och § 7 (avstånden och de relaterades sidor) · Ändrar [[ADR-0060 Itemets ikon]] § 9 för listan: bild eller ikon, aldrig båda · Ändrar issue 59a § Beslut 1 för containerns filterrad: den söker medan man skriver · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ändrar [[ADR-0061 Kartans kort och kanter]] § 3 (öppna-ikonen och plusmenyn), § 5 (inga pilspetsar) och § 7 (avstånden och de relaterades sidor) · Ändrar [[ADR-0060 Itemets ikon]] § 9 för listan: bild eller ikon, aldrig båda · Ändrar issue 59a § Beslut 1 för containerns filterrad: den söker medan man skriver · Konsekvensen om `FocusMap` ändrad av [[ADR-0063 Itemets karta i containerkartans form]] · [[ADR-index]]
 
 Tonys beslut 2026-10-18, vid genomgången av kartan i v0.23.1 (`docs/Design/findings/map_20261018_135350.png`) och av itemlistan.
 

@@ -226,6 +226,8 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | cover_attachment_id | FK → attachment NULL | Containerns bild, se [[ADR-0047 Containerns bild]] och [[Filer och lagring]] § attachment |
 | cover_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
 | cover_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
+| icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case, som `item.icon`. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0064 Containerns ikon]] |
+| icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.
