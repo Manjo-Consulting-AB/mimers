@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import ItemIcon from './ItemIcon.vue';
+import ItemIconPicker from './ItemIconPicker.vue';
 import ParentPicker from './ParentPicker.vue';
 import UiButton from './UiButton.vue';
 import UiCheckbox from './UiCheckbox.vue';
@@ -98,6 +100,15 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * Skapandeläget skickar inte `cover` alls — itemet har inga bilagor än, och
  * `StoreItemRequest` tar inte emot fältet.
+ *
+ * **Ikonen väljs i redigeringsläget och bara där** (issue 302 ·
+ * [[ADR-0060 Itemets ikon]] § 8). Ett item som just skapas har ingen ikon att
+ * visa, och sektionen ritas därför i samma gren som omslagsbilden: `item` är
+ * inte null. De nuvarande värdena är itemets egna kolumner i `ItemResource`,
+ * och de skickas alltid med PATCH — `UpdateItemRequest` säger
+ * `sometimes|nullable`, så ett uttryckligt `null` tömmer båda. Väljaren
+ * (ItemIconPicker.vue) håller inget eget utkast: varje klick skriver det
+ * valda paret här, och *Done* stänger bara arket.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -162,6 +173,15 @@ const fields = {
      * se docblocket.
      */
     ...(showCover.value ? { cover: props.cover ?? null } : {}),
+    /*
+     * Ikonen och färgen (issue 302): itemets egna kolumner, bara i
+     * redigeringsläget. Ett item som skapas har inget val att bära, och
+     * `StoreItemRequest` får dem inte heller av det här formuläret.
+     */
+    ...(props.item !== null ? {
+        icon: props.item.icon ?? null,
+        icon_color: props.item.icon_color ?? null,
+    } : {}),
 };
 
 const form = useForm(props.item === null
@@ -192,6 +212,29 @@ function openPicker(element) {
 function chooseParent(node) {
     location.value = node;
     form.parent = node?.ulid ?? null;
+}
+
+/*
+ * Ikonen (issue 302). Väljaren skickar hela paret, så ikonen och färgen
+ * aldrig kan visa två olika val; *Remove icon* tömmer båda, för en färg utan
+ * ikon är inget val.
+ */
+const iconPickerOpen = ref(false);
+const iconTrigger = ref(null);
+
+function openIconPicker(element) {
+    iconTrigger.value = element;
+    iconPickerOpen.value = true;
+}
+
+function chooseIcon({ icon, color }) {
+    form.icon = icon;
+    form.icon_color = color;
+}
+
+function removeIcon() {
+    form.icon = null;
+    form.icon_color = null;
 }
 
 /*
@@ -321,6 +364,37 @@ function submit() {
             :trigger="changeTrigger"
             @choose="chooseParent"
             @close="pickerOpen = false"
+        />
+
+        <!-- Ikonen: den nuvarande ikonen med sin ruta, eller den neutrala,
+             och knappen som öppnar väljaren (issue 302 · [[ADR-0060 Itemets
+             ikon]] § 8). Sektionen ritas bara i redigeringsläget — ett item
+             som just skapas har ingen ikon att visa. -->
+        <div v-if="item !== null" class="flex flex-col gap-2">
+            <p class="text-body font-medium text-ink">{{ t('item.form.icon') }}</p>
+
+            <div class="flex items-center gap-2">
+                <ItemIcon :name="form.icon" :color="form.icon_color" :size="24" tile />
+
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="openIconPicker($event.currentTarget)"
+                >
+                    {{ t('item.form.icon_choose') }}
+                </button>
+            </div>
+        </div>
+
+        <ItemIconPicker
+            v-if="item !== null"
+            :open="iconPickerOpen"
+            :icon="form.icon"
+            :color="form.icon_color"
+            :trigger="iconTrigger"
+            @choose="chooseIcon"
+            @remove="removeIcon"
+            @close="iconPickerOpen = false"
         />
 
         <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst

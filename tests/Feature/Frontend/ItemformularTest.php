@@ -772,6 +772,20 @@ it('har varje item-nyckel', function () {
         expect(array_keys($en['item'][$grupp]))->toBe(array_keys($sv['item'][$grupp]));
 
         foreach ($sv['item'][$grupp] as $nyckel => $varde) {
+            /*
+             * `icon_colors` (issue 302) är en nästlad grupp och inte en
+             * mening: färgernas ord hör till paletten, och väljaren slår upp
+             * dem en nyckel i taget. Varje värde prövas därför för sig.
+             */
+            if (is_array($varde)) {
+                foreach ($varde as $under => $text) {
+                    expect(trim($text))->not->toBe('', "item.{$grupp}.{$nyckel}.{$under} är");
+                    expect(trim($en['item'][$grupp][$nyckel][$under]))->not->toBe('', "item.{$grupp}.{$nyckel}.{$under} är tom på en");
+                }
+
+                continue;
+            }
+
             expect(trim($varde))->not->toBe('', "item.{$grupp}.{$nyckel} är");
             expect(trim($en['item'][$grupp][$nyckel]))->not->toBe('', "item.{$grupp}.{$nyckel} är tom på en");
         }
