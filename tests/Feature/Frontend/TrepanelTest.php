@@ -593,21 +593,23 @@ it('märker den aktuella förekomsten med synlig text och länkar de andra', fun
 });
 
 /*
- * Klart när: kartans panel visar fokuskartan — och den är ett LÄGE i
+ * Klart när: kartans panel visar kartan — och den är ett LÄGE i
  * relationsfliken under `md:` (issue 156 · [[M23 Mobilen och kartan]] § 156).
  *
  * **Provet var negativt med flit från issue 103 till issue 156.** Panelen var
- * en plats som väntade — fokuskartan behövde en layout, och den är eget arbete
- * som inte var beslutat — och det som föll då var varje ord som sade att något
- * var fel eller på väg. Nu är kartan byggd, och det som prövas är i stället att
- * panelen ritar den ur `map`-proppen och fortfarande inte ställer en egen
- * fråga: noderna kommer ur samma svar som resten av sidan.
+ * en plats som väntade — kartan behövde en layout, och den är eget arbete som
+ * inte var beslutat — och det som föll då var varje ord som sade att något var
+ * fel eller på väg. Nu är kartan byggd, och sedan issue 313 ritar panelen
+ * `ItemMap` i sin smala form ([[ADR-0063 Itemets karta i containerkartans
+ * form]] § 1). Det som prövas är att panelen ritar den ur propparna och
+ * fortfarande inte ställer en egen fråga: noderna kommer ur samma svar som
+ * resten av sidan.
  *
  * Att panelen är dold UNDER `md:` är samma beslut: där är kartan ett läge i
  * itemets relationsflik, och samma karta två gånger på samma skärm hade varit
  * samma nod två gånger. Formen prövas i tests/Feature/Frontend/FokuskartaTest.
  */
-it('fyller kartans panel med fokuskartan ur samma svar som resten av sidan', function () {
+it('fyller kartans panel med ItemMap compact ur samma svar som resten av sidan', function () {
     withoutVite();
 
     [$container, $anvandare] = trepanelKonto();
@@ -619,9 +621,12 @@ it('fyller kartans panel med fokuskartan ur samma svar som resten av sidan', fun
     $panelen = trepanelKod('components/ItemMapPanel.vue');
 
     expect($panelen)->toContain("t('item.map.heading')")
-        ->toContain("import FocusMap from './FocusMap.vue'")
-        ->toContain('<FocusMap')
+        ->toContain("import ItemMap from './ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain('compact')
         ->toContain(':map="map"')
+        ->toContain(':statuses="statuses"')
+        ->toContain(':container-ulid="containerUlid"')
         ->toContain(':overflow-href="overflowHref"');
 
     // Panelen ställer ingen egen fråga: den läser inte adressen, hämtar
@@ -633,18 +638,20 @@ it('fyller kartans panel med fokuskartan ur samma svar som resten av sidan', fun
     // Och vyn skickar kartan vidare — panelen bygger ingen själv.
     expect(trepanelKod('pages/Containers/Items/Show.vue'))
         ->toContain('<ItemMapPanel')
-        ->toContain(':map="map"')
-        ->toContain(':overflow-href="relationsHref"');
+        ->toContain(':map="itemMap"')
+        ->toContain(':statuses="itemMapStatuses"')
+        ->toContain(':container-ulid="container.ulid"')
+        ->toContain(':overflow-href="mapFocusHref"');
 
     expect(Lang::get('ui.item.map.heading', [], 'en'))->toBe('Map');
 
-    // Noderna kommer ur samma svar som relationerna, och kostar ingen egen
-    // fråga: de ÄR App\Actions\Item\ListItemLinks.
+    // Noderna kommer ur samma upplösning som resten av sidan
+    // (App\Actions\Item\ResolveItemMap), och kostar ingen egen fråga.
     actingAs($anvandare)->get(trepanelUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Show')
-            ->where('map.self.name', 'Motorn')
-            ->where('map.child.0.name', 'Impellern')
+            ->where('itemMap.center.name', 'Motorn')
+            ->where('itemMap.child.nodes.0.name', 'Impellern')
     );
 });
 
@@ -815,21 +822,24 @@ it('panelernas ordning i markupen är struktur, item, karta', function () {
 });
 
 /*
- * Klart när: `ItemStructurePanel` och `ItemMapPanel` har samma props som förut.
+ * Klart när: `ItemStructurePanel` och `ItemMapPanel` har sina proppar — och
+ * kartpanelen får de tre som `ItemMap` behöver (issue 313 · [[ADR-0063
+ * Itemets karta i containerkartans form]] § Konsekvenser).
  *
- * Beslut 3 i issue 181: ingen panel ändrar innehåll. Den nya bredden är en
+ * Beslut 3 i issue 181: ingen panel ändrar layout. Den nya bredden är en
  * layoutfråga, och en panel som plötsligt frågade efter något — en höjd, en
  * brytpunkt, ett läge — hade flyttat layouten in i panelen och gjort trepanelen
  * till tre ytor som var för sig vet vilken skärm de står på. Panelen ritar
- * proppen den får; `Show.vue` äger placeringen.
+ * propparna den får; `Show.vue` äger placeringen. `statuses` och
+ * `containerUlid` är data som `ItemMap` behöver, inte en layoutfråga.
  *
  * Provet läser deklarationen och inte en rendering: en propp som ingen skickar
  * syns inte i svaret, och det är just den som vore felet.
  */
-it('ItemStructurePanel och ItemMapPanel har samma props som förut', function () {
+it('ItemStructurePanel och ItemMapPanel har sina proppar', function () {
     expect(trepanelProps('components/ItemStructurePanel.vue'))
         ->toBe(['nodes', 'containerUlid', 'activeTrail']);
 
     expect(trepanelProps('components/ItemMapPanel.vue'))
-        ->toBe(['map', 'overflowHref']);
+        ->toBe(['map', 'statuses', 'containerUlid', 'overflowHref']);
 });

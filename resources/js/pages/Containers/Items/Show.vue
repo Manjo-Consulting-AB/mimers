@@ -100,9 +100,10 @@ defineOptions({
  * § Beslut). Strukturen är issue 94:s upplösning (`structure`), kopplad till
  * förekomsterna i issue 95 (`paths`): panelen markerar den väg som är den
  * aktuella, och den här filen räknar ut ledet en gång — `activeTrail` — i
- * stället för att låta panelen läsa adressen själv. Kartans panel är tom med
- * flit (ItemMapPanel.vue). Under `md:` staplas panelerna, och strukturen blir
- * en utfällbar yta och inte en egen sida.
+ * stället för att låta panelen läsa adressen själv. Kartan i panelen är
+ * `ItemMap` i sin smala form (ItemMapPanel.vue, issue 313 · [[ADR-0063
+ * Itemets karta i containerkartans form]] § 1). Under `md:` staplas panelerna,
+ * och strukturen blir en utfällbar yta och inte en egen sida.
  *
  * **Sidan är en flikrad med åtta flikar** (issue 102, 116 och 154 ·
  * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
@@ -357,22 +358,26 @@ const props = defineProps({
      */
     create: { type: Object, default: null },
     /*
-     * Fokuskartan (issue 156 · [[M23 Mobilen och kartan]] § 156), ur
-     * `ItemController::map()`: `{self, parent, child, related}`, där varje nod
-     * är `{ulid, name, href, rows}`.
+     * Itemets karta (issue 312 och 313 · [[ADR-0063 Itemets karta i
+     * containerkartans form]] § 2): containerkartans form med itemet som mitt,
+     * `{center, container, path, parent, child, related, rows}`, ur
+     * App\Actions\Item\ResolveItemMap.
      *
-     * Noderna ÄR relationerna — App\Actions\Item\ListItemLinks, samma svar som
-     * `links` ovan ritar — så en motpart utanför användarens omfång finns inte
-     * här heller (issue 73 § Beslut 7). `href` är null för `self`, som är
-     * itemet självt och ingen länk, och `rows` är nodens plusmeny: de rader
-     * App\Support\Frontend\CreateTarget::forNode() tillät på DEN noden. En nod
-     * utan rader ritar ingen knapp.
+     * Noderna upplöses i samma omfång som trädet och listan, så en motpart
+     * utanför användarens omfång finns inte här heller (issue 73 § Beslut 7).
+     * `rows` är mittens menyrader ur App\Support\Frontend\CreateTarget::forNode()
+     * med sidans `?path=`, så *Item under* hamnar i den förekomst man står i.
      *
      * Vyn vandrar inte i grafen, sorterar inte om en grupp och räknar
-     * ingenting: kartans fasta layout ritar de första noderna i serverns
-     * ordning och säger *+N till* om resten.
+     * ingenting: servern äger noderna, taken och `total`, och `ItemMap` ritar
+     * dem i den smala formen.
      */
-    map: { type: Object, required: true },
+    itemMap: { type: Object, required: true },
+    /*
+     * Statusen för mitten och de ritade noderna (issue 312), ur
+     * App\Support\Item\ItemStatus: item-ULID → `ok` eller `overdue`.
+     */
+    itemMapStatuses: { type: Object, required: true },
     /*
      * Relationsflikens läge (issue 156): `list` eller `focus`, ur serverns
      * läsning av `?view=`. Läget väljer vilken yta fliken visar under `md:` —
@@ -438,8 +443,8 @@ const informationHref = computed(
 );
 
 /*
- * Adressen till relationsfliken — den flik fokuskartans *+N till* leder till
- * (issue 156 · [[M23 Mobilen och kartan]] § 156).
+ * Adressen till relationsfliken — växelns *Lista* och flikraden (issue 156 ·
+ * [[M23 Mobilen och kartan]] § 156).
  *
  * Hämtad ur `tabs` och inte byggd en gång till, av samma skäl som
  * `informationHref` ovan: flikens adress bär den aktuella förekomsten
@@ -450,6 +455,15 @@ const informationHref = computed(
 const relationsHref = computed(
     () => tabs.value.find((tab) => tab.key === 'relations')?.href
         ?? `/containers/${props.container.ulid}/items/${props.item.ulid}?tab=relations`,
+);
+
+/*
+ * Hela kartan med itemet som mitt — målet för *Open in map* och *+N till* i
+ * den smala formen (issue 313 · [[ADR-0063 Itemets karta i containerkartans
+ * form]] § 6). Där står de relaterade på sidorna och linjerna ritas.
+ */
+const mapFocusHref = computed(
+    () => `/containers/${props.container.ulid}/items?view=map&focus=${props.item.ulid}`,
 );
 
 /*
@@ -1006,8 +1020,9 @@ function toggleFavorite() {
                 :links="links"
                 :counterparts="counterparts"
                 :can="can"
-                :map="map"
-                :overflow-href="relationsHref"
+                :item-map="itemMap"
+                :statuses="itemMapStatuses"
+                :overflow-href="mapFocusHref"
                 :view="linkView"
                 :views="linkViews"
             />
@@ -1144,7 +1159,7 @@ function toggleFavorite() {
             tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
             kartan börjar i mittkolumnens första — samma tre spår som
             itemet och alltså en egen rad under det. Kartan får ingen egen
-            höjdberäkning: FocusMap växer med sitt innehåll, och den
+            höjdberäkning: ItemMap växer med sitt innehåll, och den
             smalare kolumnen bryter rader i stället för att klippa.
 
             Spåren sätts på det omslutande elementet och inte på panelen:
@@ -1156,8 +1171,10 @@ function toggleFavorite() {
         <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
             <ItemMapPanel
                 class="hidden md:block"
-                :map="map"
-                :overflow-href="relationsHref"
+                :map="itemMap"
+                :statuses="itemMapStatuses"
+                :container-ulid="container.ulid"
+                :overflow-href="mapFocusHref"
             />
 
             <!--

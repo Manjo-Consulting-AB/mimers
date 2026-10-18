@@ -7,10 +7,19 @@ import ItemMapNode from './ItemMapNode.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Containerns karta, se issue 297 · [[M34 Kartan med en mitt]] § 297 och
- * [[ADR-0059 Kartan med en mitt]] § 3–8, omritad i issue 306 ·
- * [[ADR-0061 Kartans kort och kanter]] § 5–8 och luftad i issue 308 ·
- * [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § 1–3.
+ * Kartan, se issue 297 · [[M34 Kartan med en mitt]] § 297 och [[ADR-0059
+ * Kartan med en mitt]] § 3–8, omritad i issue 306 · [[ADR-0061 Kartans kort
+ * och kanter]] § 5–8, luftad i issue 308 · [[ADR-0062 Kartans luft, listans
+ * ruta och den löpande sökningen]] § 1–3 och i sin smala form på itemets sida
+ * sedan issue 313 · [[ADR-0063 Itemets karta i containerkartans form]] § 1, 3,
+ * 5 och 6.
+ *
+ * **Två ytor, en komponent.** Containerns kartläge ritar den fulla formen, och
+ * itemets högerpanel och relationsflikens läge *Focus* ritar samma karta med
+ * `compact`. Den smala formen är den som containerkartan har under `md:` —
+ * korten i en kolumn, de relaterade under barnen och inga linjer — men med
+ * `compact` gäller den på alla bredder. Utan `compact` är containerkartan
+ * oförändrad (ADR-0063 § 1).
  *
  * **En mitt och en ring.** Mitten står i mitten, föräldrarna ovanför, barnen
  * under och de relaterade i två kolumner på var sin sida — index 0, 2 och 4
@@ -41,38 +50,54 @@ import { useTranslations } from '../composables/useTranslations.js';
  * kurva per ritat kort. Linjerna har inga pilspetsar. Lagret finns bara från
  * `md:`, där rutnätet finns.
  *
- * **Alla noder utom mitten är länkar till kartan med sig själva som mitt** —
- * `?view=map&focus=<ulid>` — och öppna-ikonen bredvid leder till itemets sida.
- * Mitten ÄR sidan man står på och är därför ingen centreringslänk
- * (ADR:ns beslut 2 och 3).
+ * **Utan `compact` är alla noder utom mitten länkar till kartan med sig själva
+ * som mitt** — `?view=map&focus=<ulid>` — och öppna-ikonen bredvid leder till
+ * itemets sida. Mitten ÄR sidan man står på och är därför ingen centreringslänk
+ * (ADR-0059:s beslut 2 och 3).
  *
- * **Plusmenyn sitter bara på mittnoden** (ADR:ns beslut 4): raderna kommer ur
- * `map.rows`, som är tomma kring containern, och `ItemMapNode` ritar ingen
- * knapp när de är tomma. Menyn är monterad från början av samma skäl som i
- * `FocusMap`: `UiSheet` visar sitt `<dialog>` när `open` ÄNDRAS, och ett ark
- * som föds med `open` redan sant hade aldrig visats.
+ * **Med `compact` leder kortet till nodens egen sida** i stället
+ * (`/containers/{c}/items/{ulid}`), och kortet har inget öga: på itemets sida
+ * är nodens sida samma sak som att göra den till mitten (ADR-0063 § 3). Mitten
+ * är sidan man står på och är ingen länk. Ögat ritas därför aldrig i den smala
+ * formen, och `openHref` är `null` för varje nod och för mitten.
  *
- * **Formen är fast.** Taken per grupp är serverns — fyra föräldrar, tolv barn
- * och sex relaterade — och vyn fördelar bara de relaterade på två sidor:
- * varannan nod till vänster och varannan till höger, utan att sortera om.
- * Ingenting mäts här och ingenting skrollar i sidled: linjerna mäts i
- * `ItemMapEdges`. Över `md:` står de relaterade på sidorna; under `md:` står
- * de under barnen i serverns ordning (ADR-0061 § 8 och ADR-0062 § 3).
+ * **Plusmenyn sitter bara på mittnoden** (ADR-0059:s beslut 4 och ADR-0063
+ * § 4): raderna kommer ur `map.rows`, som är tomma kring containern, och
+ * `ItemMapNode` ritar ingen knapp när de är tomma. Varje nod hade en egen meny
+ * i den gamla fokuskartan; den är borta, och det man vill skapa under en
+ * granne skapar man på grannens sida. Menyn är monterad från början: `UiSheet`
+ * visar sitt `<dialog>` när `open` ÄNDRAS, och ett ark som föds med `open`
+ * redan sant hade aldrig visats.
+ *
+ * **Formen är fast.** Utan `compact` är taken per grupp serverns — fyra
+ * föräldrar, tolv barn och sex relaterade — och vyn fördelar bara de relaterade
+ * på två sidor: varannan nod till vänster och varannan till höger, utan att
+ * sortera om. Med `compact` ritas högst fyra föräldrar, fyra barn och fyra
+ * relaterade, i serverns ordning (ADR-0063 § 5); resten blir *+N till* ur
+ * gruppens `total`. Ingenting mäts här och ingenting skrollar i sidled:
+ * linjerna mäts i `ItemMapEdges`. Över `md:` står de relaterade på sidorna;
+ * under `md:` står de under barnen i serverns ordning (ADR-0061 § 8 och
+ * ADR-0062 § 3). Med `compact` står de under barnen på alla bredder, och inga
+ * `md:`-klasser ändrar formen.
  *
  * **Teckenförklaringen har fyra rader** (ADR-0059 § 8): *Parent*, *Child*
  * och *Related* med gruppens `total`, och *Same item*, som förklarar ⇄. Orden
  * kommer ur `lang/` som all annan text ([[ADR-0013 Språk och i18n]]), och
- * prickarna bär linjernas färger (ADR-0061 § 5).
+ * prickarna bär linjernas färger (ADR-0061 § 5). Under förklaringen står
+ * *Open in map* med `compact`, som leder till hela kartan med itemet som mitt
+ * (ADR-0063 § 6).
  *
  * ***+N till* visas när `total` är större än antalet ritade noder** och leder
- * till relationsfliken kring ett item och till listläget kring containern —
- * målen byggs av `Index.vue`, som äger containerns adresser.
+ * till `overflowHref` — relationsfliken kring ett item och listläget kring
+ * containern utan `compact`, och containerns kartläge med itemet som mitt med
+ * `compact`.
  *
- * **Vägen till mitten står ovanför kartan** (issue 298 · ADR:ns beslut 9):
+ * **Vägen till mitten står ovanför kartan** (issue 298 · ADR-0059:s beslut 9):
  * containerns namn först, som leder till kartan utan `focus`, sedan varje led i
  * `map.path`. Alla led utom det sista görs till mitten; det sista är mitten och
  * är ingen länk. ⇄ med antalet platser står efter vägen när mitten har fler än
- * en. Vägen räknas av servern — vyn vandrar inte i grafen.
+ * en. Vägen räknas av servern — vyn vandrar inte i grafen. Med `compact` ritas
+ * vägen inte: sidan har redan sin brödsmula (ADR-0063 § 3).
  */
 const props = defineProps({
     /* App\Actions\Item\ResolveItemMap:s svar: `{center, container, path, parent, child, related, rows}`. */
@@ -90,6 +115,12 @@ const props = defineProps({
      * satt, och då skrivs ingen parameter alls.
      */
     filterQuery: { type: String, default: '' },
+    /*
+     * Den smala formen på alla bredder (issue 313 · [[ADR-0063 Itemets karta i
+     * containerkartans form]] § 1, 3, 5 och 6): inga sidokolumner, inget
+     * linjelager, inget öga, ingen väg och högst fyra noder per grupp.
+     */
+    compact: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -109,6 +140,14 @@ const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTa
 const openHref = (node) => `${base.value}/${node.ulid}`;
 
 /*
+ * Kortets mål och öga (ADR-0063 § 3). I den fulla formen centrerar kortet
+ * noden och ögat öppnar itemets sida; i den smala formen är kortets mål
+ * itemets sida och ögat ritas inte.
+ */
+const nodeHref = (node) => (props.compact ? openHref(node) : focusHref(node));
+const nodeOpenHref = (node) => (props.compact ? null : openHref(node));
+
+/*
  * Sökvägens första led: containern, som leder till kartan utan `focus`.
  * Sista ledet i `map.path` är mitten och ritas utan länk — de övriga centrerar.
  */
@@ -117,8 +156,20 @@ const pathLast = computed(() => props.map.path.length - 1);
 
 const statusFor = (node) => props.statuses[node.ulid] ?? '';
 
-const parents = computed(() => props.map.parent.nodes);
-const children = computed(() => props.map.child.nodes);
+/*
+ * Taken per grupp i den smala formen (ADR-0063 § 5). Serverns tak gäller
+ * oförändrat utan `compact`; med `compact` ritar vyn bara de första fyra i
+ * varje grupp, i serverns ordning.
+ */
+const COMPACT_LIMIT = 4;
+
+const drawLimit = (nodes) => (props.compact ? nodes.slice(0, COMPACT_LIMIT) : nodes);
+
+const parents = computed(() => drawLimit(props.map.parent.nodes));
+const children = computed(() => drawLimit(props.map.child.nodes));
+
+/* De relaterade under barnen: alla utan `compact`, de fyra första med. */
+const relatedBelow = computed(() => drawLimit(props.map.related.nodes));
 
 /*
  * De relaterade fördelas på varannan sida (ADR-0062 § 3): index 0, 2 och 4
@@ -139,13 +190,13 @@ const relatedRight = computed(
  * ritar allt den har och ingen *+N till*-rad finns.
  */
 const moreParents = computed(
-    () => Math.max(0, props.map.parent.total - props.map.parent.nodes.length),
+    () => Math.max(0, props.map.parent.total - parents.value.length),
 );
 const moreChildren = computed(
-    () => Math.max(0, props.map.child.total - props.map.child.nodes.length),
+    () => Math.max(0, props.map.child.total - children.value.length),
 );
 const moreRelated = computed(
-    () => Math.max(0, props.map.related.total - props.map.related.nodes.length),
+    () => Math.max(0, props.map.related.total - relatedBelow.value.length),
 );
 
 /* Slagen i teckenförklaringens ordning, och samma tre noderna ritas i. */
@@ -175,7 +226,7 @@ const centerLabel = computed(() => (
     center.value.kind === 'item' ? t('item.links.current') : t('item.map.kind.container')
 ));
 const centerOpenHref = computed(
-    () => (center.value.kind === 'item' ? openHref(center.value) : null),
+    () => (props.compact ? null : center.value.kind === 'item' ? openHref(center.value) : null),
 );
 
 /*
@@ -207,43 +258,45 @@ function closeMenu() {
             centrerar; mitten själv är ingen länk. Kring containern är vägen
             tom och raden ritas inte.
         -->
-        <nav
-            v-if="map.path.length > 0"
-            :aria-label="t('item.map.path')"
-            class="mb-4 flex flex-wrap items-center justify-center gap-1 text-meta text-ink-muted"
-        >
-            <Link
-                :href="containerHref"
-                class="rounded-control px-1 py-0.5 text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        <template v-if="!compact">
+            <nav
+                v-if="map.path.length > 0"
+                :aria-label="t('item.map.path')"
+                class="mb-4 flex flex-wrap items-center justify-center gap-1 text-meta text-ink-muted"
             >
-                {{ map.container.name }}
-            </Link>
-
-            <template v-for="(led, index) in map.path" :key="led.ulid">
-                <span aria-hidden="true">›</span>
-
                 <Link
-                    v-if="index < pathLast"
-                    :href="focusHref(led)"
+                    :href="containerHref"
                     class="rounded-control px-1 py-0.5 text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
-                    {{ led.name }}
+                    {{ map.container.name }}
                 </Link>
 
-                <span v-else class="px-1 py-0.5 font-medium text-ink">{{ led.name }}</span>
-            </template>
+                <template v-for="(led, index) in map.path" :key="led.ulid">
+                    <span aria-hidden="true">›</span>
 
-            <!-- Fler platser än en: ⇄ och antalet står efter vägen. -->
-            <span
-                v-if="map.center.placements > 1"
-                class="ml-1 flex items-center gap-1"
-            >
-                <span aria-hidden="true">&harr; {{ map.center.placements }}</span>
-                <span class="sr-only">
-                    {{ t('item.map.placements', { count: map.center.placements }) }}
+                    <Link
+                        v-if="index < pathLast"
+                        :href="focusHref(led)"
+                        class="rounded-control px-1 py-0.5 text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    >
+                        {{ led.name }}
+                    </Link>
+
+                    <span v-else class="px-1 py-0.5 font-medium text-ink">{{ led.name }}</span>
+                </template>
+
+                <!-- Fler platser än en: ⇄ och antalet står efter vägen. -->
+                <span
+                    v-if="map.center.placements > 1"
+                    class="ml-1 flex items-center gap-1"
+                >
+                    <span aria-hidden="true">&harr; {{ map.center.placements }}</span>
+                    <span class="sr-only">
+                        {{ t('item.map.placements', { count: map.center.placements }) }}
+                    </span>
                 </span>
-            </span>
-        </nav>
+            </nav>
+        </template>
 
         <!--
             Kartans ram (issue 306 · [[ADR-0061 Kartans kort och kanter]]
@@ -252,17 +305,22 @@ function closeMenu() {
             `md:` är ramen en kolumn, och de relaterade ritas under barnen.
         -->
         <div data-map-frame class="relative">
-            <ItemMapEdges :map="map" />
+            <!-- Linjerna hör till den fulla formen; den smala har inget lager. -->
+            <template v-if="!compact">
+                <ItemMapEdges :map="map" />
+            </template>
 
             <div class="relative z-10 flex w-full flex-col items-center">
                 <!--
                     Föräldrarna ovanför, högst fyra. Från `md:` är det `gap-6`
                     mellan korten och bredden rymmer fyra kort och tre
                     mellanrum på 24 px, så raden bryts aldrig före serverns tak.
+                    Med `compact` gäller det smala avståndet på alla bredder.
                 -->
                 <ul
                     v-if="parents.length > 0"
-                    class="flex w-full flex-wrap justify-center gap-3 md:gap-6 md:max-w-[52.5rem]"
+                    class="flex w-full flex-wrap justify-center gap-3"
+                    :class="compact ? '' : 'md:gap-6 md:max-w-[52.5rem]'"
                 >
                     <ItemMapNode
                         v-for="node in parents"
@@ -271,8 +329,8 @@ function closeMenu() {
                         kind="parent"
                         :label="t('item.map.kind.parent')"
                         :status="statusFor(node)"
-                        :href="focusHref(node)"
-                        :open-href="openHref(node)"
+                        :href="nodeHref(node)"
+                        :open-href="nodeOpenHref(node)"
                         @open-menu="openMenu"
                     />
                 </ul>
@@ -297,8 +355,15 @@ function closeMenu() {
                     sidorna gömda och de relaterade står under barnen i
                     serverns ordning i stället.
                 -->
-                <div class="mt-6 flex w-full items-center justify-center md:mt-14 md:gap-12">
-                    <ul class="hidden min-w-0 flex-1 flex-col items-end gap-3 md:flex">
+                <div
+                    :class="compact
+                        ? 'mt-6 flex w-full items-center justify-center'
+                        : 'mt-6 flex w-full items-center justify-center md:mt-14 md:gap-12'"
+                >
+                    <ul
+                        v-if="!compact"
+                        class="hidden min-w-0 flex-1 flex-col items-end gap-3 md:flex"
+                    >
                         <ItemMapNode
                             v-for="(node, index) in relatedLeft"
                             :key="node.ulid"
@@ -329,7 +394,10 @@ function closeMenu() {
                         De relaterade är fler än sex: *+N till* står sist i den
                         högra kolumnen, i samma flöde som noderna den räknar.
                     -->
-                    <ul class="hidden min-w-0 flex-1 flex-col items-start gap-3 md:flex">
+                    <ul
+                        v-if="!compact"
+                        class="hidden min-w-0 flex-1 flex-col items-start gap-3 md:flex"
+                    >
                         <ItemMapNode
                             v-for="(node, index) in relatedRight"
                             :key="node.ulid"
@@ -362,7 +430,8 @@ function closeMenu() {
                 -->
                 <ul
                     v-if="children.length > 0"
-                    class="mt-6 flex w-full flex-wrap justify-center gap-3 md:mt-14 md:gap-6 md:max-w-[52.5rem]"
+                    class="mt-6 flex w-full flex-wrap justify-center gap-3"
+                    :class="compact ? '' : 'md:mt-14 md:gap-6 md:max-w-[52.5rem]'"
                 >
                     <ItemMapNode
                         v-for="node in children"
@@ -371,8 +440,8 @@ function closeMenu() {
                         kind="child"
                         :label="t('item.map.kind.child')"
                         :status="statusFor(node)"
-                        :href="focusHref(node)"
-                        :open-href="openHref(node)"
+                        :href="nodeHref(node)"
+                        :open-href="nodeOpenHref(node)"
                         @open-menu="openMenu"
                     />
                 </ul>
@@ -393,17 +462,18 @@ function closeMenu() {
             en karta som skrollar i sidled är en karta man inte ser.
         -->
         <ul
-            v-if="relatedLeft.length > 0 || relatedRight.length > 0"
-            class="mt-4 flex flex-wrap justify-center gap-2 md:hidden"
+            v-if="relatedBelow.length > 0"
+            class="mt-4 flex flex-wrap justify-center gap-2"
+            :class="compact ? '' : 'md:hidden'"
         >
             <ItemMapNode
-                v-for="node in map.related.nodes"
+                v-for="node in relatedBelow"
                 :key="node.ulid"
                 :node="node"
                 :label="t('item.map.kind.related')"
                 :status="statusFor(node)"
-                :href="focusHref(node)"
-                :open-href="openHref(node)"
+                :href="nodeHref(node)"
+                :open-href="nodeOpenHref(node)"
                 @open-menu="openMenu"
             />
 
@@ -443,10 +513,22 @@ function closeMenu() {
         </ul>
 
         <!--
-            Nodens meny, monterad från början — se `FocusMap` och
-            `ItemMapNode`. Inget `v-if` här: arket öppnas av en ÄNDRING av
-            `open`, och ett ark som monteras med `open` redan sant hinner aldrig
-            se den.
+            *Open in map* (ADR-0063 § 6): den smala formen visar högst fyra per
+            grupp, och hela kartan med itemet som mitt finns ett klick bort.
+            Träffytan är 44 px som varje annat mål.
+        -->
+        <Link
+            v-if="compact"
+            :href="overflowHref"
+            class="mx-auto mt-4 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+        >
+            {{ t('item.map.open_full') }}
+        </Link>
+
+        <!--
+            Nodens meny, monterad från början — se `ItemMapNode`. Inget `v-if`
+            här: arket öppnas av en ÄNDRING av `open`, och ett ark som monteras
+            med `open` redan sant hinner aldrig se den.
         -->
         <CreateMenu
             :open="menuOpen"

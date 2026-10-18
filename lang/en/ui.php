@@ -3152,6 +3152,12 @@ return [
             'node_menu' => 'Create in :name',
             'more' => '+:count more',
 
+            // The link under the legend in the narrow form (issue 313 ·
+            // [[ADR-0063 Itemets karta i containerkartans form]] § 6). It
+            // leads to the full map with the item as centre, where the
+            // related stand on the sides and the lines are drawn.
+            'open_full' => 'Open in map',
+
             // The hit list beside the map (issue 299 · [[ADR-0059 Kartan med
             // en mitt]] § 10). `hits` is the list's accessible name and not a
             // visible heading; `show_all` is the link to the list mode and

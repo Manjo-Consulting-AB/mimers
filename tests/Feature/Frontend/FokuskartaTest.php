@@ -16,29 +16,25 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 156 · Fokuskartan. Se [[M23 Mobilen och kartan]] § 156,
- * [[ADR-0048 Mobilen och plusknappen]] § 4, [[ADR-0042 Designsystemet]]
- * § Beslut, App\Http\Controllers\ItemController::show(),
- * App\Support\Frontend\CreateTarget::forNode() och
- * resources/js/components/FocusMap.vue, FocusMapNode.vue, ItemMapPanel.vue och
- * ItemLinkSection.vue.
+ * Issue 313 · Itemets karta ritas med ItemMap. Se [[M37 Itemets karta]] § 313
+ * och [[ADR-0063 Itemets karta i containerkartans form]] § 1, 3, 5 och 6,
+ * App\Http\Controllers\ItemController::show(), App\Actions\Item\ResolveItemMap,
+ * App\Support\Item\ItemStatus samt resources/js/components/ItemMap.vue,
+ * ItemMapPanel.vue och ItemLinkSection.vue.
  *
- * **Filen prövar två saker, och de hänger ihop.** Det första är svaret:
- * kartans noder ÄR App\Actions\Item\ListItemLinks — itemet i mitten,
- * föräldrarna ovanför, barnen under och de relaterade på sidorna — och varje
- * nod bär sin egen plusmeny, prövad på servern. Det andra är formen: den fasta
- * layouten med tre rader och två sidor, *+N till* när en rad är full,
- * teckenförklaringens tre sorter och läget *Fokus* kontra *Lista* i
- * relationsfliken.
+ * **Filen prövar tre saker.** Det första är svaret: `itemMap` är
+ * containerkartans form med itemet som mitt — `center`, `container`, `path`,
+ * `parent`, `child`, `related` och `rows` — och `itemMapStatuses` är statusen
+ * för mitten och de ritade noderna. Det andra är formen: `compact` ritar den
+ * smala formen på alla bredder, med högst fyra noder per grupp, korten som
+ * länkar till nodernas sidor och *Open in map* till hela kartan. Det tredje är
+ * att den gamla fokuskartan är borta: `FocusMap`, `FocusMapNode`, proppen
+ * `map`, `ItemController::map()` och `nodeRows()`.
  *
- * **Ingen ny fråga för kartan.** Noderna kommer ur samma Action som
- * relationsfliken ritar, och uppslaget av nodernas items sker i den lista
- * `counterparts()` redan hämtar — frågeräkningen nedan mäter det.
- *
- * **Det som kräver en webbläsare prövas inte här:** att noderna hamnar ovanför,
- * under och på sidorna om itemet vid 375 px, att linjerna möter noderna, och
- * att arket fäster under nodens plus. Det som går att avgöra ur källkoden och
- * ur serverns svar står nedan; handprovet står i PR-kroppen.
+ * **Det som kräver en webbläsare prövas inte här:** att korten står i en
+ * kolumn, att de relaterade hamnar under barnen och att *Open in map* syns
+ * under teckenförklaringen. Det som går att avgöra ur källkoden och ur serverns
+ * svar står nedan.
  *
  * Kommentarer rensas bort före varje källkodsprov, som i grannfilerna: filerna
  * är fulla av svensk prosa, och en regel som letar efter en markup ska inte
@@ -174,17 +170,17 @@ function fokuskartaFragor(Container $container, Item $item, User $anvandare): in
     return $antal;
 }
 
-// --- noderna: itemet, föräldrarna, barnen och de relaterade --------------
+// --- svaret: itemet i mitten med sina grannar ----------------------------
 
 /*
- * Klart när: högerpanelen visar itemet med föräldrar, barn och relaterade.
+ * Klart när: högerpanelen och läget *Focus* ritar `ItemMap` med `compact`, och
+ * mitten är itemet med föräldrarna, barnen och de relaterade runt sig.
  *
- * Noderna kommer ur App\Actions\Item\ListItemLinks, grupperade i de tre
- * riktningarna och sorterade på motpartens namn — samma svar som
- * relationsfliken ritar. Kartan lägger ingenting ovanpå: det som står här är
- * Actionens svar, rad för rad.
+ * Noderna kommer ur App\Actions\Item\ResolveItemMap — samma upplösning som
+ * containerns kartläge — och sorteras på motpartens namn inom varje grupp.
+ * Kartan lägger ingenting ovanpå.
  */
-it('ritar itemet med föräldrarna, barnen och de relaterade', function () {
+it('ritar itemet i mitten med föräldrarna, barnen och de relaterade', function () {
     withoutVite();
 
     [, $anvandare, $container] = fokuskartaKontext();
@@ -200,37 +196,32 @@ it('ritar itemet med föräldrarna, barnen och de relaterade', function () {
     fokuskartaKant($motorn, $betan, 'parent');
     fokuskartaKant($motorn, $masten, 'related');
 
-    $bas = "/containers/{$container->ulid}/items";
-
     actingAs($anvandare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Show')
-            ->where('map.self.ulid', $motorn->ulid)
-            ->where('map.self.name', 'Motorn')
-            // Itemet självt är ingen länk: noden ÄR sidan man står på.
-            ->where('map.self.href', null)
-            ->has('map.parent', 1)
-            ->where('map.parent.0.name', 'Båten')
-            ->where('map.parent.0.href', "{$bas}/{$båten->ulid}")
-            ->has('map.child', 2)
-            // Namnets ordning inom gruppen, som Actionen levererar den.
-            ->where('map.child.0.name', 'Alfan')
-            ->where('map.child.1.name', 'Betan')
-            ->has('map.related', 1)
-            ->where('map.related.0.name', 'Masten')
+            ->where('itemMap.center.kind', 'item')
+            ->where('itemMap.center.ulid', $motorn->ulid)
+            ->where('itemMap.center.name', 'Motorn')
+            ->where('itemMap.container.ulid', $container->ulid)
+            ->has('itemMap.parent.nodes', 1)
+            ->where('itemMap.parent.nodes.0.name', 'Båten')
+            ->has('itemMap.child.nodes', 2)
+            ->where('itemMap.child.nodes.0.name', 'Alfan')
+            ->where('itemMap.child.nodes.1.name', 'Betan')
+            ->has('itemMap.related.nodes', 1)
+            ->where('itemMap.related.nodes.0.name', 'Masten')
+            ->where('itemMap.path.1.name', 'Motorn')
     );
 });
 
 /*
- * Klart när: fokuskartans noder och `self` bär itemets ikon och färg
- * (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9).
+ * Klart när: mitten och varje nod bär itemets ikon och färg (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 6 och 9).
  *
- * Värdena kommer ur samma fråga som namnet: App\Actions\Item\ListItemLinks
- * väljer `icon` och `icon_color` tillsammans med `ulid` och `name`, och
- * `ItemController::map()` lägger dem på varje nod och läser `self` ur
- * `$item`. Ett item utan ikon svarar `null` och ritar den neutrala.
+ * Värdena kommer ur samma fråga som namnet. Ett item utan ikon svarar `null` och
+ * ritar den neutrala i stället för att tappa sin ruta.
  */
-it('bär itemets ikon på varje nod och på itemet självt', function () {
+it('bär itemets ikon på mitten och på varje nod', function () {
     withoutVite();
 
     [, $anvandare, $container] = fokuskartaKontext();
@@ -243,49 +234,17 @@ it('bär itemets ikon på varje nod och på itemet självt', function () {
 
     actingAs($anvandare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->where('map.self.icon', 'droplet')
-            ->where('map.self.icon_color', 'blue')
-            // Båten har ingen ikon: fälten finns och är null, så noden ritar
-            // den neutrala i stället för att tappa sin ruta.
-            ->where('map.parent.0.icon', null)
-            ->where('map.parent.0.icon_color', null)
+            ->where('itemMap.center.icon', 'droplet')
+            ->where('itemMap.center.icon_color', 'blue')
+            ->where('itemMap.parent.nodes.0.icon', null)
+            ->where('itemMap.parent.nodes.0.icon_color', null)
     );
-});
-
-/*
- * Klart när: noden ritar `ItemIcon` med `tile` i storleken 20 före namnet.
- *
- * Båda grenarna ritar samma form: länken och mittnoden, som är itemet självt
- * och därför inte är en `<Link>`. Ingen grind hänger på ikonen — ett item utan
- * ikon ritar den neutrala i samma storlek.
- */
-it('ritar ItemIcon före namnet på varje nod', function () {
-    $noden = fokuskartaKod('components/FocusMapNode.vue');
-
-    expect($noden)->toContain("import ItemIcon from './ItemIcon.vue'");
-
-    $ikonen = fokuskartaTagg($noden, 'ItemIcon');
-
-    expect($ikonen)->toContain(':name="node.icon"');
-    expect($ikonen)->toContain(':color="node.icon_color"');
-    expect($ikonen)->toContain(':size="20"');
-    expect($ikonen)->toContain('tile');
-    expect($ikonen)->not->toContain('v-if');
-
-    // Ikonen står direkt före namnet i både länken och mittnoden.
-    preg_match_all(
-        '/<ItemIcon\b[^>]*>\s*<span[^>]*>\{\{ node\.name \}\}/s',
-        $noden,
-        $träffar,
-    );
-
-    expect($träffar[0])->toHaveCount(2);
 });
 
 /*
  * Klart när: "en nod utanför omfånget ritas inte".
  *
- * Omfånget filtrerar RADERNA redan i App\Actions\Item\ListItemLinks, och
+ * Omfånget filtrerar upplösningen redan i App\Actions\Item\ResolveItemMap, och
  * kartan är samma svar: en motpart mottagaren inte når finns varken som nod,
  * som namn, som ULID eller som räknare (issue 73 § Beslut 7). Att rita en
  * gråad nod hade varit upplysningen "det finns något här du inte får se", och
@@ -312,10 +271,11 @@ it('ritar inte en nod utanför mottagarens omfång', function () {
 
     $svar->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->where('map.parent', [])
-            ->where('map.related', [])
-            ->has('map.child', 1)
-            ->where('map.child.0.name', 'Impellern')
+            ->where('itemMap.parent.nodes', [])
+            ->where('itemMap.related.nodes', [])
+            ->has('itemMap.child.nodes', 1)
+            ->where('itemMap.child.nodes.0.name', 'Impellern')
+            ->has('itemMapStatuses', 2)
     );
 
     $innehall = $svar->getContent();
@@ -325,99 +285,51 @@ it('ritar inte en nod utanför mottagarens omfång', function () {
 });
 
 /*
- * Klart när: "varje nods plus öppnar menyn med de rader användaren får
- * använda på den noden".
+ * Klart när: "bara mittkortet har plustecknet, och dess rader bär sidans
+ * förekomst" (ADR-0063 § 4).
  *
- * Raderna är App\Support\Frontend\CreateTarget::forNode(), prövad på NODEN,
- * och urvalet är [[ADR-0048 Mobilen och plusknappen]] § 4: *Item under* och
- * *Relation* — *Skapa sibling* finns inte, och bilagan och uppgiften hör till
- * itemets egen sida. Relationen är den enda raden med `update`-grinden (en
- * `related`-länk ändrar BÅDA itemen), så samma meny har olika innehåll för en
- * `create`-mottagare och en `write`-mottagare.
+ * Raderna är App\Support\Frontend\CreateTarget::forNode() på ITEMET, med
+ * sidans `?path=`, så att *Relation* leder tillbaka till samma väg man står på.
+ * Noderna har inga egna menyer längre: det man vill skapa under en granne
+ * skapar man på grannens sida.
  */
-it('ger varje nod de rader användaren får använda på den', function () {
-    withoutVite();
-
-    [, $agaren, $container] = fokuskartaKontext();
-
-    $motorn = fokuskartaItem($container, 'Motorn');
-    $impellern = fokuskartaItem($container, 'Impellern');
-    fokuskartaKant($motorn, $impellern, 'parent');
-
-    $bas = "/containers/{$container->ulid}/items";
-
-    // Ägaren får båda raderna, på itemet självt och på varje nod — och
-    // *Item under* pekar på den NODEN, inte på itemet man står på.
-    actingAs($agaren)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->where('map.self.rows', [
-                ['key' => 'item', 'href' => "{$bas}/create?parent={$motorn->ulid}"],
-                ['key' => 'relation', 'href' => "{$bas}/{$motorn->ulid}?tab=relations"],
-            ])
-            ->where('map.child.0.rows', [
-                ['key' => 'item', 'href' => "{$bas}/create?parent={$impellern->ulid}"],
-                ['key' => 'relation', 'href' => "{$bas}/{$impellern->ulid}?tab=relations"],
-            ])
-    );
-
-    // En `create`-mottagare får lägga till men inte ändra: bara *Item under*.
-    $skapare = fokuskartaMottagare($container, $motorn, 'create');
-
-    actingAs($skapare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('map.self.rows', 1)
-            ->where('map.self.rows.0.key', 'item')
-            ->has('map.child.0.rows', 1)
-            ->where('map.child.0.rows.0.key', 'item')
-    );
-
-    // En läsare får ingenting: noderna ritas utan plus, och menyn finns inte.
-    $lasare = fokuskartaMottagare($container, $motorn, 'read');
-
-    actingAs($lasare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->where('map.self.rows', [])
-            ->where('map.child.0.rows', [])
-    );
-});
-
-/*
- * Den aktuella förekomsten följer med mittnoden, precis som den följer med
- * flikarnas `href` (issue 95 och 102): *Relation* på itemet man står på ska
- * stanna på samma väg. En motparts förekomst är okänd, och nodens rad bär
- * därför ingen `?path=` — en påhittad väg vore värre än ingen.
- */
-it('bär den aktuella förekomsten på mittnodens menyrad', function () {
+it('bär den aktuella förekomsten i mittens menyrader', function () {
     withoutVite();
 
     [, $anvandare, $container] = fokuskartaKontext();
 
+    $båten = fokuskartaItem($container, 'Båten');
+    $trailern = fokuskartaItem($container, 'Trailern');
     $motorn = fokuskartaItem($container, 'Motorn');
-    $impellern = fokuskartaItem($container, 'Impellern');
-    fokuskartaKant($motorn, $impellern, 'parent');
 
-    $bas = "/containers/{$container->ulid}/items";
+    fokuskartaKant($båten, $motorn, 'parent');
+    fokuskartaKant($trailern, $motorn, 'parent');
+
+    $förekomst = "{$trailern->ulid}.{$motorn->ulid}";
+    $bas = "/containers/{$container->ulid}/items/{$motorn->ulid}";
 
     actingAs($anvandare)
-        ->get(fokuskartaUrl($container, $motorn, $motorn->ulid))
+        ->get(fokuskartaUrl($container, $motorn, $förekomst))
         ->assertOk()
         ->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->where('map.self.rows.1.href', "{$bas}/{$motorn->ulid}?path={$motorn->ulid}&tab=relations")
-                ->where('map.child.0.rows.1.href', "{$bas}/{$impellern->ulid}?tab=relations")
+                ->has('itemMap.rows', 2)
+                ->where('itemMap.rows.0.key', 'item')
+                ->where('itemMap.rows.1.key', 'relation')
+                ->where('itemMap.rows.1.href', "{$bas}?path={$förekomst}&tab=relations")
         );
 });
 
-// --- frågan: ingen ny, och konstant --------------------------------------
+// --- frågan: konstant ----------------------------------------------------
 
 /*
- * Klart när: kartan kostar inga egna frågor.
+ * Klart när: kartan kostar ett konstant antal frågor.
  *
- * Noderna ÄR App\Actions\Item\ListItemLinks, och uppslaget av nodernas items
- * sker i den kandidatlista `counterparts()` redan hämtar
- * (App\Actions\Item\ListItems). Sidan ställer därför samma antal frågor med
- * ett item som med fem: nodernas menyrader prövas i minnet, och
- * ResolveItemScope memoiserar per `{user, container}`.
+ * Upplösningen kostar två frågor och statusen två, oavsett antalet grannar:
+ * omfånget är memoiserat av `paths` och `structure`, och både kanterna och
+ * förekomsterna hämtas en gång och sluts i minnet
+ * (App\Actions\Item\ResolveItemMap § Frågekostnaden och
+ * App\Support\Item\ItemStatus).
  */
 it('kostar ett konstant antal frågor oavsett antal noder', function () {
     withoutVite();
@@ -450,27 +362,28 @@ it('kostar ett konstant antal frågor oavsett antal noder', function () {
 });
 
 /*
- * Servern kapar INTE listan: den skickar alla noder den har, och den fasta
- * layouten ritar de första och säger *+N till* om resten.
+ * Servern kapar inte listan vid den smala formens tak: den skickar alla noder
+ * den har (upp till containerkartans tak), och `ItemMap` ritar de första fyra
+ * per grupp med `compact`.
  *
  * Det är delningen mellan de två: servern äger vilka noder som finns — omfång,
- * sortering och menyrader — och klienten äger hur många som får plats. Kapade
- * servern listan hade "hur många som fick plats" varit en serverregel, och
- * *+N till* hade räknat fel så snart panelens bredd ändrades.
+ * sortering och `total` — och klienten äger hur många som får plats.
  */
-it('skickar alla noder och låter layouten kapa dem', function () {
+it('skickar alla noder och låter den smala formen kapa till fyra', function () {
     withoutVite();
 
     [, $anvandare, $container] = fokuskartaKontext();
 
     $motorn = fokuskartaItem($container, 'Motorn');
 
-    foreach (range(1, 4) as $i) {
+    foreach (range(1, 6) as $i) {
         fokuskartaKant($motorn, fokuskartaItem($container, sprintf('Barn %02d', $i)), 'parent');
     }
 
     actingAs($anvandare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->has('map.child', 4)
+        fn (AssertableInertia $page) => $page
+            ->has('itemMap.child.nodes', 6)
+            ->where('itemMap.child.total', 6)
     );
 });
 
@@ -481,9 +394,7 @@ it('skickar alla noder och låter layouten kapa dem', function () {
  *
  * Läget står i querysträngen (`?view=focus`) och ingenstans annat — samma
  * konstruktion som `?view=tree` i itemfliken (issue 154) och `?path=` i issue
- * 95: ett läge man kan länka till är ett läge man kan dela, och det överlever
- * en omladdning. Servern läser strängen en gång och skickar svaret som
- * `linkView`; klienten läser den aldrig själv.
+ * 95. Servern läser strängen en gång och skickar svaret som `linkView`.
  *
  * Ett okänt värde är listan, aldrig ett fel: den som klickade på en gammal
  * länk är inte här.
@@ -510,192 +421,232 @@ it('läser relationsflikens läge ur querysträngen', function () {
     }
 });
 
-// --- formen: den fasta layouten, växeln och teckenförklaringen -----------
+// --- formen: den smala formen på alla bredder ----------------------------
 
 /*
- * Klart när: "en rad har fler noder än som får plats visas de första och *+N
- * till*".
+ * Klart när: "med compact finns inga sidokolumner, inget ItemMapEdges, inget
+ * öga och ingen väg" (ADR-0063 § 1 och 3).
  *
- * Layouten är tre rader och två sidor, och taken är TAL och ingen mätning:
- * samma karta ritas på en telefon och i högerpanelen, och en rad som räknade
- * ut sitt utrymme hade krävt en webbläsare för att bli rätt. Antalet som inte
- * fick plats räknas ur listans längd och det fasta taket, och raden leder till
- * relationsfliken — listan över alla — så att den som vill se resten har en väg
- * dit.
- *
- * Ingen horisontell skrollning: en karta som skrollar i sidled är en karta man
- * inte ser (GenomgangTest prövar samma sak över hela frontenden).
+ * Den smala formen är den containerkartan har under `md:`, men `compact` låter
+ * den gälla på alla bredder: inga `md:`-klasser får ändra formen. Avstånden är
+ * `gap-3` och `mt-6`.
  */
-it('ritar en fast layout med tre rader och två sidor, och +N till när raden är full', function () {
-    $kartan = fokuskartaKod('components/FocusMap.vue');
+it('rätar den smala formen på alla bredder med compact', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
 
-    expect($kartan)->toContain('const PARENT_LIMIT = 3;')
-        ->toContain('const CHILD_LIMIT = 3;')
-        ->toContain('const RELATED_PER_SIDE = 2;');
+    expect($kartan)->toContain('compact: { type: Boolean, default: false }')
+        // Vägen och linjelagret hör till den fulla formen.
+        ->toContain('<template v-if="!compact">')
+        ->toContain('v-if="map.path.length > 0"')
+        ->toContain('<ItemMapEdges :map="map" />')
+        // Sidokolumnerna ritas inte, och de relaterade står under barnen.
+        ->toContain('v-if="!compact"')
+        ->toContain(":class=\"compact ? '' : 'md:hidden'\"")
+        // De md:-klasser som hör till den fulla formen är villkorade.
+        ->toContain(":class=\"compact ? '' : 'md:gap-6 md:max-w-[52.5rem]'\"")
+        ->toContain(":class=\"compact ? '' : 'md:mt-14 md:gap-6 md:max-w-[52.5rem]'\"");
 
-    // De första noderna ritas och resten räknas — inte tvärtom.
-    expect($kartan)->toContain('props.map.parent.slice(0, PARENT_LIMIT)')
-        ->toContain('props.map.child.slice(0, CHILD_LIMIT)')
-        ->toContain('props.map.related.slice(0, RELATED_PER_SIDE)')
-        ->toContain('props.map.related.slice(RELATED_PER_SIDE, RELATED_PER_SIDE * 2)');
+    // Den smala formens avstånd står kvar på båda listorna.
+    expect(substr_count($kartan, 'flex-wrap justify-center gap-3'))->toBe(2)
+        ->and($kartan)->toContain("'mt-6 flex w-full items-center justify-center'");
+});
 
-    expect($kartan)->toContain('props.map.parent.length - PARENT_LIMIT')
-        ->toContain('props.map.child.length - CHILD_LIMIT')
-        ->toContain('props.map.related.length - RELATED_PER_SIDE * 2');
+/*
+ * Klart när: "korten leder till nodernas sidor och mitten är ingen länk"
+ * (ADR-0063 § 3).
+ *
+ * I den smala formen är kortets mål itemets sida, `/containers/{c}/items/{ulid}`,
+ * och ögat ritas aldrig: `openHref` är `null` för varje nod och för mitten.
+ * Mitten är sidan man står på och bär ingen adress alls.
+ */
+it('låter kortet öppna nodens sida och tar bort ögat med compact', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
 
-    // Raden bär talet och leder till relationsfliken.
+    expect($kartan)->toContain(
+        'const nodeHref = (node) => (props.compact ? openHref(node) : focusHref(node));',
+    )->toContain(
+        'const nodeOpenHref = (node) => (props.compact ? null : openHref(node));',
+    )->toContain(
+        "props.compact ? null : center.value.kind === 'item' ? openHref(center.value) : null",
+    );
+
+    // Noderna får det villkorade målet och det villkorade ögat; mitten får
+    // bara ögat, som är null i den smala formen.
+    expect(substr_count($kartan, ':href="nodeHref(node)"'))->toBe(3)
+        ->and(substr_count($kartan, ':open-href="nodeOpenHref(node)"'))->toBe(3)
+        ->and($kartan)->toContain(':open-href="centerOpenHref"');
+
+    expect($kartan)->not->toContain(':href="centerOpenHref"');
+});
+
+/*
+ * Klart när: "högst 4 per grupp ritas och resten är *+N till* ur total"
+ * (ADR-0063 § 5).
+ *
+ * Taken är TAL och ingen mätning, och `+N` räknas ur gruppens `total` minus
+ * antalet ritade noder. Utan `compact` är serverns tak oförändrade.
+ */
+it('ritar högst fyra per grupp och räknar +N ur total', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain('const COMPACT_LIMIT = 4;')
+        ->toContain('const drawLimit = (nodes) => (props.compact ? nodes.slice(0, COMPACT_LIMIT) : nodes);')
+        ->toContain('const parents = computed(() => drawLimit(props.map.parent.nodes));')
+        ->toContain('const children = computed(() => drawLimit(props.map.child.nodes));')
+        ->toContain('const relatedBelow = computed(() => drawLimit(props.map.related.nodes));');
+
+    expect($kartan)->toContain('props.map.parent.total - parents.value.length')
+        ->toContain('props.map.child.total - children.value.length')
+        ->toContain('props.map.related.total - relatedBelow.value.length');
+
     expect($kartan)->toContain("t('item.map.more', { count: moreParents })")
         ->toContain("t('item.map.more', { count: moreChildren })")
         ->toContain("t('item.map.more', { count: moreRelated })")
         ->toContain(':href="overflowHref"');
-
-    // Itemet i mitten och de relaterade på var sin sida, med mittnoden ur
-    // `map.self` och noderna ur de tre grupperna.
-    expect($kartan)->toContain(':node="map.self"')
-        ->toContain('v-for="node in parents"')
-        ->toContain('v-for="node in children"')
-        ->toContain('v-for="node in relatedLeft"')
-        ->toContain('v-for="node in relatedRight"');
-
-    // Linjerna mellan raderna, som i bild 6.
-    expect($kartan)->toContain('bg-border');
-
-    // Ingen sidledsskrollning, och `md:` är den enda brytpunkten.
-    expect($kartan)->not->toMatch('/overflow-x-(auto|scroll)/');
 });
 
 /*
- * Klart när: "teckenförklaringen har tre sorter".
- *
- * De tre slagen ritas ur EN lista, och orden kommer ur `lang/` som all annan
- * text ([[ADR-0013 Språk och i18n]]). Noderna bär samma ord under sitt namn —
- * teckenförklaringen och noden under den kan därför inte säga olika saker.
+ * Klart när: "Under teckenförklaringen står länken *Open in map*
+ * (`item.map.open_full`) till `overflowHref`, med 44 px träffyta" (ADR-0063
+ * § 6).
  */
-it('ritar teckenförklaringen med tre sorter ur lang/', function () {
-    $kartan = fokuskartaKod('components/FocusMap.vue');
-    $noden = fokuskartaKod('components/FocusMapNode.vue');
+it('lägger Open in map under teckenförklaringen', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
 
-    expect($kartan)->toContain("const kinds = ['parent', 'child', 'related'];")
-        ->toContain('v-for="kind in kinds"')
-        ->toContain('{{ t(`item.map.kind.${kind}`) }}');
+    preg_match('/<Link\s+v-if="compact"[\s\S]*?<\/Link>/', $kartan, $träffar);
 
-    // Varje nod bär sitt slag som synlig text, och prickens färg kommer ur en
-    // roll — orden är desamma som förklaringens.
-    expect($noden)->toContain('{{ label }}')
-        ->toContain(':class="dot"');
+    $länken = $träffar[0] ?? '';
 
-    expect(Lang::get('ui.item.map.kind.parent', [], 'en'))->toBe('Parent')
-        ->and(Lang::get('ui.item.map.kind.child', [], 'en'))->toBe('Child')
-        ->and(Lang::get('ui.item.map.kind.related', [], 'en'))->toBe('Related');
-});
+    expect($länken)->not->toBe('');
 
-/*
- * Klart när: "noderna går att nå med tangentbord och har en läsbar etikett för
- * skärmläsare".
- *
- * Noden är en `<Link>` — alltså en `<a href>`, tabbbar av sig själv — och dess
- * tillgängliga namn är namnet som SYNLIG text under ikonen: ingen `aria-label`
- * som kan glida ifrån namnet den beskriver. Plusknappen är en `<button>` med
- * ett `aria-label` som namnger både handlingen och noden, för en ikon utan ord
- * är inget namn. Träffytorna är 44 px (issue 68a § Beslut 3), och fokusringen
- * får aldrig tas bort ([[ADR-0042 Designsystemet]] § Beslut).
- */
-it('ger noderna tangentbord, en läsbar etikett och en plusknapp med namn', function () {
-    $noden = fokuskartaKod('components/FocusMapNode.vue');
-
-    expect($noden)->toContain('<Link')
-        ->toContain(':href="node.href"')
-        // Namnet är texten i länken, alltså länkens tillgängliga namn.
-        ->toContain('{{ node.name }}')
-        // En nod utan plus ritas utan knapp: en tom meny ger ingen knapp.
-        ->toContain('v-if="node.rows.length > 0"')
-        ->toContain('<button')
-        ->toContain("t('item.map.node_menu', { name: node.name })")
+    expect($länken)->toContain(':href="overflowHref"')
         ->toContain('min-h-11')
-        ->toContain('focus-visible:ring-focus');
+        ->toContain("t('item.map.open_full')");
 
-    // Mittnoden är ingen länk: den ÄR sidan man står på.
-    expect($noden)->toContain('aria-current="page"');
+    // Länken står efter teckenförklaringen.
+    $förklaringen = strpos($kartan, "t('item.map.same_item')");
+    $öppna = strpos($kartan, "t('item.map.open_full')");
 
-    // Och menyn är samma ark som skalets plusknapp, med nodens rader och
-    // nodens namn som rubrik — raderna är relativa till just den noden.
-    $kartan = fokuskartaKod('components/FocusMap.vue');
+    expect($förklaringen)->not->toBeFalse()
+        ->and($öppna)->not->toBeFalse()
+        ->and($öppna)->toBeGreaterThan($förklaringen);
 
-    expect($kartan)->toContain("import CreateMenu from './CreateMenu.vue'")
-        ->toContain('<CreateMenu')
-        ->toContain(':rows="menuRows"')
-        ->toContain(':heading="menuName"')
-        ->toContain('@open-menu="openMenu"');
+    expect(Lang::get('ui.item.map.open_full', [], 'en'))->toBe('Open in map');
 });
 
 /*
- * Klart när: "plusknappen under en nod öppnar nodens meny".
+ * Klart när: "bara mittkortet har plustecknet, och dess rader bär sidans
+ * förekomst" (ADR-0063 § 4).
  *
- * Testarfynd 2026-10-02: första trycket på nodens plus gjorde ingenting.
- * `CreateMenu` ritas av ett `v-if` på `menuRows`, så arket fanns inte i DOM:en
- * när `openMenu()` satte raderna och `menuOpen = true` i samma tick. UiSheet
- * visar sin `<dialog>` när `open` ÄNDRAS — den har ingen `immediate` — och ett
- * ark som monteras med `open` redan sant hinner aldrig se ändringen. Nästa
- * tryck ändrade ingenting (`menuOpen` var redan sant), så menyn förblev stängd.
- *
- * Menyn är därför monterad från början, som skalets i AppLayout: dess `v-if`
- * hänger på `create` — MÅLET för menyn — och aldrig på öppna-läget. Här
- * motsvaras det av `v-if="node.rows.length > 0"` på knappen i FocusMapNode: en
- * nod utan rader ritar ingen knapp, så ett monterat ark utan rader kan ingen
- * öppna. UiSheet rörs inte: den delas av varje ark i appen.
+ * Menyn är monterad från början: `UiSheet` visar sitt `<dialog>` när `open`
+ * ÄNDRAS, och ett ark som föds med `open` redan sant hade aldrig visats.
+ * Noderna får aldrig några rader, så deras plusknapp kan inte ritas.
  */
-it('håller nodmenyn monterad så att första klicket öppnar den', function () {
-    $kartan = fokuskartaKod('components/FocusMap.vue');
+it('ritar plusmenyn bara i mittkortet och håller den monterad', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
+
+    // Raderna skickas bara till mitten.
+    expect(substr_count($kartan, ':rows="map.rows"'))->toBe(1);
 
     $menyn = fokuskartaTagg($kartan, 'CreateMenu');
 
-    // Taggen lästes hel, och öppna-läget bor kvar i den.
     expect($menyn)->toContain(':open="menuOpen"')
         ->toContain(':rows="menuRows"')
         ->toContain(':heading="menuName"')
         ->toContain('@close="closeMenu"');
 
-    // ...och inget `v-if` finns på den: arket monteras före första klicket, så
-    // att `open` går från falskt till sant när knappen trycks.
     expect($menyn)->not->toContain('v-if');
 });
 
 /*
- * Klart när: "högerpanelen visar itemet …" och "på mobil är fokuskartan ett
- * läge i relationsflikens *Fokus*".
+ * Klart när: "containerkartan utan compact är oförändrad".
  *
- * Panelen ritas av Show.vue och är dold under `md:`: där är kartan ett läge i
- * relationsfliken i stället, och samma karta två gånger på samma skärm hade
- * varit samma nod två gånger. Växeln är `ItemViewSwitch` — samma komponent som
- * itemfliken använder (issue 154) — och den är `md:hidden`, för över
- * brytpunkten står kartan i panelen och listan är det enda fliken visar.
+ * Den fulla formen har kvar sidokolumnerna, linjelagret, vägen och de
+ * `md:`-klasser som bär rutnätet. Proppen är `false` som förval, så varje yta
+ * som inte ber om den smala formen ritar som förut.
  */
-it('visar kartan i högerpanelen över md: och i relationsfliken under', function () {
+it('lämnar containerkartan oförändrad utan compact', function () {
+    $kartan = fokuskartaKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain('compact: { type: Boolean, default: false }')
+        ->toContain('items-end gap-3 md:flex')
+        ->toContain('items-start gap-3 md:flex')
+        ->toContain('flex w-full items-center justify-center md:mt-14 md:gap-12')
+        ->toContain('const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTail.value}`;');
+});
+
+// --- ytorna: panelen och fokusläget --------------------------------------
+
+/*
+ * Klart när: "högerpanelen och läget *Focus* ritar `ItemMap` med `compact`".
+ *
+ * Panelen är ramen (`UiCard` med rubriken), och Show.vue skickar `itemMap`,
+ * `itemMapStatuses` och containerns ULID till båda ytorna. `overflowHref` är
+ * hela kartan med itemet som mitt.
+ */
+it('ritar ItemMap compact i högerpanelen och i fokusläget', function () {
     $vy = fokuskartaKod('pages/Containers/Items/Show.vue');
     $panelen = fokuskartaKod('components/ItemMapPanel.vue');
     $sektionen = fokuskartaKod('components/ItemLinkSection.vue');
 
     expect($vy)->toContain('<ItemMapPanel')
-        ->toContain('class="hidden md:block"')
-        ->toContain(':map="map"')
-        ->toContain(':overflow-href="relationsHref"')
-        ->toContain('tabs.value.find((tab) => tab.key === \'relations\')?.href');
+        ->toContain(':map="itemMap"')
+        ->toContain(':statuses="itemMapStatuses"')
+        ->toContain(':container-ulid="container.ulid"')
+        ->toContain(':overflow-href="mapFocusHref"')
+        ->toContain(':item-map="itemMap"')
+        ->toContain('?view=map&focus=${props.item.ulid}');
 
-    expect($panelen)->toContain("import FocusMap from './FocusMap.vue'")
-        ->toContain('<FocusMap')
+    expect($panelen)->toContain("import ItemMap from './ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain('compact')
+        ->toContain(':map="map"')
+        ->toContain(':statuses="statuses"')
+        ->toContain(':container-ulid="containerUlid"')
         ->toContain("t('item.map.heading')");
 
-    expect($sektionen)->toContain("import ItemViewSwitch from './ItemViewSwitch.vue'")
-        ->toContain('<ItemViewSwitch')
-        ->toContain(':views="views"')
-        ->toContain(':current="view"')
-        ->toContain('md:hidden')
-        ->toContain("import FocusMap from './FocusMap.vue'")
+    expect($sektionen)->toContain("import ItemMap from './ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain(':map="itemMap"')
+        ->toContain(':statuses="statuses"')
+        ->toContain(':container-ulid="containerUlid"')
+        ->toContain('compact')
         ->toContain("focusing ? 'hidden md:block' : ''");
 
-    // ...och växelns adresser byggs ur flikraden, så de bär den aktuella
-    // förekomsten och pekar på relationsfliken.
-    expect($vy)->toContain('const linkViews = computed(')
-        ->toContain('href: relationsHref.value')
-        ->toContain('&view=focus');
+    // Panelen ställer ingen egen fråga.
+    foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {
+        expect($panelen)->not->toContain($hämtning);
+    }
+});
+
+// --- borttagningen: FocusMap, FocusMapNode och den gamla map -------------
+
+/*
+ * Klart när: "`FocusMap.vue`, `FocusMapNode.vue`, proppen `map` i `show()`,
+ * `map()` och `nodeRows()` finns inte".
+ *
+ * Två komponenter och en propp tas bort, och kontrollern bär inte längre den
+ * gamla upplösningen. `itemMap` är den enda kartan i svaret.
+ */
+it('har tagit bort FocusMap, FocusMapNode och den gamla map', function () {
+    withoutVite();
+
+    expect(File::exists(resource_path('js/components/FocusMap.vue')))->toBeFalse()
+        ->and(File::exists(resource_path('js/components/FocusMapNode.vue')))->toBeFalse();
+
+    $kontrollern = File::get(app_path('Http/Controllers/ItemController.php'));
+
+    expect(str_contains($kontrollern, 'private function map('))->toBeFalse()
+        ->and(str_contains($kontrollern, 'private function nodeRows('))->toBeFalse()
+        ->and(str_contains($kontrollern, "'map' => \$this->map("))->toBeFalse();
+
+    [, $anvandare, $container] = fokuskartaKontext();
+    $motorn = fokuskartaItem($container, 'Motorn');
+
+    actingAs($anvandare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->missing('map')
+            ->has('itemMap')
+            ->has('itemMapStatuses')
+    );
 });
