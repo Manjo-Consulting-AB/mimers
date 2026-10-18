@@ -314,6 +314,69 @@ it('svarar en tom lista utan att fråga', function () {
 });
 
 /*
+ * Klart när (issue 310 · [[ADR-0062 Kartans luft, listans ruta och den
+ * löpande sökningen]] § 6): `thumbnails()` märker den VALDA bilden med
+ * `chosen: true` och den automatiska med `chosen: false`.
+ *
+ * Den valda bilden är den NYASTE, som i `handle()`-provet ovan: hade nyckeln
+ * räknats ur "finns en pekare" i stället för ur den upplösta bildens `id`
+ * hade båda raderna fått samma svar, och skillnaden varit osynlig. En bild
+ * utan `thumb` är fortfarande ett omslag — `hasThumb` och `chosen` svarar på
+ * olika frågor.
+ */
+it('märker vald bild som chosen och automatisk bild som false', function () {
+    $container = omslagKontext()[2];
+
+    $medVal = omslagItem($container, 'Vald');
+    omslagBilaga($medVal, 'gammal.jpg');
+    $vald = omslagBilaga($medVal, 'ny.jpg');
+    omslagVal($medVal, $vald);
+
+    $automatisk = omslagItem($container, 'Automatisk');
+    $aldsta = omslagBilaga($automatisk, 'gammal.jpg');
+    omslagBilaga($automatisk, 'ny.jpg');
+
+    $utanBild = omslagItem($container, 'Utan bild');
+
+    $omslag = (new ResolveItemCover)->thumbnails([$medVal, $automatisk, $utanBild]);
+
+    expect($omslag[$medVal->id])->toBe([
+        'ulid' => $vald->ulid,
+        'hasThumb' => false,
+        'chosen' => true,
+    ])
+        ->and($omslag[$automatisk->id])->toBe([
+            'ulid' => $aldsta->ulid,
+            'hasThumb' => false,
+            'chosen' => false,
+        ])
+        ->and($omslag[$utanBild->id])->toBeNull();
+});
+
+/*
+ * `chosen` följer den UPPLÖSTA bilden, inte pekaren: en vald bilaga som
+ * mjukraderats faller tillbaka på den äldsta (steg 2), och då är det den
+ * automatiska bilden som ritas — `chosen` ska vara falsk, annars hade listan
+ * låtit ett försvunnet val slå ut ikonen.
+ */
+it('märker inte en mjukraderad pekare som chosen', function () {
+    $item = omslagItem(omslagKontext()[2]);
+    $aldsta = omslagBilaga($item, 'gammal.jpg');
+    $vald = omslagBilaga($item, 'ny.jpg');
+
+    omslagVal($item, $vald);
+    $vald->delete();
+
+    $omslag = (new ResolveItemCover)->thumbnails([$item]);
+
+    expect($omslag[$item->id])->toBe([
+        'ulid' => $aldsta->ulid,
+        'hasThumb' => false,
+        'chosen' => false,
+    ]);
+});
+
+/*
  * Klart när: valet går att sätta, ändra och rensa i itemets redigeravy.
  *
  * Tre skrivningar i samma test, för det är samma fält och samma PATCH:

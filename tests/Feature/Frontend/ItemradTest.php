@@ -91,6 +91,7 @@ it('bär miniatyr eller item-ikonen i en neutral ruta', function () {
     $raden = itemradKod('components/ItemRow.vue');
 
     expect($raden)->toContain('props.cover?.hasThumb');
+    expect($raden)->toContain('props.cover.chosen');
     expect($raden)->toContain('?variant=thumb');
     expect($raden)->toContain('name="item"');
     expect($raden)->toContain('tile="neutral"');
@@ -149,31 +150,51 @@ it('gör hela raden till en länk till itemet', function () {
 });
 
 /*
- * Klart när: listans rad ritar `ItemIcon` med itemets ikon och färg före
- * namnet, och omslagets miniatyr står kvar (issue 303 ·
- * [[ADR-0060 Itemets ikon]] § 6 och 9).
+ * Klart när (issue 310 · [[ADR-0062 Kartans luft, listans ruta och den
+ * löpande sökningen]] § 6): rutan visar en sak, i ordningen vald bild, ikon,
+ * automatisk bild, grå ruta.
  *
- * Ikonen är `props.item.icon` och `props.item.icon_color` — samma fält som
- * `ItemResource` bär sedan issue 301 — och storleken är 20. Grinden är
- * omslaget och inte ikonen: ett item utan ikon ritar den neutrala i samma
- * storlek, så raden aldrig tappar sin ruta.
+ * Provet läser KÄLLAN eftersom komponenten ritas i webbläsaren. Ordningen är
+ * hela regeln: en vald bild ska vinna över ikonen, och ikonen ska vinna över
+ * den automatiska bilden — en `<img>` som låg först hade gett rätt svar i två
+ * av fallen och fel i de andra.
+ *
+ * Den gamla rutan bredvid — `ItemIcon` på 20 px — är borta. Därför räknas
+ * `ItemIcon` och `name="item"` till exakt en förekomst var: raden ritar en
+ * ruta, inte två.
  */
-it('ritar itemets ikon före namnet och behåller omslagets miniatyr', function () {
+it('ritar en ruta i ordningen vald bild, ikon, automatisk bild, grå ruta', function () {
     $raden = itemradKod('components/ItemRow.vue');
 
     expect($raden)->toContain("import ItemIcon from './ItemIcon.vue'");
 
+    $vald = strpos($raden, 'props.cover?.hasThumb && props.cover.chosen');
+    $ikon = strpos($raden, '<ItemIcon');
+    $automatisk = strpos($raden, 'v-else-if="props.cover?.hasThumb"');
+    $gra = strpos($raden, 'tile="neutral"');
+
+    expect($vald)->not->toBeFalse()
+        ->and($ikon)->toBeGreaterThan((int) $vald)
+        ->and($automatisk)->toBeGreaterThan((int) $ikon)
+        ->and($gra)->toBeGreaterThan((int) $automatisk);
+
+    // En ruta: den andra, 20 px bredvid, är borta. Alla fyra grenarna är
+    // 48 px, så raden byter aldrig storlek när bild eller ikon saknas.
+    expect(substr_count($raden, '<ItemIcon'))->toBe(1)
+        ->and(substr_count($raden, 'name="item"'))->toBe(1)
+        ->and(substr_count($raden, 'h-12 w-12'))->toBe(4)
+        ->and($raden)->not->toContain(':size="20"');
+
     $ikonen = itemradTagg($raden, 'ItemIcon');
 
-    expect($ikonen)->toContain(':name="props.item.icon"');
-    expect($ikonen)->toContain(':color="props.item.icon_color"');
-    expect($ikonen)->toContain(':size="20"');
-    expect($ikonen)->toContain('tile');
-    expect($ikonen)->not->toContain('v-if');
+    expect($ikonen)->toContain('v-else-if="props.item.icon"')
+        ->and($ikonen)->toContain(':name="props.item.icon"')
+        ->and($ikonen)->toContain(':color="props.item.icon_color"')
+        ->and($ikonen)->toContain(':size="24"')
+        ->and($ikonen)->toContain('tile')
+        ->and($ikonen)->toContain('h-12 w-12');
 
-    expect(strpos($raden, '<ItemIcon'))->toBeLessThan(strpos($raden, 'props.item.name'));
-
-    // Omslagets miniatyr är kvar på samma plats.
-    expect($raden)->toContain('props.cover?.hasThumb');
-    expect($raden)->toContain('?variant=thumb');
+    // Den valda bilden och den automatiska är samma `<img>`, och båda
+    // kräver `hasThumb` — en bild utan derivat räknas som ingen bild.
+    expect(substr_count($raden, '?variant=thumb'))->toBe(2);
 });

@@ -20,26 +20,39 @@ import UiIcon from './UiIcon.vue';
  * Den hör till kartan, som ritar den per nod (`ContainerMapNode.vue`), och
  * raden bär därför varken `statuses` eller ett eget ord om tillstånd.
  *
+ * **Rutan visar EN sak** (issue 310 · [[ADR-0062 Kartans luft, listans ruta
+ * och den löpande sökningen]] § 6). Raden ritar en enda ruta på 48 px
+ * (`h-12 w-12`) och väljer det första som gäller:
+ *
+ *   1. en VALD omslagsbild med miniatyr,
+ *   2. itemets IKON,
+ *   3. den AUTOMATISKA omslagsbilden med miniatyr, alltså den äldsta bilden,
+ *   4. den grå rutan med den neutrala `item`-ikonen.
+ *
+ * Ett val slår en gissning: den automatiska bilden är systemets gissning,
+ * ikonen och den valda bilden är användarens val. Ikonen står därför före den
+ * automatiska bilden — ett foto som råkar vara äldst ska inte skymma en vald
+ * ikon — men en vald bild vinner över ikonen.
+ *
  * **Omslaget är itemets EGET** (issue 183 · [[ADR-0050 Desktopdesignen]]):
- * `cover` är `{ulid, hasThumb}` eller null, ur
- * App\Actions\Item\ResolveItemCover. `hasThumb` säger att `thumb`-derivatet
- * finns, och först då ritas en `<img>` mot `/files/{ulid}?variant=thumb`
- * ([[ADR-0019 Filleverans]]); annars hade varianten svarat 404 och bilden
- * varit trasig (issue 61b § Beslut 1). Containerns eget omslag läses aldrig
- * här — ett item utan bild ärver inte containerns foto.
+ * `cover` är `{ulid, hasThumb, chosen}` eller null, ur
+ * App\Actions\Item\ResolveItemCover::thumbnails(). `hasThumb` säger att
+ * `thumb`-derivatet finns, och först då ritas en `<img>` mot
+ * `/files/{ulid}?variant=thumb` ([[ADR-0019 Filleverans]]); annars hade
+ * varianten svarat 404 och bilden varit trasig (issue 61b § Beslut 1).
+ * `chosen` skiljer den bild användaren valt från den automatiska. En bild utan
+ * `thumb` räknas som ingen bild i båda fallen. Containerns eget omslag läses
+ * aldrig här — ett item utan bild ärver inte containerns foto.
  *
- * **Itemets egen ikon står före namnet** (issue 303 ·
- * [[ADR-0060 Itemets ikon]] § 6 och 9): `ItemIcon` med `tile`, i storleken 20,
- * ur `item.icon` och `item.icon_color` som `ItemResource` bär sedan issue 301.
- * Ett item utan ikon ritar den neutrala `item`-ikonen i samma storlek, så att
- * raderna står i linje. Omslagets miniatyr står kvar där den står — ikonen
- * ersätter den inte.
+ * **Ikonen är `ItemIcon` med `tile`, i storleken 24** (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 6 och 9): `item.icon` och `item.icon_color` som
+ * `ItemResource` bär sedan issue 301.
  *
- * **Omslagsrutan är `neutral`** ([[ADR-0057 Ikoner och typsnitt]] § 3): ett
- * item utan bild har ingen domän som ger en annan ton, och `neutral` är regeln
- * för allt annat. Ikonen är `item` — samma roll som containerns itemyta
- * använder — och `UiIcon` äger storlek, linjebredd, färg och `aria-hidden`
- * (issue 282).
+ * **Den grå rutan är `neutral`** ([[ADR-0057 Ikoner och typsnitt]] § 3): ett
+ * item utan bild och ikon har ingen domän som ger en annan ton, och `neutral`
+ * är regeln för allt annat. Ikonen är `item` — samma roll som containerns
+ * itemyta använder — och `UiIcon` äger storlek, linjebredd, färg och
+ * `aria-hidden` (issue 282).
  *
  * **Hela raden är länken** (issue 212). Träffytan är `min-h-11` — 44 px ur
  * issue 68a § Beslut 3 — och bor på länken, som GenomgangTest mäter.
@@ -50,8 +63,8 @@ const props = defineProps({
     /* Ett item ur `ItemResource`: `{ ulid, name, description, … }`. */
     item: { type: Object, required: true },
     /*
-     * Itemets omslag, `{ulid, hasThumb}` eller null — uppslaget är detsamma
-     * för alla rader (App\Actions\Item\ResolveItemCover::thumbnails()).
+     * Itemets omslag, `{ulid, hasThumb, chosen}` eller null — uppslaget är
+     * detsamma för alla rader (App\Actions\Item\ResolveItemCover::thumbnails()).
      */
     cover: { type: Object, default: null },
     /*
@@ -72,32 +85,48 @@ const itemUrl = computed(
             :href="itemUrl"
             class="flex min-h-11 items-center gap-4 py-3 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
+            <!--
+                DEN valda bilden går först: ett uttryckligt val slår ikonen.
+            -->
             <img
-                v-if="props.cover?.hasThumb"
+                v-if="props.cover?.hasThumb && props.cover.chosen"
                 :src="`/files/${props.cover.ulid}?variant=thumb`"
                 alt=""
                 class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
             >
 
             <!--
-                Utan derivat ritas `item`-ikonen i den neutrala rutan i
-                stället för en `<img>` mot en variant som inte finns — samma
-                val som RecentImagesPanel gör (issue 61b § Beslut 1).
+                Ikonen står före den AUTOMATISKA bilden — en vald ikon skyms
+                inte av ett foto som råkar vara äldst (ADR-0062 § 6).
             -->
+            <ItemIcon
+                v-else-if="props.item.icon"
+                :name="props.item.icon"
+                :color="props.item.icon_color"
+                :size="24"
+                tile
+                class="h-12 w-12 shrink-0"
+            />
+
+            <!--
+                Den automatiska bilden, när ikonen saknas. Utan derivat ritas
+                den neutrala rutan i stället för en `<img>` mot en variant som
+                inte finns — samma val som RecentImagesPanel gör (issue 61b
+                § Beslut 1).
+            -->
+            <img
+                v-else-if="props.cover?.hasThumb"
+                :src="`/files/${props.cover.ulid}?variant=thumb`"
+                alt=""
+                class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
+            />
+
             <UiIcon
                 v-else
                 name="item"
                 :size="24"
                 tile="neutral"
                 class="h-12 w-12 shrink-0"
-            />
-
-            <ItemIcon
-                :name="props.item.icon"
-                :color="props.item.icon_color"
-                :size="20"
-                tile
-                class="shrink-0"
             />
 
             <span class="min-w-0 flex-1">

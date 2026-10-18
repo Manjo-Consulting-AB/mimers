@@ -708,11 +708,12 @@ it('låter en förekomst utanför omfånget stå utan verkan på statusen', func
 /*
  * Klart när (issue 183): varje rad bär sitt EGET omslag bredvid resursen.
  *
- * `covers` är itemets ULID → `{ulid, hasThumb}` eller null, och ligger BREDVID
- * `ItemResource` — `/api` har inte bett om fältet och resursen rörs inte
- * (`missing('items.0.cover')`). Tre rader täcker de tre svaren: en med en vald
- * bild som har ett `thumb`-derivat, en med en bild UTAN derivat, och en med
- * bara ett dokument.
+ * `covers` är itemets ULID → `{ulid, hasThumb, chosen}` eller null, och ligger
+ * BREDVID `ItemResource` — `/api` har inte bett om fältet och resursen rörs
+ * inte (`missing('items.0.cover')`). Tre rader täcker de tre svaren: en med en
+ * vald bild som har ett `thumb`-derivat, en med en automatisk bild UTAN
+ * derivat, och en med bara ett dokument. `chosen` skiljer de två första åt
+ * även när båda har en miniatyr (M36 · issue 310).
  *
  * Den valda bilden är den NYASTE av två — annars vore skillnaden mellan "vald"
  * och "äldst" osynlig i listvägen, precis som i enhetsprovet.
@@ -739,8 +740,10 @@ it('ger varje rad sitt eget omslag bredvid resursen', function () {
             ->has('items', 3)
             ->where("covers.{$medThumb->ulid}.ulid", $vald->ulid)
             ->where("covers.{$medThumb->ulid}.hasThumb", true)
+            ->where("covers.{$medThumb->ulid}.chosen", true)
             ->where("covers.{$utanDerivat->ulid}.ulid", $utanThumb->ulid)
             ->where("covers.{$utanDerivat->ulid}.hasThumb", false)
+            ->where("covers.{$utanDerivat->ulid}.chosen", false)
             ->where("covers.{$baraDokument->ulid}", null)
             ->missing('items.0.cover')
     );
