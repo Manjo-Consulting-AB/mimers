@@ -168,11 +168,21 @@ BAS_ROD_PAUS = 60 * 60
 # KONFIGURATION & HJÄLPFUNKTIONER
 # =====================================================================
 
+def pushover_prio_och_ljud(message):
+    """Prio och ljud efter meddelandets inledande emoji: 🚨/⚠️ kräver Tony, ✅ är godkänd/mergad."""
+    if message.startswith(("🚨", "⚠️")):
+        return "1", "tugboat"
+    if message.startswith("✅"):
+        return "0", "magic"
+    return "-1", None
+
+
 def send_pushover(message):
     """Anropar det lokala skriptet ~/.local/bin/notify-tony säkert utan skal-exekvering."""
     script_path = os.path.expanduser("~/.local/bin/notify-tony")
+    prio, ljud = pushover_prio_och_ljud(message)
     try:
-        subprocess.run([script_path, message], check=True)
+        subprocess.run([script_path, message, "Claude", prio, ljud or ""], check=True)
     except Exception as e:
         print(f"⚠️ Kunde inte skicka Pushover-notis via {script_path}: {e}")
 
