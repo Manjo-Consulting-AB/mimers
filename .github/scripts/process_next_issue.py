@@ -39,6 +39,7 @@ sys.stderr.reconfigure(line_buffering=True)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import omfangslint  # noqa: E402  - samma katalog, ingen paketstruktur
+import omfangsruta  # noqa: E402  - samma katalog
 
 
 def is_peak_hour() -> bool:
@@ -1076,6 +1077,65 @@ def backa_trasig_egen_commit(worktree_path, branch_name, head_fore, head_efter, 
         print(f"  ⚠ Kunde inte backa {branch_name} på origin: {res.stderr}")
 
 
+ATGARDSVARV_RUBRIK = "## Åtgärdsvarv"
+
+
+def atgardsvarv_i_kropp(kropp, varv, modell, sha, filer, innanfor):
+    """Lägger en rad om åtgärdsvarvet sist i avsnittet `## Åtgärdsvarv`.
+
+    PR-kroppen skrivs en gång, av bygg_pr_kropp(), och rördes aldrig av
+    åtgärdsvarven - tre gånger (#797, #801, #892) sa den att en fil inte rörts
+    medan ett varv ändrat den. Vilka filer ett varv ändrade är ett faktum
+    skriptet har; prosan går inte att kontrollera. Filer som ingen glob i
+    `innanfor` täcker markeras `(utanför In scope)`.
+
+    Ren funktion. Står `sha` redan i avsnittet returneras kroppen oförändrad.
+    Avsnittet läggs sist, efter `## Processnotering`, så att innehall_under()
+    och oppna_fragor() läser samma text som förut.
+    """
+    kropp = kropp or ""
+    kort = sha[:8]
+    traff = re.search(rf"^{re.escape(ATGARDSVARV_RUBRIK)}[ \t]*$", kropp, flags=re.M)
+    if traff and f"`{kort}`" in kropp[traff.end():]:
+        return kropp
+
+    def fil_text(fil):
+        ute = not any(omfangsruta.matchar(fil, m) for m in innanfor)
+        return f"`{fil}`" + (" (utanför In scope)" if ute else "")
+
+    rad = f"- Varv {varv} ({modell}, `{kort}`): " + ", ".join(fil_text(f) for f in filer)
+    if traff is None:
+        return kropp.rstrip("\n") + f"\n\n{ATGARDSVARV_RUBRIK}\n\n{rad}\n"
+    rest = kropp[traff.end():]
+    nasta = re.search(r"^##[ \t]+", rest, flags=re.M)
+    slut = traff.end() + (nasta.start() if nasta else len(rest))
+    fore = kropp[:slut].rstrip("\n")
+    efter = kropp[slut:]
+    return fore + "\n" + rad + "\n" + (("\n" + efter) if efter else "")
+
+
+def skriv_atgardsvarv_i_kropp(pr_number, varv, modell, head_fore, issue_body, worktree_path):
+    """Skriver varvets filer i PR-kroppen. Fail-open: ett fel skrivs ut och
+    fäller inte varvet, som kor_omfangslint(). Körs efter commit och före push -
+    CI körs på `edited` och concurrency-gruppen i ci.yml avbryter den körningen
+    när pushen kommer direkt efter, medan en redigering efter pushen hade
+    avbrutit körningen på den nya commiten."""
+    try:
+        filer = [f for f in run_cmd(["git", "diff", "--name-only", head_fore, "HEAD"],
+                                     cwd=worktree_path).stdout.splitlines() if f.strip()]
+        if not filer:
+            return
+        sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        innanfor = omfangsruta.globbar(omfangsruta.avsnitt(issue_body, "In scope"))
+        kropp = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "body"],
+                                    cwd=worktree_path).stdout).get("body") or ""
+        ny = atgardsvarv_i_kropp(kropp, varv, modell, sha, filer, innanfor)
+        if ny != kropp:
+            run_cmd(bygg_kroppsuppdatering(pr_number, ny), cwd=worktree_path)
+    except Exception as fel:
+        print(f"  ⚠ Kunde inte skriva åtgärdsvarvet i PR-kroppen: {fel}. Fortsätter.")
+
+
 def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings, fragor=""):
     """
     Åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
@@ -1159,6 +1219,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         staged = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=worktree_path).stdout.strip()
         if staged:
             run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num} ({agent_namn})"], cwd=worktree_path)
+        skriv_atgardsvarv_i_kropp(pr_number, round_num, agent_namn, head_fore, issue_body, worktree_path)
         git_natverk(["git", "push", "origin", branch_name], cwd=worktree_path)
         pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
