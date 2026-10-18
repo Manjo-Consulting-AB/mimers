@@ -65,6 +65,8 @@ Tillbaka till [[00 Index]].
 | [[ADR-0057 Ikoner och typsnitt]] | Ikonerna är Lucides, kopierade in under rollnamn och ritade av `UiIcon`; ikonrutans ton följer datumregeln eller domänen; Inter från egen server; `title` medelfet; skuggan och glaset som tokens | Frontend |
 | [[ADR-0058 Trädet som tabell]] | Itemflikens träd är en tabell med egna siffror per item och containern som rotrad; filtret gäller trädet och visar träffarna med vägen dit; *Expand all*; ett huvud för de tre lägena | Frontend |
 | [[ADR-0059 Kartan med en mitt]] | Kartläget är en fokuskarta med containern eller ett item i mitten och `focus` i adressen; klick centrerar, ikonen öppnar, plusmenyn bara på mitten; vägen till mitten ovanför; filtret väljer mitten och gömmer inga grannar | Frontend, [[Items och organisation]] |
+| [[ADR-0060 Itemets ikon]] | Itemets ikon väljs ur hela Lucide och laddas en i taget; ett okänt namn ritar den neutrala; åtta färger i en fast palett utan rött; trädets rotrad fälls inte | Frontend, [[Items och organisation]] |
+| [[ADR-0061 Kartans kort och kanter]] | Kartans kort har ikonen till vänster och öppna-ikonen i hörnet; ingen räknare för barn, statusen bara som försenad; böjda linjer med pilspetsar i ett SVG-lager som mäter korten | Frontend |
 
 ## Om att ändra ett beslut
 
