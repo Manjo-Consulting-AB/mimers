@@ -115,6 +115,10 @@ class ContainerController extends Controller
             $request->validated('name'),
             $request->validated('kind'),
             $request->validated('description'),
+            // Ikonen är ett val vid skapandet när klienten skickar den
+            // (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
+            $request->validated('icon'),
+            $request->validated('icon_color'),
         );
 
         return (new ContainerResource($container))

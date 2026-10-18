@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Container;
 
+use App\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * PATCH /api/containers/{container}, se issue 8 § Beslut 9: PATCH tar bara
@@ -35,6 +37,14 @@ use Illuminate\Foundation\Http\FormRequest;
  * `cost_entry.currency` rörs inte av den här requesten, av kontrollern eller
  * av någon migration i issue 85 — det som står i en rad är vad som betalades
  * ([[ADR-0037 Valutans arv]] § Beslut).
+ *
+ * `icon` och `icon_color` (issue 314 · [[ADR-0064 Containerns ikon]] § 1
+ * och 2) följer `kind` och `currency`: båda är `sometimes` + `nullable`, så
+ * en UTELÄMNAD nyckel lämnar kolumnen orörd medan `icon: null` TÖMMER den.
+ * Reglerna är ordagrant itemets (UpdateItemRequest) — `icon` prövas bara
+ * till formatet och `icon_color` mot `Item::ICON_COLORS`, som är det enda
+ * stället servern känner till paletten ([[ADR-0060 Itemets ikon]] § 4
+ * och 5).
  */
 class UpdateContainerRequest extends FormRequest
 {
@@ -92,6 +102,8 @@ class UpdateContainerRequest extends FormRequest
             // `sometimes` skiljer "töm den" från "ändra den inte".
             'description' => ['sometimes', 'nullable', 'string'],
             'currency' => ['sometimes', 'nullable', 'string', 'alpha', 'size:3'],
+            'icon' => ['sometimes', 'nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
+            'icon_color' => ['sometimes', 'nullable', Rule::in(Item::ICON_COLORS)],
         ];
     }
 }

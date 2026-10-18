@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Container;
 
+use App\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -43,6 +44,14 @@ use Illuminate\Validation\Rule;
  * klientskickat `template_source_id` i requestkroppen är alltså ett fält
  * `validated()` aldrig innehåller, och når därmed aldrig
  * App\Models\Container.
+ *
+ * `icon` och `icon_color` (issue 314 · [[ADR-0064 Containerns ikon]] § 1
+ * och 2) valideras ordagrant som itemets (StoreItemRequest): `icon` är ett
+ * Lucide-namn i kebab-case — gemener, siffror och enkla bindestreck, högst
+ * 64 tecken — och regeln prövar FORMATET, aldrig om Lucide har ikonen,
+ * eftersom listan bor i klientens bygge ([[ADR-0060 Itemets ikon]] § 4).
+ * `icon_color` är en nyckel ur `Item::ICON_COLORS` och aldrig en hex-kod
+ * (ADR-0060 § 5); paletten kopieras inte, den läses ur itemets konstant.
  */
 class StoreContainerRequest extends FormRequest
 {
@@ -86,6 +95,8 @@ class StoreContainerRequest extends FormRequest
             // TEXT, som `item.description`, och har därför ingen `max:255` att
             // pröva mot: regeln är format och ingenting annat.
             'description' => ['nullable', 'string'],
+            'icon' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
+            'icon_color' => ['nullable', Rule::in(Item::ICON_COLORS)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
         ];
     }

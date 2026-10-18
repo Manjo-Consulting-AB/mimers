@@ -476,6 +476,10 @@ class ContainerController extends Controller
                 $request->validated('name'),
                 $request->validated('kind'),
                 $request->validated('description'),
+                // Ikonen är ett val vid skapandet när formuläret skickar
+                // den (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
+                $request->validated('icon'),
+                $request->validated('icon_color'),
             );
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['quota' => $translator->message($e)]);

@@ -256,11 +256,14 @@ it('har ingen sluten lista kvar för containerns kind', function () {
     expect($träffar)->toBe([]);
 
     // Reglerna för `kind` är längd och format — aldrig medlemskap i en mängd.
+    // Filen får sedan issue 314 innehålla `Rule::in` för `icon_color`, som
+    // läser `Item::ICON_COLORS`; påståendet gäller därför `kind`s egen
+    // regelrad och inte hela filen.
     foreach (['StoreContainerRequest', 'UpdateContainerRequest'] as $klass) {
         $kalla = File::get(app_path("Http/Requests/Container/{$klass}.php"));
 
-        expect($kalla)->not->toContain('Rule::in');
-        expect($kalla)->toContain("'kind'");
+        expect($kalla)->toMatch("/'kind'\\s*=>\\s*\\[[^\\]]*\\]/");
+        expect($kalla)->not->toMatch("/'kind'\\s*=>\\s*\\[[^\\]]*Rule::in/");
     }
 });
 
@@ -528,6 +531,8 @@ it('bär beskrivningen som en nullbar kolumn på containern', function () {
  * precis som `description` gör. Listan uppdaterades av samma skäl som regeln
  * ovan anger. `cover_focus_x`/`cover_focus_y` lades till av issue 682 —
  * fokuspunkten på samma bild, och samma skäl: den är ett faktum om containern.
+ * `icon` och `icon_color` lades till av issue 314 ([[ADR-0064 Containerns
+ * ikon]] § 2): containerns egna presentationsval, samma skäl igen.
  */
 it('har inte fått någon annan kolumn än description', function () {
     $kolumner = collect(Schema::getColumns('container'))->pluck('name')->sort()->values()->all();
@@ -541,6 +546,8 @@ it('har inte fått någon annan kolumn än description', function () {
         'currency',
         'deleted_at',
         'description',
+        'icon',
+        'icon_color',
         'id',
         'inbox_user_id',
         'kind',

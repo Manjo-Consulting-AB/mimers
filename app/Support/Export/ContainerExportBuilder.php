@@ -346,6 +346,11 @@ class ContainerExportBuilder
                 // Containerns bild, eller null (issue 158). Alltid med som
                 // nyckel — samma regel som `kind` i ContainerResource.
                 'cover' => $cover,
+                // Containerns ikon och palettnyckel (issue 314 · [[ADR-0064
+                // Containerns ikon]] § 2). Alltid med som nycklar, även som
+                // null, som itemets `icon`/`icon_color` i buildItems().
+                'icon' => $container->icon,
+                'icon_color' => $container->icon_color,
             ],
             'categories' => $categories->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,

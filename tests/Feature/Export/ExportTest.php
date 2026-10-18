@@ -277,6 +277,38 @@ it('container.json bär itemets ikon och färg', function () {
     expect($items['Utan ikon']['icon_color'])->toBeNull();
 });
 
+it('container.json bär containerns ikon och färg', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    $container->update(['icon' => 'sailboat', 'icon_color' => 'blue']);
+
+    $export = exporteringBeställOchKör($headers, $container);
+
+    $zip = new ZipArchive;
+    expect($zip->open(Storage::disk('files')->path($export->storage_path)))->toBeTrue();
+    $payload = json_decode($zip->getFromName('container.json'), true);
+    $zip->close();
+
+    expect($payload['container']['icon'])->toBe('sailboat');
+    expect($payload['container']['icon_color'])->toBe('blue');
+});
+
+it('container.json bär ikonnycklarna även när containern saknar ikon', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    $export = exporteringBeställOchKör($headers, $container);
+
+    $zip = new ZipArchive;
+    expect($zip->open(Storage::disk('files')->path($export->storage_path)))->toBeTrue();
+    $payload = json_decode($zip->getFromName('container.json'), true);
+    $zip->close();
+
+    expect($payload['container'])->toHaveKey('icon');
+    expect($payload['container'])->toHaveKey('icon_color');
+    expect($payload['container']['icon'])->toBeNull();
+    expect($payload['container']['icon_color'])->toBeNull();
+});
+
 it('index.html är fristående: bara relativa sökvägar, ingen extern resurs', function () {
     [$account, $user, $headers, $container] = exporteringKontext();
 

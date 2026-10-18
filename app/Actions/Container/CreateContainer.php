@@ -56,10 +56,14 @@ final class CreateContainer
      * `$description` kom med issue 88 · [[ADR-0039 Containerns översikt]] och
      * är frivillig av samma skäl: att kräva en beskrivning vid skapandet är
      * att ställa en fråga användaren ännu inte kan svara på. Parametern
-     * läggs SIST med ett förval, så varje anropare — båda kontrollerna, varje
-     * test och varje fabrik — är oförändrad. Att göra om de fyra
+     * läggs med ett förval, så varje anropare — båda kontrollerna, varje
+     * test och varje fabrik — är oförändrad. Att göra om
      * positionsargumenten till en attributpåse är en riktig städning och en
      * egen uppgift: den hade rört varje anropare för en kolumns skull.
+     *
+     * `$icon` och `$iconColor` kom med issue 314 · [[ADR-0064 Containerns
+     * ikon]] § 2 och ligger efter `$description` med förval av samma skäl:
+     * en container får skapas utan ikon, och `null` lagras ordagrant.
      *
      * @throws ApiException 403 `quota.containers_exceeded`
      *                      när ägarkontots containertak är nått.
@@ -70,16 +74,23 @@ final class CreateContainer
         string $name,
         ?string $kind,
         ?string $description = null,
+        ?string $icon = null,
+        ?string $iconColor = null,
     ): Container {
         // Taket gäller det konto som anges av anroparen — samma konto som blir
         // ägare och vars plan gäller (issue 27 § Beslut 4).
         $this->entitlements->assertCanCreateContainer($account);
 
-        $container = DB::transaction(function () use ($creator, $account, $name, $kind, $description): Container {
+        $container = DB::transaction(function () use ($creator, $account, $name, $kind, $description, $icon, $iconColor): Container {
             $container = new Container([
                 'name' => $name,
                 'kind' => $kind,
                 'description' => $description,
+                // Ikonen är ett val vid skapandet när klienten skickar den
+                // (issue 314 · [[ADR-0064 Containerns ikon]] § 2). Båda är
+                // nullbara, så ett utelämnat fält lagras som null.
+                'icon' => $icon,
+                'icon_color' => $iconColor,
             ]);
             $container->account_id = $account->id;
             $container->save();
