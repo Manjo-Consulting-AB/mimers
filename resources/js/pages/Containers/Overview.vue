@@ -128,22 +128,26 @@ defineOptions({
  * [[M32 Formspråket]]), och marginalen sitter kvar på varje panel, så
  * radrytmen är den samma på båda sidor om brytpunkten.
  *
- * **Rutnätet lämnar ingen tom kolumn.** *Kostnader* och *Senaste bilder* ritas
- * inte alls när de saknar innehåll, och då tar nästa panel deras plats i
- * stället: utan kostnader spänner *Containerdetaljer* två kolumner, och utan
- * bilder spänner *Items* alla tre med *Senaste aktiviteter* över två. Varje
- * kombination går därför jämnt ut i tre kolumner.
+ * **Items och Senaste bilder är EN kolumn** (issue 321). De ligger i samma
+ * omslag med `lg:col-span-2`, och bilderna staplas under itemen med samma
+ * `mt-8` som förut. Bilderna börjar därför direkt under *Items*, oavsett hur
+ * hög *Senaste aktiviteter* är — de delar ingen radhöjd med aktiviteterna.
+ * Omslaget spänner två rader när bilderna finns, så informationsytan behåller
+ * sin plats i tredje kolumnen under aktiviteterna. *Senaste aktiviteter* står
+ * bredvid omslaget i den tredje kolumnen.
+ *
+ * **Rutnätet lämnar ingen tom kolumn.** *Kostnader* ritas inte alls när den
+ * saknar innehåll, och då tar nästa panel dess plats i stället: utan
+ * kostnader spänner *Containerdetaljer* två kolumner. Utan bilder spänner
+ * omslaget alla tre med *Senaste aktiviteter* över två, och informationsytan
+ * fyller den tredje — som före issue 321. Varje kombination går därför jämnt
+ * ut i tre kolumner.
  *
  * Den visuella ordningen sätts med `lg:order-*` — uppgifterna, kostnaderna,
- * detaljerna, itemen, aktiviteterna, bilderna och sist informationsytan. Den
- * gäller bara över `lg:`: under brytpunkten är behållaren ett block, där
- * `order` inte har någon verkan, och källordningen är den samma som förut.
- *
- * Rutnätet är fullt: uppgifterna, kostnaderna och detaljerna på första raden,
- * itemen över två kolumner med aktiviteterna i den tredje, och
- * informationsytan sist i högerspalten — där bilden har den. *Senaste bilder*
- * (issue 173) står i den tredje radens lediga två kolumner, bredvid
- * informationsytan.
+ * detaljerna, omslaget med itemen och bilderna, aktiviteterna och sist
+ * informationsytan. Den gäller bara över `lg:`: under brytpunkten är
+ * behållaren ett block, där `order` inte har någon verkan, och källordningen
+ * ger panelordningen *Items*, *Senaste bilder*, *Senaste aktiviteter*.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -200,10 +204,10 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
     <Head :title="container.name" />
 
     <!--
-        Rutnätet (issue 172, omlagt i issue 288). Behållaren är ett vanligt
-        block tills `lg:` gör den till ett rutnät om tre kolumner; barnen
-        ligger kvar i källordningen, och under `lg:` staplas de precis som
-        förut. `grid-flow-dense` låter varje panel ta första lediga plats,
+        Rutnätet (issue 172, omlagt i issue 288 och 321). Behållaren är ett
+        vanligt block tills `lg:` gör den till ett rutnät om tre kolumner;
+        barnen ligger kvar i källordningen, och under `lg:` staplas de precis
+        som förut. `grid-flow-dense` låter varje panel ta första lediga plats,
         och spannet växer när en panel som skulle ha delat raden inte ritas.
         Marginalen sitter kvar på varje panel — rutnätet lägger bara till
         kolumnavståndet, så radrytmen är den samma på båda sidor om
@@ -289,13 +293,18 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
             <ContainerDetailsPanel :details="props.details" />
         </div>
 
-        <!-- Items. Samma lista som itembrickan räknar, klippt till sex av
-             servern; raden leder till itemet och panelen vidare till hela
-             listan. Utan bildpanel spänner panelen alla tre kolumner, så
-             raden inte lämnas halv. -->
+        <!-- Items och Senaste bilder är EN kolumn (issue 321). Samma lista
+             som itembrickan räknar, klippt till sex av servern; raden leder
+             till itemet och panelen vidare till hela listan. Bilderna ligger
+             i samma omslag och staplas med samma `mt-8` som förut, så de
+             börjar direkt under itemen oavsett hur hög aktivitetspanelen är.
+             Omslaget spänner två rader när bilderna finns, så
+             informationsytan behåller sin plats i tredje kolumnen. Utan
+             bilder spänner panelen alla tre kolumnerna, så raden inte lämnas
+             halv. -->
         <div
             class="mt-8 lg:order-4"
-            :class="props.recentImages.length ? 'lg:col-span-2' : 'lg:col-span-3'"
+            :class="props.recentImages.length ? 'lg:col-span-2 lg:row-span-2' : 'lg:col-span-3'"
         >
             <UiCard>
                 <template #heading>
@@ -333,14 +342,26 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
                     />
                 </ul>
             </UiCard>
+
+            <!-- Senaste bilder (issue 173). Panelen ritas inte alls när
+                 containern saknar bilder, och den ritas av sin egen
+                 komponent: sidan äger bara platsen. Bilderna är länkar till
+                 sina items, och miniatyren kräver att servern sagt att
+                 `thumb`-varianten finns. -->
+            <div v-if="props.recentImages.length" class="mt-8">
+                <RecentImagesPanel
+                    :images="props.recentImages"
+                    :container-ulid="props.container.ulid"
+                />
+            </div>
         </div>
 
         <!-- Senaste aktiviteter. Raden är `HistoryRow` och ber INTE om
              containerraden: raderna står inuti sin container här, till
              skillnad från dashboardens panel (issue 126). Det tomma läget
              är historikflikens eget ord — samma container, samma svar.
-             Utan bildpanel spänner panelen två kolumner, bredvid
-             informationsytan. -->
+             Panelen står bredvid Items-omslaget i tredje kolumnen; utan
+             bilder spänner den två kolumner, bredvid informationsytan. -->
         <div
             class="mt-8 lg:order-5"
             :class="props.recentImages.length ? '' : 'lg:col-span-2'"
@@ -363,21 +384,6 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
                     />
                 </ul>
             </UiCard>
-        </div>
-
-        <!-- Senaste bilder (issue 173). Panelen ritas inte alls när
-             containern saknar bilder, och den ritas av sin egen komponent:
-             sidan äger bara platsen i rutnätet. Bilderna är länkar till
-             sina items, och miniatyren kräver att servern sagt att
-             `thumb`-varianten finns. -->
-        <div
-            v-if="props.recentImages.length"
-            class="mt-8 lg:order-6 lg:col-span-2"
-        >
-            <RecentImagesPanel
-                :images="props.recentImages"
-                :container-ulid="props.container.ulid"
-            />
         </div>
     </div>
 </template>

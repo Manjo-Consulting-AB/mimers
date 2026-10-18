@@ -397,6 +397,19 @@ it('har en mening åt varje handling i händelseloggen', function () {
 });
 
 /*
+ * Ikonfälten i händelseloggen (issue 321).
+ *
+ * `icon` och `icon_color` bärs som alla andra fält i `meta.changed`, och
+ * `HistoryRow` slår upp orden ur `audit.field.*`. Utan dem skrev raden
+ * nycklarna `audit.field.icon` och `audit.field.icon_color` på skärmen —
+ * `translate()` skriver nyckeln själv när uppslaget misslyckas.
+ */
+it('har ord åt ikonfälten i händelseloggen', function () {
+    expect(Lang::get('ui.audit.field.icon', [], 'en'))->toBe('the icon')
+        ->and(Lang::get('ui.audit.field.icon_color', [], 'en'))->toBe('the icon colour');
+});
+
+/*
  * Skalets egna strängar, se issue 106 och resources/js/layouts/AppLayout.vue.
  *
  * `translate()` returnerar NYCKELN SJÄLV när uppslaget misslyckas (provet

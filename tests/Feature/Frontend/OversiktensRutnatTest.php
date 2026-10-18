@@ -17,8 +17,9 @@ use Illuminate\Support\Facades\File;
  * varje panel i första lediga plats, så provet läser panelernas spann ur
  * källan — de statiska klasserna och den villkorliga `:class`-ternären — och
  * lägger dem rad för rad för alla fyra kombinationer av kostnads- och
- * bildpanel. En rad som inte går jämnt ut i tre kolumner är hålet issuen
- * stänger.
+ * bildpanel. Sedan issue 321 spänner omslaget med itemen och bilderna två
+ * rader när bilderna finns, och simuleringen tar hänsyn till det också. En
+ * rad som inte går jämnt ut i tre kolumner är hålet issuen stänger.
  *
  * Kommentarerna rensas bort först, som i GenomgangTest och
  * DashboardlayoutTest: filerna är fulla av svensk prosa som förklarar varför,
@@ -72,21 +73,20 @@ function rutnatRam(string $vy, int $ordning): string
 }
 
 /**
- * Spannet en ram får i en kombination. Standard är en kolumn; en statisk
- * `lg:col-span-*` eller den villkorliga ternären breddar den.
+ * Den valda klasssträngen för en ram i en kombination: den statiska `class`
+ * och den villkorliga `:class`-ternären lagda efter varandra.
  */
-function rutnatSpann(string $ram, bool $kostnader, bool $bilder): int
+function rutnatKlasser(string $ram, bool $kostnader, bool $bilder): string
 {
-    $spann = 1;
+    $klasser = '';
 
     // `(?<!:)` skiljer den statiska klassen från den villkorliga `:class`.
-    if (preg_match('/(?<!:)class="([^"]*)"/', $ram, $träff) === 1
-        && preg_match('/lg:col-span-(\d+)/', $träff[1], $span) === 1) {
-        $spann = (int) $span[1];
+    if (preg_match('/(?<!:)class="([^"]*)"/', $ram, $träff) === 1) {
+        $klasser = $träff[1];
     }
 
     if (preg_match('/:class="([^"]+)"/', $ram, $träff) !== 1) {
-        return $spann;
+        return $klasser;
     }
 
     $uttryck = $träff[1];
@@ -103,35 +103,61 @@ function rutnatSpann(string $ram, bool $kostnader, bool $bilder): int
     );
 
     $sant = $delar[1] === 'costs.totals' ? $kostnader : $bilder;
-    $vald = $sant ? $delar[2] : $delar[3];
 
-    if (preg_match('/lg:col-span-(\d+)/', $vald, $span) === 1) {
-        $spann = (int) $span[1];
-    }
-
-    return $spann;
+    return trim($klasser.' '.($sant ? $delar[2] : $delar[3]));
 }
 
 /**
- * Panelernas spann i visuell ordning — ordningen `lg:order-*` ger — för en
- * kombination. Ett spann på noll betyder att panelen inte ritas.
+ * Kolumnspannet en ram får i en kombination. Standard är en kolumn; en
+ * statisk `lg:col-span-*` eller den villkorliga ternären breddar den.
+ */
+function rutnatSpann(string $ram, bool $kostnader, bool $bilder): int
+{
+    return preg_match('/lg:col-span-(\d+)/', rutnatKlasser($ram, $kostnader, $bilder), $span) === 1
+        ? (int) $span[1]
+        : 1;
+}
+
+/**
+ * Radspannet en ram får i en kombination. Omslaget med itemen och bilderna
+ * spänner två rader när bilderna finns (issue 321), så informationsytan
+ * behåller sin plats i tredje kolumnen.
+ */
+function rutnatRadspann(string $ram, bool $kostnader, bool $bilder): int
+{
+    return preg_match('/lg:row-span-(\d+)/', rutnatKlasser($ram, $kostnader, $bilder), $span) === 1
+        ? (int) $span[1]
+        : 1;
+}
+
+/**
+ * Panelernas spann och radspann i visuell ordning — ordningen `lg:order-*`
+ * ger — för en kombination. Ett spann på noll betyder att panelen inte ritas.
  *
- * @return array<int, int>
+ * Ordning 6 finns inte: bilderna ligger i omslaget med itemen (issue 321),
+ * och deras `v-if` styr omslagets spann i stället.
+ *
+ * @return array<int, array{spann: int, rader: int}>
  */
 function rutnatBredder(string $vy, bool $kostnader, bool $bilder): array
 {
     $bredder = [];
 
-    foreach (range(1, 7) as $ordning) {
-        $spann = rutnatSpann(rutnatRam($vy, $ordning), $kostnader, $bilder);
+    foreach ([1, 2, 3, 4, 5, 7] as $ordning) {
+        $ram = rutnatRam($vy, $ordning);
 
-        // Ordning 2 är kostnaderna och ordning 6 bilderna; båda ritas bara
-        // när listan har något i sig, och då finns ingen panel att spänna.
-        if (($ordning === 2 && ! $kostnader) || ($ordning === 6 && ! $bilder)) {
+        $spann = rutnatSpann($ram, $kostnader, $bilder);
+
+        // Ordning 2 är kostnaderna; panelen ritas bara när listan har något
+        // i sig, och då finns ingen panel att spänna.
+        if ($ordning === 2 && ! $kostnader) {
             $spann = 0;
         }
 
-        $bredder[$ordning] = $spann;
+        $bredder[$ordning] = [
+            'spann' => $spann,
+            'rader' => rutnatRadspann($ram, $kostnader, $bilder),
+        ];
     }
 
     return $bredder;
@@ -140,19 +166,23 @@ function rutnatBredder(string $vy, bool $kostnader, bool $bilder): array
 /**
  * Lägger panelerna som `grid-auto-flow: dense`: varje panel tar första
  * lediga plats, med början på första raden, och ett spann som inte får plats
- * flyttar till nästa rad.
+ * flyttar till nästa rad. Ett radspann upptar celler även på följande rader.
  *
- * @param  array<int, int>  $bredder  spann i visuell ordning, noll = ritas inte
- * @return list<int> antalet fyllda celler per rad
+ * @param  array<int, array{spann: int, rader: int}>  $bredder  i visuell ordning, noll = ritas inte
+ * @return list<int> antalet fyllda kolumner per rad
  */
 function rutnatRader(array $bredder): array
 {
     $celler = [];
 
-    foreach ($bredder as $spann) {
+    foreach ($bredder as $panel) {
+        $spann = $panel['spann'];
+
         if ($spann === 0) {
             continue;
         }
+
+        $radspann = $panel['rader'];
 
         for ($rad = 0; ; $rad++) {
             $plats = null;
@@ -160,10 +190,12 @@ function rutnatRader(array $bredder): array
             for ($kolumn = 0; $kolumn + $spann <= 3; $kolumn++) {
                 $fri = true;
 
-                for ($i = 0; $i < $spann; $i++) {
-                    if (isset($celler[$rad][$kolumn + $i])) {
-                        $fri = false;
-                        break;
+                for ($r = 0; $r < $radspann && $fri; $r++) {
+                    for ($i = 0; $i < $spann; $i++) {
+                        if (isset($celler[$rad + $r][$kolumn + $i])) {
+                            $fri = false;
+                            break;
+                        }
                     }
                 }
 
@@ -174,8 +206,10 @@ function rutnatRader(array $bredder): array
             }
 
             if ($plats !== null) {
-                for ($i = 0; $i < $spann; $i++) {
-                    $celler[$rad][$plats + $i] = true;
+                for ($r = 0; $r < $radspann; $r++) {
+                    for ($i = 0; $i < $spann; $i++) {
+                        $celler[$rad + $r][$plats + $i] = true;
+                    }
                 }
 
                 break;
@@ -214,10 +248,10 @@ it('placerar panelerna med grid-flow-dense och spann, inte med fasta rader', fun
 it('fyller varje rad i alla fyra kombinationer av paneler', function () {
     $vy = rutnatVy();
 
-    // Ordning 2 är kostnaderna och ordning 6 bilderna — det är deras
-    // `v-if` som avgör om panelen ritas.
+    // Ordning 2 är kostnaderna; bilderna ligger i omslaget på ordning 4
+    // (issue 321), och deras `v-if` styr omslagets spann.
     expect(rutnatRam($vy, 2))->toContain('v-if="props.costs.totals.length"')
-        ->and(rutnatRam($vy, 6))->toContain('v-if="props.recentImages.length"');
+        ->and(rutnatRam($vy, 4))->toContain('props.recentImages.length');
 
     foreach ([[true, true], [true, false], [false, true], [false, false]] as [$kostnader, $bilder]) {
         $rader = rutnatRader(rutnatBredder($vy, $kostnader, $bilder));
@@ -242,15 +276,17 @@ it('fyller varje rad i alla fyra kombinationer av paneler', function () {
 });
 
 /*
- * Klart när: källordningen är oförändrad.
+ * Klart när: under `lg:` står *Items*, *Senaste bilder* och *Senaste
+ * aktiviteter* i den ordningen.
  *
  * Ordningen över `lg:` sätts med `lg:order-*`, som bara gäller i rutnätet.
  * Under brytpunkten är behållaren ett block, där `order` inte har någon
- * verkan, och ingen panel får en ordningsklass utan `lg:`-prefix. Källans
- * ordning — informationsytan först, sedan uppgifterna, kostnaderna,
- * detaljerna, itemen, aktiviteterna och bilderna — står därför kvar.
+ * verkan, och ingen panel får en ordningsklass utan `lg:`-prefix. Sedan
+ * issue 321 ligger bilderna i samma omslag som itemen och före
+ * aktiviteterna i källan, så mobilens ordning blir *Items*, *Senaste
+ * bilder*, *Senaste aktiviteter*.
  */
-it('behåller källordningen och rör inte mobilens ordning', function () {
+it('ger mobilen ordningen Items, Senaste bilder, Senaste aktiviteter', function () {
     $vy = rutnatVy();
 
     $markörer = [
@@ -259,8 +295,8 @@ it('behåller källordningen och rör inte mobilens ordning', function () {
         "t('container.overview.costs')",
         '<ContainerDetailsPanel',
         "t('container.overview.view_all')",
-        "t('container.overview.activity')",
         '<RecentImagesPanel',
+        "t('container.overview.activity')",
     ];
 
     $positioner = [];

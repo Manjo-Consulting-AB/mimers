@@ -338,6 +338,44 @@ it('en ändring visar vilka fält som ändrades', function () {
 });
 
 /*
+ * Klart när: en ändrad ikon läses som ord och inte som en nyckel (issue 321).
+ *
+ * `icon` och `icon_color` bärs i `meta.changed` som alla andra fält, men
+ * saknade ord i katalogen — raden skrev då `audit.field.icon` på skärmen.
+ * Provet fäster båda ändarna: att servern lyfter de två namnen ur raden, och
+ * att orden de slås upp till finns.
+ */
+it('skriver ord för en ändrad ikon', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikKontext();
+
+    $generatorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Generator']);
+
+    historikRad(
+        $pärm,
+        $konto,
+        $ägare,
+        AuditLog::ACTION_ITEM_UPDATED,
+        $generatorn,
+        ['changed' => ['icon', 'icon_color']],
+    );
+
+    actingAs($ägare)->get(historikItemUrl($pärm, $generatorn, 'history'))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('history.0.changed', ['icon', 'icon_color'])
+        );
+
+    $ord = array_map(
+        fn (string $fält): string => trans("ui.audit.field.{$fält}", [], 'en'),
+        ['icon', 'icon_color'],
+    );
+
+    expect($ord)->toBe(['the icon', 'the icon colour']);
+});
+
+/*
  * Klart när: en rad om ett gallrat item eller en raderad användare visas med en
  * ersättare.
  *
