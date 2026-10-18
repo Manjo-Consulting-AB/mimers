@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import ItemIcon from './ItemIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -20,6 +21,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * i ytan — `truncate` — och bär hela namnet i `title`; det tillgängliga namnet
  * är det fulla, för texten är den.
  *
+ * **Itemets egen ikon står före namnet** (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 6 och 9): `ItemIcon` med `tile`, i storleken 20,
+ * ur nodens `icon` och `icon_color`. Noderna bär dem därför att servern skickar
+ * dem ur samma fråga som namnet; ett item utan ikon ritar den neutrala
+ * `item`-ikonen i samma storlek.
+ *
  * **Slagets ord och prick kommer som proppar** och slås inte upp här: orden är
  * anroparens (`FocusMap` äger både noderna och teckenförklaringen, och de två
  * ska säga samma sak), och en form som hittade på egna ord hade varit en andra
@@ -38,7 +45,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * utan ringen hade lämnat den som tabbar utan synligt fokus.
  */
 defineProps({
-    /* Noden: `{ulid, name, href, rows}`. `href` är null för itemet självt. */
+    /* Noden: `{ulid, name, icon, icon_color, href, rows}`. `href` är null för itemet självt. */
     node: { type: Object, required: true },
     /* Slagets ord, färdigöversatt av anroparen. */
     label: { type: String, required: true },
@@ -68,6 +75,7 @@ const { t } = useTranslations();
             class="flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-control border border-border bg-surface px-1 py-1 text-center outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
             <span v-if="dot" aria-hidden="true" class="h-2.5 w-2.5 rounded-pill" :class="dot"></span>
+            <ItemIcon :name="node.icon" :color="node.icon_color" :size="20" tile class="shrink-0" />
             <span class="w-full truncate text-meta font-medium text-ink" :title="node.name">{{ node.name }}</span>
             <span class="text-meta text-ink-subtle">{{ label }}</span>
         </Link>
@@ -77,6 +85,7 @@ const { t } = useTranslations();
             aria-current="page"
             class="flex min-h-11 w-full min-w-0 flex-col items-center justify-center gap-0.5 rounded-control border border-accent bg-accent-soft px-1 py-1 text-center"
         >
+            <ItemIcon :name="node.icon" :color="node.icon_color" :size="20" tile class="shrink-0" />
             <span class="w-full truncate text-meta font-medium text-ink" :title="node.name">{{ node.name }}</span>
             <span class="text-meta text-ink-subtle">{{ label }}</span>
         </span>

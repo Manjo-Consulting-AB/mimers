@@ -1833,7 +1833,12 @@ class ItemController extends Controller
      * och läses på ett ställe i klassen. Kartan och relationsfliken ritar
      * därmed bevisligen samma lista.
      *
-     * @param  list<array{item: array{ulid: string, name: string}, relation: string}>  $links
+     * **Ikonen följer med varje nod** (issue 303 · [[ADR-0060 Itemets ikon]]
+     * § 9): `icon` och `icon_color` kommer ur samma rad och ur samma fråga som
+     * namnet, och `self` läser dem ur `$item`. Ett item utan ikon får `null`
+     * och ritar den neutrala.
+     *
+     * @param  list<array{item: array{ulid: string, name: string, icon: string|null, icon_color: string|null}, relation: string}>  $links
      * @param  Collection<int, Item>  $candidates
      * @return array{self: array<string, mixed>, parent: list<array<string, mixed>>, child: list<array<string, mixed>>, related: list<array<string, mixed>>}
      */
@@ -1849,6 +1854,8 @@ class ItemController extends Controller
             $groups[$link['relation']][] = [
                 'ulid' => $ulid,
                 'name' => $link['item']['name'],
+                'icon' => $link['item']['icon'],
+                'icon_color' => $link['item']['icon_color'],
                 'href' => route('containers.items.show', [$container, $ulid], absolute: false),
                 'rows' => $this->nodeRows($user, $container, $byUlid->get($ulid), $createTarget),
             ];
@@ -1858,6 +1865,8 @@ class ItemController extends Controller
             'self' => [
                 'ulid' => $item->ulid,
                 'name' => $item->name,
+                'icon' => $item->icon,
+                'icon_color' => $item->icon_color,
                 'href' => null,
                 'rows' => $this->nodeRows($user, $container, $item, $createTarget, $path),
             ],

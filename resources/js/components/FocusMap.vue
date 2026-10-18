@@ -54,9 +54,9 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /*
      * Kartan: `{self, parent, child, related}`. Varje nod är
-     * `{ulid, name, href, rows}` — `href` är null för `self`, som är itemet
-     * självt, och `rows` är nodens menyrader (`[{key, href}]`, tom när inget
-     * får skapas på den).
+     * `{ulid, name, icon, icon_color, href, rows}` — `href` är null för `self`,
+     * som är itemet självt, och `rows` är nodens menyrader (`[{key, href}]`,
+     * tom när inget får skapas på den).
      */
     map: { type: Object, required: true },
     /* Relationsfliken — målet för *+N till*. */

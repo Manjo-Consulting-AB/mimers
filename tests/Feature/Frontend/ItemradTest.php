@@ -37,6 +37,22 @@ function itemradKod(string $sokvag): string
     return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
 }
 
+/**
+ * Öppningstaggen för en komponent, som rå markup — samma form som
+ * fokuskartaTagg i grannfilen. Attributvärdena matchas med citattecken runt
+ * om, så ett `>` inuti ett värde inte avslutar taggen i förtid.
+ */
+function itemradTagg(string $kod, string $komponent): string
+{
+    preg_match(
+        '/<'.$komponent.'\b((?:"[^"]*"|\'[^\']*\'|[^>"\'])*?)>/s',
+        $kod,
+        $träffar,
+    );
+
+    return $träffar[0] ?? '';
+}
+
 /*
  * Klart när: `Items/Index.vue` och `Overview.vue` ritar båda `ItemRow`.
  *
@@ -130,4 +146,34 @@ it('gör hela raden till en länk till itemet', function () {
     expect($raden)->toContain('min-h-11');
     expect($raden)->toContain('props.containerUlid');
     expect($raden)->toContain('props.item.ulid');
+});
+
+/*
+ * Klart när: listans rad ritar `ItemIcon` med itemets ikon och färg före
+ * namnet, och omslagets miniatyr står kvar (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 6 och 9).
+ *
+ * Ikonen är `props.item.icon` och `props.item.icon_color` — samma fält som
+ * `ItemResource` bär sedan issue 301 — och storleken är 20. Grinden är
+ * omslaget och inte ikonen: ett item utan ikon ritar den neutrala i samma
+ * storlek, så raden aldrig tappar sin ruta.
+ */
+it('ritar itemets ikon före namnet och behåller omslagets miniatyr', function () {
+    $raden = itemradKod('components/ItemRow.vue');
+
+    expect($raden)->toContain("import ItemIcon from './ItemIcon.vue'");
+
+    $ikonen = itemradTagg($raden, 'ItemIcon');
+
+    expect($ikonen)->toContain(':name="props.item.icon"');
+    expect($ikonen)->toContain(':color="props.item.icon_color"');
+    expect($ikonen)->toContain(':size="20"');
+    expect($ikonen)->toContain('tile');
+    expect($ikonen)->not->toContain('v-if');
+
+    expect(strpos($raden, '<ItemIcon'))->toBeLessThan(strpos($raden, 'props.item.name'));
+
+    // Omslagets miniatyr är kvar på samma plats.
+    expect($raden)->toContain('props.cover?.hasThumb');
+    expect($raden)->toContain('?variant=thumb');
 });

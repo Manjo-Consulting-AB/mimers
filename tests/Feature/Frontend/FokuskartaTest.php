@@ -222,6 +222,67 @@ it('ritar itemet med föräldrarna, barnen och de relaterade', function () {
 });
 
 /*
+ * Klart när: fokuskartans noder och `self` bär itemets ikon och färg
+ * (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9).
+ *
+ * Värdena kommer ur samma fråga som namnet: App\Actions\Item\ListItemLinks
+ * väljer `icon` och `icon_color` tillsammans med `ulid` och `name`, och
+ * `ItemController::map()` lägger dem på varje nod och läser `self` ur
+ * `$item`. Ett item utan ikon svarar `null` och ritar den neutrala.
+ */
+it('bär itemets ikon på varje nod och på itemet självt', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = fokuskartaKontext();
+
+    $motorn = fokuskartaItem($container, 'Motorn');
+    $motorn->update(['icon' => 'droplet', 'icon_color' => 'blue']);
+
+    $båten = fokuskartaItem($container, 'Båten');
+    fokuskartaKant($båten, $motorn, 'parent');
+
+    actingAs($anvandare)->get(fokuskartaUrl($container, $motorn))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('map.self.icon', 'droplet')
+            ->where('map.self.icon_color', 'blue')
+            // Båten har ingen ikon: fälten finns och är null, så noden ritar
+            // den neutrala i stället för att tappa sin ruta.
+            ->where('map.parent.0.icon', null)
+            ->where('map.parent.0.icon_color', null)
+    );
+});
+
+/*
+ * Klart när: noden ritar `ItemIcon` med `tile` i storleken 20 före namnet.
+ *
+ * Båda grenarna ritar samma form: länken och mittnoden, som är itemet självt
+ * och därför inte är en `<Link>`. Ingen grind hänger på ikonen — ett item utan
+ * ikon ritar den neutrala i samma storlek.
+ */
+it('ritar ItemIcon före namnet på varje nod', function () {
+    $noden = fokuskartaKod('components/FocusMapNode.vue');
+
+    expect($noden)->toContain("import ItemIcon from './ItemIcon.vue'");
+
+    $ikonen = fokuskartaTagg($noden, 'ItemIcon');
+
+    expect($ikonen)->toContain(':name="node.icon"');
+    expect($ikonen)->toContain(':color="node.icon_color"');
+    expect($ikonen)->toContain(':size="20"');
+    expect($ikonen)->toContain('tile');
+    expect($ikonen)->not->toContain('v-if');
+
+    // Ikonen står direkt före namnet i både länken och mittnoden.
+    preg_match_all(
+        '/<ItemIcon\b[^>]*>\s*<span[^>]*>\{\{ node\.name \}\}/s',
+        $noden,
+        $träffar,
+    );
+
+    expect($träffar[0])->toHaveCount(2);
+});
+
+/*
  * Klart när: "en nod utanför omfånget ritas inte".
  *
  * Omfånget filtrerar RADERNA redan i App\Actions\Item\ListItemLinks, och

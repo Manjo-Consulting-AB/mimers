@@ -107,6 +107,21 @@ function itemdetaljKomponent(string $sokvag): string
 }
 
 /**
+ * Öppningstaggen för en komponent, som rå markup — samma form som
+ * fokuskartaTagg i FokuskartaTest.
+ */
+function itemdetaljTagg(string $kod, string $komponent): string
+{
+    preg_match(
+        '/<'.$komponent.'\b((?:"[^"]*"|\'[^\']*\'|[^>"\'])*?)>/s',
+        $kod,
+        $träffar,
+    );
+
+    return $träffar[0] ?? '';
+}
+
+/**
  * Kör en snutt mot resources/js/components/itemPresentation.js i node och
  * returnerar det som skrivs på stdout.
  *
@@ -575,4 +590,28 @@ it('stjärnan går att sätta och ta bort från itemets huvud', function () {
     // ovanför den.
     expect(strpos($vy, '<h1'))->toBeLessThan(strpos($vy, ':aria-pressed'));
     expect(strpos($vy, ':aria-pressed'))->toBeLessThan(strpos($vy, '<UiTabs'));
+});
+
+/*
+ * Klart när: itemets överdel ritar ikonen före rubriken i storleken 24
+ * (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9).
+ *
+ * Ikonen läses ur `item.icon` och `item.icon_color` — samma `ItemResource`
+ * som resten av sidan — och är `tile` som i listan. Ett item utan ikon ritar
+ * den neutrala i samma storlek; därför hänger ingen grind på ikonen.
+ */
+it('ritar itemets ikon före rubriken i storleken 24', function () {
+    $vyn = itemdetaljKomponent('pages/Containers/Items/Show.vue');
+
+    expect($vyn)->toContain("import ItemIcon from '../../../components/ItemIcon.vue'");
+
+    $ikonen = itemdetaljTagg($vyn, 'ItemIcon');
+
+    expect($ikonen)->toContain(':name="item.icon"');
+    expect($ikonen)->toContain(':color="item.icon_color"');
+    expect($ikonen)->toContain(':size="24"');
+    expect($ikonen)->toContain('tile');
+    expect($ikonen)->not->toContain('v-if');
+
+    expect(strpos($vyn, '<ItemIcon'))->toBeLessThan(strpos($vyn, '<h1'));
 });

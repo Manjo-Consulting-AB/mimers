@@ -188,6 +188,29 @@ it('relaterade syns från båda hållen', function () {
         ->assertJson(['data' => [['item' => ['ulid' => $a->ulid, 'name' => 'Alpha'], 'relation' => 'related']]]);
 });
 
+it('bär motpartens ikon och färg i listningen', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $mitt = Item::factory()->for($container, 'container')->create();
+    $grann = Item::factory()->for($container, 'container')->create([
+        'icon' => 'droplet',
+        'icon_color' => 'blue',
+    ]);
+
+    postJson("/api/containers/{$container->ulid}/items/{$mitt->ulid}/links", [
+        'item' => $grann->ulid,
+        'relation' => 'parent',
+    ], $headers)->assertCreated();
+
+    getJson("/api/containers/{$container->ulid}/items/{$mitt->ulid}/links", $headers)
+        ->assertOk()
+        ->assertJson(['data' => [['item' => [
+            'ulid' => $grann->ulid,
+            'icon' => 'droplet',
+            'icon_color' => 'blue',
+        ]]]]);
+});
+
 it('samma par kan inte kopplas två gånger', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();

@@ -97,6 +97,8 @@ class ItemLinkController extends Controller
 
         $link->setAttribute('counterpart_ulid', $other->ulid);
         $link->setAttribute('counterpart_name', $other->name);
+        $link->setAttribute('counterpart_icon', $other->icon);
+        $link->setAttribute('counterpart_icon_color', $other->icon_color);
         $link->setAttribute('relation_to_item', $link->relationSeenFromItem($item->id));
 
         return (new ItemLinkResource($link))

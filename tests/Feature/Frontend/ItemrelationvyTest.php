@@ -787,13 +787,22 @@ it('lämnar /api-listningen oförändrad', function () {
     ], $headers)->assertCreated();
 
     // Kroppen flyttade till App\Actions\Item\ListItemLinks i issue 58
-    // § Beslut 2. Svaret är detsamma: motparten och relationen sedd från det
-    // item man frågar om, ingenting mer.
+    // § Beslut 2. Motparten bär nu också sin ikon och färg (issue 303 ·
+    // [[ADR-0060 Itemets ikon]] § 9), och relationen sedd från det item man
+    // frågar om — ingenting mer.
     getJson("/api/containers/{$container->ulid}/items/{$foraldern->ulid}/links", $headers)
         ->assertOk()
         ->assertExactJson([
             'data' => [
-                ['item' => ['ulid' => $barnet->ulid, 'name' => 'Impeller'], 'relation' => 'child'],
+                [
+                    'item' => [
+                        'ulid' => $barnet->ulid,
+                        'name' => 'Impeller',
+                        'icon' => null,
+                        'icon_color' => null,
+                    ],
+                    'relation' => 'child',
+                ],
             ],
         ]);
 
