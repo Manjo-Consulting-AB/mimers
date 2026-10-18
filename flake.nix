@@ -25,6 +25,11 @@
           php
           php.packages.composer
           pkgs.nodejs_22
+          # CI kör skripten under .github/scripts/ med python3; jq läser
+          # `gh --json` och sqlite3 testdatabasen (phpunit.xml kör SQLite).
+          pkgs.python3
+          pkgs.jq
+          pkgs.sqlite
         ];
       };
     };
