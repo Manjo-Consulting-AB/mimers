@@ -55,7 +55,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * med, även som `null`. Servern har redan validerat formatet och paletten;
  * resursen skickar vidare det som står i kolumnen.
  *
- * `tags` (issue 13b § Beslut 8) is always present — `[]` for an item with * no tags, never omitted, same rule as the nullable fields above. Each
+ * `tags` (issue 13b § Beslut 8) is always present — `[]` for an item with
+ * no tags, never omitted, same rule as the nullable fields above. Each
  * entry is built INLINE here rather than reusing TagResource: that class
  * carries `created_at`/`updated_at`, which is noise inside an item, and
  * the frontend paints the tag with `name` and `color` only. Sorting by
