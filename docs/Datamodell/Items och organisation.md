@@ -15,6 +15,7 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | category_id | FK NULL | **Högst en.** Se nedan. |
 | name | VARCHAR(255) | |
 | description | TEXT NULL | |
+| notes | TEXT NULL | Markdown. Se [[ADR-0066 Itemets anteckning]] |
 | manufacturer | VARCHAR(255) NULL | |
 | model | VARCHAR(255) NULL | |
 | serial_number | VARCHAR(255) NULL | Sökbart — folk letar efter serienummer |
