@@ -191,6 +191,8 @@ Vilket det än blir ska det vara ett val. Skillnaden mot [[ADR-0018 Utvecklingsp
 
 Körs på varje PR. Grön här är förutsättningen för att merge-knappen ska gå att trycka.
 
+**En PR som bara rör `docs/` kör ett kort varv** (sedan 2026-10-19). Steget *Bara dokumentation?* jämför diffen mot baskommiten. Ligger varje fil under `docs/` hoppas Node, bygget, Pint, PHPStan och *Nya tester är röda på baskommiten* över. Steget `Tester` kör då bara de prov som nämner en sökväg under `docs/`, valda med `--filter` på klassnamnet så att hjälparna i de andra provfilerna laddas. Processkontrollerna körs som vanligt. Ett ADR eller en milstolpefil har ingen anledning att gå igenom hela sviten, men de prov som jämför valvet mot koden ska fortfarande fälla en trasig rad.
+
 Filen har **ett jobb**, `test`. Processgrindarna — omfångsrutan, PR-kroppen och ordbudgeten för `AGENTS.md` — låg i ett eget `process`-jobb fram till 2026-09-07 och är nu steg i samma jobb, märkta `if: ${{ !cancelled() }}` så att ett rött testutfall inte döljer ett rött processutfall. Skälet är minutbudgeten: de tre grindarna kör tillsammans på sju sekunder, och ett eget jobb debiteras som en hel minut. Se § Minutbudgeten.
 
 ```yaml
