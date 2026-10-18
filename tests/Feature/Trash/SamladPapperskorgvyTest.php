@@ -501,6 +501,36 @@ it('ger samma svar som de befintliga rutterna när grinden eller uppslaget säge
 });
 
 /*
+ * Kroppens `type` väljer radens typ — filtret i adressen gör det inte.
+ *
+ * `POST /trash/restore?type=container` är samma querysträng som listans
+ * filter (§ 6). En klient som bara skickar `ulid` ska få ett valideringsfel
+ * på `type`, inte lånas containertypen ur filtret. När kroppen bär `type`
+ * vinner den över filtret.
+ */
+it('väljer radens typ ur kroppen och inte ur querysträngen', function () {
+    withoutVite();
+
+    [$konto, $ägare, $container] = samladVyKontext();
+
+    $item = papperskorgsItem($container, $konto, $ägare, ['name' => 'Motorn']);
+    samladVyRaderad($item, now()->subHour());
+
+    actingAs($ägare)
+        ->post('/trash/restore?type=container', ['ulid' => $item->ulid])
+        ->assertSessionHasErrors('type');
+
+    expect(DB::table('item')->where('id', $item->id)->value('deleted_at'))->not->toBeNull();
+
+    actingAs($ägare)
+        ->post('/trash/restore?type=container', ['type' => 'item', 'ulid' => $item->ulid])
+        ->assertRedirect('/trash?type=container')
+        ->assertSessionHas('status', 'trash-restored');
+
+    expect(DB::table('item')->where('id', $item->id)->value('deleted_at'))->toBeNull();
+});
+
+/*
  * Klart när: containern är radens egen och måste vara levande — ADR-0065 § 3.
  *
  * Ett item i en raderad container listas aldrig för sig, och en klient som
@@ -650,8 +680,11 @@ it('söker medan man skriver och lägger nästa sida under de befintliga raderna
         ->toContain('restoreFlags.value = { ...restoreFlags.value, ...response.props.canRestore }');
 
     // Restore bara när grinden släpper igenom, och målet bär filtret.
+    // `:preserve-state="false"` remountar sidan efter POST, annars hade den
+    // återställda raden stått kvar i den lokala `rows`-listan.
     expect($vy)->toContain('v-if="restoreFlags[entry.ulid] === true"')
         ->toContain('method="post"')
+        ->toContain(':preserve-state="false"')
         ->toContain('/trash/restore');
 
     // Ikonerna: ItemIcon för item och container, bilagans typikon.

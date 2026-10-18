@@ -27,6 +27,14 @@ use Illuminate\Validation\Rules\Exists;
  * `RestoreContainerRequest` gör. Att filtrera på retention här hade gjort
  * ett utgånget innehåll till ett 422-valideringsfel.
  *
+ * **`type` läses ur kroppen, aldrig ur querysträngen.** Listans filter har
+ * samma namn (`/trash?type=…`, [[ADR-0065 Den samlade papperskorgen]] § 6),
+ * och Laravels förval — `all()` — lägger kropp och querysträng ihop. Utan
+ * avgränsningen hade en klient som postar bara `ulid` fått radens typ ur
+ * filtret i adressen. `validationData()` ser därför bara kroppen, och
+ * `ulidExistsRule()` läser samma källa. Inertia postar JSON, ett vanligt
+ * formulär postar formdata; båda läses här.
+ *
  * **Ingen behörighetslogik bor här.** Grinden prövas av kontrollern med
  * samma Action och samma grind som de befintliga rutterna
  * ([[ADR-0024 Tunna controllers och actions]]).
@@ -47,6 +55,29 @@ class RestoreAnyRequest extends FormRequest
     }
 
     /**
+     * Bara kroppen. Se docblocken: filtret i adressen får inte välja radtyp.
+     *
+     * @return array<string, mixed>
+     */
+    public function validationData(): array
+    {
+        return $this->body();
+    }
+
+    /**
+     * Kroppen utan querysträngen. Inertia skickar JSON, formulär skickar
+     * formdata — `validationData()` och `ulidExistsRule()` läser samma källa.
+     *
+     * @return array<string, mixed>
+     */
+    private function body(): array
+    {
+        return $this->isJson()
+            ? $this->json()->all()
+            : $this->request->all();
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -63,7 +94,7 @@ class RestoreAnyRequest extends FormRequest
      */
     private function ulidExistsRule(): Exists
     {
-        $table = match ($this->input('type')) {
+        $table = match ($this->body()['type'] ?? null) {
             'item' => 'item',
             'attachment' => 'attachment',
             'container' => 'container',

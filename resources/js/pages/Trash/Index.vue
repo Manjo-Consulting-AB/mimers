@@ -46,6 +46,12 @@ defineOptions({ layout: AppLayout });
  * rutterna och ger 403 om någon postar förbi vyn. Målet bär det filter
  * servern tillämpade, så att återställningen landar i samma vy.
  *
+ * **Raden lämnar listan när den återställs.** `Link` behåller annars
+ * komponentens tillstånd efter en POST — `preserveState` är Inertias förval
+ * för allt utom GET — och då hade den lokala `rows`-listan stått kvar med en
+ * Restore-knapp som nu ger 422 eller 404. `:preserve-state="false"` remountar
+ * sidan, så att `rows` sätts ur serverns färska `entries` och raden försvinner.
+ *
  * **Load more hämtar nästa sida med markören och lägger den UNDER raderna
  * som redan står där** (§ 7): `preserveScroll` och en lokal `rows`-lista som
  * byggs på i `onSuccess`. Första sidan och varje ny sökning ersätter listan;
@@ -423,6 +429,7 @@ onBeforeUnmount(() => {
                     method="post"
                     :data="{ type: entry.type, ulid: entry.ulid }"
                     as="button"
+                    :preserve-state="false"
                     preserve-scroll
                     class="inline-flex min-h-11 items-center self-start text-sm text-accent underline"
                 >
