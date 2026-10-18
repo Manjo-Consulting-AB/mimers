@@ -50,7 +50,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * text kommer ur `t()` med en nyckel under `dashboard.containers.*`.
  */
 const props = defineProps({
-    /* `{ ulid, name, items, todos, cover }` — talen är antalet inom användarens omfång. */
+    /* `{ ulid, name, items, todos, cover, icon, icon_color }` — talen är antalet inom användarens omfång. */
     container: { type: Object, required: true },
 });
 
@@ -61,7 +61,12 @@ const { t } = useTranslations();
     <UiCard class="min-w-64 flex-1 relative">
         <template #media>
             <div class="aspect-video w-full">
-                <ContainerCover :cover="props.container.cover" variant="medium" />
+                <ContainerCover
+                    :cover="props.container.cover"
+                    :icon="props.container.icon"
+                    :color="props.container.icon_color"
+                    variant="medium"
+                />
             </div>
         </template>
 

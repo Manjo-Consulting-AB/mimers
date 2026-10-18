@@ -384,7 +384,11 @@ async function destroy() {
 
         <div class="mt-4 flex flex-wrap items-center gap-4">
             <span class="h-16 w-16 shrink-0 overflow-hidden rounded-control">
-                <ContainerCover :cover="container.cover" />
+                <ContainerCover
+                    :cover="container.cover"
+                    :icon="container.icon"
+                    :color="container.icon_color"
+                />
             </span>
 
             <ContainerCoverSheet :container="container" v-slot="{ open }">

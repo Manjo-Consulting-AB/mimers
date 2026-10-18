@@ -59,9 +59,9 @@ defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
  *
  * Bilden är containerns egen och kommer färdig i `container.cover` ur
  * `ContainerResource` — kontrollern eager-loadar den, så listan kostar ett
- * konstant antal frågor oavsett antal containers. Utan bild ritar
- * `ContainerCover` den neutrala ytan, aldrig en tom ram ([[ADR-0047
- * Containerns bild]] § Beslut).
+ * konstant antal frågor oavsett antal containers. Utan bild väljer
+ * `ContainerCover` containerns ikon eller den neutrala ytan, aldrig en tom ram
+ * ([[ADR-0047 Containerns bild]] § Beslut, [[ADR-0064 Containerns ikon]] § 5).
  *
  * Bilden är INTE en länk: kortet har redan två mål (namnet och
  * redigeringslänken), och en tredje väg till samma sida hade varit ett mål en
@@ -114,7 +114,12 @@ const isShared = (container) => accountName(container) === null;
             <UiCard class="h-full">
                 <template #media>
                     <div class="aspect-video w-full">
-                        <ContainerCover :cover="container.cover" variant="medium" />
+                        <ContainerCover
+                            :cover="container.cover"
+                            :icon="container.icon"
+                            :color="container.icon_color"
+                            variant="medium"
+                        />
                     </div>
                 </template>
 

@@ -440,7 +440,12 @@ it('ersätter mörkläggningen med en toning och behåller den neutrala ytan', f
         ->and($hjalte)->toContain('max-w-lg');
 
     // Bilden — eller den neutrala ytan — ritas utan villkor under toningen.
-    expect($hjalte)->toContain('<ContainerCover :cover="container.cover" variant="medium" />');
+    // Sedan issue 317 bär taggen också containerns ikon och färg, så att
+    // `ContainerCover` kan välja bild, ikon eller låda.
+    expect($hjalte)->toContain(':cover="container.cover"')
+        ->and($hjalte)->toContain(':icon="container.icon"')
+        ->and($hjalte)->toContain(':color="container.icon_color"')
+        ->and($hjalte)->toContain('variant="medium"');
 
     expect($hjalte)->not->toMatch('#<ContainerCover\b[^>]*v-if#s');
 });
@@ -516,6 +521,36 @@ it('bär can.update i itemlistan och historiken', function () {
         actingAs($läsare)->get($adress)
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
+    }
+});
+
+/*
+ * Klart när (issue 317): hjälten och toppraden ritar containerns ikon när
+ * bilden saknas.
+ *
+ * Båda läser sidproppen `container` (App\Http\Resources\ContainerResource,
+ * issue 314) och skickar `icon` och `icon_color` vidare till `ContainerCover`,
+ * som väljer bild, ikon eller låda ([[ADR-0064 Containerns ikon]] § 5).
+ */
+it('skickar containerns ikon till hjälten och toppraden', function () {
+    withoutVite();
+
+    [, $ägare, $container] = hjalteKontext();
+
+    $container->update(['icon' => 'anchor', 'icon_color' => 'teal']);
+
+    actingAs($ägare)->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('container.icon', 'anchor')
+            ->where('container.icon_color', 'teal')
+        );
+
+    foreach (['components/ContainerHero.vue', 'layouts/ContainerLayout.vue'] as $fil) {
+        expect(hjalteTagg(hjalteKod($fil), 'ContainerCover'))
+            ->toContain(':icon="container.icon"')
+            ->and(hjalteTagg(hjalteKod($fil), 'ContainerCover'))
+            ->toContain(':color="container.icon_color"');
     }
 });
 

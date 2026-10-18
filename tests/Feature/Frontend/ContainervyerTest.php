@@ -129,6 +129,47 @@ it('renderar Containers/Index för en inloggad användare', function () {
 });
 
 /*
+ * Klart när (issue 317): containerlistan och inställningarna skickar
+ * containerns `icon` och `icon_color` till `ContainerCover`.
+ *
+ * Båda läser samma sidprop — App\Http\Resources\ContainerResource, som bär
+ * fälten alltid och som `null` när de saknas (issue 314). Propen går orörd
+ * genom servern; vyn gör inget val själv ([[ADR-0064 Containerns ikon]] § 5).
+ */
+it('skickar containerns ikon och färg till listan och inställningarna', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Containers/Index')
+        ->where('containers.0.icon', null)
+        ->where('containers.0.icon_color', null)
+    );
+
+    $container->update(['icon' => 'anchor', 'icon_color' => 'teal']);
+
+    actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('containers.0.icon', 'anchor')
+        ->where('containers.0.icon_color', 'teal')
+    );
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/edit")->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->component('Containers/Edit')
+            ->where('container.icon', 'anchor')
+            ->where('container.icon_color', 'teal')
+    );
+
+    foreach (['js/pages/Containers/Index.vue', 'js/pages/Containers/Edit.vue'] as $fil) {
+        $vy = File::get(resource_path($fil));
+
+        expect($vy)->toContain(':icon="container.icon"')
+            ->and($vy)->toContain(':color="container.icon_color"');
+    }
+});
+
+/*
  * Urvalet är samma fråga som API:ets index() ställer —
  * Container::scopeAccessibleBy() — så en container i ett främmande konto utan
  * container_access syns inte, och en container med en giltig access gör det.
