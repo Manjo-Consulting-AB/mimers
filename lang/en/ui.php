@@ -2912,7 +2912,6 @@ return [
             'filter_tags' => 'Tags',
             'filter_category' => 'Category',
             'filter_category_all' => '— all categories —',
-            'filter_submit' => 'Filter',
             'filter_active' => 'Active filters',
             'filter_clear' => 'Clear all',
             'filter_remove' => 'Remove :filter',

@@ -582,6 +582,164 @@ it('gör aktiva filter rensbara ett i taget och alla på en gång', function () 
 });
 
 /*
+ * Klart när (issue 311 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 7): att skriva i sökfältet skickar filtret 300 ms efter den
+ * senaste tangenttryckningen, utan knapp.
+ *
+ * Flera tryckningar inom fönstret ger ett anrop därför att varje ny
+ * tangenttryckning rensar den väntande fördröjningen innan nästa sätts. Enter
+ * skickar direkt och tar bort den, och fördröjningen rensas också när raden
+ * försvinner. Provet läser källkoden, eftersom sviten inte kör en webbläsare.
+ */
+it('söker 300 ms efter sista tangenttryckningen och rensar fördröjningen vid Enter', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->toContain('SEARCH_DELAY_MS = 300')
+        ->toContain('@input="onSearchInput"')
+        ->toContain('clearTimeout(')
+        ->toContain('onBeforeUnmount(');
+
+    // Tangenttryckningen rensar den väntande fördröjningen och sätter en ny:
+    // det är det som gör att flera tryck inom 300 ms ger ett anrop.
+    preg_match('/function onSearchInput\(\) \{(.*?)\n\}/s', $rad, $input);
+
+    expect($input)->toHaveCount(2);
+
+    expect($input[1])->toContain('clearSearchTimer()')
+        ->toContain('setTimeout(');
+
+    // Enter går genom formulärets submit, rensar fördröjningen och söker nu.
+    expect($rad)->toContain('@submit.prevent="submitSearch"');
+
+    preg_match('/function submitSearch\(\) \{(.*?)\n\}/s', $rad, $submit);
+
+    expect($submit)->toHaveCount(2);
+
+    expect($submit[1])->toContain('clearSearchTimer()')
+        ->toContain('search()');
+});
+
+/*
+ * Klart när (ADR-0062 § 7): ett oförändrat sökord skickas inte, och en ny
+ * sökning avbryter den som fortfarande är på väg.
+ *
+ * Jämförelsen sker efter trimning mot `filter.q`, alltså ordet servern redan
+ * tillämpat; tomt räknas som `null` genom att båda sidor trimmas till tom
+ * sträng. Avbrottet sker uttryckligen: den förra visitens `cancelToken` sparas
+ * och avbryts, så att ett äldre svar aldrig skriver över ett nyare.
+ */
+it('skickar inte ett oförändrat sökord och avbryter den förra sökningen', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->toContain("const current = String(props.filter.q ?? '').trim();")
+        ->toContain('if (next === current)')
+        ->toContain('cancelToken.cancel()')
+        ->toContain('onCancelToken: (token) =>');
+});
+
+/*
+ * Klart när (ADR-0062 § 7): sökningar från fältet ersätter historikposten, de
+ * andra vägarna lägger till en, och fältet är aldrig inaktiverat medan svaret
+ * är på väg.
+ *
+ * `replace` är ett tillval som bara fältets sökning sätter. Kategorin,
+ * taggarna, chipkryssen och *Clear* går genom samma `apply()` utan det, alltså
+ * med webbläsarens vanliga historikpost. `preserveState` håller kvar fokus och
+ * markör, och `watch` står still medan användaren skriver.
+ */
+it('ersätter historiken för fältet och låter fältet stå öppet medan svaret kommer', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->toContain('replace: options.replace === true')
+        ->toContain('apply({ q: next }, { replace: true, fromField: true })')
+        ->toContain("apply({ q: '' })")
+        ->toContain('apply({ category: null })')
+        ->toContain("apply({ q: '', tags: [], category: null })")
+        ->toContain('preserveState: true');
+
+    // Fältet är aldrig `disabled`; bara chipsen och *Clear* stängs.
+    preg_match('/<input\b[^>]*id="item-filter-q"[^>]*>/', $rad, $sokfalt);
+    preg_match('/<select\b[^>]*id="item-filter-category"[^>]*>/', $rad, $valjare);
+
+    expect($sokfalt)->toHaveCount(1);
+    expect($valjare)->toHaveCount(1);
+    expect($sokfalt[0])->not->toContain('disabled');
+    expect($valjare[0])->not->toContain('disabled');
+    expect($rad)->toContain(':disabled="pending"');
+
+    // Serverns svar skriver inte över fältet medan en fördröjning väntar eller
+    // en sökning från fältet är på väg.
+    expect($rad)->toContain('if (searchTimer !== null || searchInFlight.value)');
+});
+
+/*
+ * Klart när (ADR-0062 § 7): knappen *Filter* och nyckeln
+ * `item.index.filter_submit` finns inte, och kategorin och taggarna skickar
+ * direkt när de ändras.
+ */
+it('tar bort Filter-knappen och nyckeln och skickar direkt från kategorin och taggarna', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->not->toContain('type="submit"');
+    expect($rad)->not->toContain('filter_submit');
+
+    // Kategorin och varje taggkryss anropar `apply()` på `change`, alltså
+    // direkt och utan fördröjning.
+    expect(substr_count($rad, '@change="apply()"'))->toBe(2);
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['item']['index'])->not->toHaveKey('filter_submit');
+});
+
+/*
+ * Klart när (ADR-0062 § 8): under `sm:` tar sökfältet och kategorin hela
+ * bredden var för sig och taggarna bryter under dem; från `sm:` växer
+ * sökfältet, och kategorin behåller sin bredd.
+ *
+ * Fälten har `min-h-11` och designsystemets tokens i stället för radens gamla
+ * `slate`- och `blue`-klasser ([[ADR-0042 Designsystemet]] § Beslut).
+ */
+it('gör filterraden responsiv med designsystemets tokens', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    // Full bredd under sm:, och sökfältet växer med en minsta bredd från sm:.
+    expect($rad)->toContain('flex w-full flex-col gap-1 text-sm font-medium text-ink sm:min-w-48 sm:flex-1')
+        ->toContain('flex w-full flex-col gap-1 text-sm font-medium text-ink sm:w-auto')
+        ->toContain('flex w-full flex-col gap-1 sm:w-auto');
+
+    // 44 px höga fält med rollerna ur @theme.
+    expect($rad)->toContain('min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink')
+        ->toContain('min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink sm:w-auto');
+
+    // Ingen palettfärg kvar i markupen.
+    expect($rad)->not->toMatch(
+        '/\b(?:text|bg|border|ring|outline|divide|from|via|to|fill|stroke|placeholder|decoration|shadow|accent|caret)-(?:slate|blue)-\d{2,3}\b/',
+    );
+});
+
+/*
+ * Klart när (ADR-0062 § 7): skalets sökfält och `/search` rörs inte. De söker
+ * fortfarande vid Enter — ett vanligt GET-formulär — och har ingen fördröjning
+ * och inget `router.get`. Provet låser kontraktet, så att den löpande
+ * sökningen i filterraden inte smittar det fält som söker i allt.
+ */
+it('lämnar skalets sökfält vid Enter utan fördröjning', function () {
+    $sok = File::get(resource_path('js/components/SearchField.vue'));
+
+    expect($sok)->toContain('method="get"')
+        ->toContain('action="/search"');
+
+    // Docblocken nämner `router.get` som det fältet INTE gör; koden läses
+    // därför utan kommentarer.
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $sok);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    expect($kod)->not->toContain('router.get');
+    expect($kod)->not->toContain('setTimeout');
+});
+
+/*
  * Klart när: itemlistans filter fungerar oförändrat på den NYA URL:en.
  *
  * Två halvor. Servern: samma querysträng ger samma urval på
