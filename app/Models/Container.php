@@ -52,8 +52,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * `currency` är containerns EGEN valuta, och den är NULLBAR: en container
  * utan egen valuta följer kontots. Se effectiveCurrency() nedan —
  * arvsregeln formuleras där och ingen annanstans.
+ *
+ * `icon` och `icon_color` (issue 314 · [[ADR-0064 Containerns ikon]] § 1
+ * och 2) är containerns egna presentationsval, i samma form och med samma
+ * palett som itemets ([[ADR-0060 Itemets ikon]] § 4 och 5). Båda är
+ * nullbara och frivilliga: ingen ikon vald lagras som `null` och ritas som
+ * rollen `container`. Namnet kontrolleras bara till formatet — listan över
+ * Lucide-ikoner bor i klientens bygge.
  */
-#[Fillable(['name', 'kind', 'description', 'currency'])]
+#[Fillable(['name', 'kind', 'description', 'currency', 'icon', 'icon_color'])]
 #[RouteKey('ulid')]
 class Container extends Model
 {

@@ -33,8 +33,12 @@ use Illuminate\Support\Facades\DB;
  *
  * **En ändring loggas med fältens namn, inte med deras innehåll.**
  * `meta.changed` är namnen på de fält som ändrades. `name` och `description`
- * är fritext och följer aldrig med. `kind` och `currency` är värdelistor och
- * bär gamla och nya värdet i `meta.values`.
+ * är fritext och följer aldrig med. `kind`, `currency`, `icon` och
+ * `icon_color` är värdelistor och bär gamla och nya värdet i `meta.values`.
+ * De två ikonfälten följer itemets regel (issue 301 · [[ADR-0060 Itemets
+ * ikon]] § 7) och containerns egen (issue 314 · [[ADR-0064 Containerns
+ * ikon]] § 2): ikonnamnet och palettnyckeln är valda värden och inte
+ * fritext, precis som `kind` och `currency`.
  *
  * **En ändring som inte ändrar något skriver ingen rad** — samma regel som
  * `App\Actions\Schedule\UpdateSchedule` (issue 110): en PATCH med samma
@@ -44,11 +48,13 @@ class UpdateContainer
 {
     /**
      * Fälten som får bära gamla och nya värdet i `meta.values`. `name` och
-     * `description` står med flit inte här.
+     * `description` står med flit inte här. `icon` och `icon_color` kom med
+     * issue 314 · [[ADR-0064 Containerns ikon]] § 2 — valda värden, inte
+     * fritext, som `kind` och `currency`.
      *
      * @var list<string>
      */
-    private const VALUE_FIELDS = ['kind', 'currency'];
+    private const VALUE_FIELDS = ['kind', 'currency', 'icon', 'icon_color'];
 
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 

@@ -52,6 +52,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * enkelradsvägarna (App\Http\Controllers\ContainerController::show/edit() och
  * de övriga kontrollerna som renderar containern).
  *
+ * **`icon` och `icon_color` kom med issue 314 · [[ADR-0064 Containerns
+ * ikon]] § 2.** De bär containerns egna presentationsval, i samma form som
+ * itemets ([[ADR-0060 Itemets ikon]] § 7), och står ALLTID med — som `null`
+ * när ingen ikon är vald, aldrig utelämnade, samma regel som `kind` och
+ * `description`. Klienten ritar då rollen `container` (ADR-0064 § 4).
+ *
  * @mixin Container
  */
 class ContainerResource extends JsonResource
@@ -121,6 +127,11 @@ class ContainerResource extends JsonResource
             // hantera två fall (issue 8 § Beslut 7, och samma linje för
             // `kind` ovan).
             'description' => $this->description,
+            // Containerns ikon och palettnyckel (issue 314 · [[ADR-0064
+            // Containerns ikon]] § 2). Alltid med som nycklar, även som
+            // `null`, som `kind` och `description` ovan.
+            'icon' => $this->icon,
+            'icon_color' => $this->icon_color,
             'account' => $this->account->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
