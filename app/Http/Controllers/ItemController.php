@@ -656,7 +656,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap): Response
     {
         Gate::authorize('view', $item);
 
@@ -836,6 +836,19 @@ class ItemController extends Controller
         $path = $request->query('path');
         $path = is_string($path) ? $path : null;
 
+        // Itemets karta (issue 312 · [[ADR-0063 Itemets karta i
+        // containerkartans form]] § 2): samma upplösning som containerns
+        // kartläge, med itemet som mitt i stället för containern. Den gamla
+        // `map` nedan ritas av fokuskartan till dess att issue 313 tar bort
+        // den; de två lever sida vid sida så länge.
+        //
+        // Upplösningen kostar sina två frågor och statusen sina två,
+        // oavsett hur många grannar itemet har
+        // (App\Actions\Item\ResolveItemMap § Frågekostnaden). Omfånget är
+        // redan löst av `paths` och `structure` ovan och memoiserat per
+        // {user, container}.
+        $itemMap = $resolveItemMap->handle($user, $container, $item->ulid);
+
         // Relationerna i sitt resursformat, EN gång: `links`-proppen grupperar
         // de här raderna och fokuskartan bygger sina noder ur dem (issue 156),
         // så relationsfliken och kartan bevisligen ritar samma lista.
@@ -983,6 +996,36 @@ class ItemController extends Controller
             // `paths`, `structure` och `counterparts`: `ItemResource` är
             // `/api`:s format och har inte bett om fältet.
             'map' => $this->map($user, $container, $item, $links, $candidates, $path, $createTarget),
+
+            // Itemets karta (issue 312 · [[ADR-0063 Itemets karta i
+            // containerkartans form]] § 2): containerkartans form med itemet
+            // som mitt — `center`, `container`, `path`, `parent`, `child`,
+            // `related` och `rows`, samma form som `map` i index() kartläge.
+            //
+            // `rows` är mittens menyrader ur App\Support\Frontend\CreateTarget
+            // med sidans `?path=`, så att *Item under* hamnar i den förekomst
+            // man står i. `containerns` ULID och namn följer med av samma skäl
+            // som i index(): vägen från roten börjar vid containern, som inte
+            // är en item-nod.
+            //
+            // `centerItem` och `drawn` följer INTE med: de är upplösningens
+            // arbetsmaterial — modellen bakom menyraderna och statusfrågan.
+            'itemMap' => [
+                'center' => $itemMap['center'],
+                'container' => ['ulid' => $container->ulid, 'name' => $container->name],
+                'path' => $itemMap['path'],
+                'parent' => $itemMap['parent'],
+                'child' => $itemMap['child'],
+                'related' => $itemMap['related'],
+                'rows' => $createTarget->forNode($user, $container, $item, $path),
+            ],
+
+            // Statusen för mitten och de ritade noderna (issue 312), samma
+            // fråga och samma avgränsning som `statuses` i index() kartläge:
+            // App\Support\Item\ItemStatus räknar bara det som ritas, så en nod
+            // utanför omfånget får ingen status att räknas i. Två frågor,
+            // oavsett antalet noder.
+            'itemMapStatuses' => $itemStatus->forItems($container, $user, array_values($itemMap['drawn'])),
 
             // Relationsflikens läge (issue 156): *Lista* är förvalet och
             // *Fokus* är kartan. Läget står i querysträngen och ingenstans
