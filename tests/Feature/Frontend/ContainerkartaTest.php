@@ -664,13 +664,14 @@ it('ritar ikonen till vänster och namnet och slagets ord till höger', function
 });
 
 /*
- * Klart när: öppna-ikonen sitter i kortets övre högra hörn och har kvar sitt
- * `aria-label` ([[ADR-0061 Kartans kort och kanter]] § 3).
+ * Klart när (issue 309 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 4 och 5): öppna-ikonen är ett öga i kortets övre högra hörn
+ * och har kvar sitt `aria-label`.
  *
  * Den är fortfarande ett eget mål för tangentbordet, med en yta på 44 px —
- * ADR:n flyttar den bara, den tar inte bort den.
+ * ADR:n byter glyf och flyttar plusknappen, den tar inte bort någon av dem.
  */
-it('sätter öppna-ikonen i kortets övre högra hörn med kvarvarande aria-label', function () {
+it('sätter ögat i kortets övre högra hörn med kvarvarande aria-label', function () {
     $noden = kartavyKod('components/ItemMapNode.vue');
 
     expect($noden)->toContain('absolute right-0 top-0')
@@ -721,14 +722,17 @@ it('ritar inte antal barn', function () {
 });
 
 /*
- * Klart när: plusknappen finns bara på mittnoden, och bara när map.rows inte
- * är tom.
+ * Klart när (issue 309 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 5): plusknappen sitter i mittkortets nedre högra hörn, inne i
+ * kortets ram, och ritas bara när mitten har rader.
  *
- * Raderna skickas bara till mitten — `:rows="map.rows"` står en gång — och
- * noden ritar ingen knapp när listan är tom ([[ADR-0048 Mobilen och
- * plusknappen]] § 2).
+ * Ordningen i markupen är kortet, ögat och plusknappen, så tabbordningen blir
+ * densamma: knappen står efter ögats `<Link>`. Ingenting ritas utanför ramen i
+ * nodens `<li>`, och en tom meny ger ingen knapp ([[ADR-0048 Mobilen och
+ * plusknappen]] § 2). Mittkortets högerutfyllnad rymmer hörnens 44 px-knappar,
+ * så namnet aldrig hamnar under dem.
  */
-it('ritar plusknappen bara på mitten och bara när raderna finns', function () {
+it('sätter plusknappen i kortets nedre högra hörn och bara när raderna finns', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
     $noden = kartavyKod('components/ItemMapNode.vue');
 
@@ -737,7 +741,36 @@ it('ritar plusknappen bara på mitten och bara när raderna finns', function () 
 
     expect($noden)->toContain('v-if="rows.length > 0"')
         ->toContain('<UiIcon name="add"')
-        ->toContain("t('item.map.node_menu', { name: node.name })");
+        ->toContain("t('item.map.node_menu', { name: node.name })")
+        ->toContain('absolute bottom-0 right-0');
+
+    // Kortet, ögat och plusknappen står i den ordningen i markupen.
+    $kortet = (int) strpos($noden, '<component');
+    $ogat = (int) strpos($noden, '<UiIcon name="open"');
+    $plus = (int) strpos($noden, 'v-if="rows.length > 0"');
+
+    expect($kortet)->toBeGreaterThan(0)
+        ->and($ogat)->toBeGreaterThan($kortet)
+        ->and($plus)->toBeGreaterThan($ogat);
+
+    // Båda knapparna står inne i kortets `relative`-ram, och ingenting ritas
+    // efter ramen i `<li>`.
+    $ram = (int) strpos($noden, 'class="relative flex"');
+    $ramSlut = (int) strpos($noden, '</div>', $ram);
+    $inne = substr($noden, $ram, $ramSlut - $ram);
+
+    expect($ram)->toBeGreaterThan(0)
+        ->and($ramSlut)->toBeGreaterThan($ram)
+        ->and($inne)->toContain('<UiIcon name="open"')
+        ->and($inne)->toContain('v-if="rows.length > 0"')
+        ->and(substr($noden, $ramSlut))->not->toContain('<button');
+
+    // Båda har 44 px träffyta. Mitten har minst 44 px till höger (11 × 4), så
+    // namnet aldrig hamnar under hörnens knappar.
+    preg_match("/w-56[^']*\\bpr-(\\d+)/", $noden, $traf);
+
+    expect(substr_count($noden, 'min-h-11 min-w-11'))->toBe(2)
+        ->and((int) ($traf[1] ?? 0) * 4)->toBeGreaterThanOrEqual(44);
 });
 
 /*
@@ -753,7 +786,8 @@ it('markerar mitten med aria-current och visar bara namnet kring containern', fu
     $noden = kartavyKod('components/ItemMapNode.vue');
 
     expect($noden)->toContain('aria-current')
-        ->toContain("current ? 'page' : undefined");
+        ->toContain("current ? 'page' : undefined")
+        ->toContain('v-if="openHref"');
 
     expect($kartan)->toContain("center.value.kind === 'item' ? openHref(center.value) : null")
         ->toContain("center.value.kind === 'item' ? t('item.links.current') : t('item.map.kind.container')");

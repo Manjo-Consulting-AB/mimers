@@ -23,10 +23,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * containern ritas `UiIcon` `container` i stället för en item-ikon, och ordet
  * *Container* i stället för *Current item*.
  *
- * **Öppna-ikonen sitter i kortets övre högra hörn** (ADR:ns beslut 3) men är
- * fortfarande ett eget mål för tangentbordet, med samma `aria-label` som
- * namnger itemet ([[ADR-0059 Kartan med en mitt]] § 3). Den ritas med `UiIcon`
- * och rollen `open`. Plusmenyn sitter kvar bara på mitten (ADR-0059 § 4).
+ * **Öppna-ikonen är ett öga i kortets övre högra hörn** ([[ADR-0062 Kartans
+ * luft, listans ruta och den löpande sökningen]] § 4 och 5): rollen `open` bär
+ * Lucides `eye`, och knappen är fortfarande ett eget mål för tangentbordet med
+ * samma `aria-label` som namnger itemet ([[ADR-0059 Kartan med en mitt]] § 3).
+ *
+ * **Plusmenyn sitter inne i mittkortet** (ADR-0062 § 5): knappen ligger i
+ * kortets `relative`-ram, absolut i det nedre högra hörnet, och ritas bara när
+ * `rows` inte är tom. Både ögat och plustecknet har 44 px träffyta, och
+ * tabbordningen är kortet, ögat och plustecknet — därför står plusknappen efter
+ * ögats `<Link>` i markupen. Kring containern finns ingen öppna-länk (den är
+ * inget item) och inga rader, så kortet får varken öga eller plus. Ingenting
+ * ritas utanför kortets ram i nodens `<li>`.
  *
  * **Noden visar inte antal barn** (ADR:ns beslut 4). Statusen ritas bara när
  * den är `overdue`: en prick i `danger` vid namnet, med ordet i `sr-only` och
@@ -93,8 +101,8 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
             Kortet är en länk för varje nod utom mitten. `component :is` håller
             formen i en enda uppsättning markup: en `<Link>` när noden har en
             adress, en `<span>` med `aria-current` när den är mitten. Ramen är
-            `relative`, så att öppna-ikonen hamnar i KORTETS hörn och inte i
-            radens — plusknappen står utanför ramen.
+            `relative`, så att öppna-ikonen och plusknappen hamnar i KORTETS
+            hörn och inte i radens.
         -->
         <div class="relative flex">
             <component
@@ -105,7 +113,7 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
                 :data-map-kind="current ? 'center' : kind"
                 class="flex min-h-11 min-w-0 items-center rounded-card border shadow-card outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="current
-                    ? 'w-56 flex-col justify-center gap-1 border-accent bg-accent-soft px-8 py-3 text-center'
+                    ? 'w-56 flex-col justify-center gap-1 border-accent bg-accent-soft py-3 pl-8 pr-12 text-center'
                     : 'w-48 gap-3 border-border bg-surface py-2 pl-3 pr-10 text-left'"
             >
                 <!-- Mitten: ikonen ovanför namnet, ordet under. -->
@@ -220,17 +228,21 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
             >
                 <UiIcon name="open" :size="16" />
             </Link>
-        </div>
 
-        <!-- Plusmenyn: bara mitten har rader, och en tom meny ger ingen knapp. -->
-        <button
-            v-if="rows.length > 0"
-            type="button"
-            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-pill text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            :aria-label="t('item.map.node_menu', { name: node.name })"
-            @click="emit('open-menu', { rows, trigger: $event.currentTarget, name: node.name })"
-        >
-            <UiIcon name="add" :size="16" />
-        </button>
+            <!--
+                Plusmenyn, i kortets nedre högra hörn och efter ögat i
+                tabbordningen. Bara mitten har rader, och en tom meny ger
+                ingen knapp.
+            -->
+            <button
+                v-if="rows.length > 0"
+                type="button"
+                class="absolute bottom-0 right-0 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-pill text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :aria-label="t('item.map.node_menu', { name: node.name })"
+                @click="emit('open-menu', { rows, trigger: $event.currentTarget, name: node.name })"
+            >
+                <UiIcon name="add" :size="16" />
+            </button>
+        </div>
     </li>
 </template>

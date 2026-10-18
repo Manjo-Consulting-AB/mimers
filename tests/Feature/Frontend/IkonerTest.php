@@ -37,7 +37,9 @@ function ikonVersion(): string
 /**
  * Startlistan ur [[ADR-0057 Ikoner och typsnitt]] § 1: roll → Lucide-namn.
  * `open` kom med issue 297 och containerns karta
- * ([[ADR-0059 Kartan med en mitt]] § 3); övriga står i ADR-0057.
+ * ([[ADR-0059 Kartan med en mitt]] § 3), och bytte glyf från `arrow-up-right`
+ * till `eye` i issue 309 ([[ADR-0062 Kartans luft, listans ruta och den
+ * löpande sökningen]] § 4); övriga står i ADR-0057.
  *
  * @return array<string, string>
  */
@@ -87,7 +89,7 @@ function ikonRoller(): array
         'more-vertical' => 'ellipsis-vertical',
         'chevron-left' => 'chevron-left',
         'mail' => 'mail',
-        'open' => 'arrow-up-right',
+        'open' => 'eye',
     ];
 }
 
