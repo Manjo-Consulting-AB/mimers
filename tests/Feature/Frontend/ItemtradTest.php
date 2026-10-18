@@ -599,8 +599,8 @@ it('ritar containern som en olänkad rotrad med containerns ikon och utan fällk
     expect($kod)->not->toContain('containerOpen')
         // Rötterna syns utan klick — ingen flagga grindar vandringen.
         ->toContain('walk(props.nodes, [], 0, [])')
-        ->toContain('name="container"')
-        ->toContain('tile="neutral"');
+        ->toContain('containerIcon')
+        ->toContain('fallback="container"');
 
     // Rotraden läses ut för sig: containerns namn finns i hela filen även som
     // etikett på en fällknapp, och provet gäller raden.
@@ -609,7 +609,12 @@ it('ritar containern som en olänkad rotrad med containerns ikon och utan fällk
     $rot = substr($kod, (int) $start, (int) $slut - (int) $start);
 
     expect($rot)->toContain('{{ containerName }}')
-        ->toContain('<UiIcon name="container"')
+        ->toContain('<ItemIcon')
+        ->toContain(':name="containerIcon"')
+        ->toContain(':color="containerIconColor"')
+        ->toContain(':size="20"')
+        ->toContain('tile')
+        ->toContain('fallback="container"')
         // Ikonen står i samma 44 px-kolumn som itemradernas fällknappar.
         ->toContain('min-w-11');
 
@@ -617,6 +622,18 @@ it('ritar containern som en olänkad rotrad med containerns ikon och utan fällk
     expect($rot)->not->toContain('<button');
     expect($rot)->not->toContain('aria-expanded');
     expect($rot)->not->toContain('<Link');
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): `Index.vue`
+ * skickar containerns `icon` och `icon_color` ur sidproppen `container`
+ * (ContainerResource, issue 314) till trädet, så att rotraden ritar dem.
+ */
+it('skickar containerns ikon ur sidproppen till trädet', function () {
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    expect($vy)->toContain(':container-icon="container.icon"')
+        ->toContain(':container-icon-color="container.icon_color"');
 });
 
 /*
@@ -658,10 +675,11 @@ it('ritar itemets ikon mellan fällknappen och namnet', function () {
         ->toContain(':color="cells(row.node).icon_color"')
         ->toContain(':size="20"');
 
-    // Ordningen i raden: knappen, platshållaren, ikonen, namnet.
+    // Ordningen i raden: knappen, platshållaren, ikonen, namnet. Rotradens
+    // ikon står före knappen, så sökningen börjar vid knappen.
     $knapp = strpos($kod, 'v-if="row.node.children.length > 0"');
-    $ikon = strpos($kod, '<ItemIcon');
-    $namn = strpos($kod, '{{ row.node.name }}');
+    $ikon = strpos($kod, '<ItemIcon', (int) $knapp);
+    $namn = strpos($kod, '{{ row.node.name }}', (int) $ikon);
 
     expect($knapp)->not->toBeFalse('raden ritar ingen fällknapp')
         ->and($ikon)->not->toBeFalse('raden ritar ingen itemikon')
@@ -671,9 +689,8 @@ it('ritar itemets ikon mellan fällknappen och namnet', function () {
         ->and((int) $ikon)->toBeLessThan((int) $namn);
 
     // Ikonen är inte grindad på skärmbredd: under `md:` gäller samma form.
-    $start = strpos($kod, '<ItemIcon');
-    $slut = strpos($kod, '/>', (int) $start);
-    $ikonMarkup = substr($kod, (int) $start, (int) $slut - (int) $start);
+    $slut = strpos($kod, '/>', (int) $ikon);
+    $ikonMarkup = substr($kod, (int) $ikon, (int) $slut - (int) $ikon);
 
     expect($ikonMarkup)->toContain('tile')
         ->and($ikonMarkup)->not->toContain('md:')

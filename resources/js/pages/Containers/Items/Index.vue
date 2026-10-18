@@ -472,6 +472,8 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             :tree-rows="treeRows ?? {}"
             :container-ulid="container.ulid"
             :container-name="container.name"
+            :container-icon="container.icon"
+            :container-icon-color="container.icon_color"
             :filtered="hasFilter"
             :expand-all="allOpen"
         />

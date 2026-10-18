@@ -11,11 +11,12 @@ use Illuminate\Support\Facades\File;
  * **Provet läser KÄLLAN.** Raderna ritas i webbläsaren — Inertia renderar
  * mallen i klienten — så det som går att avgöra på serversidan är att varje
  * rad bär en `UiIcon`, att rollen står i samma lista som raden, att varje
- * container ritas med `container` oavsett art, att sidomenyn och sidopanelen
- * ritar SAMMA komponenter och därför samma roll på samma rad, att ikonerna
- * inte sätter en egen färg, och att den aktiva radens färg och fokusringen
- * står kvar. Kommentarerna rensas bort först, som i IkonerTest och
- * GenomgangTest: en mening i ett docblock är inte samma sak som ett anrop.
+ * container ritas med sin egen ikon och `container` som fallback oavsett art,
+ * att sidomenyn och sidopanelen ritar SAMMA komponenter och därför samma roll
+ * på samma rad, att ikonerna inte sätter en egen färg, och att den aktiva
+ * radens färg och fokusringen står kvar. Kommentarerna rensas bort först, som
+ * i IkonerTest och GenomgangTest: en mening i ett docblock är inte samma sak
+ * som ett anrop.
  *
  * Hjälparna har prefixet `sidopanelIkon` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -114,23 +115,24 @@ it('ger favorit- och kontoraden ikoner', function () {
 });
 
 /*
- * Klart när: varje container i `ShellContainerList` ritas med `container`,
- * oavsett art.
+ * Klart när: varje container i `ShellContainerList` ritar sin egen ikon, och
+ * faller tillbaka på `container` oavsett art (issue 316 · [[ADR-0064
+ * Containerns ikon]] § 5).
  *
  * `kind` är fritt ([[ADR-0036 Containerns art]]), och en ikon gissad ur
- * fritext ger fel bild åt den som skrev något eget ([[ADR-0057 Ikoner och
- * typsnitt]] § 1). Rollen är därför statisk, och mallen läser aldrig
- * `container.kind` för att välja den. *Add container* bär `add`; den
- * handritade plussvg:n är ersatt med rollen ur listan.
+ * fritext ger fel bild åt den som skrev något eget. Fallbacken är därför
+ * statisk, och mallen läser aldrig `container.kind` för att välja den.
+ * *Add container* bär `add`; den handritade plussvg:n är ersatt med rollen ur
+ * listan.
  */
-it('ritar varje container med container, oavsett art', function () {
+it('ritar varje container med sin ikon och container som fallback, oavsett art', function () {
     $lista = sidopanelIkonKod('components/ShellContainerList.vue');
 
     expect($lista)->toContain("import UiIcon from './UiIcon.vue'");
 
     expect($lista)->toMatch(
-        '~v-for="container in group\.containers"[\s\S]*?<UiIcon name="container"[^>]*/>\s*\{\{ container\.name \}\}~',
-        'containerraden ritar inte rollen container framför namnet',
+        '~v-for="container in group\.containers"[\s\S]*?<ItemIcon\b[^>]*fallback="container"[^>]*/>\s*\{\{ container\.name \}\}~',
+        'containerraden ritar inte containerns ikon med containern som fallback framför namnet',
     );
 
     // Ikonen väljs aldrig ur arten.

@@ -12,8 +12,14 @@ import { ICON_COLORS, loadIcon } from './itemIconPresentation.js';
  *
  * **Ikonen laddas när den ritas.** Globben är lat, så den här komponenten är
  * det enda stället en item-ikon hämtas. Medan filen hämtas, och när namnet är
- * `null` eller inte finns, ritas `UiIcon` med rollen `item` i den neutrala
- * tonen — i samma storlek som den färdiga ikonen, så att raden inte hoppar.
+ * `null` eller inte finns, ritas `UiIcon` med rollen i `fallback` i den
+ * neutrala tonen — i samma storlek som den färdiga ikonen, så att raden inte
+ * hoppar.
+ *
+ * **`fallback` är en roll, inte ett Lucide-namn** (issue 316 · [[ADR-0064
+ * Containerns ikon]] § 4). Förvalet `item` ritar samma låda som förut; en
+ * container skickar `container`, så att en container utan ikon får containerns
+ * egen fallback i stället för itemets.
  *
  * **Färgen är en palettnyckel.** `color` är en av de åtta i `ICON_COLORS`;
  * en saknad eller okänd nyckel ritas som `slate` (ADR-0060 § 5). Med `tile`
@@ -28,6 +34,12 @@ const props = defineProps({
     color: { type: String, default: null },
     size: { type: Number, default: 20 },
     tile: { type: Boolean, default: false },
+    /*
+     * Rollen som ritas när `name` är tomt eller okänt — en nyckel ur
+     * `resources/js/icons/index.js`, inte ett Lucide-namn. `item` är förvalet,
+     * så en yta utan proppen beter sig som före issue 316.
+     */
+    fallback: { type: String, default: 'item' },
 });
 
 const SIZES = [16, 20, 24];
@@ -113,7 +125,7 @@ watch(
     >
         <component :is="icon" />
     </span>
-    <UiIcon v-else-if="tile" name="item" :size="size" tile="neutral" />
+    <UiIcon v-else-if="tile" :name="fallback" :size="size" tile="neutral" />
     <component :is="icon" v-else-if="icon" />
-    <UiIcon v-else name="item" :size="size" class="text-ink-muted" />
+    <UiIcon v-else :name="fallback" :size="size" class="text-ink-muted" />
 </template>

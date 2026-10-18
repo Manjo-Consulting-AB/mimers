@@ -197,6 +197,8 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
             ->where('map.center.name', $container->name)
             ->where('map.center.children', null)
             ->where('map.center.placements', null)
+            ->where('map.center.icon', null)
+            ->where('map.center.icon_color', null)
             ->where('map.parent', ['nodes' => [], 'total' => 0])
             ->where('map.related', ['nodes' => [], 'total' => 0])
             ->has('map.child.nodes', 1)
@@ -220,6 +222,38 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
     preg_match_all("/key: '(\w+)'/", $vy, $träffar);
 
     expect($träffar[1])->toBe(['list', 'tree', 'map']);
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): kartans mitt bär
+ * containerns `icon` och `icon_color` när mitten är containern — de är inte
+ * längre `null` där. Ett item som mitt bär fortfarande sitt eget val.
+ *
+ * Fälten ligger på containerraden, som redan är hämtad, så svaret kostar
+ * ingen ny fråga. Det mäts av provet om frågekostnaden nedan.
+ */
+it('bär containerns ikon i kartans mitt', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kartavyKontext();
+    $container->update(['icon' => 'sailboat', 'icon_color' => 'teal']);
+
+    $motorn = kartavyItem($container, 'Motorn', ['icon' => 'cog', 'icon_color' => 'amber']);
+
+    actingAs($anvandare)->get(kartavyUrl($container, 'view=map'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('map.center.kind', 'container')
+            ->where('map.center.icon', 'sailboat')
+            ->where('map.center.icon_color', 'teal')
+    );
+
+    actingAs($anvandare)->get(kartavyUrl($container, "view=map&focus={$motorn->ulid}"))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('map.center.kind', 'item')
+            ->where('map.center.icon', 'cog')
+            ->where('map.center.icon_color', 'amber')
+        );
 });
 
 /*
@@ -682,13 +716,14 @@ it('sätter ögat i kortets övre högra hörn med kvarvarande aria-label', func
 });
 
 /*
- * Klart när: mitten är större, bär *Current item*, och kring containern står
- * `UiIcon` `container` och ordet *Container* (ADR:ns beslut 2).
+ * Klart när: mitten är större, bär *Current item*, och kring containern ritas
+ * containerns egen ikon med `ItemIcon`, `tile` och `fallback="container"`
+ * (issue 316 · [[ADR-0064 Containerns ikon]] § 5) — med ordet *Container*.
  *
  * Kanten är i `accent` och bakgrunden `accent-soft`; plusmenyn sitter kvar på
  * mitten som i dag.
  */
-it('ritar en större mitt med Current item och containern som ikon och ord', function () {
+it('ritar en större mitt med Current item och containerns ikon och ord', function () {
     $noden = kartavyKod('components/ItemMapNode.vue');
     $kartan = kartavyKod('components/ItemMap.vue');
 
@@ -696,7 +731,10 @@ it('ritar en större mitt med Current item och containern som ikon och ord', fun
         ->toContain('border-accent')
         ->toContain('bg-accent-soft')
         ->toContain("node.kind === 'container'")
-        ->toContain('name="container"')
+        ->toContain(':name="node.icon"')
+        ->toContain(':color="node.icon_color"')
+        ->toContain('fallback="container"')
+        ->toContain('tile')
         ->toContain('v-if="label" class="text-meta text-accent"');
 
     expect($kartan)->toContain("t('item.links.current') : t('item.map.kind.container')");

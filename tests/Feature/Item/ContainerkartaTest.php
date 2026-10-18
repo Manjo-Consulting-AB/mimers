@@ -305,12 +305,36 @@ it('bär itemets ikon på varje nod och på mitten', function () {
         ->and($karta['child']['nodes'][0]['icon'])->toBeNull()
         ->and($karta['child']['nodes'][0]['icon_color'])->toBeNull();
 
-    // Kring containern har mitten ingen ikon: containern är inget item.
+    // Kring containern bär mitten containerns EGET val (issue 316 ·
+    // [[ADR-0064 Containerns ikon]] § 5); här har containern inget, så
+    // fälten är null och lådan ritas.
     $containern = kartaKarta($medlem, $container);
 
     expect($containern['center']['icon'])->toBeNull()
         ->and($containern['center']['icon_color'])->toBeNull()
         ->and($containern['child']['nodes'][0]['icon'])->toBe('anchor');
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): när mitten är
+ * containern bär `center` containerns `icon` och `icon_color`. Containern är
+ * fortfarande inget item — `children` och `placements` är null — men den har
+ * samma presentationsval som itemet sedan issue 314.
+ *
+ * Fälten ligger på containerraden, som redan är hämtad, så frågekostnaden är
+ * oförändrad; det mäts av provet nedanför.
+ */
+it('bär containerns ikon på mitten', function () {
+    [$container, $medlem] = kartaBåt();
+
+    $container->update(['icon' => 'sailboat', 'icon_color' => 'teal']);
+
+    $karta = kartaKarta($medlem, $container);
+
+    expect($karta['center']['icon'])->toBe('sailboat')
+        ->and($karta['center']['icon_color'])->toBe('teal')
+        ->and($karta['center']['children'])->toBeNull()
+        ->and($karta['center']['placements'])->toBeNull();
 });
 
 /*
