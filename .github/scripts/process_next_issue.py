@@ -2595,7 +2595,9 @@ def kor_omfangslint(issue_num, issue_body, worktree_path):
         head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         try:
             svar = call_deepseek(fraga, cwd=worktree_path)
-            modellfynd = omfangslint.fynd_ur_modellsvar(svar, innanfor, worktree_path)
+            modellfynd = omfangslint.fynd_ur_modellsvar(
+                svar, innanfor, worktree_path,
+                utanfor=omfangslint.o.globbar(omfangslint.o.avsnitt(issue_body, "Out of scope")))
         except Exception as fel:
             print(f"!! Omfångslintens modellanrop misslyckades: {fel}. Kör vidare på den mekaniska halvan.")
         smutsigt = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()

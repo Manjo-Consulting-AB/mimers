@@ -289,7 +289,11 @@ def bygg_modellfraga(kropp: str, innanfor: list[str], tabell: list[Rutt]) -> str
 SAKNAS_RAD = re.compile(r"^\s*SAKNAS:\s*`?([^\s`—-]+)`?\s*(?:[—-]\s*(.*))?$", re.MULTILINE)
 
 
-def fynd_ur_modellsvar(svar: str, innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
+OUT_OF_SCOPE_MARKOR = "**Out of scope**"
+
+
+def fynd_ur_modellsvar(svar: str, innanfor: list[str], rot: str = REPO_ROOT,
+                       utanfor=()) -> list[str]:
     """Modellens rader, minus allt skriptet kan motbevisa.
 
     Tre filter, i ordning: filen ska finnas på disk (annars är den gissad),
@@ -310,6 +314,14 @@ def fynd_ur_modellsvar(svar: str, innanfor: list[str], rot: str = REPO_ROOT) -> 
         if any(o.matchar(sokvag, m) for m in innanfor):
             continue
         svans = f" — {motivering.strip()}" if motivering and motivering.strip() else ""
+        traffad_utanfor = [m for m in utanfor if o.matchar(sokvag, m)]
+        if traffad_utanfor:
+            fynd.append(
+                f"- `{sokvag}` verkar bära en `Klart när`-punkt men ligger {OUT_OF_SCOPE_MARKOR} "
+                f"({', '.join(traffad_utanfor)}) — issuen säger emot sig själv. Filen går inte "
+                f"att deklarera; rätta issuen eller fråga.{svans}"
+            )
+            continue
         fynd.append(f"- `{sokvag}` verkar bära en `Klart när`-punkt men matchar ingen glob i `In scope`{svans}")
     return fynd
 
@@ -470,9 +482,13 @@ def rapport(mekaniska: list[str], modellfynd: list[str], lage: str,
         rader += ["**Nämnda rutter, upplösta mot ruttabellen:**", ""] + mekaniska + [""]
     if modellfynd:
         rader += ["**`Klart när`-punkter utan en fil i rutan:**", ""] + modellfynd + [""]
-    if lage == o.OMFANGSLAGE_SPARAD:
+    out_of_scope = [OUT_OF_SCOPE_MARKOR in rad for rad in mekaniska + modellfynd]
+    if lage == o.OMFANGSLAGE_SPARAD and all(out_of_scope):
+        pass  # Grinden fäller Out of scope även i `spårad`: ingen deklaration att föreslå.
+    elif lage == o.OMFANGSLAGE_SPARAD:
+        undantag = " — utom filerna under Out of scope" if any(out_of_scope) else ""
         rader.append("Issuen står i läget `spårad`: behövs en av filerna ändå går den att "
-                     "deklarera i PR-kroppen under `Utanför rutan:`. Vidga gärna rutan här "
+                     f"deklarera i PR-kroppen under `Utanför rutan:`{undantag}. Vidga gärna rutan här "
                      "i stället — en deklaration räknas som omfångsdrift i retron.")
     else:
         rader.append("Issuen står i läget `fast`: en fil utanför rutan går inte att "
