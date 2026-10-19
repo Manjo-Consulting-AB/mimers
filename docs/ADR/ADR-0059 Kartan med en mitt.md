@@ -1,6 +1,6 @@
 # ADR-0059 Kartan med en mitt
 
-**Status:** Antagen 2026-10-18 · Ersätter kolumnerna, *en öppen gren per nivå* och `?path=` i [[ADR-0046 Containerns karta]]; nodernas status, platsmarkeringen och läget i itemfliken gäller · § 3, 5 och 7 ändrade av [[ADR-0061 Kartans kort och kanter]]: öppna-ikonen i kortets hörn, ingen räknare för barn, böjda linjer med pilspetsar · Ändrar [[ADR-0058 Trädet som tabell]] § 7: kartan filtreras · Bygger vidare på [[ADR-0041 Itemets vy]], [[ADR-0040 Underträdets summor]] och [[ADR-0028 Åtkomst på itemnivå]] · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ersätter kolumnerna, *en öppen gren per nivå* och `?path=` i [[ADR-0046 Containerns karta]]; nodernas status, platsmarkeringen och läget i itemfliken gäller · § 3, 5 och 7 ändrade av [[ADR-0061 Kartans kort och kanter]]: öppna-ikonen i kortets hörn, ingen räknare för barn, böjda linjer med pilspetsar · Ändrar [[ADR-0058 Trädet som tabell]] § 7: kartan filtreras · Bygger vidare på [[ADR-0041 Itemets vy]], [[ADR-0040 Underträdets summor]] och [[ADR-0028 Åtkomst på itemnivå]] · § 6 och 10 ändrade av [[ADR-0067 Itemfliken utan listläge]]: länkarna leder till trädet · [[ADR-index]]
 
 Tonys beslut 2026-10-18, vid genomgången av `docs/Design/items-map.png`.
 
