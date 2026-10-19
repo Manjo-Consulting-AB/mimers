@@ -6,6 +6,8 @@ Tillagd 2026-10-19, efter Tonys fynd på v0.24.1. Det här ingår: en uppgiftsli
 
 **Ordningen:** 328 står fritt.
 
+**Releasen:** ingen egen. 328 rullas ut tillsammans med [[M43 Trädet som förval]], när båda är stängda.
+
 ---
 
 ### 328. Uppgiftslistan i anteckningen utan punkt
