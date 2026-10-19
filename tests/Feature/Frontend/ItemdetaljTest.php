@@ -677,14 +677,16 @@ it('ställer bilden till vänster om snabbfakta från md och ovanför under md',
     $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
 
     expect($vy)->toContain("import ItemOverviewCover from '../../../components/ItemOverviewCover.vue'")
-        ->and($vy)->toContain('v-if="cover"')
         ->and($vy)->toContain('flex-col gap-6 md:flex-row md:items-start');
 
     expect(strpos($vy, '<ItemOverviewCover'))->toBeLessThan(strpos($vy, '<ItemQuickFacts'));
 
-    // Utan bild ritas ingen flexrad alls; då står snabbfakta ensam i hela
-    // bredden (`v-else`), inte i en tom tvåkolumnsrad.
-    expect($vy)->toContain('<ItemQuickFacts v-else');
+    // Bilden ritas bara när itemet har en bild (issue 307), och sedan issue
+    // 325 tar spalten med beskrivningen och snabbfakta hela bredden när den
+    // är ensam i raden — ingen tom bildruta och ingen egen `v-else`-gren för
+    // snabbfakta.
+    expect(itemdetaljTagg($vy, 'ItemOverviewCover'))->toContain('v-if="cover"')
+        ->and($vy)->not->toContain('<ItemQuickFacts v-else');
 });
 
 /*
