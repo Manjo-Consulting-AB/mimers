@@ -957,6 +957,18 @@ Route::middleware('auth')->group(function () {
         ->scopeBindings()
         ->name('containers.items.update');
 
+    /*
+     * M42 · issue 324 — anteckningens egen rutt, se [[ADR-0066 Itemets
+     * anteckning]] § 6. Bara `notes` skrivs, och svaret är JSON med den
+     * ritade HTML:en, så autosparningen inte laddar om sidan.
+     *
+     * `scopeBindings()` av samma skäl som itemets övriga rutter: en
+     * item-ULID från en annan container blir 404 innan kontrollern körs.
+     */
+    Route::patch('/containers/{container}/items/{item}/notes', [ItemController::class, 'updateNotes'])
+        ->scopeBindings()
+        ->name('containers.items.notes.update');
+
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.destroy');

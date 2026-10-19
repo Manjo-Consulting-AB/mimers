@@ -11,15 +11,18 @@ use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\RecordRecentVisit;
+use App\Actions\Item\RenderItemNotes;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Actions\Item\ResolveItemTreeRows;
 use App\Actions\Item\UpdateItem;
+use App\Actions\Item\UpdateItemNotes;
 use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
+use App\Http\Requests\Item\UpdateItemNotesRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\AttachmentResource;
 use App\Http\Resources\CategoryResource;
@@ -45,6 +48,7 @@ use App\Support\Frontend\CreateTarget;
 use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -656,7 +660,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap, RenderItemNotes $renderItemNotes): Response
     {
         Gate::authorize('view', $item);
 
@@ -863,6 +867,14 @@ class ItemController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
+
+            // Anteckningen ritad som HTML (M42 · issue 324 · [[ADR-0066
+            // Itemets anteckning]] § 2). `item.notes` står kvar som rå text:
+            // läsläget ritar den här formen, men fältet öppnas med den text
+            // användaren skrev. Ligger BREDVID resursen av samma skäl som
+            // `paths` och `cover` — `ItemResource` är `/api`:s format och har
+            // inte bett om fältet.
+            'notesHtml' => $renderItemNotes->handle($item->notes),
 
             // Sant när containern är en inbox (ADR-0054 § 1). Flaggan döljer
             // *Back to Inbox* på bilageraden — bilagan är redan där. Ligger
@@ -1494,6 +1506,36 @@ class ItemController extends Controller
         return redirect()
             ->route('containers.items.show', [$container, $item])
             ->with('status', 'item-updated');
+    }
+
+    /**
+     * PATCH /containers/{container}/items/{item}/notes — JSON med anteckningen
+     * och dess HTML, se [[ADR-0066 Itemets anteckning]] § 6 och 7.
+     *
+     * **Bara `notes` sparas.** Itemets övriga fält, kategorin, taggarna och
+     * omslaget rörs inte, och ruttens request tar inte emot dem.
+     *
+     * **Grinden är `update` på ITEMET**, samma pinne som itemets vanliga
+     * PATCH: den som får ändra itemet får skriva i anteckningen, och den som
+     * inte får det får 403.
+     *
+     * **Ingen versionskontroll.** Den som sparar sist vinner (ADR-0066 § 7);
+     * klienten skickar ingen `updated_at` och servern jämför ingen.
+     *
+     * Svaret bär båda formerna: den sparade råa texten och den ritade
+     * HTML:en. Vyn byter till läsläget ur `notes_html` utan att rita
+     * Markdown själv (ADR-0066 § 2 och 3).
+     */
+    public function updateNotes(UpdateItemNotesRequest $request, Container $container, Item $item, UpdateItemNotes $updateItemNotes, RenderItemNotes $renderItemNotes): JsonResponse
+    {
+        Gate::authorize('update', $item);
+
+        $updateItemNotes->handle($item, $request->user(), $request->validated('notes'));
+
+        return response()->json([
+            'notes' => $item->notes,
+            'notes_html' => $renderItemNotes->handle($item->notes),
+        ]);
     }
 
     /**
