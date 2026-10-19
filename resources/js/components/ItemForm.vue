@@ -52,13 +52,18 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * FormRequesten kräver — ingen egen datumtolkning i JavaScript, och ingen
  * `maxlength` på `description`, som är TEXT och inte har någon längdregel.
  *
- * **Anteckningen är ett eget fält bredvid beskrivningen** (issue 96 ·
- * [[ADR-0041 Itemets vy]] § Beslut). Två textrutor, två kolumner, två
- * betydelser: beskrivningen säger vad itemet ÄR, anteckningen vad användaren
- * VET om det. Formuläret fyller aldrig den ena ur den andra och visar dem
- * inte som en text — slås de ihop blir beskrivningen en uppsättning eller
- * anteckningen en rubrik. `notes` är TEXT som `description` och har därför
- * ingen `maxlength` heller; ett tömt fält skickas som tom sträng, vilket
+ * **Anteckningen lämnar redigeringsläget** (M42 · issue 325 ·
+ * [[ADR-0066 Itemets anteckning]] § 9). Fältet ritas bara när ett item
+ * SKAPAS: när ett item ändras sparas anteckningen i sin egen ruta på
+ * översikten och formuläret skickar inte `notes` alls. Annars hade
+ * formulärets gamla text skrivit över det som sparats av sig självt.
+ * `UpdateItemRequest` tar fortfarande emot fältet, så `/api` och webbens
+ * PATCH fungerar som förut.
+ *
+ * Fältet är ett eget fält bredvid beskrivningen (issue 96) och inte en
+ * fortsättning på den: beskrivningen säger vad itemet ÄR, anteckningen vad
+ * användaren VET om det. `notes` är TEXT som `description` och har därför
+ * ingen `maxlength`; ett tömt fält skickas som tom sträng, vilket
  * `sometimes|nullable` gör till `null`.
  *
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
@@ -157,7 +162,13 @@ const showCover = computed(() => props.item !== null && props.images.length > 0)
 const fields = {
     name: props.item?.name ?? '',
     description: props.item?.description ?? '',
-    notes: props.item?.notes ?? '',
+    /*
+     * `notes` följer bara med när itemet skapas (M42 · issue 325 ·
+     * [[ADR-0066 Itemets anteckning]] § 9). I redigeringsläget ägs
+     * anteckningen av sin egen ruta på översikten, och ett `notes` här hade
+     * skrivit över det som sparats av sig självt.
+     */
+    ...(props.item === null ? { notes: '' } : {}),
     manufacturer: props.item?.manufacturer ?? '',
     model: props.item?.model ?? '',
     serial_number: props.item?.serial_number ?? '',
@@ -435,11 +446,12 @@ function submit() {
             />
         </FormField>
 
-        <!-- Anteckningen: ett eget fält bredvid beskrivningen och inte en
-             fortsättning på den (issue 96). Beskrivningen säger vad itemet
-             ÄR, anteckningen vad användaren VET om det — ingen av dem fylls
-             ur den andra, och `notes: null` tömmer fältet. -->
+        <!-- Anteckningen: ett eget fält bredvid beskrivningen (issue 96), och
+             bara i skapandeläget (M42 · issue 325 · [[ADR-0066 Itemets
+             anteckning]] § 9). Ett item som redan finns sparar sin anteckning
+             i sin egen ruta på översikten; formuläret skickar den inte. -->
         <FormField
+            v-if="item === null"
             v-slot="{ describedBy }"
             :label="t('item.form.notes')"
             id="notes"

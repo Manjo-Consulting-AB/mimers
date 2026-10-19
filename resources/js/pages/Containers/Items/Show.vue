@@ -11,6 +11,7 @@ import ItemIcon from '../../../components/ItemIcon.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
+import ItemNotes from '../../../components/ItemNotes.vue';
 import ItemOverviewCover from '../../../components/ItemOverviewCover.vue';
 import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
 import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
@@ -163,6 +164,14 @@ defineOptions({
 const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
+    /*
+     * Anteckningen ritad som HTML, ur App\Actions\Item\RenderItemNotes
+     * (M42 · issue 324 · [[ADR-0066 Itemets anteckning]] § 2 och 3), eller
+     * null när anteckningen är tom. `item.notes` står kvar som rå text och är
+     * vad fältet i ItemNotes.vue öppnas med: läsläget ritar den här formen,
+     * redigeringsläget den användaren skrev.
+     */
+    notesHtml: { type: String, default: null },
     /*
      * Sant när containern är en inbox (M27 · issue 244, ADR-0054 § 1).
      * Skickas vidare till bilagesektionen, som döljer *Back to Inbox* för en
@@ -443,6 +452,15 @@ const informationHref = computed(
 );
 
 /*
+ * Anteckningens egen rutt (M42 · issue 325 · [[ADR-0066 Itemets
+ * anteckning]] § 6). Adressen byggs här och skickas som prop, så komponenten
+ * inte behöver känna till containerns eller itemets form.
+ */
+const notesUrl = computed(
+    () => `/containers/${props.container.ulid}/items/${props.item.ulid}/notes`,
+);
+
+/*
  * Adressen till relationsfliken — växelns *Lista* och flikraden (issue 156 ·
  * [[M23 Mobilen och kartan]] § 156).
  *
@@ -494,8 +512,9 @@ const linkViews = computed(() => [
  * ingen rad i bilden men måste ändå få en plats — en yta ingen hittar är samma
  * sak som en yta som inte finns (issue 62a:s och 67c:s motivering) — så de
  * står efter de fem, i den ordning issue 102 räknar dem. Ingen flik bär två
- * stycken text: anteckningen och beskrivningen står överst på översikten,
- * snabbfakta under dem ([[ADR-0041 Itemets vy]] § Beslut, issue 96 och 154).
+ * stycken text: beskrivningen står ovanför snabbfakta överst på översikten,
+ * och anteckningen har sin egen ruta längre ned ([[ADR-0041 Itemets vy]]
+ * § Beslut, issue 96, 154 och 325).
  *
  * **Ordningen är översikten först, sedan bildens, och de egna sist.**
  * Kostnaden fick sin flik i issue 168 — bilden ritar den, och ytan fanns
@@ -889,11 +908,17 @@ function toggleFavorite() {
             <UiTabs class="mt-8" :tabs="tabs" :label="item.name" />
 
             <!--
-                Översikten (issue 102 och 154 · [[ADR-0041 Itemets vy]]
-                § Beslut): anteckningen och beskrivningen som vyns ledande
-                stycken — de är två fält sedan issue 96, beskrivningen
-                säger vad itemet ÄR och anteckningen vad användaren VET om
-                det — och sedan *Snabbfakta*, som sammanfattar itemet.
+                Översikten (M42 · issue 325 · [[ADR-0066 Itemets
+                anteckning]] § 4): bilden, beskrivningen och snabbfakta i en
+                rad, sedan *Visa alla fält*, anteckningen och till sist
+                händelsepanelen.
+
+                **Beskrivningen står ovanför snabbfakta** i radens högra
+                spalt. Det är två fält sedan issue 96 — beskrivningen säger
+                vad itemet ÄR, anteckningen vad användaren VET om det — och
+                `<dl>`-formen de hade före den här issuen är borta.
+                Anteckningen bor i `ItemNotes.vue` och har flyttat ned
+                nedanför fälten.
 
                 **Fältlistan flyttade till informationsfliken i issue
                 154.** Översikten är den sammanfattning en läsare möter
@@ -913,37 +938,33 @@ function toggleFavorite() {
                 skrivet, även om ingenting av det står här.
             -->
             <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
-                <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
-                    <div v-if="item.description">
-                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.description') }}</dt>
-                        <dd class="mt-1 whitespace-pre-line text-ink">{{ item.description }}</dd>
-                    </div>
-
-                    <div v-if="item.notes">
-                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.notes') }}</dt>
-                        <dd class="mt-1 whitespace-pre-line text-ink">{{ item.notes }}</dd>
-                    </div>
-                </dl>
-
                 <!--
-                    Omslagsbilden och snabbfakta (issue 307 · [[M35 Itemets
-                    ikon och kartans kort]] § 307): bilden till vänster och
+                    Omslagsbilden, beskrivningen och snabbfakta (issue 307 ·
+                    [[M35 Itemets ikon och kartans kort]] § 307, M42 · issue
+                    325): bilden till vänster och beskrivningen ovanför
                     snabbfakta till höger från `md:`, och bilden ovanför
-                    under `md:`. Raden ritas bara när itemet har en bild —
-                    utan bild finns ingen ram, ingen platshållare och ingen
-                    tom flexrad, och snabbfakta tar hela bredden. Ett item
-                    med bild men utan snabbfakta visar bara bilden.
+                    under `md:`. Utan bild ritas ingen bildruta och
+                    spalten tar hela bredden — flexraden har då bara ett
+                    barn. Ett item med bild men utan snabbfakta visar bara
+                    bilden.
 
                     Snabbfakta (issue 154): komponenten ritar ingenting när
                     ingen av de tre uppgifterna har ett värde — ingen
                     rubrik över en tom lista — och urvalet bor i
                     itemPresentation.js så att regeln går att pröva i node.
                 -->
-                <div v-if="cover" class="flex flex-col gap-6 md:flex-row md:items-start">
-                    <ItemOverviewCover :cover="cover" :alt="item.name" class="md:w-64 md:shrink-0" />
-                    <ItemQuickFacts :item="item" :locale="locale" class="md:flex-1" />
+                <div class="flex flex-col gap-6 md:flex-row md:items-start">
+                    <ItemOverviewCover
+                        v-if="cover"
+                        :cover="cover"
+                        :alt="item.name"
+                        class="md:w-64 md:shrink-0"
+                    />
+                    <div class="flex min-w-0 flex-col gap-6 md:flex-1">
+                        <p v-if="item.description" class="whitespace-pre-line text-ink">{{ item.description }}</p>
+                        <ItemQuickFacts :item="item" :locale="locale" />
+                    </div>
                 </div>
-                <ItemQuickFacts v-else :item="item" :locale="locale" />
 
                 <!--
                     Vägen till resten av fälten (issue 154). Adressen är
@@ -956,6 +977,21 @@ function toggleFavorite() {
                 >
                     {{ t('item.show.all_fields') }}
                 </Link>
+
+                <!--
+                    Anteckningen (M42 · issue 325 · [[ADR-0066 Itemets
+                    anteckning]] § 3–8): den ritade Markdown-HTML:en i
+                    läsläget, och det redigerbara fältet för den som har
+                    `update`. Komponenten äger sin egen sparning och sin egen
+                    statusrad; vyn skickar itemet, HTML:en, grinden och
+                    rutten.
+                -->
+                <ItemNotes
+                    :item="item"
+                    :notes-html="notesHtml"
+                    :can-edit="can.update"
+                    :update-url="notesUrl"
+                />
 
                 <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
 

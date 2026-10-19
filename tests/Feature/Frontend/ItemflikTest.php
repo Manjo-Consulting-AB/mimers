@@ -643,11 +643,13 @@ it('flikraden ligger inuti containerns ram', function () {
  *
  * De är två fält sedan issue 96 — beskrivningen säger vad itemet ÄR,
  * anteckningen vad användaren VET om det — och [[ADR-0041 Itemets vy]]
- * § Beslut säger att de visas som vyns ledande stycken i stället för som en
- * rad bland tillverkare och modell. Provet skiljer dem åt på tre ställen: de
- * två styckena överst på översikten, fältlistan UNDER dem på samma flik, och
- * modulen som bygger listan — `itemFields` lämnar dem ifrån sig, och det
- * prövas på den modul klienten importerar.
+ * § Beslut säger att de inte är en rad bland tillverkare och modell.
+ * Beskrivningen står överst på översikten, och anteckningen har sedan
+ * M42 · issue 325 en egen ruta längre ned ([[ADR-0066 Itemets anteckning]]
+ * § 4), där den ritas ur `notesHtml`. Provet skiljer dem åt på tre ställen:
+ * ytorna på översikten, fältlistan på informationsfliken, och modulen som
+ * bygger listan — `itemFields` lämnar dem ifrån sig, och det prövas på den
+ * modul klienten importerar.
  *
  * Att båda ligger på översikten är punkt 4 i arkitektens svar: det finns
  * ingen sjunde flik som bär de två styckena, och en detaljflik hade betytt
@@ -658,11 +660,13 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
 
     $paneler = itemflikPaneler($vy);
 
-    // Två stycken med var sin etikett, aldrig en sammanslagen text.
+    // Beskrivningen står kvar på översikten, och anteckningen har flyttat in
+    // i sin egen ruta (M42 · issue 325 · [[ADR-0066 Itemets anteckning]]
+    // § 4): den ritas ur `notesHtml` av ItemNotes.vue och bär inte längre en
+    // egen `<dt>`.
     expect($paneler['overview'])->toContain('item.description')
-        ->toContain("t('item.show.description')")
-        ->toContain('item.notes')
-        ->toContain("t('item.show.notes')");
+        ->toContain('<ItemNotes')
+        ->toContain(':notes-html="notesHtml"');
 
     // **Fältlistan står på informationsfliken sedan issue 154** — det är
     // bildens *Information*, och dit leder *Visa alla fält*. Översikten bär

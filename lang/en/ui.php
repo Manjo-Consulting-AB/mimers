@@ -2947,9 +2947,9 @@ return [
             // no second place for *Relations* to drift from.
             //
             // `overview` is the item's own text and the resting tab: it is
-            // written without `tab`, and it carries the two paragraphs and
-            // *Quick facts*. The rows `itemFields` returns stood here until
-            // issue 154 and stand on the information tab now.
+            // written without `tab`, and it carries the description, *Quick
+            // facts* and the note's own box. The rows `itemFields` returns
+            // stood here until issue 154 and stand on the information tab now.
             'overview' => 'Overview',
 
             // The second tab, and the one *Show all fields* opens (issue 154 ·
@@ -2974,9 +2974,11 @@ return [
 
             'description' => 'Description',
             // Issue 96. `description` says what the item IS, `notes` what the
-            // user KNOWS about it — two rows, never one merged text. On the
-            // overview tab they are the two leading paragraphs of the item,
-            // and the words label one paragraph each.
+            // user KNOWS about it — two fields, never one merged text. On the
+            // overview tab the description stands above *Quick facts*, and
+            // the note has its own box further down (M42 · issue 325 ·
+            // [[ADR-0066 Itemets anteckning]] § 4), where this word is the
+            // box's heading.
             'notes' => 'Notes',
             // The overview tab with nothing written in it at all — no
             // paragraph and no field. The tab is the first thing a reader
@@ -3034,6 +3036,23 @@ return [
             // the wrong action.
             'favorite_add' => 'Add to favourites',
             'favorite_remove' => 'Remove from favourites',
+        ],
+
+        /*
+         * The note's own box on the overview, see M42 · issue 325 and
+         * [[ADR-0066 Itemets anteckning]] § 5 and 6. The heading is
+         * `item.show.notes` — the same word the paragraph carried before the
+         * box — so the two never say different things. `placeholder` and
+         * `markdown_supported` belong to the field, and the three status
+         * words to the row beside the heading.
+         */
+        'notes' => [
+            'placeholder' => 'Write a note…',
+            'markdown_supported' => 'Markdown supported',
+            'saving' => 'Saving…',
+            'saved' => 'Saved',
+            'not_saved' => 'Not saved',
+            'try_again' => 'Try again',
         ],
 
         // The left-hand panel of the three-panel layout, see issue 103 and
