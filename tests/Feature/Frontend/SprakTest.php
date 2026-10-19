@@ -1089,6 +1089,11 @@ it('hämtar växelns strängar ur ui.php', function () {
  * förrän dess, och ett ord utan yta är ett löfte katalogen inte kan hålla. Det
  * är inte samma ord som `item.map.*`: den senare är itemets EGEN fokusgraf, en
  * annan yta med en annan fråga ([[ADR-0032 Produktens ord]]).
+ *
+ * **Växeln har två lägen sedan issue 327** · [[ADR-0067 Itemfliken utan
+ * listläge]] § 1: `item.view.list` finns inte längre, och ett uppslag av den
+ * faller tillbaka på nyckeln själv. Provet prövar därför både orden och att
+ * det tredje läget är borta.
  */
 it('hämtar itemväxelns strängar ur ui.php', function () {
     $vaxeln = File::get(resource_path('js/components/ItemViewSwitch.vue'));
@@ -1098,11 +1103,13 @@ it('hämtar itemväxelns strängar ur ui.php', function () {
 
     preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $fliken, $träffar);
 
-    foreach (['item.view.label', 'item.view.list', 'item.view.tree', 'item.view.map'] as $nyckel) {
+    foreach (['item.view.label', 'item.view.tree', 'item.view.map'] as $nyckel) {
         expect($träffar[1])->toContain($nyckel);
     }
 
-    expect(Lang::get('ui.item.view.list', [], 'en'))->toBe('List')
+    expect($träffar[1])->not->toContain('item.view.list');
+
+    expect(Lang::get('ui.item.view.list', [], 'en'))->toBe('ui.item.view.list')
         ->and(Lang::get('ui.item.view.tree', [], 'en'))->toBe('Tree')
         ->and(Lang::get('ui.item.view.map', [], 'en'))->toBe('Map');
 

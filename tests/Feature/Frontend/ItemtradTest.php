@@ -23,12 +23,12 @@ use function Pest\Laravel\withoutVite;
  * resources/js/components/ItemTreeTable.vue och
  * resources/js/components/ItemStructureTree.vue.
  *
- * **Växeln har tre lägen sedan issue 157.** [[ADR-0046 Containerns karta]]
- * ritar *Lista*, *Träd* och *Karta*, och kartan kom i § 157 — den ägs av
- * tests/Feature/Frontend/ContainerkartaTest.php. Här står regeln som gäller
- * alla lägen: det FÖRSTA är förvalet, och ett värde som inte är ett läge är
- * samma sak som inget läge — samma linje som filtret i issue 59a § Beslut 3
- * (en gammal länk är ingen felsida).
+ * **Växeln har två lägen sedan issue 327** · [[ADR-0067 Itemfliken utan
+ * listläge]] § 1, som ändrar [[ADR-0046 Containerns karta]]: *Träd* och
+ * *Karta*. Kartan ägs av tests/Feature/Frontend/ContainerkartaTest.php. Här
+ * står regeln som gäller båda: det FÖRSTA är förvalet, och ett värde som inte
+ * är ett läge är samma sak som inget läge — samma linje som filtret i
+ * issue 59a § Beslut 3 (en gammal länk är ingen felsida).
  *
  * **Läget är en adress.** Det står i querysträngen och ingenstans annat, och
  * `view`-proppen är serverns läsning av samma sträng som avgör vilken yta
@@ -36,7 +36,7 @@ use function Pest\Laravel\withoutVite;
  * att växelns adresser skriver det — en växel vars länkar tappar läget ser
  * rätt ut i en strukturell kontroll och gör ingenting i en webbläsare.
  *
- * **Trädet tar samma filter som listan sedan issue 293.** `q`, `tags[]` och
+ * **Trädet tar samma filter som kartan.** `q`, `tags[]` och
  * `category` ger träffarna ur `ListItems`, och trädet visar varje träff plus
  * vägen från roten ned till den ([[ADR-0058 Trädet som tabell]] § 5). Utan
  * filter är trädet hela containern inom omfånget: rötter enligt [[ADR-0041
@@ -190,7 +190,7 @@ function itemtradFragor(Closure $värm, Closure $anrop): int
  * Förvalet är frånvaron av `view` och ingenting annat — samma val som
  * översiktsfliken gör med `tab` (issue 100 och 102): den aktuella adressen
  * innehåller ingen parameter, och den som öppnar fliken utan en länk landar i
- * trädet. Index.vue rörs inte här; växeln får sina två lägen i issue 327.
+ * trädet. Växelns två lägen prövas i proven om läget och filtret nedan.
  */
 it('har trädet som förval', function () {
     withoutVite();
@@ -330,12 +330,16 @@ it('låter läget överleva en omladdning', function () {
 
     $lagen = itemtradLagen(itemtradKod('pages/Containers/Items/Index.vue'));
 
-    // Trädläget bär läget i sin adress, och listan bär det inte: förvalet
-    // skrivs som frånvaron av parametern. (`view=tree` står två gånger i
+    // Växeln har två lägen, i den ordningen: trädet är förvalet och skrivs
+    // som frånvaron av parametern, kartan bär `?view=map` (issue 327 ·
+    // [[ADR-0067 Itemfliken utan listläge]] § 1). `view=map` står två gånger i
     // raden — en gång för den tomma querysträngen och en för den fyllda — och
-    // det är samma läge i båda.)
-    expect($lagen)->toContain('view=tree')
-        ->and($lagen)->not->toContain('view=list');
+    // det är samma läge i båda.
+    expect($lagen)->toContain("key: 'tree'")
+        ->and($lagen)->toContain("key: 'map'")
+        ->and($lagen)->not->toContain("key: 'list'")
+        ->and($lagen)->toContain('view=map')
+        ->and($lagen)->not->toContain('view=tree');
 
     // Och `current` är proppen och inte en egen läsning av adressen: vyn
     // jämför ingenting själv, för en andra läsning är en andra regel.
@@ -471,10 +475,10 @@ it('bär filtret med sig genom växeln', function () {
  * filterraden, och ett filter utan träffar ritar listans tomma text
  * (`item.index.filter_empty`) med de filter användaren själv satt.
  *
- * Ett OFILTRERAT tomt träd ritar ingenting, som förut. Proven läser markupen,
- * eftersom sviten inte kör en webbläsare: filterraden ritas en gång utanför
- * lägesgrenarna, grindad på kartan, och den tomma texten hänger på
- * `hasFilter` — samma propp som listans tomma lägen räknar ur.
+ * Ett OFILTRERAT tomt träd ritar rotraden och `item.index.empty`, se provet
+ * om den tomma containern nedanför. Proven läser markupen, eftersom sviten
+ * inte kör en webbläsare: filterraden ritas en gång utanför lägesgrenarna,
+ * och den tomma texten för ett filter hänger på `hasFilter`.
  */
 it('ritar filterraden i trädläget och den tomma texten för ett filter utan träffar', function () {
     withoutVite();
@@ -484,9 +488,9 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
 
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
-    // Filterraden ritas en gång, i alla tre lägena (kartan fick den i issue
-    // 299). Komponenten är oförändrad: filtret är samma querysträng i alla
-    // lägena, och växeln bär det mellan dem.
+    // Filterraden ritas en gång, i båda lägena (kartan fick den i issue 299,
+    // och listläget försvann i issue 327). Komponenten är oförändrad: filtret
+    // är samma querysträng i båda lägena, och växeln bär det mellan dem.
     expect(substr_count($vy, '<ItemFilterBar'))->toBe(1)
         ->and(str_contains($vy, 'v-if="view !== \'map\'"'))->toBeFalse();
 
@@ -506,21 +510,58 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
 });
 
 /*
+ * Klart när (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 6): en
+ * ofiltrerad tom container visar rotraden och `item.index.empty` under den.
+ *
+ * Rotraden är containerns egen rad och ritas även när trädet saknar noder —
+ * villkoret som förut gömde hela tabellen är borta. Meningen under den är
+ * densamma för ägaren och för en mottagare med begränsat omfång (issue 73
+ * § Beslut 6): den säger att containern är tom och ingenting om vad som dolts.
+ */
+it('visar rotraden och den tomma texten för en ofiltrerad tom container', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemtradKontext();
+
+    actingAs($anvandare)->get(itemtradUrl($container))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('view', 'tree')
+            ->where('structure', [])
+            ->has('treeRows', 0)
+            ->where('filter.q', null)
+    );
+
+    $tabellen = itemtradKod('components/ItemTreeTable.vue');
+
+    // Tabellen ritas även utan noder: rotraden står kvar.
+    expect($tabellen)->not->toContain('v-if="nodes.length > 0"')
+        ->and($tabellen)->toContain('{{ containerName }}');
+
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    // Den tomma meningen hänger på att containern är tom och INTE på ett
+    // filter; ett filter utan träffar ritar `item.index.filter_empty` i
+    // stället (provet ovanför).
+    expect($vy)->toContain("t('item.index.empty')")
+        ->and($vy)->toContain('structure !== null && structure.length === 0');
+});
+
+/*
  * Klart när (arkitektens svar på granskningen av issue 293): ett filter som
  * skickas från trädläget stannar i trädläget.
  *
  * Filterraden submittar en GET mot samma rutt som sidan ligger på, så läget
- * måste följa med i frågan för att träfflistan ska stanna i trädet. Trädläget
- * ger därför raden `view=tree`; submit, chipkryss och "rensa" går alla genom
- * samma `apply()` och bär parametern. Listan skickar `null` — komponentens
- * standard — och då skrivs ingen `view` alls, så listans beteende är
- * oförändrat. Provet läser källkoden eftersom sviten inte kör en webbläsare.
+ * måste följa med i frågan för att träfflistan ska stanna i kartan. Kartläget
+ * ger därför raden `view=map`; submit, chipkryss och "rensa" går alla genom
+ * samma `apply()` och bär parametern. Trädet skickar `null` — komponentens
+ * standard — och då skrivs ingen `view` alls, eftersom trädet är förvalet.
+ * Provet läser källkoden eftersom sviten inte kör en webbläsare.
  */
-it('låter ett filter som skickas från trädläget stanna i trädläget', function () {
+it('låter ett filter som skickas från kartläget stanna i kartan', function () {
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
-    // Träd- och kartläget ger raden sitt läge; listan skickar null.
-    expect($vy)->toContain(":view=\"view === 'list' ? null : view\"");
+    // Kartläget ger raden sitt läge; trädet skickar null.
+    expect($vy)->toContain(":view=\"view === 'map' ? 'map' : null\"");
 
     $rad = itemtradKod('components/ItemFilterBar.vue');
 
@@ -674,6 +715,68 @@ it('ritar itemets ikon mellan fällknappen och namnet', function () {
 });
 
 /*
+ * Klart när (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 3): trädets
+ * rad väljer ur radens `cover`, `icon` och `icon_color` det första som finns,
+ * i ordningen vald bild, ikon, automatisk bild och den grå rutan.
+ *
+ * Provet läser KÄLLAN eftersom komponenten ritas i webbläsaren, och läser
+ * RADEN och inte hela filen: rotraden ritar containerns ikon och hade gett
+ * rätt svar på fel ställe. Två av de fyra grenarna är `<img>`, och båda
+ * kräver `hasThumb` — en bild utan derivat ritas aldrig som `<img>`.
+ */
+it('ritar rutans fyra val i ordningen vald bild, ikon, automatisk bild, grå ruta', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    $knapp = strpos($kod, 'v-if="row.node.children.length > 0"');
+
+    expect($knapp)->not->toBeFalse('raden ritar ingen fällknapp');
+
+    $lank = strpos($kod, '<Link', (int) $knapp);
+
+    expect($lank)->not->toBeFalse('raden ritar ingen namncell');
+
+    $ruta = substr($kod, (int) $knapp, (int) $lank - (int) $knapp);
+
+    $vald = strpos($ruta, 'cover?.hasThumb &&');
+    $ikon = strpos($ruta, '<ItemIcon');
+    $automatisk = strpos($ruta, 'v-else-if="cells(row.node).cover?.hasThumb"');
+    $gra = strpos($ruta, 'tile="neutral"');
+
+    expect($vald)->not->toBeFalse('rutan ritar ingen vald bild')
+        ->and($ikon)->not->toBeFalse('rutan ritar ingen ikon')
+        ->and($automatisk)->not->toBeFalse('rutan ritar ingen automatisk bild')
+        ->and($gra)->not->toBeFalse('rutan ritar ingen grå ruta');
+
+    expect((int) $vald)->toBeLessThan((int) $ikon)
+        ->and((int) $ikon)->toBeLessThan((int) $automatisk)
+        ->and((int) $automatisk)->toBeLessThan((int) $gra);
+
+    // Två `<img>`, båda 32 px och båda grindade på `hasThumb`.
+    expect(substr_count($ruta, '<img'))->toBe(2)
+        ->and(substr_count($ruta, 'cover?.hasThumb'))->toBe(2)
+        ->and(substr_count($ruta, 'alt=""'))->toBe(2)
+        ->and(substr_count($ruta, 'h-8 w-8'))->toBe(2)
+        ->and(substr_count($ruta, 'object-cover'))->toBe(2)
+        ->and(substr_count($ruta, '?variant=thumb'))->toBe(2);
+
+    // Ikonen ritas med `ItemIcon` i `tile` och storleken 20, som förut.
+    $ikonKod = (int) $knapp + (int) $ikon;
+    $ikonMarkup = substr($kod, $ikonKod, (int) strpos($kod, '/>', $ikonKod) - $ikonKod);
+
+    expect($ikonMarkup)->toContain(':name="cells(row.node).icon"')
+        ->toContain(':color="cells(row.node).icon_color"')
+        ->toContain(':size="20"')
+        ->toContain('tile')
+        ->and($ikonMarkup)->not->toContain('md:');
+
+    // Den grå rutan bär den neutrala `item`-ikonen, och rutan står kvar
+    // framför namnet under `md:` — den ligger i namncellen.
+    expect($ruta)->toContain('name="item"')
+        ->and($ruta)->not->toContain('md:')
+        ->and($ruta)->not->toContain('md:hidden');
+});
+
+/*
  * Klart när (issue 304 · [[ADR-0060 Itemets ikon]] § 10): rötternas
  * fällknappar står i samma kolumn som containerns ikon, så att toppnivåns
  * items står i linje under den.
@@ -794,10 +897,10 @@ it('ritar Expand all i trädläget och låter texten följa läget', function ()
 
     // Knappen står i filterraden, alltså före båda lägesgrenarna, och
     // tabellen får flaggan som propp.
-    expect((int) $knapp)->toBeLessThan((int) strpos($vy, '<section v-else-if="view === \'tree\'"'))
+    expect((int) $knapp)->toBeLessThan((int) strpos($vy, '<section v-if="view === \'tree\'"'))
         ->and($vy)->toContain(':expand-all="allOpen"')
-        // Knappen grindas på trädet; raden är gemensam för alla tre lägena
-        // sedan issue 299 och har ingen grind kvar.
+        // Knappen grindas på trädet; raden är gemensam för båda lägena sedan
+        // issue 299 och har ingen grind kvar.
         ->and(str_contains($vy, 'v-if="view !== \'map\'"'))->toBeFalse();
 });
 

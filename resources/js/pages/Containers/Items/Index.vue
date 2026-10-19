@@ -6,7 +6,6 @@ import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemMap from '../../../components/ItemMap.vue';
 import ItemMapHits from '../../../components/ItemMapHits.vue';
-import ItemRow from '../../../components/ItemRow.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
@@ -40,13 +39,15 @@ defineOptions({
  * klientmatchning på `name`. Formuläret och de aktiva filtren bor i
  * resources/js/components/ItemFilterBar.vue; här ritas bara resultatet.
  *
- * **Tre lägen i den tomma listan, och inget av dem vet om omfånget**
- * (59a § Beslut 4, issue 73 § Beslut 6):
+ * **Tre tillstånd i den tomma containern, och inget av dem vet om omfånget**
+ * (59a § Beslut 4, issue 73 § Beslut 6, [[ADR-0067 Itemfliken utan listläge]]
+ * § 6):
  *
- *   - inga filter, inga rader  → containern är tom
- *   - filter, inga rader       → de filter ANVÄNDAREN satt, uppräknade
- *   - filter, några rader      → ingenting extra
+ *   - inga filter, inga noder  → containern är tom
+ *   - filter, inga noder       → de filter ANVÄNDAREN satt, uppräknade
+ *   - filter, några noder      → ingenting extra
  *
+ * Ett ofiltrerat tomt träd ritar rotraden och `item.index.empty` under den.
  * Meningen räknar upp det användaren själv satt — sökordet, taggarnas namn,
  * kategorins namn — och säger aldrig hur många rader som fanns utan filtren,
  * hur många som dolts, eller att resultatet skulle vara ofullständigt. En
@@ -54,32 +55,13 @@ defineOptions({
  * etiketterna byggs av resources/js/components/itemFilter.js, som inte
  * känner till omfång alls.
  *
- * **Sidan visar antalet rader den ritar** och ingenting mer (57a § Beslut 4).
- * Ingen totalsumma, ingen "av N", ingen rad om att något dolts.
- *
- * **Kategorinamnet slås upp i `categories`** — proppen står kvar även sedan
- * raden slutade rita den (issue 212). Servern bygger den ur de redan
- * eager-laddade relationerna (ULID → namn), och uppslaget hör BREDVID
- * resursen och inte inuti den, för `ItemResource` bär bara kategorins ULID —
- * samma linje som issue 54 § Beslut 9. `categoryTree` är något annat: hela
- * trädet, till filterradens väljare.
+ * **Rutans bild är trädets sedan issue 327** ([[ADR-0067 Itemfliken utan
+ * listläge]] § 3): raden i trädtabellen ritar det första som finns av radens
+ * `cover`, `icon` och `icon_color` — samma ordning som listans rad hade
+ * ([[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § 6) —
+ * och formen ägs av `ItemTreeTable`.
  *
  * **Serienumret ritas inte här** (57a § Beslut 8). Det hör till detaljvyn.
- *
- * **Raden är `ItemRow` sedan issue 285** · [[M32 Formspråket]]: raden med
- * miniatyr, namn, beskrivning och pil bor i
- * `resources/js/components/ItemRow.vue`, och översiktens itempanel ritar
- * samma komponent. Här står bara listan — formen på raden ägs av den filen.
- *
- * **Raden ritar itemets EGET omslag** (issue 212 · [[ADR-0050
- * Desktopdesignen]]): `covers` är itemets ULID → `{ulid, hasThumb}` eller
- * null, och urvalet är App\Actions\Item\ResolveItemCover — samma bild och
- * samma omfång som servern räknade, ritat som en miniatyr mot
- * `/files/{ulid}?variant=thumb` ([[ADR-0019 Filleverans]]). Servern har
- * prövat att derivatet finns (`hasThumb`); utan det ritas `item`-ikonen i en
- * neutral ruta, för en `<img>` mot en variant som inte finns är en trasig bild
- * (issue 61b § Beslut 1). Containerns eget omslag läses ALDRIG i raden — ett
- * item utan bild ärver inte containerns foto.
  *
  * **`can.create` ritar skapaknappen** (issue 57b § Beslut 2). Flaggan är
  * `ContainerPolicy::createItem()` och sätts mot CONTAINERN, för det är grinden
@@ -92,32 +74,30 @@ defineOptions({
  * [[ADR-0050 Desktopdesignen]], formen omgjord i issue 296 ·
  * [[ADR-0059 Kartan med en mitt]]). `statuses` är itemets ULID → `ok` eller
  * `overdue`, räknat på servern över itemets underträd (issue 92 ·
- * [[ADR-0040 Underträdets summor]]). Listans rad ritar den inte — mockupen
- * bär namn, beskrivning och en pil — och proppen står kvar för kartans skull.
- * Vyn räknar ingenting själv — den slår upp och översätter, och TEXTEN ligger
- * i `lang/` precis som resten av sidans ord. Uppslaget ligger bredvid
- * `ItemResource` av samma skäl som `categories` gör det: resursen delas med
- * `/api`, som inte har bett om fältet.
+ * [[ADR-0040 Underträdets summor]]). Trädets rad ritar den inte, och proppen
+ * finns bara i kartläget. Vyn räknar ingenting själv — den slår upp och
+ * översätter, och TEXTEN ligger i `lang/` precis som resten av sidans ord.
+ * Uppslaget ligger bredvid `ItemResource` av samma skäl som förut: resursen
+ * delas med `/api`, som inte har bett om fältet.
  *
- * **Fliken har tre lägen sedan issue 154 och 157** · [[ADR-0046 Containerns
- * karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]]: *Lista*, som är
- * sidan som den var och förblir förval, *Träd*, som ritar containerns struktur
- * som tabell med `ItemTreeTable` (issue 294 · [[ADR-0058 Trädet som tabell]]),
- * och *Karta*, som ritar en mitt med föräldrar, barn och relaterade runt sig
- * med `ItemMap` (issue 296 och 297). Läget står i querysträngen (`?view=tree`,
- * `?view=map`) och `view`-proppen är serverns läsning av den — vyn håller
- * inget eget tillstånd, och därför överlever läget en omladdning och en delad
- * länk. `ItemViewSwitch` ritar växeln, och ordningen i `views` är bindande:
- * det första läget är förvalet.
+ * **Fliken har två lägen sedan issue 327** · [[ADR-0067 Itemfliken utan
+ * listläge]], som ändrar [[ADR-0046 Containerns karta]]: *Träd*, som är
+ * förval och ritar containerns struktur som tabell med `ItemTreeTable`
+ * (issue 294 · [[ADR-0058 Trädet som tabell]]), och *Karta*, som ritar en
+ * mitt med föräldrar, barn och relaterade runt sig med `ItemMap` (issue 296
+ * och 297). Trädet skrivs utan `view`; kartan bär `?view=map`. `view`-proppen
+ * är serverns läsning av adressen — vyn håller inget eget tillstånd, och
+ * därför överlever läget en omladdning och en delad länk. `ItemViewSwitch`
+ * ritar växeln, och ordningen i `views` är bindande: det första läget är
+ * förvalet.
  *
- * **Trädläget tar samma filter som listan sedan issue 293**
- * ([[ADR-0058 Trädet som tabell]] § 5). `q`, `tags[]` och `category` är
- * samma filter som i listan, träffarna är `ListItems` och trädet visar varje
- * träff plus vägen från roten ned till den. **Kartläget tar samma filter sedan
- * issue 299** ([[ADR-0059 Kartan med en mitt]] § 10): träffarna står i en
- * träfflista bredvid kartan, men filtret **väljer mitten och gömmer aldrig
- * något runt den** — kartans grannar ritas oavsett om de matchar. Filterraden
- * ritas därför i alla tre lägena. Växelns länkar bär filtret med sig, liksom
+ * **Träd- och kartläget delar filter** ([[ADR-0058 Trädet som tabell]] § 5,
+ * [[ADR-0059 Kartan med en mitt]] § 10). `q`, `tags[]` och `category` är
+ * samma filter, träffarna är `ListItems` och trädet visar varje träff plus
+ * vägen från roten ned till den. I kartan står träffarna i en träfflista
+ * bredvid kartan, men filtret **väljer mitten och gömmer aldrig något runt
+ * den** — kartans grannar ritas oavsett om de matchar. Filterraden ritas
+ * därför i båda lägena. Växelns länkar bär filtret med sig, liksom
  * kartans nod- och sökvägslänkar: ett flikbyte eller ett mittbyte ska behålla
  * samma träfflista. Strukturen, kartan och träfflistan kommer i `structure-`,
  * `map`- och `hits`-propparna, och de finns BARA i sina egna lägen — `null`
@@ -140,20 +120,8 @@ defineOptions({
  */
 const props = defineProps({
     container: { type: Object, required: true },
-    items: { type: Array, required: true },
-    /*
-     * Kategori-ULID → namn. Servern skickar den; raden ritar den inte längre
-     * (issue 212), men proppen står kvar av samma skäl som `statuses` gör det.
-     */
-    categories: { type: Object, required: true },
-    /* Item-ULID → status: `ok` eller `overdue`. */
+    /* Item-ULID → status: `ok` eller `overdue`. Bara i kartläget, annars `{}`. */
     statuses: { type: Object, required: true },
-    /*
-     * Item-ULID → `{ulid, hasThumb}` eller null, ur
-     * App\Actions\Item\ResolveItemCover: radens eget omslag. `hasThumb` säger
-     * att `thumb`-derivatet finns, och först då ritas en miniatyr.
-     */
-    covers: { type: Object, required: true },
     /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
     tags: { type: Array, required: true },
     /* Containerns kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
@@ -168,10 +136,10 @@ const props = defineProps({
      */
     can: { type: Object, required: true },
     /*
-     * Läget fliken står i, ur serverns läsning av `?view=` (issue 154 ·
-     * [[ADR-0046 Containerns karta]]): `list` eller `tree`. Servern skriver
-     * alltid ett giltigt värde — ett okänt eller saknat läge är `list` — och
-     * vyn faller därför aldrig tillbaka själv på något eget.
+     * Läget fliken står i, ur serverns läsning av `?view=` (issue 327 ·
+     * [[ADR-0067 Itemfliken utan listläge]]): `tree` eller `map`. Servern
+     * skriver alltid ett giltigt värde — ett okänt eller saknat läge är
+     * `tree` — och vyn faller därför aldrig tillbaka själv på något eget.
      */
     view: { type: String, required: true },
     /*
@@ -192,8 +160,10 @@ const props = defineProps({
     structure: { type: Array, default: null },
     /*
      * Trädets kolumner, item-ULID → `{category, tags, documents, tasks,
-     * updated_at}`, ur App\Actions\Item\ResolveItemTreeRows (issue 292 ·
-     * [[ADR-0058 Trädet som tabell]] § 1, 3 och 4). Proppen finns BARA i
+     * updated_at, icon, icon_color, cover}`, ur
+     * App\Actions\Item\ResolveItemTreeRows (issue 292 och 326 ·
+     * [[ADR-0058 Trädet som tabell]] § 1, 3 och 4, [[ADR-0067 Itemfliken
+     * utan listläge]] § 4). Proppen finns BARA i
      * trädläget, samma form och samma skäl som `structure` ovan: `null`
      * betyder INTE HÄMTAD, och en tom tabell är ett svar servern HAR gett.
      *
@@ -265,7 +235,7 @@ watch(() => props.filter, () => {
 /*
  * Sidans adress utan läge, och filtret som servern tillämpade — som
  * querysträng. Växelns länkar byggs ur de två och ur ingenting annat: det
- * aktuella läget lämnas ur adressen (så *Lista* skriver ingen `view` alls,
+ * aktuella läget lämnas ur adressen (så *Träd* skriver ingen `view` alls,
  * som översiktsfliken inte skriver någon `tab`), och filtret följer med så att
  * ett läge man kommer tillbaka till är samma träfflista.
  *
@@ -311,16 +281,16 @@ const views = computed(() => {
     const filterTail = query === '' ? '' : `&${query}`;
 
     return [
-        { key: 'list', label: t('item.view.list'), href: query === '' ? base.value : `${base.value}?${query}` },
-        { key: 'tree', label: t('item.view.tree'), href: `${base.value}?view=tree${filterTail}` },
+        { key: 'tree', label: t('item.view.tree'), href: query === '' ? base.value : `${base.value}?${query}` },
         { key: 'map', label: t('item.view.map'), href: `${base.value}?view=map${filterTail}` },
     ];
 });
 
 /*
  * *+N till* i `ItemMap` leder hit. Kring ett item är det itemets
- * relationsflik, som listar alla; kring containern är det listläget
- * ([[ADR-0059 Kartan med en mitt]] § 6).
+ * relationsflik, som listar alla; kring containern är det trädet
+ * ([[ADR-0059 Kartan med en mitt]] § 6, [[ADR-0067 Itemfliken utan listläge]]
+ * § 7).
  */
 const overflowHref = computed(() => (props.map.center.kind === 'item'
     ? `${base.value}/${props.map.center.ulid}?tab=relations`
@@ -331,15 +301,15 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     <Head :title="t('item.index.title')" />
 
     <!--
-        Huvudet är gemensamt för de tre lägena (issue 291 · [[ADR-0058 Trädet
+        Huvudet är gemensamt för de två lägena (issue 291 · [[ADR-0058 Trädet
         som tabell]] § 7): rubriken, *New item* och växeln står på en rad, i den
         ordningen, och raden ritas utanför lägesgrenarna. `mr-auto` trycker
         knappen och växeln till höger även när `can.create` är falsk.
 
-        Växeln (issue 154 · [[ADR-0046 Containerns karta]]). Den står över
-        båda ytorna och byter mellan dem med en adress: *Lista* är förvalet
-        och skrivs utan `view`, *Träd* bär `?view=tree`. Läget kommer ur
-        `view`-proppen — serverns läsning av adressen — så vyn håller
+        Växeln (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 1). Den
+        står över båda ytorna och byter mellan dem med en adress: *Träd* är
+        förvalet och skrivs utan `view`, *Karta* bär `?view=map`. Läget kommer
+        ur `view`-proppen — serverns läsning av adressen — så vyn håller
         ingenting i minnet och en omladdning landar i samma läge.
     -->
     <div class="mt-6 flex flex-wrap items-center gap-3">
@@ -361,18 +331,17 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     </div>
 
     <!--
-        Filterraden står under huvudet i alla tre lägena (issue 293 ·
+        Filterraden står under huvudet i båda lägena (issue 293 ·
         [[ADR-0058 Trädet som tabell]] § 7 och issue 299 · [[ADR-0059 Kartan
         med en mitt]] § 10). Raden ritas en gång och utanför lägesgrenarna, så
-        att listan, trädet och kartan ser samma filter och samma aktiva chips.
-        Trädet och kartan filtreras ur samma querysträng (`?view=tree&q=…`,
-        `?view=map&q=…`), och växeln bär filtret med sig mellan lägena.
+        att trädet och kartan ser samma filter och samma aktiva chips. Trädet
+        och kartan filtreras ur samma querysträng (`?q=…`, `?view=map&q=…`),
+        och växeln bär filtret med sig mellan lägena.
 
-        Träd- och kartläget ger raden sitt `view`, så att ett filter som SKICKAS
-        där stannar i samma läge i stället för att landa i listan: raden
-        submittar en GET mot samma rutt, och läget är en del av adressen. Listan
-        skickar `null` — komponentens standard — och skriver därför ingen
-        `view`.
+        Kartläget ger raden sitt `view`, så att ett filter som SKICKAS där
+        stannar i kartan i stället för att landa i trädet: raden submittar en
+        GET mot samma rutt, och läget är en del av adressen. Trädet skickar
+        `null` — komponentens standard — och skriver därför ingen `view`.
 
         Trädläget har också *Expand all* i raden (issue 295 · [[ADR-0058
         Trädet som tabell]] § 6). Knappen öppnar varje gren och blir
@@ -395,7 +364,7 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             :tags="tags"
             :categories="categoryTree"
             :filter="filter"
-            :view="view === 'list' ? null : view"
+            :view="view === 'map' ? 'map' : null"
         />
 
         <!--
@@ -417,66 +386,46 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
         </button>
     </div>
 
-    <!-- Listan, oförändrad: de tre tomma lägena och raderna. -->
-    <template v-if="view === 'list'">
-        <p v-if="items.length === 0 && !hasFilter" class="mt-8 text-slate-700">
-            {{ t('item.index.empty') }}
-        </p>
-
-        <p v-else-if="items.length === 0" class="mt-8 text-slate-700">
-            {{ t('item.index.filter_empty', { filters: summary }) }}
-        </p>
-
-        <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-            <!--
-                Raden är `ItemRow` (issue 285 · [[M32 Formspråket]]), samma
-                komponent som översiktens itempanel ritar. Listan äger bara
-                formen runt raderna: `<ul>` med skiljelinjer, i serverns
-                ordning.
-            -->
-            <ItemRow
-                v-for="item in items"
-                :key="item.ulid"
-                :item="item"
-                :cover="covers[item.ulid]"
-                :container-ulid="container.ulid"
-            />
-        </ul>
-    </template>
-
     <!--
         Trädläget (issue 154, tabell sedan issue 294 · [[ADR-0058 Trädet som
-        tabell]]): containerns struktur som tabell, med containern som rotrad
-        och kolumnerna ur `treeRows`. Rotraden fälls aldrig ihop
+        tabell]], förval sedan issue 327 · [[ADR-0067 Itemfliken utan
+        listläge]]): containerns struktur som tabell, med containern som
+        rotrad och kolumnerna ur `treeRows`. Rotraden fälls aldrig ihop
         ([[ADR-0060 Itemets ikon]] § 10): den bär containerns ikon och
-        rötterna syns alltid. Sedan issue 293 tar trädet samma
-        filter som listan (§ 5): servern skickar träffarna och vägen ned till
-        dem, och varje nod bär `match`. Varje led är en länk till sitt item
-        (`?path=` följer med, se ItemTreeTable.vue).
+        rötterna syns alltid. Sedan issue 293 tar trädet samma filter som
+        kartan (§ 5): servern skickar träffarna och vägen ned till dem, och
+        varje nod bär `match`. Varje led är en länk till sitt item (`?path=`
+        följer med, se ItemTreeTable.vue).
 
-        Ett filter UTAN träffar säger samma sak som listan, med de filter
+        Ett filter UTAN träffar säger samma sak som förut, med de filter
         användaren själv satt — `item.index.filter_empty` — och ingenting om
-        vad som dolts. Ett OFILTRERAT tomt träd ritar ingenting, som förut:
-        växeln säger vilket läge man står i, och att säga "containern är tom"
-        här hade varit listans rad (issue 73 § Beslut 6).
+        vad som dolts. Ett OFILTRERAT tomt träd ritar rotraden och
+        `item.index.empty` under den ([[ADR-0067 Itemfliken utan listläge]]
+        § 6): meningen är densamma för ägaren och för en mottagare med
+        begränsat omfång (issue 73 § Beslut 6).
     -->
-    <section v-else-if="view === 'tree'" class="mt-6">
+    <section v-if="view === 'tree'" class="mt-6">
         <p v-if="structure !== null && structure.length === 0 && hasFilter" class="mt-8 text-slate-700">
             {{ t('item.index.filter_empty', { filters: summary }) }}
         </p>
 
-        <ItemTreeTable
-            v-else
-            :key="filterQuery"
-            :nodes="structure ?? []"
-            :tree-rows="treeRows ?? {}"
-            :container-ulid="container.ulid"
-            :container-name="container.name"
-            :container-icon="container.icon"
-            :container-icon-color="container.icon_color"
-            :filtered="hasFilter"
-            :expand-all="allOpen"
-        />
+        <template v-else>
+            <ItemTreeTable
+                :key="filterQuery"
+                :nodes="structure ?? []"
+                :tree-rows="treeRows ?? {}"
+                :container-ulid="container.ulid"
+                :container-name="container.name"
+                :container-icon="container.icon"
+                :container-icon-color="container.icon_color"
+                :filtered="hasFilter"
+                :expand-all="allOpen"
+            />
+
+            <p v-if="structure !== null && structure.length === 0" class="mt-8 text-slate-700">
+                {{ t('item.index.empty') }}
+            </p>
+        </template>
     </section>
 
     <!--
@@ -492,8 +441,8 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
 
         Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
         tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
-        (issue 73 § Beslut 6). Ett filter UTAN träffar är däremot listans tomma
-        text, ritad av `ItemMapHits` på samma sätt som listan.
+        (issue 73 § Beslut 6). Ett filter UTAN träffar är däremot den tomma
+        texten, ritad av `ItemMapHits` på samma sätt som trädet.
     -->
     <section v-else class="mt-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-start">
