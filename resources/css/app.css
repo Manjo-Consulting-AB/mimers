@@ -229,6 +229,18 @@
     margin-top: 0.25rem;
 }
 
+/*
+ * En uppgiftslista ritas av serverrenderingen som en vanlig `<ul>` med en
+ * checkbox som första barn — league/commonmark sätter ingen `task-list-item`
+ * (M44 · issue 328). Raden känns igen på checkboxen, tappar punkten och
+ * flyttas vänster om listans `padding-left`, så att checkboxen står där
+ * punkten annars hade stått. Rader utan checkbox behåller sin markör.
+ */
+.item-notes-content li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.25rem;
+}
+
 .item-notes-content a {
     color: var(--color-accent);
     text-decoration: underline;
