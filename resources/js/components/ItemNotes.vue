@@ -90,6 +90,17 @@ let failed = false;
  */
 const showCard = computed(() => props.canEdit || rendered.value !== null);
 
+/*
+ * Frågan statusraden och `beforeunload` ställer: väntar en osparad ändring?
+ *
+ * Jämförelsen är trimmad därför att servern trimmar `notes` (Laravels
+ * `TrimStrings`). Utan trimningen hade ett avslutande blanksteg setts som en
+ * ändring varje gång en sparning kom tillbaka, och skickats igen i en slinga.
+ */
+function isDirty() {
+    return draft.value.trim() !== savedText.value.trim();
+}
+
 function scheduleSave() {
     clearTimeout(timer);
     timer = setTimeout(saveNow, 1000);
@@ -104,18 +115,25 @@ function saveNow() {
     clearTimeout(timer);
     timer = null;
 
-    if (! props.canEdit || saving.value || draft.value === savedText.value) {
+    if (! props.canEdit || saving.value || ! isDirty()) {
         return;
     }
+
+    /*
+     * Det som skickas är det som sparades. Servern trimmar `notes`, så
+     * `savedText` får inte sättas ur svaret: då hade ett avslutande blanksteg
+     * setts som en ny ändring och skickats om och om igen.
+     */
+    const sent = draft.value;
 
     saving.value = true;
     failed = false;
     status.value = 'saving';
-    http.notes = draft.value;
+    http.notes = sent;
 
     http.patch(props.updateUrl, {
         onSuccess: (response) => {
-            savedText.value = response?.notes ?? '';
+            savedText.value = sent;
             rendered.value = response?.notes_html ?? null;
             status.value = 'saved';
         },
@@ -137,7 +155,7 @@ function saveNow() {
             // En ändring som kom medan förfrågan pågick skickas nu, men bara
             // efter en lyckad sparning: ett fel väntar på *Try again* och ska
             // inte bli en oändlig serie förfrågningar.
-            if (! failed && draft.value !== savedText.value) {
+            if (! failed && isDirty()) {
                 saveNow();
             }
         },
@@ -250,7 +268,7 @@ function onReadClick(event) {
 }
 
 function onBeforeUnload(event) {
-    if (! saving.value && draft.value === savedText.value) {
+    if (! saving.value && ! isDirty()) {
         return;
     }
 

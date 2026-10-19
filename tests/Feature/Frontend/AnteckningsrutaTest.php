@@ -164,8 +164,16 @@ it('sparar en sekund efter sista tangenttrycket och direkt vid fokusförlust', f
 
     // En förfrågan åt gången, och en ändring som kom under tiden skickas när
     // den första är klar.
-    expect($komponent)->toMatch('/saving\.value \|\| draft\.value === savedText\.value/')
-        ->and($komponent)->toMatch('/! failed && draft\.value !== savedText\.value/');
+    expect($komponent)->toMatch('/saving\.value \|\| ! isDirty\(\)/')
+        ->and($komponent)->toMatch('/! failed && isDirty\(\)/');
+
+    // Det som sparades är det som skickades, inte svaret: servern trimmar
+    // `notes`, och en jämförelse mot svaret hade gjort ett avslutande
+    // blanksteg till en ändring som skickades om och om igen.
+    expect($komponent)->toContain('const sent = draft.value')
+        ->and($komponent)->toContain('savedText.value = sent;')
+        ->and($komponent)->not->toMatch('/savedText\.value = response/')
+        ->and($komponent)->toContain('draft.value.trim() !== savedText.value.trim()');
 
     // Webbläsaren varnar medan en ändring väntar.
     expect($komponent)->toContain("window.addEventListener('beforeunload', onBeforeUnload)")
