@@ -525,13 +525,13 @@ it('låter en write-mottagare ändra men inte radera', function () {
 
 /*
  * Klart när: en användare med `delete` raderar itemet, som försvinner ur
- * listan men ligger kvar med `deleted_at` satt.
+ * trädet men ligger kvar med `deleted_at` satt.
  *
  * Raderingen är MJUK ([[ADR-0008 Soft delete och papperskorg]]): `deleted_at`
  * sätts och ingenting annat. Papperskorgen som listar och återställer är issue
- * 62 — här prövas bara att raden finns kvar och att listan inte visar den.
+ * 62 — här prövas bara att raden finns kvar och att trädet inte visar den.
  */
-it('mjukraderar itemet på delete-pinnen och tar bort det ur listan', function () {
+it('mjukraderar itemet på delete-pinnen och tar bort det ur trädet', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemformKontext();
@@ -551,8 +551,8 @@ it('mjukraderar itemet på delete-pinnen och tar bort det ur listan', function (
 
     actingAs($raderare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->has('items', 1)
-            ->where('items.0.ulid', $masten->ulid)
+            ->has('treeRows.'.$masten->ulid)
+            ->missing('treeRows.'.$motorn->ulid)
     );
 });
 

@@ -184,15 +184,15 @@ function itemtradFragor(Closure $värm, Closure $anrop): int
 }
 
 /*
- * Klart när: itemfliken har växeln med *Lista* som förval.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 1): trädet är
+ * förvalet.
  *
  * Förvalet är frånvaron av `view` och ingenting annat — samma val som
  * översiktsfliken gör med `tab` (issue 100 och 102): den aktuella adressen
  * innehåller ingen parameter, och den som öppnar fliken utan en länk landar i
- * listan. Provet prövar båda halvorna: svaret bär `list`, och växelns första
- * läge skriver sin adress utan `view`.
+ * trädet. Index.vue rörs inte här; växeln får sina två lägen i issue 327.
  */
-it('har växeln med Lista som förval', function () {
+it('har trädet som förval', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemtradKontext();
@@ -201,63 +201,38 @@ it('har växeln med Lista som förval', function () {
     actingAs($anvandare)->get(itemtradUrl($container))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Index')
-            ->where('view', 'list')
-            // Listan är hämtad, trädet är det inte: en yta ingen ser ska inte
-            // kosta en fråga (samma linje som historikens rader, issue 116).
-            ->where('structure', null)
-            ->has('items', 1)
+            ->where('view', 'tree')
+            // Trädet ritar inga statusar — de hör till kartläget.
+            ->where('statuses', [])
+            // Trädet är hämtat, listans data är det inte.
+            ->has('structure', 1)
+            ->missing('items')
+            ->missing('categories')
+            ->missing('covers')
     );
-
-    $vy = itemtradKod('pages/Containers/Items/Index.vue');
-
-    expect($vy)->toContain("import ItemViewSwitch from '../../../components/ItemViewSwitch.vue'")
-        ->toContain('<ItemViewSwitch')
-        ->toContain(':views="views"')
-        ->toContain(':current="view"');
-
-    $lagen = itemtradLagen($vy);
-
-    // Listan först, och den skrivs utan `view`. Trädet står före kartan: de två
-    // ritar samma struktur, och den som läser växeln från vänster möter den
-    // enkla formen först.
-    expect(strpos($lagen, "key: 'list'"))->toBeLessThan(strpos($lagen, "key: 'tree'"))
-        ->and(strpos($lagen, "key: 'tree'"))->toBeLessThan(strpos($lagen, "key: 'map'"));
-
-    preg_match_all("/key: '(\w+)'/", $lagen, $träffar);
-
-    expect($träffar[1])->toBe(['list', 'tree', 'map']);
 });
 
 /*
- * Klart när: ett okänt läge är listan, aldrig ett fel.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 2): ett okänt
+ * läge är trädet, aldrig ett fel.
  *
- * Sedan issue 157 finns *Karta* i växeln, och den ägs av
- * tests/Feature/Frontend/ContainerkartaTest.php. Kvar här står regeln som
- * gäller varje läge: `?view[]=…`, `?view=` och skräp läses som "inget läge",
- * och svaret är listan — den som klickat på en gammal länk är inte här.
- *
- * Provet prövar båda halvorna: att lägeslistan ÄR de tre lägena, i ordning,
- * och att ett värde utanför den ger listan med dess rader.
+ * `?view=list` är en gammal adress och landar i trädet, liksom `?view=tree`,
+ * `?view[]=…`, `?view=` och skräp — den som klickat på en gammal länk är inte
+ * här. Filtret i adressen gäller som vanligt.
  */
-it('svarar listan för ett okänt läge', function () {
+it('svarar trädet för ett okänt läge', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemtradKontext();
     itemtradItem($container, 'Motorn');
 
-    $lagen = itemtradLagen(itemtradKod('pages/Containers/Items/Index.vue'));
-
-    preg_match_all("/key: '(\w+)'/", $lagen, $träffar);
-
-    expect($träffar[1])->toBe(['list', 'tree', 'map']);
-
-    foreach (['view=skräp', 'view=', 'view[]=map'] as $fråga) {
+    foreach (['view=list', 'view=tree', 'view=skräp', 'view=', 'view[]=map'] as $fråga) {
         actingAs($anvandare)->get(itemtradUrl($container, $fråga))->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
                 ->component('Containers/Items/Index')
-                ->where('view', 'list')
-                ->where('structure', null)
-                ->has('items', 1)
+                ->where('view', 'tree')
+                ->has('structure', 1)
+                ->missing('items')
         );
     }
 });
@@ -469,14 +444,15 @@ it('bär filtret med sig genom växeln', function () {
     expect($lagen)->toContain('base.value')
         ->and($lagen)->toContain('query');
 
-    // Och en filtrerad lista svarar med filtret kvar i svaret, så växeln har
-    // något att bygga adressen ur.
+    // Och en filtrerad adress utan läge landar i trädet sedan issue 326, med
+    // filtret kvar i svaret.
     actingAs($anvandare)->get(itemtradUrl($container, 'q=Motor'))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->where('view', 'list')
+            ->where('view', 'tree')
             ->where('filter.q', 'Motor')
-            ->has('items', 1)
-            ->where('items.0.ulid', $motorn->ulid)
+            ->where('structure', [
+                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => []],
+            ])
     );
 
     // Trädläget svarar med träffarna och ingenting annat: masten är ingen

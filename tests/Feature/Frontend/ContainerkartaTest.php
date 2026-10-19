@@ -188,10 +188,12 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Index')
             ->where('view', 'map')
-            // Kartan är hämtad, trädet och listan är det inte: en yta ingen
-            // ser ska inte kosta en fråga (samma linje som `structure`).
+            // Kartan är hämtad, trädet och listans data är det inte: en yta
+            // ingen ser ska inte kosta en fråga (samma linje som `structure`).
             ->where('structure', null)
-            ->has('items', 0)
+            ->missing('items')
+            ->missing('categories')
+            ->missing('covers')
             ->where('map.center.kind', 'container')
             ->where('map.center.ulid', $container->ulid)
             ->where('map.center.name', $container->name)

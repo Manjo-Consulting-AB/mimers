@@ -569,13 +569,13 @@ it('återställer containern, ökar förbrukningen och lämnar innehållet kvar'
     expect(Invitation::query()->whereKey($inbjudan->id)->exists())->toBeTrue();
     expect(DB::table('item_tag')->where('item_id', $item->id)->where('tag_id', $tagg->id)->exists())->toBeTrue();
 
-    // Och containern svarar igen: itemet står i containerns lista som om ingenting
-    // hänt, för ingenting hände med det.
+    // Och containern svarar igen: itemet står i containerns träd som om
+    // ingenting hänt, för ingenting hände med det.
     actingAs($ägare)
         ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($item->ulid))
+            ->has('treeRows.'.$item->ulid)
         );
 });
 
