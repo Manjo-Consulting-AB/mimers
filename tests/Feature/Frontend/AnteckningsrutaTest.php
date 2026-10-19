@@ -123,9 +123,16 @@ it('gör rutan till ett textfält vid klick och Enter med markören i slutet', f
 
     expect($komponent)->toContain("addEventListener('click', onReadClick)")
         ->and($komponent)->toContain("closest('a')")
-        ->and($komponent)->toContain('@keydown.enter.prevent="enterEdit"')
+        ->and($komponent)->toContain('@keydown="onReadKeydown"')
         ->and($komponent)->toContain('v-if="editing"')
         ->and($komponent)->toContain('<textarea');
+
+    // Enter från innehållet — en länk som tabbats fram — bubblar upp till
+    // rutan. Hanteraren hoppar över allt som inte är rutan själv, så länken
+    // får sin Enter och följs, samma undantag som klicket gör.
+    expect($komponent)->toContain('event.target !== event.currentTarget')
+        ->and($komponent)->toMatch('/function onReadKeydown\(event\)[\s\S]*?event\.target !== event\.currentTarget[\s\S]*?event\.preventDefault\(\)/')
+        ->and($komponent)->not->toContain('@keydown.enter.prevent');
 
     // Markören i slutet: längden används som både start och slut.
     expect($komponent)->toContain('const end = element.value.length')

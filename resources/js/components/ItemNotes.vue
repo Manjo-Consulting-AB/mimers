@@ -267,6 +267,25 @@ function onReadClick(event) {
     enterEdit();
 }
 
+/*
+ * Enter i läsläget. Tangenttryck från innehållet bubblar upp till rutan, så
+ * en länk som tabbats fram får sin Enter av webbläsaren — annars hade
+ * tangentbordsanvändare inte kunnat följa länkarna i sin egen anteckning,
+ * samma undantag som `onReadClick` gör för musen.
+ */
+function onReadKeydown(event) {
+    if (! props.canEdit || editing.value || event.key !== 'Enter') {
+        return;
+    }
+
+    if (event.target !== event.currentTarget) {
+        return;
+    }
+
+    event.preventDefault();
+    enterEdit();
+}
+
 function onBeforeUnload(event) {
     if (! saving.value && ! isDirty()) {
         return;
@@ -342,7 +361,7 @@ onBeforeUnmount(() => {
                 class="item-notes-content cursor-text rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :tabindex="canEdit ? 0 : undefined"
                 :aria-label="canEdit ? t('item.show.notes') : undefined"
-                @keydown.enter.prevent="enterEdit"
+                @keydown="onReadKeydown"
                 v-html="rendered"
             />
 
