@@ -72,6 +72,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0064 Containerns ikon]] | Containern får itemets ikon och palett med samma väljare; ikonen syns i huvudmenyn, trädets rotrad, kartans mitt och i rutan när bilden saknas | Frontend, [[Konton och åtkomst]] |
 | [[ADR-0065 Den samlade papperskorgen]] | `/trash` listar raderade items, bilagor och containrar över allt användaren når, med sökfält, växel med fyra lägen, vem som raderade ur loggen och *Restore*; skalet får posten *Trash* | Frontend, [[Filer och lagring]], [[Konton och åtkomst]] |
 | [[ADR-0066 Itemets anteckning]] | Itemets anteckning är Markdown som servern ritar, redigeras direkt på översikten ovanför *Recent activity*, sparas av sig själv, den som sparar sist vinner och loggen får en rad per arbetspass | Frontend, [[Items och organisation]] |
+| [[ADR-0067 Itemfliken utan listläge]] | Itemflikens listläge tas bort; växeln är *Tree* och *Map* med trädet som förval, en gammal adress landar i trädet och trädets rad får listans ruta med bild eller ikon | Frontend, [[Items och organisation]] |
 
 ## Om att ändra ett beslut
 
