@@ -451,9 +451,10 @@ class ItemController extends Controller
             'create' => $createTarget->forContainer($user, $container, $center),
 
             // Läget i itemfliken (issue 154 och 157 · [[ADR-0046 Containerns
-            // karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]]).
-            // *Lista* är förvalet och den här sidan som den var; *Träd* ritar
-            // containerns struktur; *Karta* ritar en mitt med sina grannar.
+            // karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]], två
+            // lägen sedan issue 326 · [[ADR-0067 Itemfliken utan listläge]]).
+            // *Träd* är förvalet och ritar containerns struktur; *Karta* ritar
+            // en mitt med sina grannar.
             // Läget står i querysträngen och ingenstans annat — vyn håller
             // inget eget tillstånd — och därför är proppen svaret på samma
             // fråga som `structure` och `map` nedan.
@@ -471,7 +472,7 @@ class ItemController extends Controller
             // träd utan fältet — `structure()` lägger det bara på begäran, så
             // panelens svar är ordagrant det det var.
             //
-            // `null` och inte en tom lista när läget är listan: en tom lista
+            // `null` och inte en tom lista utanför trädläget: en tom lista
             // är ett svar servern HAR gett — "hon når ingenting" — och vyn
             // ska kunna skilja det från "inte hämtad" (samma form och samma
             // skäl som `history`-proppen i show()).

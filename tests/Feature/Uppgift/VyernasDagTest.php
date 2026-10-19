@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: statusarna räknas bara i kartläget sedan issue 326; befintliga dag-prov omdirigeras till ?view=map och är därför gröna på basen, som redan svarar med kartan.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;

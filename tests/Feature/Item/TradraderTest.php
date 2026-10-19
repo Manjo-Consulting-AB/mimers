@@ -151,6 +151,34 @@ function tradradFragor(Closure $varm, Closure $anrop): int
 }
 
 /**
+ * Antalet omslagsfrågor $anrop ställer — bara de tabeller
+ * App\Actions\Item\ResolveItemCover rör.
+ *
+ * Bilagorna räknas redan i trädets dokumentkolumn, så en räkning över alla
+ * frågor hade varit grön även utan omslaget. `stored_file` och
+ * `image_derivative` ställs bara av omslagsupplösningen — utan den är svaret
+ * noll, vilket är vad baskommiten svarar.
+ */
+function tradradOmslagsfragor(Closure $varm, Closure $anrop): int
+{
+    app()->forgetScopedInstances();
+
+    $varm();
+
+    $antal = 0;
+
+    DB::listen(function ($fraga) use (&$antal): void {
+        if (preg_match('/\b(stored_file|image_derivative)\b/', $fraga->sql) === 1) {
+            $antal++;
+        }
+    });
+
+    $anrop();
+
+    return $antal;
+}
+
+/**
  * Källkoden med kommentarer borta — samma tre slag som GenomgangTest rensar.
  */
 function tradradKod(string $sokvag): string
@@ -538,6 +566,11 @@ it('kostar samma antal frågor för tre och trettio items, också med bilder', f
         fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
     );
 
+    $omslagMedTre = tradradOmslagsfragor(
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+    );
+
     foreach (range(1, 30) as $i) {
         $barn = tradradItem($container, sprintf('Del %02d', $i));
         tradradKant($baten, $barn);
@@ -550,12 +583,24 @@ it('kostar samma antal frågor för tre och trettio items, också med bilder', f
         fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
     );
 
+    $omslagMedTrettiotre = tradradOmslagsfragor(
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+    );
+
     Carbon::setTestNow();
 
     expect($medTrettiotre)->toBe(
         $medTre,
         'trädraderna kostar fler frågor när trädet växer — räkningen går per item',
-    );
+    )
+        // Noll här är baskommiten: utan omslagsupplösningen frågas varken
+        // stored_file eller image_derivative.
+        ->and($omslagMedTre)->toBeGreaterThan(0)
+        ->and($omslagMedTrettiotre)->toBe(
+            $omslagMedTre,
+            'omslaget kostar fler frågor när trädet växer — upplösningen går per item',
+        );
 });
 
 /*
