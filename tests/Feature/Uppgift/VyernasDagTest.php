@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: statusarna räknas bara i kartläget sedan issue 326; befintliga dag-prov omdirigeras till ?view=map och är därför gröna på basen, som redan svarar med kartan.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
@@ -124,7 +126,7 @@ function vyernasDagLan(Item $item, string $due): Loan
 
 // --- klockan 01:30 svensk tid ----------------------------------------------
 
-it('räknar ett item som förfallit i den svenska dagen som förfallet i trädet', function () {
+it('räknar ett item som förfallit i den svenska dagen som förfallet i kartan', function () {
     withoutVite();
 
     Carbon::setTestNow('2026-09-24 23:30:00');
@@ -137,7 +139,8 @@ it('räknar ett item som förfallit i den svenska dagen som förfallet i trädet
     // 24:e. Före issue 136 var jämförelsen "24 < 24" och raden såg OK ut.
     vyernasDagFörekomst($item, '2026-09-24');
 
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
+    // Statusarna räknas bara i kartläget sedan issue 326.
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where("statuses.{$item->ulid}", ItemStatus::OVERDUE)
     );
 });
@@ -211,8 +214,8 @@ it('ger en användare i New York sitt eget datum på alla fyra ställena', funct
     vyernasDagFörekomst($item, '2026-09-24');
     vyernasDagLan($item, '2026-09-24');
 
-    // 1. Itemträdet: hennes dag är den 24:e, alltså är den 24:e inte förfallen.
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
+    // 1. Kartan: hennes dag är den 24:e, alltså är den 24:e inte förfallen.
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where("statuses.{$item->ulid}", ItemStatus::OK)
     );
 
@@ -258,8 +261,8 @@ it('ger samma utfall som före issuen mitt på dagen', function () {
     vyernasDagFörekomst($idag, '2026-09-25');
     vyernasDagLan($idag, '2026-09-24');
 
-    // 1. Itemträdet: i går är förfallet, i dag är det inte — gränsen är orörd.
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
+    // 1. Kartan: i går är förfallet, i dag är det inte — gränsen är orörd.
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->where("statuses.{$igar->ulid}", ItemStatus::OVERDUE)
             ->where("statuses.{$idag->ulid}", ItemStatus::OK)

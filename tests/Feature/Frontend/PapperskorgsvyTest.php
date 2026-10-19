@@ -404,7 +404,7 @@ it('ger en tom papperskorg samma svar för mottagaren som för ägaren', functio
  * Klart när: ett item återställs ur vyn och dyker upp i containerns itemlista
  * igen, med flashkoden `trash-restored` (Beslut 7).
  */
-it('återställer ett item ur vyn och visar det i containerns itemlista igen', function () {
+it('återställer ett item ur vyn och visar det i containerns träd igen', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = papperskorgsvyKontext();
@@ -426,7 +426,7 @@ it('återställer ett item ur vyn och visar det i containerns itemlista igen', f
         ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($raderat->ulid))
+            ->has('treeRows.'.$raderat->ulid)
         );
 });
 

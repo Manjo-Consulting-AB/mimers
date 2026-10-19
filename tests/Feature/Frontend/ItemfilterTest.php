@@ -164,16 +164,63 @@ function itemfilterUrl(Container $container, array $query = []): string
 }
 
 /**
- * Radernas namn ur svaret, i serverns ordning.
+ * Trädets träffar ur svaret, i ritad ordning — namnet på varje nod med
+ * `match` sant.
+ *
+ * Sedan issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 8 finns ingen
+ * listpropp kvar: filtret prövas mot trädets träffar, och en förfader som bara
+ * är vägen ned till en träff räknas inte.
  *
  * @return list<string>
  */
 function itemfilterNamn(TestResponse $svar): array
 {
-    /** @var array{items: list<array{name: string}>} $proppar */
+    /** @var array{structure: list<array{name: string, match: bool, children: list<mixed>}>|null} $proppar */
     $proppar = $svar->inertiaProps();
 
-    return array_map(fn (array $item): string => $item['name'], $proppar['items']);
+    $namn = [];
+
+    $samla = function (array $noder) use (&$samla, &$namn): void {
+        foreach ($noder as $nod) {
+            if (($nod['match'] ?? false) === true) {
+                $namn[] = $nod['name'];
+            }
+
+            $samla($nod['children'] ?? []);
+        }
+    };
+
+    $samla($proppar['structure'] ?? []);
+
+    return $namn;
+}
+
+/**
+ * ULID:na för trädets träffar, i ritad ordning — samma vandring som
+ * `itemfilterNamn()`.
+ *
+ * @return list<string>
+ */
+function itemfilterTradUlids(TestResponse $svar): array
+{
+    /** @var array{structure: list<array{ulid: string, match: bool, children: list<mixed>}>|null} $proppar */
+    $proppar = $svar->inertiaProps();
+
+    $ulids = [];
+
+    $samla = function (array $noder) use (&$samla, &$ulids): void {
+        foreach ($noder as $nod) {
+            if (($nod['match'] ?? false) === true) {
+                $ulids[] = $nod['ulid'];
+            }
+
+            $samla($nod['children'] ?? []);
+        }
+    };
+
+    $samla($proppar['structure'] ?? []);
+
+    return $ulids;
 }
 
 /**
@@ -230,10 +277,10 @@ it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
     $svar = actingAs($anvandare)->get(itemfilterUrl($container, ['q' => $term]));
 
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('items', 5)
         ->where('filter.q', $term)
     );
 
+    expect(itemfilterNamn($svar))->toHaveCount(5);
     expect(itemfilterNamn($svar))->not->toContain('Kontrollen');
 
     // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela containern, tio
@@ -448,7 +495,7 @@ it('säger att containern är tom utan filter och räknar upp filtren med', func
 
     actingAs($anvandare)->get(itemfilterUrl($tom))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->has('items', 0)
+            ->has('structure', 0)
             ->where('filter.q', null)
             ->where('filter.tags', [])
             ->where('filter.category', null)
@@ -456,7 +503,7 @@ it('säger att containern är tom utan filter och räknar upp filtren med', func
     );
 
     actingAs($anvandare)->get(itemfilterUrl($container, ['q' => 'Ingenting alls']))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->has('items', 0)->where('filter.q', 'Ingenting alls')
+        fn (AssertableInertia $page) => $page->has('structure', 0)->where('filter.q', 'Ingenting alls')
     );
 
     $sv = require lang_path('en/ui.php');
@@ -493,8 +540,8 @@ it('nämner aldrig ett tal om dolda rader och ger mottagaren ägarens mening', f
     $mottagarSvar = actingAs($mottagare)->get($url)->assertOk();
 
     expect($mottagarSvar->inertiaProps()['filter'])->toBe($ägarSvar->inertiaProps()['filter'])
-        ->and($mottagarSvar->inertiaProps()['items'])->toBe([])
-        ->and($ägarSvar->inertiaProps()['items'])->toBe([]);
+        ->and($mottagarSvar->inertiaProps()['structure'])->toBe([])
+        ->and($ägarSvar->inertiaProps()['structure'])->toBe([]);
 
     // Ingen av de två tomma texterna bär ett tal, och den dolda raden finns
     // inte i mottagarens svar.
@@ -772,17 +819,18 @@ it('lämnar skalets sökfält vid Enter utan fördröjning', function () {
 });
 
 /*
- * Klart när: itemlistans filter fungerar oförändrat på den NYA URL:en.
+ * Klart när: itemflikens filter fungerar oförändrat på adressen.
  *
  * Två halvor. Servern: samma querysträng ger samma urval på
  * `/containers/{ulid}/items` — urvalet är `ListItems`, och flytten i issue 89
- * rörde den inte. Klienten: filterraden submittar mot LISTANS adress och inte
- * mot containerns egen, som sedan flytten svarar med översikten. Ett filter som
- * submittade dit hade tappat både listan och filtret, och det är den här raden
- * som fångar det — resources/js/components/ItemFilterBar.vue ligger utanför
- * issuens ruta och ändrades ändå, se PR:ens Frågor och antaganden.
+ * rörde den inte. Klienten: filterraden submittar mot itemflikens adress och
+ * inte mot containerns egen, som sedan flytten svarar med översikten. Ett
+ * filter som submittade dit hade tappat både träffarna och filtret, och det är
+ * den här raden som fångar det — resources/js/components/ItemFilterBar.vue
+ * ligger utanför issuens ruta och ändrades ändå, se PR:ens Frågor och
+ * antaganden.
  */
-it('filtrerar oförändrat på itemlistans nya URL', function () {
+it('filtrerar oförändrat på itemflikens adress', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
@@ -798,12 +846,37 @@ it('filtrerar oförändrat på itemlistans nya URL', function () {
 });
 
 /*
- * Klart när: en bokmärkt filtrerad URL ger samma lista efter omladdning.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 2): ett
+ * filter i en gammal listadress gäller i trädet.
+ *
+ * `?view=list` landar i trädet, och filtret i samma adress läses som vanligt —
+ * ett bokmärke är inte ett misstag.
+ */
+it('låter ett filter i en gammal listadress gälla i trädet', function () {
+    withoutVite();
+
+    ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
+
+    $svar = actingAs($anvandare)->get(itemfilterUrl($container, [
+        'view' => 'list',
+        'tags' => [$taggar['Motor']->ulid],
+    ]))->assertOk();
+
+    expect(itemfilterNamn($svar))->toBe(['Impellern', 'Motorn']);
+
+    $svar->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('view', 'tree')
+        ->where('filter.tags', [$taggar['Motor']->ulid])
+    );
+});
+
+/*
+ * Klart när: en bokmärkt filtrerad URL ger samma träffar efter omladdning.
  *
  * Det är hela poängen med att filtret är querysträng (Beslut 1): svaret får
  * inte bero på något som bara finns i den första requesten.
  */
-it('ger samma lista för en bokmärkt filtrerad URL efter omladdning', function () {
+it('ger samma träffar för en bokmärkt filtrerad URL efter omladdning', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
@@ -870,7 +943,7 @@ it('kostar ett konstant antal frågor oavsett antal filtervärden', function () 
 
     $medTreVärden = itemfilterFrågor($värm, function () use ($treVärden) {
         // Tre värden — och en annan mängd rader än ovan.
-        get($treVärden)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 1));
+        get($treVärden)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('treeRows', 1));
     });
 
     $medRoten = itemfilterFrågor($värm, fn () => get($roten)->assertOk());
@@ -962,22 +1035,22 @@ it('har varje filter-nyckel och ingen svensk sträng i vyn', function () {
 });
 
 /*
- * Klart när (issue 299 · [[ADR-0059 Kartan med en mitt]] § 10): kartans
- * träffar är listans träffar med samma filter, i samma ordning.
+ * Klart när (issue 299 · [[ADR-0059 Kartan med en mitt]] § 10 och issue 326 ·
+ * [[ADR-0067 Itemfliken utan listläge]] § 8): kartans träffar är trädets
+ * träffar med samma filter, i samma ordning.
  *
  * Provet jämför de två svaren och inte en avskrift: en andra filtreringsregel
- * i kartan hade glidit ifrån listans vid första ändringen. Filtret väljer
+ * i kartan hade glidit ifrån trädets vid första ändringen. Filtret väljer
  * mitten men gömmer aldrig något runt den — `map` prövas i KartfilterTest.
  */
-it('ger kartans träffar samma rader som listan med samma filter', function () {
+it('ger kartans träffar samma rader som trädet med samma filter', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
 
-    $lista = actingAs($anvandare)
+    $trad = actingAs($anvandare)
         ->get(itemfilterUrl($container, ['tags' => [$taggar['Motor']->ulid]]))
-        ->assertOk()
-        ->inertiaProps()['items'];
+        ->assertOk();
 
     $karta = actingAs($anvandare)
         ->get(itemfilterUrl($container, [
@@ -987,9 +1060,6 @@ it('ger kartans träffar samma rader som listan med samma filter', function () {
         ->assertOk()
         ->inertiaProps()['hits'];
 
-    expect(array_map(
-        fn (array $item): array => ['ulid' => $item['ulid'], 'name' => $item['name']],
-        $lista,
-    ))->toBe($karta['nodes'])
-        ->and($karta['total'])->toBe(count($lista));
+    expect(itemfilterTradUlids($trad))->toBe(array_column($karta['nodes'], 'ulid'))
+        ->and($karta['total'])->toBe(count(itemfilterNamn($trad)));
 });

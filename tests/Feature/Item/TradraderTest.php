@@ -1,14 +1,17 @@
 <?php
 
+use App\Actions\Container\SetContainerCover;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -23,8 +26,8 @@ use function Pest\Laravel\withoutVite;
  * index() och [[ADR-0058 Trädet som tabell]] § 1, 3 och 4.
  *
  * Filen prövar svaret, inte upplösningens inre: `treeRows` är item-ULID →
- * `{category, tags, documents, tasks, updated_at, icon, icon_color}` för
- * exakt de items som står i `structure`, och `null` i list- och kartläget.
+ * `{category, tags, documents, tasks, updated_at, icon, icon_color, cover}` för
+ * exakt de items som står i `structure`, och `null` i kartläget.
  *
  * De två talen följer ADR-0028:s omfång: en mottagare med en itemgrant får
  * bara poster för de items trädet bär. Den regeln — och att räkningen aldrig
@@ -82,6 +85,29 @@ function tradradKant(Item $foralder, Item $barn): void
     ]);
 }
 
+/**
+ * En bild på itemet, med ett `thumb`-derivat när $thumb är sant — samma
+ * handgrepp som itemlistaBild(): derivatet byggs direkt så att `hasThumb` är
+ * känt utan att köa ett jobb.
+ */
+function tradradBild(Item $item, string $namn = 'foto.jpg', bool $thumb = true, string $kind = 'image'): Attachment
+{
+    $bilaga = Attachment::factory()->for($item, 'item')->create([
+        'filename' => $namn,
+        'kind' => $kind,
+    ]);
+
+    if ($thumb) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $bilaga->stored_file_id,
+            'variant' => 'thumb',
+            'storage_path' => $bilaga->storedFile->storage_path.'_thumb.jpg',
+        ]);
+    }
+
+    return $bilaga;
+}
+
 function tradradUrl(Container $container, string $query = ''): string
 {
     return "/containers/{$container->ulid}/items".($query === '' ? '' : "?{$query}");
@@ -117,6 +143,34 @@ function tradradFragor(Closure $varm, Closure $anrop): int
 
     DB::listen(function () use (&$antal): void {
         $antal++;
+    });
+
+    $anrop();
+
+    return $antal;
+}
+
+/**
+ * Antalet omslagsfrågor $anrop ställer — bara de tabeller
+ * App\Actions\Item\ResolveItemCover rör.
+ *
+ * Bilagorna räknas redan i trädets dokumentkolumn, så en räkning över alla
+ * frågor hade varit grön även utan omslaget. `stored_file` och
+ * `image_derivative` ställs bara av omslagsupplösningen — utan den är svaret
+ * noll, vilket är vad baskommiten svarar.
+ */
+function tradradOmslagsfragor(Closure $varm, Closure $anrop): int
+{
+    app()->forgetScopedInstances();
+
+    $varm();
+
+    $antal = 0;
+
+    DB::listen(function ($fraga) use (&$antal): void {
+        if (preg_match('/\b(stored_file|image_derivative)\b/', $fraga->sql) === 1) {
+            $antal++;
+        }
     });
 
     $anrop();
@@ -174,26 +228,34 @@ it('svarar med exakt en post per item i structure och inga andra', function () {
 });
 
 /*
- * Klart när: i list- och kartläget är `treeRows` `null`.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 8): trädet är
+ * förvalet, och bara kartläget svarar `null`.
  *
  * Samma form och samma skäl som `structure`: en yta ingen ser ska inte kosta
  * en fråga, och `null` betyder "inte hämtad" medan en tom tabell hade varit
- * ett svar servern hade gett.
+ * ett svar servern hade gett. Sedan issue 326 finns inget listläge kvar —
+ * `?view=list` landar i trädet.
  */
-it('svarar null utanför trädläget', function () {
+it('svarar trädet som förval och null bara i kartläget', function () {
     withoutVite();
 
     [$container, $anvandare] = tradradKontext();
 
-    tradradItem($container, 'Motorn');
+    $item = tradradItem($container, 'Motorn');
 
-    foreach (['' => 'list', 'view=map' => 'map'] as $fraga => $lage) {
+    foreach (['', 'view=list', 'view=tree', 'view=okant'] as $fraga) {
         actingAs($anvandare)->get(tradradUrl($container, $fraga))->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->where('view', $lage)
-                ->where('treeRows', null)
+                ->where('view', 'tree')
+                ->has('treeRows.'.$item->ulid)
         );
     }
+
+    actingAs($anvandare)->get(tradradUrl($container, 'view=map'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('view', 'map')
+            ->where('treeRows', null)
+    );
 });
 
 /*
@@ -387,9 +449,89 @@ it('ger ett item med två föräldrar en enda rad', function () {
 });
 
 /*
- * Klart när: antalet frågor i trädläget är detsamma för 3 och 30 items.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 4): raden bär
+ * itemets omslag, med samma form som listan hade.
+ *
+ * `cover` är `{ulid, hasThumb, chosen}` eller `null`, ur
+ * App\Actions\Item\ResolveItemCover::thumbnails(). Den valda bilden är den
+ * NYASTE av två, så att skillnaden mellan "vald" och "äldst" syns: `chosen`
+ * är sann för den valda och falsk för den automatiska. Ett item utan bild
+ * svarar null i stället för att saknas.
  */
-it('kostar samma antal frågor för tre och trettio items', function () {
+it('ger varje rad sitt omslag med chosen och null för ett item utan bild', function () {
+    withoutVite();
+
+    [$container, $anvandare] = tradradKontext();
+
+    $vald = tradradItem($container, 'Motorn');
+    tradradBild($vald, 'gammal.jpg', false);
+    $ny = tradradBild($vald, 'ny.jpg', true);
+    $vald->cover_attachment_id = $ny->id;
+    $vald->save();
+
+    $automatisk = tradradItem($container, 'Masten');
+    $aldst = tradradBild($automatisk, 'foto.jpg', false);
+
+    $utanBild = tradradItem($container, 'Seglet');
+
+    actingAs($anvandare)->get(tradradUrl($container, 'view=tree'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('treeRows.'.$vald->ulid.'.cover', [
+                'ulid' => $ny->ulid,
+                'hasThumb' => true,
+                'chosen' => true,
+            ])
+            ->where('treeRows.'.$automatisk->ulid.'.cover', [
+                'ulid' => $aldst->ulid,
+                'hasThumb' => false,
+                'chosen' => false,
+            ])
+            ->where('treeRows.'.$utanBild->ulid.'.cover', null)
+    );
+});
+
+/*
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 4): radens
+ * omslag är itemets eget, aldrig containerns.
+ *
+ * Containern har en egen bild satt genom samma action som rutten använder,
+ * men itemet har inga bilder — och då är radens `cover` null, inte containerns
+ * foto. Utan `expect`-raden hade provet varit grönt även om bilden aldrig
+ * satts och bevisat noll.
+ */
+it('tar aldrig containerns omslag till en rad', function () {
+    withoutVite();
+
+    [$container, $anvandare] = tradradKontext();
+
+    actingAs($anvandare);
+
+    $containerbild = app(SetContainerCover::class)->handle(
+        $container,
+        UploadedFile::fake()->image('container.png'),
+        $anvandare,
+        $container->account,
+    );
+
+    expect($container->refresh()->cover_attachment_id)->toBe($containerbild->id);
+
+    $item = tradradItem($container, 'Motorn');
+
+    actingAs($anvandare)->get(tradradUrl($container, 'view=tree'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('treeRows.'.$item->ulid.'.cover', null)
+    );
+});
+
+/*
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 4): antalet
+ * frågor i trädläget är detsamma för 3 och 30 items, också när raderna har
+ * bilder.
+ *
+ * Omslaget hämtas en gång för hela trädet i stället för en gång per rad
+ * (App\Actions\Item\ResolveItemCover::forItems()), så bilderna läggs på alla
+ * items och mätningen jämför samma frågor före och efter att skogen växer.
+ */
+it('kostar samma antal frågor för tre och trettio items, också med bilder', function () {
     withoutVite();
 
     [$container, $anvandare] = tradradKontext();
@@ -402,6 +544,13 @@ it('kostar samma antal frågor för tre och trettio items', function () {
 
     tradradKant($baten, $motorn);
     tradradKant($baten, $masten);
+
+    // Två bilder var, med ett derivat på den ena: en upplösning som vandrade
+    // per rad — eller frågade efter varje bilds derivat — hade vuxit.
+    foreach ([$baten, $motorn, $masten] as $item) {
+        tradradBild($item, 'ett.jpg', false);
+        tradradBild($item, 'tva.jpg', true);
+    }
 
     // En tagg på ett item gör att tagguppslaget alltid har något att hämta —
     // mätningen ska jämföra samma frågor, inte råka tappa en tom sådan.
@@ -417,11 +566,24 @@ it('kostar samma antal frågor för tre och trettio items', function () {
         fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
     );
 
+    $omslagMedTre = tradradOmslagsfragor(
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+    );
+
     foreach (range(1, 30) as $i) {
-        tradradKant($baten, tradradItem($container, sprintf('Del %02d', $i)));
+        $barn = tradradItem($container, sprintf('Del %02d', $i));
+        tradradKant($baten, $barn);
+        tradradBild($barn, 'ett.jpg', false);
+        tradradBild($barn, 'tva.jpg', true);
     }
 
     $medTrettiotre = tradradFragor(
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+        fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
+    );
+
+    $omslagMedTrettiotre = tradradOmslagsfragor(
         fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
         fn () => actingAs($anvandare)->get(tradradUrl($container, 'view=tree')),
     );
@@ -431,7 +593,14 @@ it('kostar samma antal frågor för tre och trettio items', function () {
     expect($medTrettiotre)->toBe(
         $medTre,
         'trädraderna kostar fler frågor när trädet växer — räkningen går per item',
-    );
+    )
+        // Noll här är baskommiten: utan omslagsupplösningen frågas varken
+        // stored_file eller image_derivative.
+        ->and($omslagMedTre)->toBeGreaterThan(0)
+        ->and($omslagMedTrettiotre)->toBe(
+            $omslagMedTre,
+            'omslaget kostar fler frågor när trädet växer — upplösningen går per item',
+        );
 });
 
 /*

@@ -1135,12 +1135,12 @@ it('räknar itembrickan som antalet items användaren når', function () {
 
     $rader = fn (User $anvandare): int => count(actingAs($anvandare)
         ->get("/containers/{$container->ulid}/items")->assertOk()
-        ->inertiaProps()['items']);
+        ->inertiaProps()['treeRows']);
 
     expect($bricka($ägare))->toBe(6)
         ->and($bricka($mottagare))->toBe(1);
 
-    // Talet är lika långt som listan — samma urval, samma längd, båda gångerna.
+    // Talet är lika långt som trädets rader — samma urval, samma längd, båda gångerna.
     expect($bricka($ägare))->toBe($rader($ägare))
         ->and($bricka($mottagare))->toBe($rader($mottagare));
 

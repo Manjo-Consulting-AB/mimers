@@ -2,21 +2,11 @@
 
 // rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
 
-use App\Actions\Container\SetContainerCover;
 use App\Models\Account;
-use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\ImageDerivative;
 use App\Models\Item;
-use App\Models\ItemLink;
-use App\Models\Schedule;
-use App\Models\ScheduleOccurrence;
 use App\Models\User;
-use App\Support\Item\ItemStatus;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -25,17 +15,14 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 57a · Containerns itemlista. Se
- * App\Http\Controllers\ItemController::index(),
- * App\Actions\Item\ListItems och
+ * Issue 57a · Containerns itemflik. Se
+ * App\Http\Controllers\ItemController::index() och
  * resources/js/pages/Containers/Items/Index.vue.
  *
- * **Listan låg på containerns egen URL till och med issue 88.** Sedan issue 89
- * · [[ADR-0039 Containerns översikt]] ligger den på
- * `GET /containers/{container}/items`, och containerns egen URL svarar med
- * översikten — den prövas i tests/Feature/Frontend/ContainervyerTest.php, som
- * äger App\Http\Controllers\ContainerController. Filen här följer med flytten:
- * samma sex tester, samma förväntningar, en annan sökväg.
+ * **Sidan svarar med trädet sedan issue 326** · [[ADR-0067 Itemfliken utan
+ * listläge]] § 1, 2 och 8. Filen behåller proven som gäller fliken oavsett
+ * läge — åtkomst, navigation, `can`-flaggorna och de tomma lägena — och läser
+ * trädets rader ur `treeRows` där den tidigare läste listans `items`.
  *
  * Den viktigaste gränsen i filen är OMFÅNGET (Beslut 4, issue 73 § Beslut 2
  * och 6): en omfångsbegränsad mottagare ser bara de items hon når, och svaret
@@ -52,14 +39,10 @@ use function Pest\Laravel\withoutVite;
  * är gröna utan en enda ändrad förväntan efter utbrytningen i Beslut 3. En ny
  * formulering av samma sak här hade bevisat noll.
  *
- * **Radens status kom med issue 92** · [[ADR-0040 Underträdets summor]]:
- * `statuses` är itemets ULID → `ok` eller `overdue`, härlett ur underträdet av
- * App\Support\Item\ItemStatus. Slutningen prövas i
- * tests/Feature/Item/ItemstatusTest.php; här prövas det listan svarar med —
- * att varje rad bär en status, att den ligger BREDVID `ItemResource` och
- * aldrig inuti den, att en förekomst på en rad utanför omfånget inte färgar
- * någon status mottagaren ser, och att frågekostnaden är konstant även när
- * raderna har barn och förekomster.
+ * Trädets kolumner, dess frågekostnad och radens omslag prövas i
+ * tests/Feature/Item/TradraderTest.php, som äger App\Actions\Item\
+ * ResolveItemTreeRows. Statusarna hör till kartläget och prövas i
+ * tests/Feature/Frontend/ContainerkartaTest.php.
  *
  * Hjälparna har prefixet `itemlista` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -116,118 +99,6 @@ function itemlistaMottagare(Container $container, ?Item $item = null, string $ni
 }
 
 /**
- * En öppen förekomst på itemet, `$dagar` från idag — negativt är förfallet.
- *
- * Produktionen går alltid genom App\Actions\Schedule\OpenNextOccurrence
- * (fabrikens docblock), men här byggs raden direkt så att datumet är känt utan
- * att räkna kalender. `visible_from` följer `due_at`: ett förfallet datum är
- * alltid synligt.
- */
-function itemlistaFörekomst(Item $item, int $dagar): ScheduleOccurrence
-{
-    $datum = Carbon::today()->addDays($dagar)->toDateString();
-
-    $schema = Schedule::factory()->for($item, 'item')->create([
-        'anchor_date' => $datum,
-        'lead_days' => 0,
-        'is_active' => true,
-    ]);
-
-    return ScheduleOccurrence::factory()->create([
-        'schedule_id' => $schema->id,
-        'due_at' => $datum,
-        'visible_from' => $datum,
-        'status' => 'open',
-    ]);
-}
-
-/**
- * En kant skriven direkt i tabellen, förbi App\Actions\Item\LinkItems — samma
- * skäl som i tests/Feature/Item/AttlingsupplosningTest.php: Actionen är
- * garanten för att API:et aldrig skapar en cykel, och garanten ska inte kunna
- * maskera ett fel i vandringen.
- */
-function itemlistaKant(Item $förälder, Item $barn, string $relation = 'parent'): void
-{
-    ItemLink::query()->insert([
-        'from_item_id' => $förälder->id,
-        'to_item_id' => $barn->id,
-        'relation' => $relation,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-}
-
-/**
- * En bilaga på itemet, med ett `thumb`-derivat när $thumb är sant.
- *
- * Derivatet skapas av kön i drift (issue 61b § Beslut 1); här byggs raden
- * direkt så att `hasThumb` är känd utan att köa ett jobb. `kind` är `image`
- * som standard — det är den sortens bilaga omslaget väljer.
- */
-function itemlistaBild(
-    Item $item,
-    string $filnamn = 'foto.jpg',
-    bool $thumb = true,
-    string $kind = 'image',
-): Attachment {
-    $bilaga = Attachment::factory()->for($item, 'item')->create([
-        'filename' => $filnamn,
-        'kind' => $kind,
-    ]);
-
-    if ($thumb) {
-        ImageDerivative::factory()->create([
-            'stored_file_id' => $bilaga->stored_file_id,
-            'variant' => 'thumb',
-            'storage_path' => $bilaga->storedFile->storage_path.'_thumb.jpg',
-        ]);
-    }
-
-    return $bilaga;
-}
-
-/**
- * Sätter containerns EGEN bild genom App\Actions\Container\SetContainerCover —
- * samma väg rutten går. Raden ska aldrig låna den.
- */
-function itemlistaContainerbild(User $användare, Container $container): Attachment
-{
-    actingAs($användare);
-
-    return app(SetContainerCover::class)->handle(
-        $container,
-        UploadedFile::fake()->image('container.png'),
-        $användare,
-        $container->account,
-    );
-}
-
-/**
- * Antalet frågor $anrop ställer, mätt efter ett omätt anrop som värmer
- * guarderna och kontocachen — samma mönster som
- * ListningsfilterTest::listningsFrågor().
- */
-function itemlistaFrågor(Closure $värm, Closure $anrop): int
-{
-    // ResolveItemScope är `scoped` och memoiserar per request i drift, men i
-    // testsviten överlever den mellan HTTP-anropen. Glöm den därför inför
-    // varje mätning — annars mäter man förra anropets omfång.
-    app()->forgetScopedInstances();
-
-    $värm();
-
-    $frågor = 0;
-    DB::listen(function () use (&$frågor) {
-        $frågor++;
-    });
-
-    $anrop();
-
-    return $frågor;
-}
-
-/**
  * Listblocket i Index.vue — från `<ul v-else` till första `</ul>`.
  *
  * Raden prövas mot blocket och inte mot hela filen: docblocken ovan räknar upp
@@ -267,7 +138,7 @@ function itemlistaKod(): string
  * Beslut 1: båda rutterna ligger bakom `auth`. En utloggad besökare skickas
  * till inloggningen och når aldrig en kontrollermetod.
  */
-it('skickar en utloggad besökare till inloggningen från listan och detaljvyn', function () {
+it('skickar en utloggad besökare till inloggningen från itemfliken och detaljvyn', function () {
     withoutVite();
 
     [, , $container] = itemlistaKontext();
@@ -279,13 +150,13 @@ it('skickar en utloggad besökare till inloggningen från listan och detaljvyn',
 });
 
 /*
- * Klart när: itemlistan ligger på `/containers/{container}/items` och renderar
- * listan för en medlem i ägarkontot, sorterad på namn.
+ * Klart när (issue 326 · [[ADR-0067 Itemfliken utan listläge]] § 1): itemfliken
+ * renderar trädet för en medlem i ägarkontot, med rötterna i namnordning.
  *
- * Sorteringen är serverns — raderna skapas i omvänd bokstavsordning så att en
- * lista som råkade behålla skapelseordningen faller.
+ * Sorteringen är serverns — raderna skapas i omvänd bokstavsordning så att ett
+ * träd som råkade behålla skapelseordningen faller.
  */
-it('renderar itemlistan sorterad på namn för en medlem i ägarkontot', function () {
+it('renderar trädet sorterat på namn för en medlem i ägarkontot', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemlistaKontext();
@@ -298,10 +169,12 @@ it('renderar itemlistan sorterad på namn för en medlem i ägarkontot', functio
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Index')
             ->where('container.ulid', $container->ulid)
-            ->has('items', 3)
-            ->where('items.0.name', 'Impellern')
-            ->where('items.1.name', 'Motorn')
-            ->where('items.2.name', 'Storseglet')
+            ->where('view', 'tree')
+            ->has('structure', 3)
+            ->where('structure.0.name', 'Impellern')
+            ->where('structure.1.name', 'Motorn')
+            ->where('structure.2.name', 'Storseglet')
+            ->has('treeRows', 3)
             // `can.create` är presentationsflaggan för 57b:s skapayta. Ägar-
             // kontots medlem får den; ytan ritas inte av den här issuen.
             ->where('can.create', true)
@@ -336,7 +209,7 @@ it('når fortfarande skapaformuläret på /containers/create', function () {
  * `containers.items.index` är det nya målet (issue 89 · [[ADR-0039
  * Containerns översikt]] § Konsekvenser).
  */
-it('länkar containernamnet i containerlistan till itemlistan', function () {
+it('länkar containernamnet i containerlistan till itemfliken', function () {
     [, , $container] = itemlistaKontext();
 
     expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}")
@@ -381,7 +254,7 @@ it('länkar containernamnet i containerlistan till itemlistan', function () {
  * sektion — den hör till flikraden och räknas inte hit. En räkning över hela
  * filen hade räknat den som en sektion.
  */
-it('lägger itemlistan först i containerns navigation och behåller tretton rader', function () {
+it('lägger itemfliken först i containerns navigation och behåller tretton rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -399,7 +272,7 @@ it('lägger itemlistan först i containerns navigation och behåller tretton rad
 /*
  * Klart när: en användare utan åtkomst till containern får 403 på listan.
  */
-it('nekar en främling listan med 403', function () {
+it('nekar en främling itemfliken med 403', function () {
     withoutVite();
 
     [, , $container] = itemlistaKontext();
@@ -434,8 +307,8 @@ it('visar bara items inom omfånget och bär inget tal om de dolda', function ()
 
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Items/Index')
-        ->has('items', 1)
-        ->where('items.0.name', 'Motorn')
+        ->has('treeRows', 1)
+        ->has('treeRows.'.$motorn->ulid)
         ->missing('total')
         ->missing('meta')
     );
@@ -449,66 +322,21 @@ it('visar bara items inom omfånget och bär inget tal om de dolda', function ()
 });
 
 /*
- * Klart när: listan kostar ett konstant antal frågor oavsett antal items, mätt
- * med DB::listen.
- *
- * N+1-skyddet är `with(['category', 'createdByAccount', 'tags'])` i
- * App\Actions\Item\ListItems, som bars vidare oförändrat ur API:ets index()
- * (issue 13b § Beslut 10).
- */
-it('kostar ett konstant antal frågor oavsett antal items', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    foreach (range(1, 10) as $i) {
-        itemlistaItem($container, "Item $i", $anvandare);
-    }
-
-    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
-    // (issue 80, 477).
-    Carbon::setTestNow(now());
-
-    actingAs($anvandare);
-
-    $url = "/containers/{$container->ulid}/items";
-
-    $värm = fn () => get($url)->assertOk();
-
-    $tioItems = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 10));
-    });
-
-    // Tio nya items — omfånget växer med items, inte med frågor.
-    foreach (range(11, 20) as $i) {
-        itemlistaItem($container, "Item $i", $anvandare);
-    }
-
-    $tjugoItems = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 20));
-    });
-
-    expect($tjugoItems)->toBe($tioItems);
-
-    Carbon::setTestNow();
-});
-
-/*
- * Klart när: ett `read_only`-ägarkonto tillåter listning men ger `can.create`
+ * Klart när: ett `read_only`-ägarkonto tillåter läsning men ger `can.create`
  * falskt.
  *
  * Flaggan är presentation; grinden är `ContainerPolicy::createItem()`, som
  * nekar allt skrivande när ägarkontot är fryst (regel 4).
  */
-it('låter ett fryst ägarkonto lista men ger can.create falskt', function () {
+it('låter ett fryst ägarkonto se trädet men ger can.create falskt', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemlistaKontext(['status' => 'read_only']);
-    itemlistaItem($container, 'Motorn', $anvandare);
+    $item = itemlistaItem($container, 'Motorn', $anvandare);
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->has('items', 1)
+            ->has('treeRows.'.$item->ulid)
             ->where('can.create', false)
     );
 });
@@ -580,7 +408,8 @@ it('säger att containern är tom och aldrig att den kanske är det', function (
     $svar = actingAs($anvandare)->get("/containers/{$container->ulid}/items");
 
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('items', 0)
+        ->where('structure', [])
+        ->has('treeRows', 0)
         ->where('can.create', true)
     );
 
@@ -638,281 +467,6 @@ it('har varje item-nyckel', function () {
 });
 
 /*
- * Klart när: varje rad i itemlistan bär en härledd status.
- *
- * Statusen ligger BREDVID resursen (issue 92), samma linje som kategorinamnet:
- * `statuses` är itemets ULID → status, och `ItemResource` — som delas med
- * `/api` — bär inget `status`-fält. Förekomsten på masten är framtida och
- * räknas inte; den på impellern har förfallit och färgar både impellern och
- * motorn ovanför.
- */
-it('ger varje rad i itemlistan en härledd status bredvid resursen', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $motorn = itemlistaItem($container, 'Motorn', $anvandare);
-    $impellern = itemlistaItem($container, 'Impellern', $anvandare);
-    $masten = itemlistaItem($container, 'Masten', $anvandare);
-
-    itemlistaKant($motorn, $impellern);
-    itemlistaFörekomst($impellern, -1);
-    itemlistaFörekomst($masten, 30);
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('items', 3)
-            ->where("statuses.{$motorn->ulid}", ItemStatus::OVERDUE)
-            ->where("statuses.{$impellern->ulid}", ItemStatus::OVERDUE)
-            ->where("statuses.{$masten->ulid}", ItemStatus::OK)
-            ->missing('items.0.status')
-    );
-});
-
-/*
- * Klart när: en förekomst på ett item användaren inte når påverkar inte den
- * status hon ser.
- *
- * Mottagaren har en grant på motorn och ser därför motorn och dess ättlingar
- * och ingenting annat ([[ADR-0028 Åtkomst på itemnivå]] regel 3). Det hemliga
- * syskonet bär en förfallen förekomst, och den får inte färga motorn: raden
- * hon ser svarar på vad som hänger under DEN.
- */
-it('låter en förekomst utanför omfånget stå utan verkan på statusen', function () {
-    withoutVite();
-
-    [, , $container] = itemlistaKontext();
-
-    $motorn = itemlistaItem($container, 'Motorn');
-    $impellern = itemlistaItem($container, 'Impellern');
-    $hemlig = itemlistaItem($container, 'Hemlig impeller');
-
-    itemlistaKant($motorn, $impellern);
-    itemlistaFörekomst($hemlig, -1);
-
-    $mottagare = itemlistaMottagare($container, $motorn);
-
-    $svar = actingAs($mottagare)->get("/containers/{$container->ulid}/items");
-
-    $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('items', 2)
-        ->where("statuses.{$motorn->ulid}", ItemStatus::OK)
-        ->where("statuses.{$impellern->ulid}", ItemStatus::OK)
-    );
-
-    // Det dolda itemet nämns inte någonstans i svaret — varken dess ULID eller
-    // ett tal som antyder att det finns.
-    expect($svar->getContent())->not->toContain($hemlig->ulid);
-});
-
-/*
- * Klart när (issue 183): varje rad bär sitt EGET omslag bredvid resursen.
- *
- * `covers` är itemets ULID → `{ulid, hasThumb, chosen}` eller null, och ligger
- * BREDVID `ItemResource` — `/api` har inte bett om fältet och resursen rörs
- * inte (`missing('items.0.cover')`). Tre rader täcker de tre svaren: en med en
- * vald bild som har ett `thumb`-derivat, en med en automatisk bild UTAN
- * derivat, och en med bara ett dokument. `chosen` skiljer de två första åt
- * även när båda har en miniatyr (M36 · issue 310).
- *
- * Den valda bilden är den NYASTE av två — annars vore skillnaden mellan "vald"
- * och "äldst" osynlig i listvägen, precis som i enhetsprovet.
- */
-it('ger varje rad sitt eget omslag bredvid resursen', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $medThumb = itemlistaItem($container, 'Med thumb', $anvandare);
-    itemlistaBild($medThumb, 'gammal.jpg', false);
-    $vald = itemlistaBild($medThumb, 'ny.jpg', true);
-    $medThumb->cover_attachment_id = $vald->id;
-    $medThumb->save();
-
-    $utanDerivat = itemlistaItem($container, 'Utan derivat', $anvandare);
-    $utanThumb = itemlistaBild($utanDerivat, 'foto.jpg', false);
-
-    $baraDokument = itemlistaItem($container, 'Bara dokument', $anvandare);
-    itemlistaBild($baraDokument, 'manual.pdf', false, 'document');
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('items', 3)
-            ->where("covers.{$medThumb->ulid}.ulid", $vald->ulid)
-            ->where("covers.{$medThumb->ulid}.hasThumb", true)
-            ->where("covers.{$medThumb->ulid}.chosen", true)
-            ->where("covers.{$utanDerivat->ulid}.ulid", $utanThumb->ulid)
-            ->where("covers.{$utanDerivat->ulid}.hasThumb", false)
-            ->where("covers.{$utanDerivat->ulid}.chosen", false)
-            ->where("covers.{$baraDokument->ulid}", null)
-            ->missing('items.0.cover')
-    );
-});
-
-/*
- * Klart när (issue 183): containerns omslag används ALDRIG för en rad.
- *
- * Containern har en egen bild satt genom samma action som rutten använder,
- * men itemet har inga bilder — och då är radens svar null, inte containerns
- * foto. Utan `expect`-raden nedan hade provet varit grönt även om bilden
- * aldrig satts, och bevisat noll.
- */
-it('tar aldrig containerns omslag till en rad', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $containerbild = itemlistaContainerbild($anvandare, $container);
-
-    expect($container->refresh()->cover_attachment_id)->toBe($containerbild->id);
-
-    $item = itemlistaItem($container, 'Motorn', $anvandare);
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('items', 1)
-            ->where("covers.{$item->ulid}", null)
-    );
-});
-
-/*
- * Klart när (issue 183): träd- och kartläget betalar ingenting.
- *
- * `covers` är `[]` där, samma grind som `categories` och `statuses`: en yta
- * ingen ser ska inte kosta en fråga. Itemet har en bild — hade grinden saknats
- * hade fältet burit den.
- */
-it('skickar inga omslag i träd- och kartläget', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $item = itemlistaItem($container, 'Motorn', $anvandare);
-    itemlistaBild($item, 'foto.jpg');
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=tree")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('covers', [])
-    );
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('covers', [])
-    );
-});
-
-/*
- * Klart när: antalet frågor är konstant oavsett antalet rader.
- *
- * Det är issuens svåraste del, och det är DÄRFÖR filen mäter om det: raderna
- * nedan har både barn och förekomster, så en lösning som vandrade per rad
- * hade vuxit med trädet och inte bara med listan. Kanterna och förekomsterna
- * hämtas en gång per lista och slutningen sker i minnet.
- */
-it('kostar ett konstant antal frågor även när raderna har barn och förekomster', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $båten = itemlistaItem($container, 'Båten', $anvandare);
-    $motorn = itemlistaItem($container, 'Motorn', $anvandare);
-    $masten = itemlistaItem($container, 'Masten', $anvandare);
-    $impellern = itemlistaItem($container, 'Impellern', $anvandare);
-
-    itemlistaKant($båten, $motorn);
-    itemlistaKant($båten, $masten);
-    itemlistaKant($motorn, $impellern);
-    itemlistaFörekomst($impellern, -1);
-
-    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
-    // (issue 80, 477).
-    Carbon::setTestNow(now());
-
-    actingAs($anvandare);
-
-    $url = "/containers/{$container->ulid}/items";
-
-    $värm = fn () => get($url)->assertOk();
-
-    $fyraRader = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 4));
-    });
-
-    // Trettio rotitems till, vardera med ett barn som bär en förfallen
-    // förekomst: sextiofyra rader och sextiofyra underträd, samma frågor.
-    foreach (range(1, 30) as $i) {
-        $rot = itemlistaItem($container, "Rot $i", $anvandare);
-        $barn = itemlistaItem($container, "Barn $i", $anvandare);
-
-        itemlistaKant($rot, $barn);
-        itemlistaFörekomst($barn, -1);
-    }
-
-    $sextiofyraRader = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 64));
-    });
-
-    expect($sextiofyraRader)->toBe($fyraRader);
-
-    Carbon::setTestNow();
-});
-
-/*
- * Klart när (issue 183): omslaget kostar ett konstant antal frågor oavsett
- * antalet rader.
- *
- * Samma mätning som provet ovan, men varje rad bär två bilder och ett derivat:
- * en lösning som vandrade per rad — en fråga per item, eller ett derivat
- * uppslaget i taget — hade vuxit med listan. Bilderna hämtas en gång och valet
- * sker i minnet (App\Actions\Item\ResolveItemCover::forItems()).
- */
-it('kostar ett konstant antal frågor även när raderna har bilder', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemlistaKontext();
-
-    $fyra = [
-        itemlistaItem($container, 'Båten', $anvandare),
-        itemlistaItem($container, 'Motorn', $anvandare),
-        itemlistaItem($container, 'Masten', $anvandare),
-        itemlistaItem($container, 'Impellern', $anvandare),
-    ];
-
-    foreach ($fyra as $item) {
-        itemlistaBild($item, 'ett.jpg', false);
-        itemlistaBild($item, 'tva.jpg', true);
-    }
-
-    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
-    // (issue 80, 477).
-    Carbon::setTestNow(now());
-
-    actingAs($anvandare);
-
-    $url = "/containers/{$container->ulid}/items";
-
-    $värm = fn () => get($url)->assertOk();
-
-    $fyraRader = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 4));
-    });
-
-    // Sextio rader till, vardera med två bilder och ett derivat: sextiofyra
-    // rader, samma frågor.
-    foreach (range(1, 60) as $i) {
-        $item = itemlistaItem($container, "Rad $i", $anvandare);
-        itemlistaBild($item, 'ett.jpg', false);
-        itemlistaBild($item, 'tva.jpg', true);
-    }
-
-    $sextiofyraRader = itemlistaFrågor($värm, function () use ($url) {
-        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 64));
-    });
-
-    expect($sextiofyraRader)->toBe($fyraRader);
-
-    Carbon::setTestNow();
-});
-
-/*
  * Klart när: statusens text ligger i `lang/` och inte i en `.vue`-fil.
  *
  * Ordet är mockupens, och uppslaget ligger i `item.index.status_*` — en text i
@@ -966,7 +520,7 @@ it('räcker varje rad sitt eget omslag', function () {
  * som behöll en egen rad, en status eller en tagglista hade sett rätt ut vid
  * en blick och ändå burit en yta som flyttat eller tagits bort.
  */
-it('ritar listan med ItemRow och behåller listformen i övrigt', function () {
+it('ritar listraderna med ItemRow och behåller listformen i övrigt', function () {
     $raden = itemlistaListblock();
 
     expect($raden)->toContain('<ItemRow');

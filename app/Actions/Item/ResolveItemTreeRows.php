@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Kolumnerna till trädtabellen — item-ULID → `{category, tags, documents,
- * tasks, updated_at, icon, icon_color}` för exakt de items som står i trädet,
- * se [[ADR-0058 Trädet som tabell]] § 1, 3 och 4, [[ADR-0060 Itemets ikon]]
- * § 6 och 10 och issue 292 och 304.
+ * tasks, updated_at, icon, icon_color, cover}` för exakt de items som står i
+ * trädet, se [[ADR-0058 Trädet som tabell]] § 1, 3 och 4, [[ADR-0060 Itemets
+ * ikon]] § 6 och 10, [[ADR-0067 Itemfliken utan listläge]] § 4 och issue 292,
+ * 304 och 326.
  *
  * **Räkningen görs på trädet och aldrig på containern.** Trädet kommer ur
  * App\Actions\Item\ResolveItemTree och är redan omfångsfiltrerat
@@ -34,13 +35,23 @@ use Illuminate\Support\Facades\DB;
  * SoftDeletes' globala scope, och ett mjukraderat schema med sina förekomster
  * likaså — `deleted_at` prövas uttryckligen i joinen nedan.
  *
+ * **Omslaget är listans, med listans form** (ADR-0067 § 4). `cover` är
+ * `{ulid, hasThumb, chosen}` eller `null`, ur
+ * App\Actions\Item\ResolveItemCover::thumbnails() — samma upplösning som
+ * itemlistan använde innan läget försvann. Den räknas på exakt de items som
+ * står i trädet, så ett item utanför omfånget aldrig får en bild, och
+ * containerns eget omslag används aldrig för en rad.
+ *
  * **Frågekostnaden är konstant**: itemen, deras kategorier och taggar, en
- * grupperad räkning för bilagorna och en för förekomsterna — fem frågor
- * oavsett hur många items trädet bär. Räknarna sker i databasen och aldrig
- * som en vandring per rad, samma skäl som i ResolveItemTree.
+ * grupperad räkning för bilagorna, en för förekomsterna och omslagets bilder
+ * med sina derivat — oavsett hur många items trädet bär. Räknarna sker i
+ * databasen och aldrig som en vandring per rad, samma skäl som i
+ * ResolveItemTree.
  */
 class ResolveItemTreeRows
 {
+    public function __construct(private readonly ResolveItemCover $resolveItemCover) {}
+
     /**
      * @return array<string, array{
      *     category: string|null,
@@ -50,6 +61,7 @@ class ResolveItemTreeRows
      *     updated_at: string,
      *     icon: string|null,
      *     icon_color: string|null,
+     *     cover: array{ulid: string, hasThumb: bool, chosen: bool}|null,
      * }>
      */
     public function handle(Container $container, ItemTree $tree): array
@@ -68,7 +80,7 @@ class ResolveItemTreeRows
             ->with(['category', 'tags'])
             ->orderBy('name')
             ->orderBy('id')
-            ->get(['id', 'ulid', 'name', 'category_id', 'updated_at', 'icon', 'icon_color']);
+            ->get(['id', 'ulid', 'name', 'category_id', 'updated_at', 'icon', 'icon_color', 'cover_attachment_id']);
 
         if ($items->isEmpty()) {
             return [];
@@ -78,6 +90,7 @@ class ResolveItemTreeRows
 
         $documents = $this->documentsByItem($itemIds);
         $tasks = $this->tasksByItem($itemIds);
+        $covers = $this->resolveItemCover->thumbnails($items);
 
         $rows = [];
 
@@ -90,6 +103,7 @@ class ResolveItemTreeRows
                 'updated_at' => $item->updated_at->toIso8601String(),
                 'icon' => $item->icon,
                 'icon_color' => $item->icon_color,
+                'cover' => $covers[$item->id] ?? null,
             ];
         }
 

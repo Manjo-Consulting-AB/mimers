@@ -141,8 +141,13 @@ use Inertia\Response;
 class ItemController extends Controller
 {
     /**
-     * GET /containers/{container}/items — containerns itemlista, sorterad på
-     * namn, med filtren ur querysträngen (issue 59a § Beslut 1–7).
+     * GET /containers/{container}/items — containerns itemflik, med filtren ur
+     * querysträngen (issue 59a § Beslut 1–7).
+     *
+     * **Sidan svarar med trädet sedan issue 326** · [[ADR-0067 Itemfliken utan
+     * listläge]] § 1, 2 och 8. Listläget är borta: raderna hämtas inte längre,
+     * propparna `items`, `categories` och `covers` finns inte, och `statuses`
+     * räknas bara i kartläget. Se `view()` nedan för lägena.
      *
      * **Rutten flyttade hit i issue 89** · [[ADR-0039 Containerns översikt]].
      * Ingenting i metoden ändrades av flytten: urvalet, filtren och propformerna
@@ -198,21 +203,23 @@ class ItemController extends Controller
      * inget filtervärde lägger till en fråga — uppslagen sker i minnet mot de
      * redan hämtade listorna.
      *
-     * **Fliken har tre lägen sedan issue 154 och 157** ([[ADR-0046 Containerns
-     * karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]]): listan, som
-     * är den här metoden oförändrad, *Träd*, som ritar containerns struktur,
-     * och *Karta*, som ritar en mitt med föräldrar, barn och relaterade runt
-     * sig. Läget står i querysträngen (`?view=tree`, `?view=map`, se `view()`
-     * nedan) och filtrerar ingenting: trädet och kartan är containern som
-     * användaren når, medan filtret hör till listan.
-     * Strukturen och kartan hämtas därför BARA i sina egna lägen — den som
-     * öppnar listan ska inte betala två frågor för en yta hon inte ser — och
-     * båda kostar sina två oavsett hur många items containern har
-     * (App\Actions\Item\ResolveItemTree och App\Actions\Item\ResolveItemMap).
-     * Trädläget bär sedan issue 292 även kolumnerna ur
-     * App\Actions\Item\ResolveItemTreeRows — fem frågor för hela trädet,
-     * oavsett hur många noder det har, och ingen av dem ställs i list- eller
-     * kartläget.
+     * **Fliken har två lägen sedan issue 326** · [[ADR-0067 Itemfliken utan
+     * listläge]] § 1, 2 och 8: *Träd*, som ritar containerns struktur, och
+     * *Karta*, som ritar en mitt med föräldrar, barn och relaterade runt sig.
+     * Listläget är borta, och `?view=list`, `?view=tree`, ett okänt läge och
+     * inget läge alls ger trädet — ett bokmärke är inte ett misstag. Läget står
+     * i querysträngen (`?view=map`, se `view()` nedan) och filtrerar ingenting:
+     * trädet och kartan är containern som användaren når, och filtret gäller
+     * dem båda.
+     * Strukturen och kartan hämtas därför BARA i sina egna lägen — den yta
+     * ingen ser ska inte kosta en fråga — och båda kostar sina två oavsett hur
+     * många items containern har (App\Actions\Item\ResolveItemTree och
+     * App\Actions\Item\ResolveItemMap). Trädläget bär sedan issue 292 även
+     * kolumnerna ur App\Actions\Item\ResolveItemTreeRows — ett konstant antal
+     * frågor för hela trädet, oavsett hur många noder det har, och ingen av dem
+     * ställs i kartläget. Sedan issue 326 bär raden dessutom itemets omslag,
+     * ur samma upplösning som listan använde
+     * (App\Actions\Item\ResolveItemCover::thumbnails()).
      *
      * `can.create` är `ContainerPolicy::createItem()` — samma grind som
      * `Api\ItemController::store()` prövar för ett toppnivå-item, och bara en
@@ -252,7 +259,6 @@ class ItemController extends Controller
         ListTags $listTags,
         ActiveContainer $activeContainer,
         ItemStatus $itemStatus,
-        ResolveItemCover $resolveItemCover,
         CreateTarget $createTarget,
         ResolveItemTree $resolveItemTree,
         ResolveItemTreeRows $resolveItemTreeRows,
@@ -276,25 +282,15 @@ class ItemController extends Controller
 
         $view = $this->view($request);
 
-        // Listan och dess statusar ritas BARA i listläget (issue 154), och
-        // därför hämtas de bara där — samma linje som `structure` nedan: en
-        // yta ingen ser ska inte kosta en fråga. Trädläget läser varken
-        // `items`, `statuses` eller `categories` (Index.vue ritar trädet ur
-        // `structure`), och en tom lista är det svar vyn ska se: propparna
-        // finns kvar med sina tomma värden i stället för att försvinna.
+        // Sidan hämtar inte längre listans rader (issue 326 · [[ADR-0067
+        // Itemfliken utan listläge]] § 8). `ListItems` anropas bara när ett
+        // filter är satt — i trädläget för träffarna och i kartläget för
+        // träfflistan — precis som tidigare i de två lägena.
         //
         // Tag- och kategorilistorna ovan hämtas i BÅDA lägena: de är
         // filterradens innehåll OCH det `filter()` löser upp de inskickade
         // ULID:na mot (Beslut 3 och 5), och `filter`-proppen bygger växelns
-        // adresser i vyn. Grinden gäller därför bara raderna och deras
-        // statusar, inte uppslagen.
-        $items = $view === 'list'
-            ? $listItems->handle($user, $container, [
-                'tags' => $filter['tags'],
-                'category' => $filter['category'],
-                'q' => $filter['q'],
-            ])
-            : collect();
+        // adresser i vyn.
 
         // Kartan (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1): mitten står
         // i querysträngen som `?focus=`, och upplösningen svarar med mitten och
@@ -312,19 +308,15 @@ class ItemController extends Controller
             : null;
 
         // Statusen hör till det som RITAS ([[ADR-0040 Underträdets summor]]
-        // och issue 92): listans rader i listläget, kartans mitt och noder i
-        // kartläget. Samma klass, samma regel och samma två frågor — det är
-        // avgränsningen som skiljer, och den är kartans: en nod utanför
+        // och issue 92): kartans mitt och noder i kartläget. Sedan issue 326 ·
+        // [[ADR-0067 Itemfliken utan listläge]] § 8 räknas den BARA där —
+        // trädet ritar inga statusar och svarar med en tom tabell, samma
+        // avgränsning som förut och samma två frågor i kartan: en nod utanför
         // omfånget ritas inte och får därför ingen status att räknas i.
         // `drawn` bär mitten (när den är ett item) och bara de ritade noderna.
-        //
-        // Trädläget ritar inga statusar och betalar därför inte ens de två
-        // fasta frågorna.
-        $statuses = match ($view) {
-            'list' => $itemStatus->forItems($container, $user, $items),
-            'map' => $itemStatus->forItems($container, $user, array_values($map['drawn'])),
-            default => [],
-        };
+        $statuses = $view === 'map'
+            ? $itemStatus->forItems($container, $user, array_values($map['drawn']))
+            : [];
 
         // Mitten, för plusknappens mål och mittens menyrader nedan. Modellen
         // kommer ur kartans upplösning — en fråga som bara valde id, ulid och
@@ -415,41 +407,19 @@ class ItemController extends Controller
 
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
-            'items' => ItemResource::collection($items)->resolve($request),
-            // `categories` är ULID → namn för RADERNA (57a § Beslut 1 och 6) —
-            // ett annat uppslag än `categoryTree` nedan, som är filterradens
-            // väljare och bär hela trädet. Raderna finns bara i listläget, och
-            // uppslaget följer dem.
-            'categories' => $view === 'list' ? $this->categoryNames($items) : [],
 
             // Statusen är HÄRLEDD och ligger BREDVID resursen (issue 92 ·
-            // [[ADR-0040 Underträdets summor]]), samma linje som
-            // `categoryNames()` ovan: `ItemResource` delas med `/api`, som
-            // inte har bett om fältet, och `app/Http/Resources/**` rörs inte.
-            // `item` har ingen `status`-kolumn och får ingen — det som går att
-            // räkna fram lagras inte.
+            // [[ADR-0040 Underträdets summor]]): `ItemResource` delas med
+            // `/api`, som inte har bett om fältet, och `app/Http/Resources/**`
+            // rörs inte. `item` har ingen `status`-kolumn och får ingen — det
+            // som går att räkna fram lagras inte.
             //
-            // Två frågor per lista, oavsett antal rader: kanterna och
+            // Två frågor i kartan, oavsett antal noder: kanterna och
             // förekomsterna hämtas en gång och slutningen sker i minnet, se
-            // App\Support\Item\ItemStatus. En vandring per rad vore den N+1
-            // hela åtkomstlösningen byggdes för att undvika. Se `$statuses`
-            // ovan för vad som räknas i vilket läge.
+            // App\Support\Item\ItemStatus. Se `$statuses` ovan för vad som
+            // räknas i vilket läge; trädet svarar med en tom tabell.
             'statuses' => $statuses,
 
-            // Radens eget omslag (issue 183 · [[ADR-0050 Desktopdesignen]]),
-            // samma linje som `statuses` ovan: upplösningen ligger BREDVID
-            // `ItemResource`, som delas med `/api` och inte har bett om
-            // fältet. Formen är item-ULID → `{ulid, hasThumb}` eller null, och
-            // uppslaget är detsamma för alla rader.
-            //
-            // En fråga för hela listan, oavsett antal rader — bilderna hämtas
-            // en gång och valet sker i minnet, se
-            // App\Actions\Item\ResolveItemCover::forItems(). Containerns eget
-            // omslag (`coverAttachment` ovan) används aldrig för en rad.
-            //
-            // Träd- och kartläget ritar inga rader och betalar därför
-            // ingenting, samma grind som `categories` ovan.
-            'covers' => $view === 'list' ? $this->covers($items, $resolveItemCover) : [],
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [
@@ -481,9 +451,10 @@ class ItemController extends Controller
             'create' => $createTarget->forContainer($user, $container, $center),
 
             // Läget i itemfliken (issue 154 och 157 · [[ADR-0046 Containerns
-            // karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]]).
-            // *Lista* är förvalet och den här sidan som den var; *Träd* ritar
-            // containerns struktur; *Karta* ritar en mitt med sina grannar.
+            // karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]], två
+            // lägen sedan issue 326 · [[ADR-0067 Itemfliken utan listläge]]).
+            // *Träd* är förvalet och ritar containerns struktur; *Karta* ritar
+            // en mitt med sina grannar.
             // Läget står i querysträngen och ingenstans annat — vyn håller
             // inget eget tillstånd — och därför är proppen svaret på samma
             // fråga som `structure` och `map` nedan.
@@ -501,7 +472,7 @@ class ItemController extends Controller
             // träd utan fältet — `structure()` lägger det bara på begäran, så
             // panelens svar är ordagrant det det var.
             //
-            // `null` och inte en tom lista när läget är listan: en tom lista
+            // `null` och inte en tom lista utanför trädläget: en tom lista
             // är ett svar servern HAR gett — "hon når ingenting" — och vyn
             // ska kunna skilja det från "inte hämtad" (samma form och samma
             // skäl som `history`-proppen i show()).
@@ -1688,27 +1659,26 @@ class ItemController extends Controller
 
     /**
      * Läget i itemfliken ur querysträngen — issue 154 ·
-     * [[ADR-0046 Containerns karta]].
+     * [[ADR-0046 Containerns karta]], två lägen sedan issue 326 ·
+     * [[ADR-0067 Itemfliken utan listläge]] § 1 och 2.
      *
-     * `list` är dagens lista och förvalet; `tree` är containerns struktur ritad
-     * som träd; `map` är en mitt med föräldrar, barn och relaterade runt sig
-     * (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1). Läget är en LÄNK och
-     * inget tillstånd i vyn, samma konstruktion som filtret i issue 59a
-     * § Beslut 1 och förekomsten i issue 95: en flik man kan länka till är en
-     * flik man kan dela, och den överlever en omladdning därför att servern
-     * läser samma sträng igen.
+     * `tree` är containerns struktur ritad som träd och förvalet; `map` är en
+     * mitt med föräldrar, barn och relaterade runt sig (issue 296 ·
+     * [[ADR-0059 Kartan med en mitt]] § 1). Läget är en LÄNK och inget
+     * tillstånd i vyn, samma konstruktion som filtret i issue 59a § Beslut 1
+     * och förekomsten i issue 95: en flik man kan länka till är en flik man
+     * kan dela, och den överlever en omladdning därför att servern läser samma
+     * sträng igen.
      *
-     * **Ett okänt värde är listan, aldrig ett fel** — samma linje som
+     * **Ett okänt värde är trädet, aldrig ett fel** — samma linje som
      * `filter()` ovan och av samma skäl: den som klickade på en gammal länk är
-     * inte här. `?view[]=…`, `?view=` och skräp läses som "inget läge".
+     * inte här. `list`, `?view[]=…`, `?view=` och skräp läses som trädet.
      *
      * Ingen FormRequest: värdet är en sträng ur adressen och regeln är en rad.
      */
     private function view(Request $request): string
     {
-        $view = $request->query('view');
-
-        return is_string($view) && in_array($view, ['list', 'tree', 'map'], true) ? $view : 'list';
+        return $request->query('view') === 'map' ? 'map' : 'tree';
     }
 
     /**
@@ -1953,36 +1923,6 @@ class ItemController extends Controller
         }
 
         return $names;
-    }
-
-    /**
-     * Radens omslag, nycklad på itemets ULID (issue 183 ·
-     * [[ADR-0050 Desktopdesignen]]).
-     *
-     * **Formen bor i App\Actions\Item\ResolveItemCover::thumbnails()** sedan
-     * issue 229: uppgiftslistornas rader bär samma `{ulid, hasThumb}`, och två
-     * formuleringar av den hade glidit isär. Här nycklas svaret bara om från
-     * item-`id` till item-`ulid`, vilket är vad `covers`-proppen alltid varit
-     * nycklad på — webbens rad slår upp sitt omslag med itemets ULID.
-     *
-     * En rad utan bild svarar null i stället för att saknas: vyns uppslag är
-     * detsamma för alla rader. Containerns omslag används aldrig — raden bär
-     * sitt eget.
-     *
-     * @param  Collection<int, Item>  $items
-     * @return array<string, array{ulid: string, hasThumb: bool}|null>
-     */
-    private function covers(Collection $items, ResolveItemCover $resolveItemCover): array
-    {
-        $uppslaget = $resolveItemCover->thumbnails($items);
-
-        $covers = [];
-
-        foreach ($items as $item) {
-            $covers[$item->ulid] = $uppslaget[$item->id];
-        }
-
-        return $covers;
     }
 
     /**
