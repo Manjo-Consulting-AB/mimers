@@ -6,6 +6,8 @@ Tillagd 2026-10-19, efter v0.24.1. Det här ingår: itemflikens listläge tas bo
 
 **Ordningen:** 327 bygger på 326.
 
+**Releasen:** M43 rullas ut tillsammans med [[M44 Fynd efter v0.24.1]] i samma release, när båda är stängda.
+
 **Detta ingår inte:** `/api/containers/{container}/items`, itemets relationsflik med sin egen växel, översiktens itempanel och `ItemRow`.
 
 ---
