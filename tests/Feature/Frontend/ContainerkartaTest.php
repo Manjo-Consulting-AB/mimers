@@ -223,7 +223,9 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
 
     preg_match_all("/key: '(\w+)'/", $vy, $träffar);
 
-    expect($träffar[1])->toBe(['list', 'tree', 'map']);
+    // Två lägen sedan issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 1:
+    // trädet är förvalet och kartan det andra.
+    expect($träffar[1])->toBe(['tree', 'map']);
 });
 
 /*
@@ -1126,7 +1128,7 @@ it('förklarar de fyra slagen med gruppernas total', function () {
  *
  * Servern skickar bara de noder som ritas, plus gruppens total, och vyn räknar
  * skillnaden. Målet är `overflowHref` — relationsfliken kring ett item och
- * listläget kring containern.
+ * trädet kring containern ([[ADR-0067 Itemfliken utan listläge]] § 7).
  */
 it('visar +N till när gruppen är större än antalet noder', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
@@ -1352,14 +1354,15 @@ it('låter träffarna centrera kartan med filtret kvar och markerar mitten', fun
 });
 
 /*
- * Klart när: *Show all N in list* visas bara när `total` är större än antalet
- * noder och leder till listläget med samma filter, och ett filter utan
- * träffar ritar `item.index.filter_empty`.
+ * Klart när (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 7): *Show
+ * all N in tree* visas bara när `total` är större än antalet noder och leder
+ * till trädet med samma filter, och ett filter utan träffar ritar
+ * `item.index.filter_empty`.
  *
  * Tröskeln är serverns `total` mot antalet skickade noder — vyn räknar inget
- * själv — och listadressen skriver ingen `view`, som växelns *Lista*.
+ * själv — och trädadressen skriver ingen `view`, som växelns *Träd*.
  */
-it('visar Show all N in list vid fler träffar och den tomma texten utan träffar', function () {
+it('visar Show all N in tree vid fler träffar och den tomma texten utan träffar', function () {
     $traffar = kartavyKod('components/ItemMapHits.vue');
 
     expect($traffar)->toContain(
@@ -1367,8 +1370,12 @@ it('visar Show all N in list vid fler träffar och den tomma texten utan träffa
     )
         ->and($traffar)->toContain('v-if="hasMore"')
         ->and($traffar)->toContain("t('item.map.show_all', { count: hits.total })")
-        ->and($traffar)->toContain('const listHref = computed(')
+        ->and($traffar)->toContain('const treeHref = computed(')
+        ->and($traffar)->toContain(':href="treeHref"')
         ->and($traffar)->toContain("t('item.index.filter_empty', { filters: summary })");
+
+    // Ordet säger *tree*, och katalogen bär samma ord.
+    expect(Lang::get('ui.item.map.show_all', ['count' => 3], 'en'))->toBe('Show all 3 in tree');
 });
 
 /*

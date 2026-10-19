@@ -515,7 +515,7 @@ it('säger att containern är tom utan filter och räknar upp filtren med', func
 
     expect($vy)->toContain("t('item.index.empty')")
         ->toContain("t('item.index.filter_empty', { filters: summary })")
-        ->toContain('items.length === 0 && !hasFilter');
+        ->toContain('structure !== null && structure.length === 0 && hasFilter');
 });
 
 /*

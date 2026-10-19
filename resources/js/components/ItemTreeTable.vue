@@ -30,11 +30,26 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `container` och ritas med `ItemIcon` i `tile` — samma kolumn och storlek som
  * förut. Utan ett val ritar `fallback="container"` lådan, som i dag.
  *
- * **Itemraden bär itemets ikon** ([[ADR-0060 Itemets ikon]] § 6 och 10).
- * `ItemIcon` med `tile` står mellan fällknappen — eller platshållaren för
- * ett löv — och namnet, i storleken 20. Ikonen kommer ur radens celler
- * tillsammans med de övriga kolumnerna, så vyn ritar den utan att slå upp
- * något själv.
+ * **Itemraden bär listans ruta** (issue 327 · [[ADR-0067 Itemfliken utan
+ * listläge]] § 3, [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 6). Rutan står mellan fällknappen — eller platshållaren för
+ * ett löv — och namnet och ritar det första som finns, i listans ordning:
+ *
+ *   1. en VALD omslagsbild med miniatyr (`cover.hasThumb && cover.chosen`),
+ *   2. itemets IKON,
+ *   3. den AUTOMATISKA omslagsbilden med miniatyr (`cover.hasThumb`),
+ *   4. den grå rutan med den neutrala `item`-ikonen.
+ *
+ * Ett val slår en gissning: den automatiska bilden är systemets gissning,
+ * ikonen och den valda bilden är användarens val. Bilden är 32 px — lika stor
+ * som ikonens ruta, så att raderna inte blir högre — och ritas som en `<img>`
+ * mot `/files/{ulid}?variant=thumb` med `alt=""` ([[ADR-0019 Filleverans]]).
+ * `hasThumb` säger att derivatet finns, och en bild utan derivat räknas som
+ * ingen bild: en `<img>` mot en variant som inte finns är en trasig bild
+ * (issue 61b § Beslut 1). Ikonen ritas med `ItemIcon` i `tile` och storleken
+ * 20, och den kommer ur radens celler tillsammans med de övriga kolumnerna,
+ * så vyn slår inte upp något själv. Rutan ligger i namncellen och göms aldrig
+ * under `md:`; rotraden ritar containerns ikon som förut.
  *
  * **Noderna är förekomster och inte items**, samma regel som i
  * `ItemStructureTree.vue`: ett item med två föräldrar står på båda ställena.
@@ -82,8 +97,10 @@ const props = defineProps({
     nodes: { type: Array, required: true },
     /*
      * Item-ULID → `{category, tags, documents, tasks, updated_at, icon,
-     * icon_color}`, ur App\Actions\Item\ResolveItemTreeRows. Samma form som
-     * sidans `treeRows`-propp; vyn räknar ingenting själv.
+     * icon_color, cover}`, ur App\Actions\Item\ResolveItemTreeRows. Samma
+     * form som sidans `treeRows`-propp; vyn räknar ingenting själv. `cover`
+     * är `{ulid, hasThumb, chosen}` eller null (issue 326 ·
+     * [[ADR-0067 Itemfliken utan listläge]] § 4).
      */
     treeRows: { type: Object, default: () => ({}) },
     containerUlid: { type: String, required: true },
@@ -195,7 +212,12 @@ function isMatch(node) {
 </script>
 
 <template>
-    <table v-if="nodes.length > 0" class="w-full border-collapse text-left">
+    <!--
+        Tabellen ritas även utan noder: rotraden är containerns egen rad och
+        står kvar för en tom container ([[ADR-0067 Itemfliken utan listläge]]
+        § 6). Den tomma meningen under den ägs av sidan.
+    -->
+    <table class="w-full border-collapse text-left">
         <thead>
             <tr class="border-b border-border">
                 <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
@@ -291,15 +313,50 @@ function isMatch(node) {
                         <span v-else class="inline-block min-w-11 shrink-0" aria-hidden="true"></span>
 
                         <!--
-                            Itemets ikon mellan fällknappen (eller platshållaren)
-                            och namnet ([[ADR-0060 Itemets ikon]] § 6 och 10).
-                            Ett item utan ikon ritar den neutrala i samma ruta.
+                            Rutan mellan fällknappen (eller platshållaren) och
+                            namnet ([[ADR-0067 Itemfliken utan listläge]] § 3).
+                            DEN valda bilden går först: ett uttryckligt val
+                            slår ikonen.
+                        -->
+                        <img
+                            v-if="cells(row.node).cover?.hasThumb && cells(row.node).cover.chosen"
+                            :src="`/files/${cells(row.node).cover.ulid}?variant=thumb`"
+                            alt=""
+                            class="h-8 w-8 shrink-0 rounded border border-slate-200 object-cover"
+                        >
+
+                        <!--
+                            Ikonen står före den AUTOMATISKA bilden — en vald
+                            ikon skyms inte av ett foto som råkar vara äldst
+                            (ADR-0062 § 6).
                         -->
                         <ItemIcon
+                            v-else-if="cells(row.node).icon"
                             :name="cells(row.node).icon"
                             :color="cells(row.node).icon_color"
                             :size="20"
                             tile
+                            class="shrink-0"
+                        />
+
+                        <!--
+                            Den automatiska bilden, när ikonen saknas. Utan
+                            derivat ritas den neutrala rutan i stället för en
+                            `<img>` mot en variant som inte finns (issue 61b
+                            § Beslut 1).
+                        -->
+                        <img
+                            v-else-if="cells(row.node).cover?.hasThumb"
+                            :src="`/files/${cells(row.node).cover.ulid}?variant=thumb`"
+                            alt=""
+                            class="h-8 w-8 shrink-0 rounded border border-slate-200 object-cover"
+                        />
+
+                        <UiIcon
+                            v-else
+                            name="item"
+                            :size="20"
+                            tile="neutral"
                             class="shrink-0"
                         />
 

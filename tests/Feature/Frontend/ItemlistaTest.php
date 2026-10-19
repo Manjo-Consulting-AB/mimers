@@ -99,25 +99,6 @@ function itemlistaMottagare(Container $container, ?Item $item = null, string $ni
 }
 
 /**
- * Listblocket i Index.vue — från `<ul v-else` till första `</ul>`.
- *
- * Raden prövas mot blocket och inte mot hela filen: docblocken ovan räknar upp
- * ord och proppar som raden inte får bära (som `container.cover` och
- * `statuses`), och en kontroll mot hela filen hade fällt på dem i stället för
- * på raden.
- */
-function itemlistaListblock(): string
-{
-    $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
-
-    preg_match('#<ul v-else.*?</ul>#s', $vy, $träff);
-
-    expect($träff[0] ?? '')->not->toBe('', 'listblocket finns inte i Index.vue');
-
-    return $träff[0];
-}
-
-/**
  * Index.vue med kommentarerna borttagna.
  *
  * Ordningskontrollerna nedan letar efter markup, och docblocken räknar upp
@@ -495,56 +476,21 @@ it('har statusens text i lang och inte i vyn', function () {
 });
 
 /*
- * Klart när (issue 212): raden ritar itemets EGET omslag.
- *
- * **Omslagsregeln flyttade till `ItemRow` i issue 285** · [[M32
- * Formspråket]]: formen `{ulid, hasThumb}` och reservikonen prövas i
- * tests/Feature/Frontend/ItemradTest.php. Här står det listan äger — att
- * `covers` följer med varje rad, nycklat på itemets ULID — och att containerns
- * eget omslag aldrig lånas in i listan.
+ * Rutan i itemfliken prövas sedan issue 327 i
+ * tests/Feature/Frontend/ItemtradTest.php: listläget försvann och rutan
+ * flyttade till trädets rad ([[ADR-0067 Itemfliken utan listläge]] § 3).
  */
-it('räcker varje rad sitt eget omslag', function () {
-    $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
-
-    expect($vy)->toContain('covers: { type: Object, required: true }');
-    expect($vy)->toContain(':cover="covers[item.ulid]"');
-
-    expect($vy)->not->toContain('container.cover');
-});
-
-/*
- * Klart när (issue 285): itemlistan ritar samma `ItemRow` som översikten, och
- * listans egen markup är oförändrad i övrigt.
- *
- * Kontrollerna mot det borttagna är lika viktiga som de mot det nya: en lista
- * som behöll en egen rad, en status eller en tagglista hade sett rätt ut vid
- * en blick och ändå burit en yta som flyttat eller tagits bort.
- */
-it('ritar listraderna med ItemRow och behåller listformen i övrigt', function () {
-    $raden = itemlistaListblock();
-
-    expect($raden)->toContain('<ItemRow');
-    expect($raden)->toContain('v-for="item in items"');
-    expect($raden)->toContain(':item="item"');
-
-    expect($raden)->not->toContain('<Link');
-    expect($raden)->not->toContain('item.manufacturer');
-    expect($raden)->not->toContain('item.model');
-    expect($raden)->not->toContain('categories[item.category]');
-    expect($raden)->not->toContain('statuses[item.ulid]');
-    expect($raden)->not->toContain('<ItemTagList');
-});
 
 /*
  * Klart när (issue 291 · [[ADR-0058 Trädet som tabell]] § 7): rubriken,
- * *New item* och växeln står på en rad, i den ordningen, i alla tre lägena.
+ * *New item* och växeln står på en rad, i den ordningen, i båda lägena.
  *
  * Raden ritas en gång och utanför lägesgrenarna — det är därför den gäller
- * alla tre — och provet läser därför markupen. En rad som låg inuti
- * listgrenen hade gett rätt ordning i listan och ingen rad alls i trädet och
- * kartan, och en kontroll mot de tre svaren hade inte kunnat se skillnaden.
+ * båda — och provet läser därför markupen. En rad som låg inuti trädgrenen
+ * hade gett rätt ordning i trädet och ingen rad alls i kartan, och en kontroll
+ * mot de två svaren hade inte kunnat se skillnaden.
  */
-it('ställer rubriken, New item och växeln på en rad i alla tre lägena', function () {
+it('ställer rubriken, New item och växeln på en rad i båda lägena', function () {
     $vy = itemlistaKod();
 
     $start = strpos($vy, '<div class="mt-6 flex flex-wrap items-center gap-3">');
@@ -570,33 +516,34 @@ it('ställer rubriken, New item och växeln på en rad i alla tre lägena', func
     // *New item* ritas bara när hon får skapa (57b § Beslut 2).
     expect($huvud)->toContain('v-if="can.create"');
 
-    // Huvudet står före lägesgrenen, alltså också i träd- och kartläget.
-    expect($start)->toBeLessThan(strpos($vy, '<template v-if="view === \'list\'">'));
+    // Huvudet står före lägesgrenen, alltså också i kartläget.
+    expect($start)->toBeLessThan(strpos($vy, '<section v-if="view === \'tree\'"'));
 });
 
 /*
  * Klart när (issue 293 · [[ADR-0058 Trädet som tabell]] § 7 och issue 299 ·
- * [[ADR-0059 Kartan med en mitt]] § 10): filterraden ritas i alla tre lägena.
+ * [[ADR-0059 Kartan med en mitt]] § 10): filterraden ritas i båda lägena.
  *
  * Provet flyttade hit i issue 293: fram till dess hörde raden bara till
  * listan. Den ritas en gång och utanför lägesgrenarna — en rad inuti
- * listgrenen hade gett rätt svar i listan och ingen rad alls i trädet.
- * Kartläget fick raden i issue 299, då filtret började välja mitt.
+ * trädgrenen hade gett rätt svar i trädet och ingen rad alls i kartan.
+ * Kartläget fick raden i issue 299, då filtret började välja mitt, och
+ * listläget försvann i issue 327 ([[ADR-0067 Itemfliken utan listläge]] § 1).
  */
-it('ritar filterraden i alla tre lägena', function () {
+it('ritar filterraden i båda lägena', function () {
     $vy = itemlistaKod();
 
-    $lista = strpos($vy, '<template v-if="view === \'list\'">');
-    $trad = strpos($vy, '<section v-else-if="view === \'tree\'"');
+    $trad = strpos($vy, '<section v-if="view === \'tree\'"');
+    $karta = strpos($vy, '<section v-else class="mt-6">');
 
-    expect($lista)->not->toBeFalse()
-        ->and($trad)->toBeGreaterThan((int) $lista);
+    expect($trad)->not->toBeFalse()
+        ->and($karta)->toBeGreaterThan((int) $trad);
 
     // Raden finns en gång, före alla lägesgrenar och utan undantag för kartan.
     expect(substr_count($vy, '<ItemFilterBar'))->toBe(1);
 
     $filter = strpos($vy, '<ItemFilterBar');
 
-    expect($filter)->toBeLessThan((int) $lista)
+    expect($filter)->toBeLessThan((int) $trad)
         ->and(str_contains($vy, 'v-if="view !== \'map\'"'))->toBeFalse();
 });

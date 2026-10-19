@@ -3116,15 +3116,16 @@ return [
         // thing), and the two live in separate namespaces for that reason.
         //
         // `label` is the switch's accessible name and not a visible word: the
-        // three modes name themselves, and a fourth row saying "View" above
-        // three rows would be a heading over a three-word list. *List*, *Tree*
-        // and *Map* are the product's words for the modes ([[ADR-0032
-        // Produktens ord]]), and `tree` deliberately reads the same word as the
-        // disclosure in the structure panel: it is the same tree, seen as a
-        // whole surface.
+        // two modes name themselves, and a third row saying "View" above two
+        // rows would be a heading over a two-word list. *Tree* and *Map* are
+        // the product's words for the modes ([[ADR-0032 Produktens ord]]), and
+        // `tree` deliberately reads the same word as the disclosure in the
+        // structure panel: it is the same tree, seen as a whole surface. The
+        // item tab's switch has two modes since issue 327 · [[ADR-0067
+        // Itemfliken utan listläge]] § 1: *Tree* is the default and *Map* is
+        // the other; *List* is gone.
         'view' => [
             'label' => 'Item view',
-            'list' => 'List',
             'tree' => 'Tree',
             'map' => 'Map',
         ],
@@ -3187,10 +3188,11 @@ return [
 
             // The hit list beside the map (issue 299 · [[ADR-0059 Kartan med
             // en mitt]] § 10). `hits` is the list's accessible name and not a
-            // visible heading; `show_all` is the link to the list mode and
-            // carries the whole count, not the number drawn.
+            // visible heading; `show_all` is the link to the tree mode and
+            // carries the whole count, not the number drawn (issue 327 ·
+            // [[ADR-0067 Itemfliken utan listläge]] § 7).
             'hits' => 'Hits',
-            'show_all' => 'Show all :count in list',
+            'show_all' => 'Show all :count in tree',
         ],
 
         // The form's field labels, see issue 57b decision 9. The product's

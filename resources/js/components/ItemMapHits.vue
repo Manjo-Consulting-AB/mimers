@@ -10,20 +10,22 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Filtret väljer mitten men gömmer aldrig något runt den.** Listan ritar
  * exakt de träffar servern skickade (`App\Actions\Item\ListItems`), och kartan
  * ritar samma grannar som utan filter. Komponenten sållar ingenting själv och
- * känner inte till omfånget — servern äger urvalet, som i listan.
+ * känner inte till omfånget — servern äger urvalet, som i trädet.
  *
  * **En träff leder till kartan med sig själv som mitt** — `?view=map&focus=`
  * — och filtret följer med i adressen, så att mittbytet stannar i samma
  * träfflista. Den träff som REDAN är mitten är ingen länk: den bär
  * `aria-current` i stället, samma regel som mittnoden i kartan.
  *
- * ***Show all N in list*** följer när `total` är större än antalet noder, och
- * leder till listläget med samma filter. Servern skickar högst tjugo noder och
- * hela antalet, så vyn räknar ingenting själv.
+ * ***Show all N in tree*** följer när `total` är större än antalet noder, och
+ * leder till trädet med samma filter (issue 327 · [[ADR-0067 Itemfliken utan
+ * listläge]] § 7). Servern skickar högst tjugo noder och hela antalet, så vyn
+ * räknar ingenting själv.
  *
- * **Ett filter utan träffar ritar listans tomma text** (`item.index.filter_empty`)
- * med de filter användaren själv satt. Meningen säger ingenting om vad
- * omfånget höll tillbaka — samma ord som listan (issue 73 § Beslut 6).
+ * **Ett filter utan träffar ritar trädets tomma text**
+ * (`item.index.filter_empty`) med de filter användaren själv satt. Meningen
+ * säger ingenting om vad omfånget höll tillbaka — samma ord som trädet
+ * (issue 73 § Beslut 6).
  *
  * Träffytorna är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och texten
  * kommer ur `lang/` som all annan text ([[ADR-0013 Språk och i18n]]).
@@ -51,15 +53,15 @@ const filterTail = computed(() => (props.filterQuery === '' ? '' : `&${props.fil
 /* En träff centrerar kartan och behåller filtret i adressen. */
 const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTail.value}`;
 
-/* Listläget med samma filter — ingen `view`, som växelns *Lista*. */
-const listHref = computed(
+/* Trädet med samma filter — ingen `view`, som växelns *Träd*. */
+const treeHref = computed(
     () => (props.filterQuery === '' ? base.value : `${base.value}?${props.filterQuery}`),
 );
 
 /* Sant när träffen är mitten: containern är aldrig en träff. */
 const isCurrent = (node) => props.center.kind === 'item' && props.center.ulid === node.ulid;
 
-/* Fler träffar finns än listan ritar: *Show all N in list*. */
+/* Fler träffar finns än listan ritar: *Show all N in tree*. */
 const hasMore = computed(() => props.hits.total > props.hits.nodes.length);
 </script>
 
@@ -97,7 +99,7 @@ const hasMore = computed(() => props.hits.total > props.hits.nodes.length);
 
             <Link
                 v-if="hasMore"
-                :href="listHref"
+                :href="treeHref"
                 class="mt-2 inline-flex min-h-11 items-center rounded-control px-2 font-medium text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 {{ t('item.map.show_all', { count: hits.total }) }}

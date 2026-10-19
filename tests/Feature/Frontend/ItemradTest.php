@@ -54,22 +54,20 @@ function itemradTagg(string $kod, string $komponent): string
 }
 
 /*
- * Klart när: `Items/Index.vue` och `Overview.vue` ritar båda `ItemRow`.
+ * Klart när (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 9): `ItemRow`
+ * ritas på översikten och inte på itemfliken.
  *
- * Formen är den samma på båda ytorna: `v-for` över itemen och `:cover` ur
- * `covers`-uppslaget, nycklat på itemets ULID. Skillnaden är bara vilken
- * propp ytan läser — listan `items`, panelen `props.items` — och att
- * panelen klipper listan på servern.
+ * Listläget försvann i issue 327, och rutan flyttade till trädets rad
+ * (`ItemTreeTable`). Raden står kvar för översiktens itempanel, som ritar
+ * `props.items` och `props.covers`.
  */
-it('ritar ItemRow i itemlistan och på översikten', function () {
-    $listan = itemradKod('pages/Containers/Items/Index.vue');
+it('ritar ItemRow på översikten och inte på itemfliken', function () {
+    $fliken = itemradKod('pages/Containers/Items/Index.vue');
     $oversikten = itemradKod('pages/Containers/Overview.vue');
 
-    expect($listan)->toContain("import ItemRow from '../../../components/ItemRow.vue'");
-    expect($listan)->toContain('<ItemRow');
-    expect($listan)->toContain('v-for="item in items"');
-    expect($listan)->toContain(':cover="covers[item.ulid]"');
-    expect($listan)->toContain(':container-ulid="container.ulid"');
+    // Listläget är borta: vyn importerar varken raden eller listans data.
+    expect($fliken)->not->toContain('ItemRow')
+        ->and($fliken)->not->toContain('covers');
 
     expect($oversikten)->toContain("import ItemRow from '../../components/ItemRow.vue'");
     expect($oversikten)->toContain('<ItemRow');
