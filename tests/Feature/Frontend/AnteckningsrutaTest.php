@@ -297,6 +297,37 @@ it('lägger anteckningens typografi i app.css med designsystemets token', functi
 });
 
 /*
+ * Klart när (M44 · issue 328): en rad med checkbox i anteckningen ritas utan
+ * punkt, med checkboxen i punktens kolumn.
+ *
+ * league/commonmark sätter ingen `task-list-item`-klass, så regeln känner
+ * igen raden på att dess första barn är en checkbox. Den negativa marginalen
+ * är listans `padding-left`, alltså där punkten annars hade stått. Punktlistan
+ * och den numrerade listan behåller sina markörer.
+ */
+it('ritar en rad med checkbox utan punkt med checkboxen i punktens kolumn', function () {
+    $css = File::get(resource_path('css/app.css'));
+
+    preg_match(
+        '/\.item-notes-content li:has\(> input\[type="checkbox"\]\)\s*\{([^}]*)\}/',
+        $css,
+        $uppgiftsrad,
+    );
+    $uppgiftsrad = $uppgiftsrad[1] ?? '';
+
+    expect($uppgiftsrad)->toContain('list-style: none')
+        ->and($uppgiftsrad)->toContain('margin-left: -1.25rem');
+
+    preg_match('/\.item-notes-content ul\s*\{([^}]*)\}/', $css, $punktlista);
+    preg_match('/\.item-notes-content ol\s*\{([^}]*)\}/', $css, $numrerad);
+
+    expect($punktlista[1] ?? '')->toContain('list-style: disc')
+        ->and($punktlista[1] ?? '')->toContain('padding-left: 1.25rem')
+        ->and($numrerad[1] ?? '')->toContain('list-style: decimal')
+        ->and($numrerad[1] ?? '')->toContain('padding-left: 1.25rem');
+});
+
+/*
  * Klart när: anteckningsrutans ord kommer ur `lang/en/ui.php`.
  *
  * Komponenten ligger utanför SprakTest:s formulärsvep, så nycklarna prövas
