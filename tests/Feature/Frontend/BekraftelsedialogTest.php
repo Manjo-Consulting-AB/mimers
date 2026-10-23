@@ -78,8 +78,8 @@ it('stänger utan att bekräfta på Escape och bakgrunden', function () {
     expect($kod)->toContain('@cancel="onEscape"');
     preg_match('/function onEscape\(event\) \{(.*?)\n\}/s', $kod, $esc);
     expect($esc[1] ?? '')->toContain('event.preventDefault()')
-        ->toContain('cancel()')
-        ->not->toContain("emit('confirm')");
+        ->toContain('cancel()');
+    expect($esc[1] ?? '')->not->toContain("emit('confirm')");
 
     // Bakgrunden är en `<button>` som avbryter.
     preg_match('/<button\b[^>]*absolute inset-0[^>]*>/s', $kod, $bakgrund);
@@ -108,8 +108,8 @@ it('lämnar tillbaka fokus till utlösaren', function () {
 it('låter itemets sida sakna window.confirm', function () {
     $vy = bekraftelseKod('pages/Containers/Items/Show.vue');
 
-    expect($vy)->not->toContain('window.confirm')
-        ->not->toContain('confirm(');
+    expect($vy)->not->toContain('window.confirm');
+    expect($vy)->not->toContain('confirm(');
     expect($vy)->toContain('<UiConfirmDialog');
 });
 
@@ -123,7 +123,9 @@ it('nämner itemets namn och 30 dagar i dialogen', function () {
 
     expect($en['item']['destroy']['confirm_heading'])->toContain(':name');
     expect($en['item']['destroy']['confirm_body'])->toContain(':name')->toContain(':days');
-    expect(strtolower($en['item']['destroy']['confirm_body']))->toContain('trash')->not->toContain('permanent');
+    $brodtext = strtolower($en['item']['destroy']['confirm_body']);
+    expect($brodtext)->toContain('trash');
+    expect($brodtext)->not->toContain('permanent');
 });
 
 it('raderar itemet som förut när dialogen bekräftas', function () {
