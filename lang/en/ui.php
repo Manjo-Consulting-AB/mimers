@@ -28,6 +28,14 @@ return [
         ],
     ],
 
+    // The app's own confirmation dialog, see issue 330 · [[ADR-0068 Itemets sida
+    // och skapandet]] § 6 · resources/js/components/UiConfirmDialog.vue. The
+    // dialog carries only the word it owns itself: the question, the body and
+    // the confirming label come from the caller, translated.
+    'confirm' => [
+        'cancel' => 'Cancel',
+    ],
+
     /*
      * Datumregeln, se issue 104 och [[ADR-0042 Designsystemet]] § Konsekvenser.
      *
@@ -3360,10 +3368,13 @@ return [
 
         // The deletion is SOFT ([[ADR-0008 Soft delete och papperskorg]]), and
         // `confirm` says so: the trash and the 30 days, never "deleted
-        // permanently", which would be untrue (decision 8).
+        // permanently", which would be untrue (decision 8). Since issue 330 the
+        // question is the app's own dialog: `confirm_heading` names the item
+        // and `confirm_body` says that it moves to the trash for :days days.
         'destroy' => [
             'action' => 'Delete',
-            'confirm' => 'The item goes to the trash and can be restored within 30 days. Continue?',
+            'confirm_heading' => 'Delete :name?',
+            'confirm_body' => ':name moves to the trash and stays there for :days days. You can restore it from there until then.',
         ],
 
         // The relation section, see issue 58 decisions 3, 4, 8, 9 and 10, and

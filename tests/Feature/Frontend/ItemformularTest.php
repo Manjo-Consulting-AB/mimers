@@ -799,7 +799,9 @@ it('har varje item-nyckel', function () {
 
     // Raderingen lovar inte mer än den håller (Beslut 8): papperskorgen och de
     // 30 dagarna, aldrig "permanent".
-    expect($sv['item']['destroy']['confirm'])->toContain('30');
+    // Sedan issue 330 är frågan appens egen dialog: brödtexten bär :days.
+    expect($sv['item']['destroy']['confirm_body'])->toContain(':days');
+    expect($sv['item']['destroy'])->not->toHaveKey('confirm');
 
     foreach ([
         'pages/Containers/Items/Create.vue',

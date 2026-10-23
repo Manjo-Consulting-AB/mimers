@@ -540,11 +540,12 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
     // Och tokenregeln gäller katalogen, inte bara de fem: en rå färgklass i en
     // yta är samma fel som en i knappen — rollen ska komma ur `@theme`, och
     // `text-slate-800` är den färg rollen ersatte. Regeln står över globben så
-    // att en trettonde `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
+    // att en femtonde `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
     // samma katalog och fäller den som en övertalig komponent.
     //
-    // Tretton i dag: de fem primitiverna (issue 425), de fem ytorna (issue
-    // 426), flikraden (issue 100), arket (issue 152) och ikonen (issue 282).
+    // Fjorton i dag: de fem primitiverna (issue 425), de fem ytorna (issue
+    // 426), flikraden (issue 100), arket (issue 152), ikonen (issue 282) och
+    // bekräftelsedialogen (issue 330).
     $granskade = 0;
 
     foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
@@ -556,7 +557,7 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
         ))->toBe([]);
     }
 
-    expect($granskade)->toBe(13);
+    expect($granskade)->toBe(14);
 });
 
 it('kortet tar rubrik och åtgärd som slots', function () {
