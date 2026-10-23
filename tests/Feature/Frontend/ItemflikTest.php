@@ -733,7 +733,6 @@ it('ritar ingen räknare på en flik med noll rader', function () {
         expect($rad)->toContain('rows(');
     }
 
-
     // Historiken är `null` så länge raderna inte hämtats, och talet därefter.
     expect(itemflikRader($vy)['history'])->toContain('props.history === null ? null : rows(props.history.length)');
 
