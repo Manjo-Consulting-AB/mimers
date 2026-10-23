@@ -3366,6 +3366,14 @@ return [
             'submit' => 'Save',
         ],
 
+        // The ⋯ menu in the item's head, see issue 331 · [[ADR-0068 Itemets
+        // sida och skapandet]] § 3. `label` names the button and the menu;
+        // `trash` is the last row and only opens the confirmation dialog.
+        'menu' => [
+            'label' => 'More actions',
+            'trash' => 'Move to trash',
+        ],
+
         // The deletion is SOFT ([[ADR-0008 Soft delete och papperskorg]]), and
         // `confirm` says so: the trash and the 30 days, never "deleted
         // permanently", which would be untrue (decision 8). Since issue 330 the

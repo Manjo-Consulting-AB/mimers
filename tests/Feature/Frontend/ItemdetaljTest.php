@@ -275,8 +275,13 @@ it('ger en read-innehavare en detaljvy utan skrivytor', function () {
     // knappar som ger felkod." Flaggorna är alltså hela villkoret.
     $vy = File::get(resource_path('js/pages/Containers/Items/Show.vue'));
 
+    // Redigeringsknappen bor i vyn; raderingen och *Nytt item under det här*
+    // bor sedan issue 331 i ⋯-menyn, som vyn matar med flaggorna.
+    $menyn = File::get(resource_path('js/components/ItemActionMenu.vue'));
+
     expect($vy)->toContain('v-if="can.update"');
-    expect($vy)->toContain('v-if="can.delete"');
+    expect($vy)->toContain(':can-delete="can.delete"');
+    expect($menyn)->toContain('v-if="canDelete"');
 
     // Och plusknappen i skalet får inget mål: en tom meny ger ingen knapp
     // (issue 152 · [[ADR-0048 Mobilen och plusknappen]] § 2). `can.create` är

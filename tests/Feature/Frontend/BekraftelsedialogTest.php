@@ -101,7 +101,9 @@ it('lämnar tillbaka fokus till utlösaren', function () {
     // Och Show.vue ger den knappen som utlösare.
     $vy = bekraftelseKod('pages/Containers/Items/Show.vue');
 
-    expect($vy)->toContain('destroyTrigger.value = event.currentTarget')
+    // Sedan issue 331 är utlösaren ⋯-knappen, som menyn skickar med `trash`.
+    expect($vy)->toContain('destroyTrigger.value = trigger')
+        ->toContain('@trash="askDestroy"')
         ->toContain(':trigger="destroyTrigger"');
 });
 
@@ -136,8 +138,12 @@ it('raderar itemet som förut när dialogen bekräftas', function () {
         ->toContain('onStart: () => { pending.value = true; }');
 
     // Knappen öppnar bara dialogen; raderingen går inte direkt från klicket.
-    preg_match('/<button\b[^>]*@click="askDestroy"[^>]*>/s', $vy, $knapp);
-    expect($knapp[0] ?? '')->toContain('v-if="can.delete"');
+    // Raden bor i ⋯-menyn (issue 331) och finns bara med `can.delete`.
+    $meny = bekraftelseKod('components/ItemActionMenu.vue');
+
+    preg_match('/<button\b[^>]*@click="trash"[^>]*>/s', $meny, $knapp);
+    expect($knapp[0] ?? '')->toContain('v-if="canDelete"');
+    expect($meny)->toContain("emit('trash', trigger)");
 
     // Avbrott stänger dialogen och rör inte raderingen.
     expect($vy)->toContain('@cancel="confirmOpen = false"');
