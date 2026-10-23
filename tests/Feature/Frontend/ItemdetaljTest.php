@@ -467,16 +467,13 @@ it('visar bara de snabbfakta som har värde och ingen rubrik när alla saknas', 
 });
 
 /*
- * Klart när: *Visa alla fält* leder till informationsfliken.
+ * Klart när: översikten har ingen länk *Show all fields* (issue 332).
  *
- * Raden står på översikten (issue 154), och adressen är informationsflikens
- * EGEN — hämtad ur flikraden i Show.vue och inte byggd en gång till, så den
- * bär den aktuella förekomsten precis som flikarna gör (`?path=` före `tab=`,
- * se ItemflikTest). Provet följer raden hela vägen: ur vyns `tabs`, ut i
- * mallen, och sedan mot servern — en rad som pekar på en flik som inte svarar
- * är en död länk.
+ * Länken pekade på informationsfliken, som utgår. Fältrutnätet på översikten
+ * byggs i issue 333. Adressen `?tab=information` visar översikten, som varje
+ * annat okänt värde gör.
  */
-it('låter Visa alla fält leda till informationsfliken', function () {
+it('har ingen länk Show all fields och låter ?tab=information visa översikten', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemdetaljKontext();
@@ -488,22 +485,19 @@ it('låter Visa alla fält leda till informationsfliken', function () {
 
     $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
 
-    expect($vy)->toContain("t('item.show.all_fields')")
-        ->toContain(':href="informationHref"')
-        // Adressen kommer ur flikraden: informationsfliken finns där, och
-        // raden bygger ingen egen sträng.
-        ->toContain('const informationHref = computed(')
-        ->toContain("tab.key === 'information'");
+    expect($vy)->not->toContain('item.show.all_fields');
+    expect($vy)->not->toContain('informationHref');
+    expect($vy)->not->toContain("activeTab === 'information'");
 
-    // Och fliken svarar, med fältraderna på plats: fältet som inte är
-    // snabbfakta står här, och det gör det på samma sida som översikten.
-    actingAs($anvandare)
-        ->get("/containers/{$container->ulid}/items/{$motorn->ulid}?tab=information")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Containers/Items/Show')
-            ->where('item.purchased_at', '2024-05-17')
-        );
+    foreach (['information', 'tags'] as $flik) {
+        actingAs($anvandare)
+            ->get("/containers/{$container->ulid}/items/{$motorn->ulid}?tab={$flik}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Containers/Items/Show')
+                ->where('item.purchased_at', '2024-05-17')
+            );
+    }
 
     // Översikten är frånvaron av `tab` och svarar som förut.
     actingAs($anvandare)

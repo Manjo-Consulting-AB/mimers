@@ -52,7 +52,7 @@ function anteckningsrutaTagg(string $kod, string $komponent): string
 
 /*
  * Klart när: översikten visar bild, beskrivning och snabbfakta i en rad, sedan
- * *All fields*, anteckningen och *Recent activity*.
+ * anteckningen och *Recent activity*.
  *
  * Ordningen läses i mallen. `<dl>`-formen som bar beskrivningen och
  * anteckningen före den här issuen är borta: beskrivningen är ett stycke
@@ -63,19 +63,16 @@ it('ritar översikten i ordningen beskrivning, snabbfakta, alla fält, antecknin
 
     $beskrivning = strpos($vy, '{{ item.description }}');
     $snabbfakta = strpos($vy, '<ItemQuickFacts');
-    $allaFalt = strpos($vy, "t('item.show.all_fields')");
     $anteckningen = strpos($vy, '<ItemNotes');
     $aktiviteten = strpos($vy, '<ItemActivityPanel');
 
     expect($beskrivning)->not->toBeFalse('beskrivningen står inte på översikten')
         ->and($snabbfakta)->not->toBeFalse('snabbfakta står inte på översikten')
-        ->and($allaFalt)->not->toBeFalse('*Visa alla fält* står inte på översikten')
         ->and($anteckningen)->not->toBeFalse('anteckningen står inte på översikten')
         ->and($aktiviteten)->not->toBeFalse('aktiviteten står inte på översikten');
 
     expect($beskrivning)->toBeLessThan($snabbfakta)
-        ->and($snabbfakta)->toBeLessThan($allaFalt)
-        ->and($allaFalt)->toBeLessThan($anteckningen)
+        ->and($snabbfakta)->toBeLessThan($anteckningen)
         ->and($anteckningen)->toBeLessThan($aktiviteten);
 
     $anteckningsrutan = anteckningsrutaTagg($vy, 'ItemNotes');

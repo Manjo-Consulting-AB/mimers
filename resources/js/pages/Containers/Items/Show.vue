@@ -110,7 +110,7 @@ defineOptions({
  * Itemets karta i containerkartans form]] § 1). Under `md:` staplas panelerna,
  * och strukturen blir en utfällbar yta och inte en egen sida.
  *
- * **Sidan är en flikrad med åtta flikar** (issue 102, 116 och 154 ·
+ * **Sidan är en flikrad med sju flikar** (issue 102, 116 och 154 ·
  * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
  * taggarna, relationerna, utlåningen, schemana och bilagorna på en enda lång
  * sida; nu ligger var och en i sin flik, och raden byggs av `UiTabs` (issue
@@ -440,22 +440,6 @@ const overviewEmpty = computed(
 );
 
 /*
- * Adressen till informationsfliken — *Visa alla fält* på översikten (issue
- * 154 · [[M23 Mobilen och kartan]] § 154).
- *
- * Hämtad ur `tabs` och inte byggd en gång till: flikens adress bär den
- * aktuella förekomsten (`?path=` skrivs före `tab=`), och en egen sträng här
- * hade varit en andra upplaga av samma regel — den som glider ifrån den
- * första så snart ordningen eller parametern byter namn. Reservvärdet är
- * itemets egen sökväg och kan bara nås om fliken tagits bort ur raden, vilket
- * ItemflikTest fäller.
- */
-const informationHref = computed(
-    () => tabs.value.find((tab) => tab.key === 'information')?.href
-        ?? `/containers/${props.container.ulid}/items/${props.item.ulid}`,
-);
-
-/*
  * Anteckningens egen rutt (M42 · issue 325 · [[ADR-0066 Itemets
  * anteckning]] § 6). Adressen byggs här och skickas som prop, så komponenten
  * inte behöver känna till containerns eller itemets form.
@@ -507,29 +491,16 @@ const linkViews = computed(() => [
 /*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har nio flikar, och kostnaden har en egen sedan issue 168.**
- * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
- * dokument, kostnader, uppgifter och historik, och mobilmockupen ritar
- * Översikt · Information · Dokument. Raden är bildens, med två namn bytta:
- * "detaljer" är **informationsfliken** — fältraderna, dit *Visa alla fält* på
- * översikten leder — och "dokument" är bilagorna. Utlåningen och taggarna har
- * ingen rad i bilden men måste ändå få en plats — en yta ingen hittar är samma
- * sak som en yta som inte finns (issue 62a:s och 67c:s motivering) — så de
- * står efter de fem, i den ordning issue 102 räknar dem. Ingen flik bär två
- * stycken text: beskrivningen står ovanför snabbfakta överst på översikten,
- * och anteckningen har sin egen ruta längre ned ([[ADR-0041 Itemets vy]]
- * § Beslut, issue 96, 154 och 325).
+ * **Raden har sju flikar** i den ordning [[ADR-0068 Itemets sida och
+ * skapandet]] § 4 anger: Overview, Relations, Documents, Costs, To do, Loans,
+ * History. Informationsfliken och taggfliken utgår (issue 332): fälten ritas
+ * på översikten och taggarna i huvudet. Nycklarna i adressen (`attachments`,
+ * `schedules`) står still; ett `?tab=` som inte längre är någon fliks ger
+ * översikten, som varje annat okänt värde.
  *
- * **Ordningen är översikten först, sedan bildens, och de egna sist.**
- * Kostnaden fick sin flik i issue 168 — bilden ritar den, och ytan fanns
- * redan på `/api` innan den fanns i webben — och ligger näst sist, före
- * historiken, som containerns egen flikrad gör ([[ADR-0050 Desktopdesignen]]
- * § 4). Historiken kom med issue 116 och ligger SIST: den är vad som HAR
- * hänt och inte en yta man arbetar i.
- *
- * **Etiketten är sektionens eget ord.** Sex av flikarna bär samma rubrik som
+ * **Etiketten är sektionens eget ord.** Fem av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
- * `item.schedule.heading`, `item.loan.heading`, `item.show.tags` och
+ * `item.cost.heading`, `item.schedule.heading`, `item.loan.heading` och
  * `audit.history.heading` — så att fliken och rubriken strax under den aldrig
  * kan säga olika saker. Bara översikten lånar inget ord: ingen sektion äger
  * den, och den har därför en egen nyckel. Historikens nyckel ligger under
@@ -544,9 +515,9 @@ const linkViews = computed(() => [
  *
  * **`count` räknas ur proparna och aldrig ur en egen förfrågan.** Det är
  * antalet rader fliken ritar: motparterna i sina tre grupper, bilagorna,
- * schemana, utlåningarna — den öppna är en rad — och taggarna. En flik som
- * ritar en lista bär sin räknare även när den är noll: `0` säger att listan är
- * tom och en saknad räknare att det inte finns någon lista (issue 99).
+ * kostnaderna, schemana och utlåningarna — den öppna är en rad. **En flik med
+ * noll rader bär ingen räknare** ([[ADR-0068 Itemets sida och skapandet]]
+ * § 4): `count` är `null` när talet är `0`. Regeln gäller bara itemets flikar.
  * Översikten bär `null` — den ritar itemets eget innehåll och ingen lista över
  * något annat.
  */
@@ -557,44 +528,26 @@ const tabs = computed(() => {
 
     const tabHref = (key) => (path === null ? `${base}?tab=${key}` : `${base}?path=${path}&tab=${key}`);
 
+    /*
+     * En flik med noll rader bär ingen räknare ([[ADR-0068 Itemets sida och
+     * skapandet]] § 4): `null` när talet är `0`, annars talet.
+     */
+    const rows = (n) => (n === 0 ? null : n);
+
     return [
         { key: 'overview', label: t('item.show.overview'), href: `${base}${here}`, count: null },
+        { key: 'relations', label: t('item.links.heading'), href: tabHref('relations'), count: rows(props.links.parent.length + props.links.child.length + props.links.related.length) },
+        { key: 'attachments', label: t('item.attachment.heading'), href: tabHref('attachments'), count: rows(props.attachments.length) },
+        { key: 'costs', label: t('item.cost.heading'), href: tabHref('costs'), count: rows(props.costs.length) },
+        { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: rows(props.schedules.length) },
+        { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: rows(props.loanHistory.length + (props.openLoan ? 1 : 0)) },
         /*
-         * Informationsfliken (issue 154): fältraderna, som flyttade hit från
-         * översikten när den fick *Snabbfakta* och *Visa alla fält*. Det är
-         * bildens *Information* — mobilmockupen ritar raden Översikt ·
-         * Information · Dokument — och räknaren är antalet rader den ritar:
-         * fälten plus kategorin, som är ett strukturerat fält och ingen tagg.
+         * Historiken ligger sist: den är vad som HAR hänt och inte en yta man
+         * arbetar i. Räknaren är `null` så länge raderna inte är hämtade —
+         * servern skickar dem bara när fliken är aktiv — och för en hämtad
+         * men tom lista.
          */
-        { key: 'information', label: t('item.show.information'), href: tabHref('information'), count: fields.value.length + (categoryName.value === null ? 0 : 1) },
-        { key: 'relations', label: t('item.links.heading'), href: tabHref('relations'), count: props.links.parent.length + props.links.child.length + props.links.related.length },
-        { key: 'attachments', label: t('item.attachment.heading'), href: tabHref('attachments'), count: props.attachments.length },
-        { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: props.schedules.length },
-        { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
-        { key: 'tags', label: t('item.show.tags'), href: tabHref('tags'), count: props.item.tags.length },
-        /*
-         * Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8). Ytan
-         * fanns på `/api` innan den fanns här, och raden ligger näst sist —
-         * före historiken, som containerns egen flikrad gör. Räknaren är
-         * antalet rader fliken ritar, ur `costs`-proppen: en nolla säger att
-         * listan är tom, och den är ett svar och inte en gissning.
-         */
-        { key: 'costs', label: t('item.cost.heading'), href: tabHref('costs'), count: props.costs.length },
-        /*
-         * Historiken (issue 116) är den NIONDE fliken och ligger sist, som
-         * containerns egen: den är vad som HAR hänt och inte en yta man
-         * arbetar i. Etiketten är `audit.history.heading` — samma ord som
-         * containerns flik och som panelens egen rubrik, så fliken och ytan
-         * strax under den inte kan säga olika saker.
-         *
-         * Räknaren är `null` så länge raderna inte är hämtade — servern
-         * skickar dem bara när fliken är aktiv (se `history`-proppen) — och
-         * talet när de finns. `null` betyder "inget tal att visa" och inte
-         * "noll rader": en nolla hade varit ett påstående om innehållet som
-         * vyn inte har gjort (issue 99 och 100). En hämtad och TOM lista ger
-         * däremot noll, och det är ett svar och inte en gissning.
-         */
-        { key: 'history', label: t('audit.history.heading'), href: tabHref('history'), count: props.history === null ? null : props.history.length },
+        { key: 'history', label: t('audit.history.heading'), href: tabHref('history'), count: props.history === null ? null : rows(props.history.length) },
     ];
 });
 
@@ -1051,18 +1004,6 @@ function toggleFavorite() {
                 </div>
 
                 <!--
-                    Vägen till resten av fälten (issue 154). Adressen är
-                    informationsflikens egen, ur `tabs` ovan, så den bär
-                    den aktuella förekomsten precis som flikraden gör.
-                -->
-                <Link
-                    :href="informationHref"
-                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                >
-                    {{ t('item.show.all_fields') }}
-                </Link>
-
-                <!--
                     Anteckningen (M42 · issue 325 · [[ADR-0066 Itemets
                     anteckning]] § 3–8): den ritade Markdown-HTML:en i
                     läsläget, och det redigerbara fältet för den som har
@@ -1091,38 +1032,6 @@ function toggleFavorite() {
                     se ItemController::show() och `events`-proppen ovan.
                 -->
                 <ItemActivityPanel v-if="events !== null" :events="events" />
-            </section>
-
-            <!--
-                Informationsfliken (issue 154 · [[M23 Mobilen och kartan]]
-                § 154): itemets fältrader, kategorin inräknad — den är ett
-                strukturerat fält och ingen tagg — och ingenting annat.
-                Fälten kommer ur `fields` (itemPresentation.js), som
-                utelämnar varje tomt fält i stället för att visa en tom
-                etikett eller ett streck (issue 57a § Beslut 8).
-
-                Fliken nås genom *Visa alla fält* på översikten, och en
-                panel som vore tom hade mött en läsare som just tryckt på
-                en rad — därför raden i stället, samma val som översikten
-                gör (issue 102).
-            -->
-            <section v-if="activeTab === 'information'" class="mt-8">
-                <dl
-                    v-if="fields.length > 0 || categoryName"
-                    class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
-                >
-                    <div v-for="field in fields" :key="field.key">
-                        <dt class="text-sm font-medium text-ink-muted">{{ field.label }}</dt>
-                        <dd class="mt-1 whitespace-pre-line text-ink">{{ field.value }}</dd>
-                    </div>
-
-                    <div v-if="categoryName">
-                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.category') }}</dt>
-                        <dd class="mt-1 text-ink">{{ categoryName }}</dd>
-                    </div>
-                </dl>
-
-                <p v-else class="text-sm text-ink-muted">{{ t('item.show.information_empty') }}</p>
             </section>
 
             <!--
@@ -1223,31 +1132,6 @@ function toggleFavorite() {
                 :cost-defaults="costDefaults"
                 :can="can"
             />
-
-            <!-- Taggarna (issue 56a): itemets fria ord bredvid kategorin. Ett item
-                 utan taggar ritade tidigare ingenting här och lät räknaren i
-                 fliken säga det — men en tom yta efter ett tryck på en flik läses
-                 som ett fel, samma skäl som informationsflikens tomma rad. Nu
-                 säger raden att itemet saknar taggar, och den som får redigera
-                 får länken dit taggarna sätts. -->
-            <section v-if="activeTab === 'tags'" class="mt-8">
-                <template v-if="item.tags.length > 0">
-                    <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
-
-                    <ItemTagList class="mt-2" :tags="item.tags" />
-                </template>
-
-                <p v-else class="text-sm text-ink-muted">
-                    {{ t('item.show.tags_empty') }}
-                    <Link
-                        v-if="can.update"
-                        :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                        class="ml-1 font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.show.tags_add') }}
-                    </Link>
-                </p>
-            </section>
 
             <!--
                 Historiken (issue 116 · [[ADR-0043 Tre loggar]]
