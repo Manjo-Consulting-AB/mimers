@@ -210,7 +210,9 @@ it('har tagit bort länkarna Create tags och Create categories och deras nycklar
 
     expect($kod)->not->toContain('categories_empty_link');
     expect($kod)->not->toContain('tags_empty_link');
-    expect($kod)->not->toContain('<Link');
+    // Bara länkarna till tagg- och kategorisidorna ska vara borta; formulärets
+    // egna länkar (issue 339: Cancel och raden Created) är något annat.
+    expect($kod)->not->toMatch('#<Link[^>]*(/tags|/categories)#');
     expect($kod)->not->toContain('/categories`"');
 
     $en = require lang_path('en/ui.php');
