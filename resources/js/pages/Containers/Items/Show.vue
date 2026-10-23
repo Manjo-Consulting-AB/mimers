@@ -1141,13 +1141,28 @@ function toggleFavorite() {
             />
 
             <!-- Taggarna (issue 56a): itemets fria ord bredvid kategorin. Ett item
-                 utan taggar ritar ingenting här, och räknaren i fliken säger det. -->
+                 utan taggar ritade tidigare ingenting här och lät räknaren i
+                 fliken säga det — men en tom yta efter ett tryck på en flik läses
+                 som ett fel, samma skäl som informationsflikens tomma rad. Nu
+                 säger raden att itemet saknar taggar, och den som får redigera
+                 får länken dit taggarna sätts. -->
             <section v-if="activeTab === 'tags'" class="mt-8">
                 <template v-if="item.tags.length > 0">
                     <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
 
                     <ItemTagList class="mt-2" :tags="item.tags" />
                 </template>
+
+                <p v-else class="text-sm text-ink-muted">
+                    {{ t('item.show.tags_empty') }}
+                    <Link
+                        v-if="can.update"
+                        :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
+                        class="ml-1 font-medium text-accent hover:underline"
+                    >
+                        {{ t('item.show.tags_add') }}
+                    </Link>
+                </p>
             </section>
 
             <!--
