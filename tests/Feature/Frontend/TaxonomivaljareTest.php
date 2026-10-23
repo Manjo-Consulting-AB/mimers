@@ -73,7 +73,7 @@ it('håller flera värden i multiple och tar bort ett i taget', function () {
     $kod = taxonomiKod();
 
     expect($kod)->toContain("emit('update:modelValue', [...selectedUlids.value, option.ulid]);")
-        ->toContain("selectedUlids.value.filter((value) => value !== ulid)");
+        ->toContain('selectedUlids.value.filter((value) => value !== ulid)');
 });
 
 it('filtrerar alternativen på namnet medan man skriver', function () {
