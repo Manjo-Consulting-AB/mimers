@@ -409,64 +409,6 @@ it('utelämnar tomma fält i stället för att hitta på ett värde', function (
 });
 
 /*
- * Klart när: itemets översikt visar bara de snabbfakta som har värde, och
- * ingen rubrik när alla saknas.
- *
- * **Fälten flyttade till informationsfliken i issue 154**, och översikten
- * sammanfattar dem i stället: `manufacturer`, `model` och `serial_number` —
- * uppgifterna om VAD itemet är — och bara de som har ett värde. Urvalet bor i
- * `itemQuickFacts()` i resources/js/components/itemPresentation.js och prövas
- * därför i node på exakt den modul klienten importerar.
- *
- * Den andra halvan är rubriken och är MALLENS: raden över en tom lista hade
- * sagt att något fattas, och fälten är frivilliga ([[ADR-0041 Itemets vy]]
- * § Beslut: ett tomt fält utelämnas, aldrig påhittat). Rubriken står därför
- * innanför komponentens egen `v-if`, och komponenten ritar ingenting alls när
- * inget av de tre fälten är satt.
- */
-it('visar bara de snabbfakta som har värde och ingen rubrik när alla saknas', function () {
-    $item = json_encode([
-        'description' => 'En diesel.',
-        'notes' => 'Bytte impeller 2024.',
-        'manufacturer' => 'Yanmar',
-        'model' => '3YM30',
-        'serial_number' => null,
-        // Fälten som INTE är snabbfakta: de hör till informationsfliken, och
-        // att de har värden här är hela beviset — hade de varit kvar i urvalet
-        // hade de synts i svaret.
-        'purchased_at' => '2024-05-17',
-        'warranty_until' => '2027-05-17',
-        'position_note' => 'Bakom panelen',
-    ], JSON_UNESCAPED_UNICODE);
-
-    $rader = itemdetaljKör("process.stdout.write(JSON.stringify(m.itemQuickFacts({$item}, 'sv-SE')));");
-
-    expect($rader)->toBe('[{"key":"manufacturer","value":"Yanmar"},{"key":"model","value":"3YM30"}]');
-
-    // Ett item utan de tre fälten ger en tom lista och inte en rad med tomma
-    // värden — samma regel som `itemFields`, och det som gör att rubriken kan
-    // villkoras på listans längd.
-    $utan = json_encode([
-        'manufacturer' => null,
-        'model' => '',
-        'serial_number' => null,
-        'purchased_at' => '2024-05-17',
-    ], JSON_UNESCAPED_UNICODE);
-
-    expect(itemdetaljKör("process.stdout.write(JSON.stringify(m.itemQuickFacts({$utan}, 'sv-SE')));"))
-        ->toBe('[]');
-
-    // Och komponenten ritar rubriken innanför sin egen grind: en rubrik över
-    // en tom lista når aldrig fram.
-    $komponent = itemdetaljKomponent('components/ItemQuickFacts.vue');
-
-    expect($komponent)->toMatch('/<section v-if="facts\.length > 0">/')
-        ->toContain("t('item.show.quick_facts')")
-        ->toContain('v-for="fact in facts"')
-        ->toContain('{{ fact.value }}');
-});
-
-/*
  * Klart när: översikten har ingen länk *Show all fields* (issue 332).
  *
  * Länken pekade på informationsfliken, som utgår. Fältrutnätet på översikten
@@ -678,14 +620,14 @@ it('ställer bilden till vänster om snabbfakta från md och ovanför under md',
     expect($vy)->toContain("import ItemOverviewCover from '../../../components/ItemOverviewCover.vue'")
         ->and($vy)->toContain('flex-col gap-6 md:flex-row md:items-start');
 
-    expect(strpos($vy, '<ItemOverviewCover'))->toBeLessThan(strpos($vy, '<ItemQuickFacts'));
+    expect(strpos($vy, '<ItemOverviewCover'))->toBeLessThan(strpos($vy, '<ItemFieldGrid'));
 
     // Bilden ritas bara när itemet har en bild (issue 307), och sedan issue
     // 325 tar spalten med beskrivningen och snabbfakta hela bredden när den
     // är ensam i raden — ingen tom bildruta och ingen egen `v-else`-gren för
     // snabbfakta.
     expect(itemdetaljTagg($vy, 'ItemOverviewCover'))->toContain('v-if="cover"')
-        ->and($vy)->not->toContain('<ItemQuickFacts v-else');
+        ->and($vy)->not->toContain('<ItemFieldGrid v-else');
 });
 
 /*

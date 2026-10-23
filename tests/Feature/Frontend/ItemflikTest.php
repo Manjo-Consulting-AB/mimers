@@ -400,7 +400,7 @@ it('alla sex befintliga propar når sin flik', function () {
 
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
-        'overview' => ['<ItemQuickFacts', ':item="item"'],
+        'overview' => ['<ItemFieldGrid', ':item="item"'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
