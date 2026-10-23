@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemIcon from './ItemIcon.vue';
 import ItemIconPicker from './ItemIconPicker.vue';
@@ -138,6 +138,8 @@ const props = defineProps({
     structure: { type: Array, default: () => [] },
     /* Får användaren lägga itemet på toppnivån? Ur `can_create_root`. */
     canCreateRoot: { type: Boolean, default: false },
+    /* Får användaren skapa taggar och kategorier? Ur `can.manage_taxonomy`. */
+    canManageTaxonomy: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -285,6 +287,56 @@ const parentError = computed(() => form.errors.parent ?? null);
 const submitLabel = computed(() => (form.processing
     ? t('common.pending.default')
     : (props.item === null ? t('item.create.submit') : t('item.edit.submit'))));
+
+/*
+ * Nya taggar och kategorier ur väljaren (issue 337 · [[ADR-0068 Itemets sida
+ * och skapandet]] § 14). Anropet går till de BEFINTLIGA ändpunkterna —
+ * `POST /containers/{c}/tags` och `/categories` — som prövar `update` på
+ * containern; ingen ny rutt eller grind. `preserveState` behåller formulärets
+ * inmatning, och ändpunktens `back()` ritar om sidan med de nya listorna.
+ * Det nya värdet slås upp på namnet i den uppdaterade sidans prop och väljs.
+ *
+ * Valideringsfelet kommer i `onError` och hålls här, skilt från `form.errors`:
+ * ändpunktens fältnamn (`name`) är inte formulärets egna.
+ */
+const taxonomyErrors = ref({ category: null, tags: null });
+const taxonomyCreating = ref(false);
+
+function createTaxonomy(kind, name) {
+    const isTag = kind === 'tags';
+
+    taxonomyErrors.value[kind] = null;
+
+    router.post(`/containers/${props.containerUlid}/${isTag ? 'tags' : 'categories'}`, { name }, {
+        preserveState: true,
+        preserveScroll: true,
+        onStart: () => {
+            taxonomyCreating.value = true;
+        },
+        onSuccess: (page) => {
+            const needle = name.trim().toLowerCase();
+            const created = page.props[isTag ? 'tags' : 'categories']
+                .find((option) => option.name.trim().toLowerCase() === needle
+                    && (isTag || (option.parent ?? null) === null));
+
+            if (created === undefined) {
+                return;
+            }
+
+            if (isTag) {
+                form.tags = [...form.tags, created.ulid];
+            } else {
+                form.category = created.ulid;
+            }
+        },
+        onError: (errors) => {
+            taxonomyErrors.value[kind] = Object.values(errors)[0] ?? null;
+        },
+        onFinish: () => {
+            taxonomyCreating.value = false;
+        },
+    });
+}
 
 function submit() {
     const url = `/containers/${props.containerUlid}/items`;
@@ -554,54 +606,51 @@ function submit() {
 
         <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
         <FormField
-            v-if="options.length > 0"
+            v-if="options.length > 0 || canManageTaxonomy"
             v-slot="{ describedBy }"
             :label="t('item.form.category')"
             id="category"
-            :error="form.errors.category"
+            :error="form.errors.category ?? taxonomyErrors.category"
         >
             <TaxonomyPicker
                 id="category"
                 v-model="form.category"
                 :options="options"
                 mode="single"
+                :can-create="canManageTaxonomy && ! taxonomyCreating"
+                :disabled="taxonomyCreating"
+                @create="(name) => createTaxonomy('category', name)"
                 :described-by="describedBy"
             />
         </FormField>
 
-        <!-- Tom container: en rad som pekar på kategorisidan, aldrig en tom väljare. -->
+        <!-- Tom container utan rätt att skapa: en rad, aldrig en tom väljare. -->
         <p v-else class="text-body text-ink-muted">
             {{ t('item.form.categories_empty') }}
-            <Link
-                :href="`/containers/${containerUlid}/categories`"
-                class="text-accent underline"
-            >
-                {{ t('item.form.categories_empty_link') }}
-            </Link>
         </p>
 
         <!-- Taggarna: samma väljare, flera värden. -->
         <FormField
-            v-if="tags.length > 0"
+            v-if="tags.length > 0 || canManageTaxonomy"
             v-slot="{ describedBy }"
             :label="t('item.form.tags')"
             id="tags"
-            :error="tagError"
+            :error="tagError ?? taxonomyErrors.tags"
         >
             <TaxonomyPicker
                 id="tags"
                 v-model="form.tags"
                 :options="tags"
                 mode="multiple"
+                :can-create="canManageTaxonomy && ! taxonomyCreating"
+                :disabled="taxonomyCreating"
+                @create="(name) => createTaxonomy('tags', name)"
                 :described-by="describedBy"
             />
         </FormField>
 
         <p v-else class="text-body text-ink-muted">
             {{ t('item.form.tags_empty') }}
-            <Link :href="`/containers/${containerUlid}/tags`" class="text-accent underline">
-                {{ t('item.form.tags_empty_link') }}
-            </Link>
         </p>
 
         <!-- Ett enda konto: värdet är förvalt och visas som text (Beslut 4). -->

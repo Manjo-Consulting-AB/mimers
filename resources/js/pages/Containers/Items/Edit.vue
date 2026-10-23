@@ -39,6 +39,8 @@ defineOptions({
  * formuläret räknar om listan; väljaren ritar den som den kommer.
  */
 defineProps({
+    /* `manage_taxonomy`: får användaren skapa taggar och kategorier i väljaren? */
+    can: { type: Object, default: () => ({ manage_taxonomy: false }) },
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     categories: { type: Array, required: true },
@@ -63,5 +65,6 @@ const { t } = useTranslations();
         :item="item"
         :images="images"
         :cover="cover"
+        :can-manage-taxonomy="can.manage_taxonomy"
     />
 </template>

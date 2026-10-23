@@ -1177,7 +1177,23 @@ class ItemController extends Controller
             'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
             'structure' => $this->pickableStructure($tree->roots(), $this->creatable($user, $container, $tree)),
             'can_create_root' => $canCreateRoot,
+            'can' => $this->taxonomyAbilities($user, $container),
         ]);
+    }
+
+    /**
+     * `can.manage_taxonomy` till väljaren (issue 337): får anroparen skapa en
+     * tagg eller kategori? Det är `ContainerPolicy::update`, samma grind som
+     * `TagController::store` och `CategoryController::store` prövar. Flaggan
+     * styr bara om raden *Create "X"* ritas — ändpunkterna nekar som förut.
+     *
+     * @return array{manage_taxonomy: bool}
+     */
+    private function taxonomyAbilities(User $user, Container $container): array
+    {
+        return [
+            'manage_taxonomy' => Gate::forUser($user)->allows('update', $container),
+        ];
     }
 
     /**
@@ -1400,6 +1416,7 @@ class ItemController extends Controller
             // inte i listan, och `firstWhere` svarar då null. Det är rätt svar:
             // valet är borta, och upplösningens steg 2 gäller.
             'cover' => $images->firstWhere('id', $item->cover_attachment_id)?->ulid,
+            'can' => $this->taxonomyAbilities($user, $container),
         ]);
     }
 

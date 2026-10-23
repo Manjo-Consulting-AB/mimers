@@ -3231,14 +3231,12 @@ return [
             'category' => 'Category',
             'category_none' => '— no category —',
             'categories_empty' => 'The container has no categories yet.',
-            'categories_empty_link' => 'Create categories',
 
             // The tags are chips in a searchable picker, one choice per tag in the
-            // container. A new tag is created on the tags page and not here: one way to the same write
-            // in two places is two rules to keep in step (decision 5).
+            // container. Issue 337: whoever may manage the container creates a
+            // new tag from the picker, through the tags page's own endpoint.
             'tags' => 'Tags',
             'tags_empty' => 'The container has no tags yet.',
-            'tags_empty_link' => 'Create tags',
 
             // The picker for categories and tags (issue 336 · [[ADR-0068
             // Itemets sida och skapandet]] § 13). `taxonomy_remove` is the
@@ -3246,6 +3244,9 @@ return [
             'taxonomy_search' => 'Search',
             'taxonomy_remove' => 'Remove :name',
             'taxonomy_no_matches' => 'No matches',
+
+            // The row for a new tag or category (issue 337 · ADR-0068 § 14).
+            'taxonomy_create' => 'Create ":name"',
 
             // The account the row is attributed to — the yard, not the
             // employee. Only on creation: who created the row is history
