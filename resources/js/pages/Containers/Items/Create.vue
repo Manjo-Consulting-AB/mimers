@@ -60,6 +60,8 @@ const props = defineProps({
     structure: { type: Array, default: () => [] },
     /* Får användaren lägga itemet på toppnivån? Ur `can_create_root`. */
     canCreateRoot: { type: Boolean, default: false },
+    /* `manage_taxonomy`: får användaren skapa taggar och kategorier i väljaren? */
+    can: { type: Object, default: () => ({ manage_taxonomy: false }) },
 });
 
 const { t } = useTranslations();
@@ -91,5 +93,6 @@ const account = computed(() => {
         :parent="parent"
         :structure="structure"
         :can-create-root="canCreateRoot"
+        :can-manage-taxonomy="can.manage_taxonomy"
     />
 </template>

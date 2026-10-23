@@ -60,9 +60,15 @@ const props = defineProps({
         default: 'multiple',
         validator: (value) => ['single', 'multiple'].includes(value),
     },
+    /*
+     * Visar raden *Create "X"*. Föräldern räknar ut det ur
+     * `can.manage_taxonomy` (`Gate::allows('update', $container)`), samma
+     * grind som ändpunkterna prövar — väljaren avgör ingenting själv.
+     */
+    canCreate: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'create']);
 
 const { t } = useTranslations();
 
@@ -99,16 +105,48 @@ const visibleOptions = computed(() => {
     });
 });
 
+/*
+ * Raden *Create "X"*: bara med behörighet, bara med text, och bara när texten
+ * inte exakt (skiftlägesokänsligt) är ett alternativ. Jämförelsen gäller ALLA
+ * alternativ, även de som redan är valda och därför inte syns i listan.
+ */
+const createName = computed(() => query.value.trim());
+
+const showCreate = computed(() => {
+    if (! props.canCreate || createName.value === '') {
+        return false;
+    }
+
+    const needle = createName.value.toLowerCase();
+
+    return ! props.options.some((option) => plainName(option).toLowerCase() === needle);
+});
+
+/* Antalet rader som går att markera: alternativen plus skaparaden. */
+const rowCount = computed(() => visibleOptions.value.length + (showCreate.value ? 1 : 0));
+
+const createIndex = computed(() => visibleOptions.value.length);
+
 const listboxId = computed(() => `${props.id}-listbox`);
 
 function optionId(option) {
     return `${props.id}-option-${option.ulid}`;
 }
 
+const createRowId = computed(() => `${props.id}-option-create`);
+
 const activeDescendant = computed(() => {
+    if (! open.value) {
+        return undefined;
+    }
+
+    if (showCreate.value && activeIndex.value === createIndex.value) {
+        return createRowId.value;
+    }
+
     const option = visibleOptions.value[activeIndex.value];
 
-    return open.value && option !== undefined ? optionId(option) : undefined;
+    return option !== undefined ? optionId(option) : undefined;
 });
 
 /* Namnet utan indraget — det som står i chipet och i knappens etikett. */
@@ -127,7 +165,7 @@ function closeList() {
 
 function onInput() {
     open.value = true;
-    activeIndex.value = visibleOptions.value.length > 0 ? 0 : -1;
+    activeIndex.value = rowCount.value > 0 ? 0 : -1;
 }
 
 function choose(option) {
@@ -136,6 +174,14 @@ function choose(option) {
     } else {
         emit('update:modelValue', [...selectedUlids.value, option.ulid]);
     }
+
+    query.value = '';
+    closeList();
+}
+
+/* Ber föräldern skapa namnet; den väljer det nya värdet när servern svarat. */
+function create() {
+    emit('create', createName.value);
 
     query.value = '';
     closeList();
@@ -152,7 +198,7 @@ function remove(ulid) {
 }
 
 function move(step) {
-    const count = visibleOptions.value.length;
+    const count = rowCount.value;
 
     if (! open.value) {
         open.value = true;
@@ -185,7 +231,9 @@ function onKeydown(event) {
 
         const option = visibleOptions.value[activeIndex.value];
 
-        if (open.value && option !== undefined) {
+        if (open.value && showCreate.value && activeIndex.value === createIndex.value) {
+            create();
+        } else if (open.value && option !== undefined) {
             choose(option);
         }
     } else if (event.key === 'Escape') {
@@ -273,7 +321,19 @@ function onFocusout(event) {
                 {{ option.name }}
             </li>
 
-            <li v-if="visibleOptions.length === 0" role="presentation" class="px-3 py-2 text-body text-ink-muted">
+            <li
+                v-if="showCreate"
+                :id="createRowId"
+                role="option"
+                aria-selected="false"
+                class="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-body text-accent"
+                :class="activeIndex === createIndex ? 'bg-accent-soft' : 'hover:bg-surface-sunken'"
+                @mousedown.prevent="create"
+            >
+                {{ t('item.form.taxonomy_create', { name: createName }) }}
+            </li>
+
+            <li v-if="rowCount === 0" role="presentation" class="px-3 py-2 text-body text-ink-muted">
                 {{ t('item.form.taxonomy_no_matches') }}
             </li>
         </ul>
