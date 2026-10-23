@@ -1,5 +1,6 @@
 <script setup>
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import ItemStructureTree from './ItemStructureTree.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -31,6 +32,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * användaren och itemet vid varje sidladdning. `overflow-x` rörs inte;
  * `md:` är fortfarande enda brytpunkten.
  *
+ * **Sedan issue 335 ([[ADR-0068 Itemets sida och skapandet]] § 2) har panelen
+ * två skepnader.** Under `lg:` är den en utfällbar rad ovanför itemet, hopfälld
+ * från början (`<details>` utan `open`). Från `lg:` är den en sidopanel som
+ * fälls ihop till en smal list med en knapp, och listen fäller ut den igen.
+ * Valet ägs av sidan (`collapsed`, `toggle`): rutnätets spår beror på det,
+ * och sidan sparar det i `localStorage`. Panelen läser och skriver ingen
+ * lagring själv. Skepnaderna ritas båda och väljs med klasser, samma sätt som
+ * förekomstpanelen; den som inte syns är `display: none` och därmed ur
+ * tabbordningen.
+ *
  * **Ingen egen tom-text.** Ett tomt träd ritar ingenting — se
  * ItemStructureTree.vue — och panelen säger varken att containern är tom eller
  * att något dolts.
@@ -41,27 +52,70 @@ const props = defineProps({
     containerUlid: { type: String, required: true },
     /* ULID:na längs den aktuella vägen, ur `paths` (issue 95). */
     activeTrail: { type: Array, required: true },
+    /* Från `lg:`: panelen är hopfälld till en smal list. Sidan äger valet. */
+    collapsed: { type: Boolean, default: false },
 });
+
+defineEmits(['toggle']);
 
 const { t } = useTranslations();
 </script>
 
 <template>
-    <UiCard>
-        <template #heading>{{ t('item.structure.heading') }}</template>
+    <div class="min-w-0">
+        <UiCard class="lg:hidden">
+            <template #heading>{{ t('item.structure.heading') }}</template>
 
-        <details open>
-            <summary class="flex min-h-11 cursor-pointer items-center text-body text-ink-muted">
-                {{ t('item.structure.tree') }}
-            </summary>
+            <details>
+                <summary class="flex min-h-11 cursor-pointer items-center text-body text-ink-muted">
+                    {{ t('item.structure.tree') }}
+                </summary>
 
-            <ItemStructureTree
-                class="mt-2 max-h-80 overflow-y-auto md:max-h-none md:overflow-visible"
-                :nodes="nodes"
-                :container-ulid="containerUlid"
-                :trail="[]"
-                :active-trail="activeTrail"
-            />
-        </details>
-    </UiCard>
+                <ItemStructureTree
+                    class="mt-2 max-h-80 overflow-y-auto"
+                    :nodes="nodes"
+                    :container-ulid="containerUlid"
+                    :trail="[]"
+                    :active-trail="activeTrail"
+                />
+            </details>
+        </UiCard>
+
+        <div class="hidden lg:block">
+            <button
+                v-if="collapsed"
+                type="button"
+                :aria-expanded="'false'"
+                :aria-label="t('item.structure.panel_expand')"
+                :title="t('item.structure.panel_expand')"
+                class="flex min-h-11 w-full items-start justify-center rounded-card border border-border bg-surface py-3 text-ink-muted shadow-card outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                @click="$emit('toggle')"
+            >
+                <UiIcon name="chevron-right" :size="16" class="h-4 w-4" />
+            </button>
+
+            <UiCard v-else>
+                <template #heading>{{ t('item.structure.heading') }}</template>
+                <template #action>
+                    <button
+                        type="button"
+                        :aria-expanded="'true'"
+                        :aria-label="t('item.structure.panel_collapse')"
+                        :title="t('item.structure.panel_collapse')"
+                        class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        @click="$emit('toggle')"
+                    >
+                        <UiIcon name="chevron-left" :size="16" class="h-4 w-4" />
+                    </button>
+                </template>
+
+                <ItemStructureTree
+                    :nodes="nodes"
+                    :container-ulid="containerUlid"
+                    :trail="[]"
+                    :active-trail="activeTrail"
+                />
+            </UiCard>
+        </div>
+    </div>
 </template>

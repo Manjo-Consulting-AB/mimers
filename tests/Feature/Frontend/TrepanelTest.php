@@ -212,10 +212,10 @@ it('renderar de tre panelerna inuti containerns ram', function () {
     expect((int) $strukturen)->toBeLessThan((int) $itemet);
     expect((int) $itemet)->toBeLessThan((int) $kartan);
 
-    // Rutan runt dem: en kolumn på en telefon, fyra över `md:` — mittkolumnen
-    // är tre av dem, och strukturen en.
-    expect($ram)->toContain('grid grid-cols-1 gap-6 md:grid-cols-4')
-        ->toContain('md:col-span-3');
+    // Rutan runt dem: en kolumn under `lg:`, tre spår därifrån (issue 335:
+    // spåren väljs av `panelGridClass`, som också håller de hopfällda
+    // listerna).
+    expect($ram)->toContain('grid grid-cols-1 gap-6" :class="panelGridClass"');
 
     // Skalet deklareras inte om här i mallen: containerns ram bär det, och
     // sedan issue 275 bor den i kedjan — ingen layouttagg står i vyn. Och
@@ -479,7 +479,7 @@ it('ritar förekomsterna i en egen panel under kartan', function () {
         ->and((int) $panelen)->toBeLessThan((int) $ramen);
 
     // ...och inuti kartans EGET omslutande element — samma kolumn.
-    preg_match('#<div class="[^"]*md:col-start-2[^"]*">(.*?)</div>#s', $vy, $träff);
+    preg_match('#<div class="[^"]*hidden min-w-0 lg:block[^"]*">(.*?)</div>#s', $vy, $träff);
 
     expect($träff[1] ?? '')->toContain('<ItemMapPanel')
         ->toContain('<ItemPlacementsPanel')
@@ -528,7 +528,7 @@ it('ritar förekomstpanelen i mittenkolumnen under md:', function () {
     // ...och det är den som bär brytpunkten.
     preg_match('/<ItemPlacementsPanel\b[^>]*>/s', $vy, $först);
 
-    expect($först[0] ?? '')->toContain('md:hidden');
+    expect($först[0] ?? '')->toContain('lg:hidden');
 
     // Regeln och id:t flyttade in i panelen. Två `expect` och inte en kedja:
     // ett andra `not` mitt i en kedja fäller phpstan (samma fälla som
@@ -674,28 +674,23 @@ it('staplar panelerna på smal skärm med strukturen utfällbar', function () {
 
     $panelen = trepanelKod('components/ItemStructurePanel.vue');
 
-    // Staplad i källan och sida vid sida över `md:` — en kolumn först, fyra
-    // sedan, och mittkolumnen tre av dem.
+    // Staplad i källan under `lg:` och sida vid sida därifrån (issue 335).
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
 
     expect($vy)->toContain('grid-cols-1')
-        ->toContain('md:grid-cols-4')
-        ->toContain('md:col-span-3');
+        ->toContain('lg:grid-cols-[');
 
-    // Utfällbar: `<details>` med en `<summary>`, och öppen i källan så att den
-    // breda skärmen visar trädet som bilden gör.
-    expect($panelen)->toContain('<details open>')
+    // Utfällbar: `<details>` med en `<summary>`, hopfälld från början under
+    // `lg:` (ingen `open`).
+    expect($panelen)->toContain('<details>')
         ->toContain('<summary')
         ->toContain('<ItemStructureTree');
 
     // Och taket: en öppen `<details>` utan höjdtak är i praktiken den egna sida
     // staplingen inte får vara — hela containerns träd står då mellan användaren
-    // och itemet vid varje sidladdning. Trädet skrollar i höjdled under `md:`
-    // och är fritt däröver; `md:` är fortfarande enda brytpunkten.
+    // och itemet. Trädet i raden skrollar i höjdled.
     expect($panelen)->toContain('max-h-80')
-        ->toContain('overflow-y-auto')
-        ->toContain('md:max-h-none')
-        ->toContain('md:overflow-visible');
+        ->toContain('overflow-y-auto');
 
     // Trädet står INUTI den utfällbara ytan — en `<details>` runt en rubrik
     // hade varit en fällning utan innehåll.
@@ -742,9 +737,11 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
         'lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]',
     );
 
-    preg_match('/lg:grid-cols-\[([^\]]+)\]/', $vy, $träff);
+    // Det utfällda läget är grenen där ingen panel är hopfälld: den som har
+    // `minmax(…rem)` i båda sidospåren. De hopfällda grenarna prövas nedan.
+    preg_match('/lg:grid-cols-\[(minmax\([^\]_]+\)_[^\]_]+_minmax\([^\]_]+\))\]/', $vy, $träff);
 
-    expect($träff)->not->toBeEmpty('vyn sätter ingen lg:grid-cols-');
+    expect($träff)->not->toBeEmpty('vyn sätter ingen utfälld lg:grid-cols-');
 
     $spår = explode('_', $träff[1]);
 
@@ -754,6 +751,24 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
     expect($spår[0])->toStartWith('minmax(')->toEndWith('rem)')
         ->and($spår[2])->toStartWith('minmax(')->toEndWith('rem)')
         ->and($spår[1])->toContain('1fr');
+
+    // En hopfälld sidopanel är en list på `2.75rem`, aldrig ett minmax-spår.
+    preg_match_all('/lg:grid-cols-\[([^\]]+)\]/', $vy, $alla);
+
+    expect($alla[1])->toHaveCount(4);
+
+    foreach ($alla[1] as $uppsattning) {
+        $delar = explode('_', $uppsattning);
+
+        expect($delar)->toHaveCount(3)
+            ->and($delar[1])->toContain('1fr');
+
+        foreach ([$delar[0], $delar[2]] as $sida) {
+            expect(str_starts_with($sida, 'minmax(') || $sida === '2.75rem')->toBeTrue("oväntat spår: {$sida}");
+        }
+    }
+
+    expect($alla[1])->toContain('2.75rem_minmax(0,1fr)_2.75rem');
 });
 
 /*
@@ -772,25 +787,28 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
 it('mellan md och lg står kartan under itemet', function () {
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
 
-    // Mittkolumnen är tre av fyra spår över `md:` — itemets kolumn.
-    expect($vy)->toContain('min-w-0 md:col-span-3');
+    // Mittkolumnen är en kolumn under `lg:` och har ingen `md:`-spårbredd
+    // längre: kartan har ingen egen rad där, den står på översiktens sektion
+    // i mittkolumnen.
+    expect($vy)->toContain('<div class="min-w-0">');
+    expect($vy)->not->toContain('md:col-span-3');
+    expect($vy)->not->toContain('md:col-start-2');
 
-    // Kartans omslutande element, alltså rutnätets barn — spåren sätts där
-    // och inte på panelen, vars proppar och innehåll är orörda (Beslut 3).
+    $översikten = strpos($vy, "<section v-if=\"activeTab === 'overview'\"");
+    $kartan = strpos($vy, '<ItemMapPanel');
+
+    expect($översikten)->not->toBeFalse('översikten saknas')
+        ->and((int) $kartan)->toBeGreaterThan((int) $översikten);
+
+    preg_match('/<ItemMapPanel\b[^>]*>/s', $vy, $översiktens);
+
+    expect($översiktens[0] ?? '')->toContain('class="lg:hidden"');
+
+    // Och högerkolumnens omslag är dolt under `lg:` och är rutnätets tredje barn.
     preg_match('#<div class="([^"]*)">\s*<ItemMapPanel\b#', $vy, $träff);
 
     expect($träff)->not->toBeEmpty('kartan har inget omslutande rutnätselement');
-
-    $kartan = $träff[1];
-
-    // Samma startspår och samma bredd som itemet, alltså raden under det.
-    expect($kartan)->toContain('md:col-start-2')
-        ->toContain('md:col-span-3');
-
-    // Och över `lg:` tar kartan det tredje spåret i stället — den har inte
-    // kvar mittkolumnens tre.
-    expect($kartan)->toContain('lg:col-start-3')
-        ->toContain('lg:col-span-1');
+    expect($träff[1])->toContain('hidden')->toContain('lg:block');
 });
 
 /*
@@ -838,8 +856,8 @@ it('panelernas ordning i markupen är struktur, item, karta', function () {
  */
 it('ItemStructurePanel och ItemMapPanel har sina proppar', function () {
     expect(trepanelProps('components/ItemStructurePanel.vue'))
-        ->toBe(['nodes', 'containerUlid', 'activeTrail']);
+        ->toBe(['nodes', 'containerUlid', 'activeTrail', 'collapsed']);
 
     expect(trepanelProps('components/ItemMapPanel.vue'))
-        ->toBe(['map', 'statuses', 'containerUlid', 'overflowHref']);
+        ->toBe(['map', 'statuses', 'containerUlid', 'overflowHref', 'collapsed', 'collapsible']);
 });

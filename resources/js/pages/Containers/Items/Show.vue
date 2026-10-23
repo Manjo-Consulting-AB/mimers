@@ -98,7 +98,7 @@ defineOptions({
  * den aktuella, och den här filen vandrar inte i grafen och sorterar inte om
  * listan (issue 57a § Beslut 8). Brödsmulan står överst i itemet; de övriga
  * vägarna ligger i ItemPlacementsPanel.vue, som den här filen ritar i
- * högerkolumnen under kartan över `md:` och i mittenkolumnen under — samma
+ * högerkolumnen under kartan från `lg:` och i mittenkolumnen under — samma
  * mönster som kartan.
  *
  * **Sidan är tre paneler** (issue 103 · [[M17 Designsystemet]] § 103):
@@ -109,8 +109,9 @@ defineOptions({
  * aktuella, och den här filen räknar ut ledet en gång — `activeTrail` — i
  * stället för att låta panelen läsa adressen själv. Kartan i panelen är
  * `ItemMap` i sin smala form (ItemMapPanel.vue, issue 313 · [[ADR-0063
- * Itemets karta i containerkartans form]] § 1). Under `md:` staplas panelerna,
- * och strukturen blir en utfällbar yta och inte en egen sida.
+ * Itemets karta i containerkartans form]] § 1). Under `lg:` staplas panelerna,
+ * strukturen blir en utfällbar rad ovanför itemet och kartan flyttar in på
+ * översikten (issue 335 · [[ADR-0068 Itemets sida och skapandet]] § 2 och 5).
  *
  * **Sidan är en flikrad med sju flikar** (issue 102, 116 och 154 ·
  * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
@@ -482,6 +483,74 @@ const mapFocusHref = computed(
 );
 
 /*
+ * Sidopanelernas hopfällning (issue 335 · [[ADR-0068 Itemets sida och
+ * skapandet]] § 2). Från `lg:` kan struktur- och kartpanelen fällas ihop var
+ * för sig, och valet sparas per webbläsare i `localStorage`: värdet är
+ * `collapsed`, och en utfälld panel har ingen nyckel alls.
+ *
+ * Läsning och skrivning ligger i `try/catch` — lagringen kan saknas, vara
+ * spärrad eller kasta (privat fönster, blockerade webbplatsdata) — och sidan
+ * ritar då båda panelerna utfällda, utan fel. Rutnätets spår beror på valet,
+ * så tillståndet bor här och inte i panelerna.
+ */
+const STRUCTURE_PANEL_KEY = 'mimers.item.structure_panel';
+const MAP_PANEL_KEY = 'mimers.item.map_panel';
+
+function readPanelCollapsed(key) {
+    try {
+        return window.localStorage.getItem(key) === 'collapsed';
+    } catch {
+        return false;
+    }
+}
+
+function writePanelCollapsed(key, collapsed) {
+    try {
+        if (collapsed) {
+            window.localStorage.setItem(key, 'collapsed');
+        } else {
+            window.localStorage.removeItem(key);
+        }
+    } catch {
+        /* Valet gäller då bara tills sidan laddas om. */
+    }
+}
+
+const structureCollapsed = ref(readPanelCollapsed(STRUCTURE_PANEL_KEY));
+const mapCollapsed = ref(readPanelCollapsed(MAP_PANEL_KEY));
+
+function toggleStructurePanel() {
+    structureCollapsed.value = ! structureCollapsed.value;
+    writePanelCollapsed(STRUCTURE_PANEL_KEY, structureCollapsed.value);
+}
+
+function toggleMapPanel() {
+    mapCollapsed.value = ! mapCollapsed.value;
+    writePanelCollapsed(MAP_PANEL_KEY, mapCollapsed.value);
+}
+
+/*
+ * Rutnätets tre spår från `lg:`. Klasserna står utskrivna i sin helhet, så
+ * att Tailwind hittar dem: en hopfälld panel är en list på `2.75rem` (en
+ * knapp med träffyta 44 px), en utfälld har golv och tak i `rem`.
+ */
+const panelGridClass = computed(() => {
+    if (structureCollapsed.value && mapCollapsed.value) {
+        return 'lg:grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]';
+    }
+
+    if (structureCollapsed.value) {
+        return 'lg:grid-cols-[2.75rem_minmax(0,1fr)_minmax(18rem,24rem)]';
+    }
+
+    if (mapCollapsed.value) {
+        return 'lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_2.75rem]';
+    }
+
+    return 'lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]';
+});
+
+/*
  * Relationsflikens två lägen (issue 156), till växeln under `md:`: *Lista* är
  * sektionen och förvalet — adressen UTAN `view`, samma val som översiktsfliken
  * gör med `tab` (issue 100) — och *Fokus* är kartan.
@@ -717,41 +786,36 @@ function toggleFavorite() {
         vänster, itemet i mitten, kartan till höger — allt inuti containerns
         ram, som i `docs/Design/struktur - item.jpeg`.
 
-        Under `md:` staplas panelerna i dokumentordningen: strukturen
-        först, itemet sedan, kartan sist. Strukturen blir där en utfällbar
-        yta — se ItemStructurePanel.vue — och aldrig en egen sida: en andra
-        sida hade varit bildens globala navigering, som är avvisad två
-        gånger. Där är vyn oförändrad sedan issue 154.
+        Under `lg:` staplas panelerna i dokumentordningen: strukturen
+        först, itemet sedan. Strukturen blir där en utfällbar rad, hopfälld
+        från början — se ItemStructurePanel.vue — och aldrig en egen sida: en
+        andra sida hade varit bildens globala navigering, som är avvisad två
+        gånger. Kartan har ingen egen rad där: den står på översikten
+        (ADR-0068 § 5, punkt 5).
 
-        Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
-        (M24 · [[ADR-0050 Desktopdesignen]]).
-
-        **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet tre,
-        kartan tre. Kartan börjar i mittkolumnens första spår och får
-        därför en EGEN rad under itemet i stället för en tredje kolumn:
-        1 + 3 fyller fyra spår, och kartan hamnar under itemet och inte
-        vid sidan om det.
-
-        **`lg:` och uppåt — tre spår:**
+        **`lg:` och uppåt — tre spår** (`panelGridClass`):
         `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
         struktur, item, karta. Sidopanelerna har ett golv och ett tak i
         rem i stället för en andel: strukturträdets längsta rad bestämmer
         golvet, kartans teckenförklaring taket, och itemet tar resten. En
         andel hade krympt trädet under läsbarhet på en smalare skärm och
-        låtit itemet svälla på en bredare.
+        låtit itemet svälla på en bredare. En hopfälld sidopanel är en list
+        på `2.75rem`, och itemet tar utrymmet.
 
         `min-w-0` behövs för att en lång rad i itemet ska brytas i stället
         för att tvinga ut kolumnen — samma skäl som ContainerLayouts egen
         slot bär den.
     -->
-    <div class="grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]">
+    <div class="grid grid-cols-1 gap-6" :class="panelGridClass">
         <ItemStructurePanel
             :nodes="structure"
             :container-ulid="container.ulid"
             :active-trail="activeTrail"
+            :collapsed="structureCollapsed"
+            @toggle="toggleStructurePanel"
         />
 
-        <div class="min-w-0 md:col-span-3 lg:col-span-1">
+        <div class="min-w-0">
             <!--
                 Brödsmulan (issue 95): vägen från roten ned till itemet, den
                 aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
@@ -926,21 +990,21 @@ function toggleFavorite() {
             />
 
             <!--
-                Förekomstpanelen under `md:` (issue 95 och 633 ·
+                Förekomstpanelen under `lg:` (issue 95, 633 och 335 ·
                 ItemPlacementsPanel.vue). Under brytpunkten är högerkolumnen
                 dold, och panelen ritas därför en gång till här i
                 mittenkolumnen — samma mönster och samma skäl som kartan,
-                som står i högerpanelen över `md:` och i relationsfliken
-                under (FokuskartaTest). Samma yta två gånger på samma skärm
+                som står i högerpanelen från `lg:`, på översikten och i
+                relationsfliken under (FokuskartaTest). Samma yta två gånger på samma skärm
                 hade varit samma väg två gånger, och därför bär den här
-                kopian `md:hidden`.
+                kopian `lg:hidden` (utom när kartan är hopfälld).
 
                 Villkoret — itemet ska ha MER än en förekomst — bor i
                 panelen och inte här: anroparen ritar den två gånger och
                 ska inte behöva komma ihåg samma regel på två ställen.
             -->
             <ItemPlacementsPanel
-                class="mt-6 md:hidden"
+                :class="mapCollapsed ? 'mt-6' : 'mt-6 lg:hidden'"
                 :paths="paths"
                 :path-href="pathHref"
             />
@@ -1010,6 +1074,21 @@ function toggleFavorite() {
                     </span>
                     <span v-if="openLoanOverdue" class="font-medium text-danger">{{ t('item.loan.overdue') }}</span>
                 </Link>
+
+                <!--
+                    Kartan i sin smala form, bara under `lg:` (issue 335 ·
+                    ADR-0068 § 5, punkt 5): mellan den pågående utlåningen
+                    och anteckningarna. Från `lg:` står den i högerpanelen och
+                    översikten ritar ingen — relationerna visas en gång på
+                    varje bredd. Panelen här har ingen hopfällningsknapp.
+                -->
+                <ItemMapPanel
+                    class="lg:hidden"
+                    :map="itemMap"
+                    :statuses="itemMapStatuses"
+                    :container-ulid="container.ulid"
+                    :overflow-href="mapFocusHref"
+                />
 
                 <!--
                     Anteckningen (M42 · issue 325 · [[ADR-0066 Itemets
@@ -1189,48 +1268,45 @@ function toggleFavorite() {
         </div>
 
         <!--
-            Kartans plats (issue 156, 181): fokuskartan i högerpanelen över
-            `md:`. Under brytpunkten är panelen dold med flit — där är
-            kartan ett LÄGE i itemets relationsflik i stället (se
-            ItemLinkSection.vue), och samma karta två gånger på samma
+            Kartans plats (issue 156, 181, 335): kartan i högerpanelen från
+            `lg:`. Under `lg:` är panelen dold med flit — där står kartan på
+            översikten (ADR-0068 § 5) och, som ett läge, i relationsfliken
+            (se ItemLinkSection.vue), och samma karta två gånger på samma
             skärm hade varit samma nod två gånger.
 
-            Placeringen sker med klasserna och inte genom att flytta
-            markupen: strukturen, itemet och kartan står i samma ordning i
-            källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
-            tangentbordsordningen följer den. Över `lg:` tar kartan det
-            tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
-            kartan börjar i mittkolumnens första — samma tre spår som
-            itemet och alltså en egen rad under det. Kartan får ingen egen
-            höjdberäkning: ItemMap växer med sitt innehåll, och den
-            smalare kolumnen bryter rader i stället för att klippa.
+            Strukturen, itemet och kartan står i samma ordning i källan på
+            varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
+            tangentbordsordningen följer den. Spåren sätts av rutnätet
+            (`panelGridClass`), som också håller de hopfällda listerna.
+            Kartan får ingen egen höjdberäkning: ItemMap växer med sitt
+            innehåll, och den smalare kolumnen bryter rader i stället för att
+            klippa.
 
-            Spåren sätts på det omslutande elementet och inte på panelen:
-            panelen bär kvar `hidden md:block` från issue 156, och dess
-            innehåll och proppar är orörda (Beslut 3). Omslaget bär samma
-            `hidden md:block`, så den dolda panelen inte lämnar en tom
-            rad med ett `gap-6` efter sig på en telefon.
+            Förekomstpanelen följer med kartans kolumn. Är kartan hopfälld är
+            kolumnen en list utan plats för den, och panelen ritas då i
+            mittenkolumnen i stället — aldrig på båda ställena.
         -->
-        <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
+        <div class="hidden min-w-0 lg:block">
             <ItemMapPanel
-                class="hidden md:block"
                 :map="itemMap"
                 :statuses="itemMapStatuses"
                 :container-ulid="container.ulid"
                 :overflow-href="mapFocusHref"
+                collapsible
+                :collapsed="mapCollapsed"
+                @toggle="toggleMapPanel"
             />
 
             <!--
-                Förekomstpanelen över `md:` (issue 633 ·
+                Förekomstpanelen från `lg:` (issue 633 ·
                 `docs/Design/struktur - item.jpeg`, panelen under kartan):
                 samma vägar som brödsmulan visar en av, med den aktuella
                 utmärkt. Raderna kommer i serverns ordning och sorteras
                 aldrig här — för samma användare står brödsmulan och
                 panelen därför alltid i samma ordning (issue 57a § Beslut 8).
-                Omslaget ovanför bär redan `hidden md:block`, så panelen
-                behöver ingen egen brytpunkt.
             -->
             <ItemPlacementsPanel
+                v-if="! mapCollapsed"
                 class="mt-6"
                 :paths="paths"
                 :path-href="pathHref"
