@@ -66,6 +66,8 @@ const props = defineProps({
      * grind som ändpunkterna prövar — väljaren avgör ingenting själv.
      */
     canCreate: { type: Boolean, default: false },
+    /* Låser sökfältet medan ett skapande pågår. */
+    disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue', 'create']);
@@ -288,6 +290,7 @@ function onFocusout(event) {
                 :aria-controls="listboxId"
                 :aria-activedescendant="activeDescendant"
                 :aria-describedby="describedBy"
+                :disabled="disabled"
                 :placeholder="chips.length === 0 ? t('item.form.taxonomy_search') : ''"
                 class="min-h-11 min-w-24 flex-1 bg-transparent px-1 text-body text-ink outline-none"
                 @focus="openList"

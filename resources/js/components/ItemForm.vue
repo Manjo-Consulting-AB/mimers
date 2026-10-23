@@ -306,11 +306,13 @@ function createTaxonomy(kind, name) {
     const isTag = kind === 'tags';
 
     taxonomyErrors.value[kind] = null;
-    taxonomyCreating.value = true;
 
     router.post(`/containers/${props.containerUlid}/${isTag ? 'tags' : 'categories'}`, { name }, {
         preserveState: true,
         preserveScroll: true,
+        onStart: () => {
+            taxonomyCreating.value = true;
+        },
         onSuccess: (page) => {
             const needle = name.trim().toLowerCase();
             const created = page.props[isTag ? 'tags' : 'categories']
@@ -616,6 +618,7 @@ function submit() {
                 :options="options"
                 mode="single"
                 :can-create="canManageTaxonomy && ! taxonomyCreating"
+                :disabled="taxonomyCreating"
                 @create="(name) => createTaxonomy('category', name)"
                 :described-by="describedBy"
             />
@@ -640,6 +643,7 @@ function submit() {
                 :options="tags"
                 mode="multiple"
                 :can-create="canManageTaxonomy && ! taxonomyCreating"
+                :disabled="taxonomyCreating"
                 @create="(name) => createTaxonomy('tags', name)"
                 :described-by="describedBy"
             />

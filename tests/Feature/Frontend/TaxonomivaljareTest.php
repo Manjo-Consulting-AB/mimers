@@ -50,7 +50,7 @@ it('tar alternativen, värdet och läget single eller multiple', function () {
     expect($kod)->toContain('options: { type: Array')
         ->toContain('modelValue: { type: [String, Array], default: null }')
         ->toContain("['single', 'multiple'].includes(value)")
-        ->toContain("defineEmits(['update:modelValue'])");
+        ->toContain("defineEmits(['update:modelValue', 'create'])");
 });
 
 it('håller ett värde i single och byter ut det vid nästa val', function () {

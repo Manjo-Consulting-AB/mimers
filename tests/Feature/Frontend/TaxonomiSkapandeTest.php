@@ -156,7 +156,7 @@ it('har inte lagt till några rutter för tagg- och kategoriskapandet', function
     $poster = collect(Route::getRoutes()->getRoutes())
         ->filter(fn ($rutt) => in_array('POST', $rutt->methods(), true))
         ->map(fn ($rutt) => $rutt->uri())
-        ->filter(fn (string $uri) => str_contains($uri, 'containers/{container}/tags') || str_contains($uri, 'containers/{container}/categories'))
+        ->filter(fn (string $uri) => str_starts_with($uri, 'containers/{container}/tags') || str_starts_with($uri, 'containers/{container}/categories'))
         ->values()
         ->all();
 
@@ -195,6 +195,9 @@ it('skapar ur formuläret med preserveState och preserveScroll och väljer det n
         ->toContain('form.category = created.ulid;')
         ->toContain('Object.values(errors)[0]')
         ->toContain('taxonomyErrors.category')
+        ->toContain('onStart:')
+        ->toContain('onFinish:')
+        ->toContain(':disabled="taxonomyCreating"')
         ->toContain(':can-create="canManageTaxonomy && ! taxonomyCreating"');
 
     foreach (['pages/Containers/Items/Create.vue', 'pages/Containers/Items/Edit.vue'] as $fil) {
