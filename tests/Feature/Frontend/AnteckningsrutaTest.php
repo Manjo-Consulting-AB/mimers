@@ -58,7 +58,7 @@ function anteckningsrutaTagg(string $kod, string $komponent): string
  * anteckningen före den här issuen är borta: beskrivningen är ett stycke
  * ovanför `ItemQuickFacts`, och anteckningen har flyttat ned i sin egen ruta.
  */
-it('ritar översikten i ordningen beskrivning, snabbfakta, anteckningen och aktiviteten', function () {
+it('ritar översikten i ordningen beskrivning, snabbfakta, alla fält, anteckningen och aktiviteten', function () {
     $vy = anteckningsrutaKod('pages/Containers/Items/Show.vue');
 
     $beskrivning = strpos($vy, '{{ item.description }}');
