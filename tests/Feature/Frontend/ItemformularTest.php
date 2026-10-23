@@ -817,3 +817,19 @@ it('har varje item-nyckel', function () {
         expect($kod)->not->toMatch('/[åäöÅÄÖ]/u', "svensk text utanför kommentar i {$fil}");
     }
 });
+
+/*
+ * Issue 336: kategorin och taggarna väljs i TaxonomyPicker, men det som
+ * skickas är detsamma — en ULID eller null, och en lista med ULID:n.
+ */
+it('skickar category som ULID eller null och tags som ULID-lista ur väljaren', function () {
+    $kod = File::get(resource_path('js/components/ItemForm.vue'));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    expect($kod)->toContain('<TaxonomyPicker')
+        ->toContain('v-model="form.category"')
+        ->toContain('v-model="form.tags"');
+
+    expect($kod)->not->toContain('<UiCheckbox');
+});

@@ -5,8 +5,8 @@ import FormField from './FormField.vue';
 import ItemIcon from './ItemIcon.vue';
 import ItemIconPicker from './ItemIconPicker.vue';
 import ParentPicker from './ParentPicker.vue';
+import TaxonomyPicker from './TaxonomyPicker.vue';
 import UiButton from './UiButton.vue';
-import UiCheckbox from './UiCheckbox.vue';
 import UiInput from './UiInput.vue';
 import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
@@ -28,12 +28,13 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * .vue-fil bland vyerna blir en sida som går att rendera utan att någon rutt
  * pekar på den. Den här är ingen sida — den är en del av Create och Edit.
  *
- * **Kategorin är en väljare ur trädet, taggarna är kryssrutor** (§ Beslut 5).
- * Ett item ligger i HÖGST en kategori, men kan bära hur många taggar som
- * helst — [[ADR-0004 Fria taggar och kategorier]] — och formen visar den
- * skillnaden. Kategoriträdet byggs av resources/js/components/categoryTree.js,
- * precis som kategorisidan bygger det; ingen kombibox, ingen autocomplete och
- * inget nytt beroende. Att en ny tagg inte går att skapa härifrån är
+ * **Kategorin och taggarna är samma väljare i två lägen** (§ Beslut 5, och
+ * sedan issue 336 [[ADR-0068 Itemets sida och skapandet]] § 13). Ett item
+ * ligger i HÖGST en kategori (`single`), men kan bära hur många taggar som
+ * helst (`multiple`) — [[ADR-0004 Fria taggar och kategorier]] — och
+ * TaxonomyPicker visar den skillnaden. Kategoriträdet byggs av
+ * resources/js/components/categoryTree.js, precis som kategorisidan bygger
+ * det; inget nytt beroende. Att en ny tagg inte går att skapa härifrån är
  * avsiktligt: taggsidan finns, och en väg till samma skrivning på två ställen
  * är två regler att hålla i takt.
  *
@@ -250,8 +251,8 @@ function removeIcon() {
 
 /*
  * Taggfelet ligger på `tags.0`, `tags.1`, ... och inte på `tags` — regeln bor
- * på `tags.*` i den delade FormRequesten (issue 13b § Beslut 5). Kryssrutorna
- * är en grupp och inte ett fält, så den första taggnyckeln i felpåsen blir
+ * på `tags.*` i den delade FormRequesten (issue 13b § Beslut 5). Väljaren
+ * är ett fält och inte en grupp av fält, så den första taggnyckeln i felpåsen blir
  * gruppens fel.
  */
 const tagError = computed(() => {
@@ -551,7 +552,7 @@ function submit() {
             />
         </FormField>
 
-        <!-- Kategorin: en väljare ur trädet, indraget efter djup. -->
+        <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
         <FormField
             v-if="options.length > 0"
             v-slot="{ describedBy }"
@@ -559,17 +560,13 @@ function submit() {
             id="category"
             :error="form.errors.category"
         >
-            <UiSelect
+            <TaxonomyPicker
                 id="category"
                 v-model="form.category"
+                :options="options"
+                mode="single"
                 :described-by="describedBy"
-                name="category"
-            >
-                <option :value="null">{{ t('item.form.category_none') }}</option>
-                <option v-for="option in options" :key="option.ulid" :value="option.ulid">
-                    {{ option.name }}
-                </option>
-            </UiSelect>
+            />
         </FormField>
 
         <!-- Tom container: en rad som pekar på kategorisidan, aldrig en tom väljare. -->
@@ -583,39 +580,22 @@ function submit() {
             </Link>
         </p>
 
-        <!-- Taggarna: kryssrutor med sin färgprick, en per tagg i containern. -->
-        <fieldset
+        <!-- Taggarna: samma väljare, flera värden. -->
+        <FormField
             v-if="tags.length > 0"
-            class="flex flex-col gap-2"
-            :aria-describedby="tagError ? 'tags-error' : undefined"
+            v-slot="{ describedBy }"
+            :label="t('item.form.tags')"
+            id="tags"
+            :error="tagError"
         >
-            <legend class="text-body font-medium text-ink">{{ t('item.form.tags') }}</legend>
-
-            <UiCheckbox
-                v-for="tag in tags"
-                :key="tag.ulid"
+            <TaxonomyPicker
+                id="tags"
                 v-model="form.tags"
-                :id="`item-tag-${tag.ulid}`"
-                :value="tag.ulid"
-            >
-                <span
-                    aria-hidden="true"
-                    class="inline-block h-3 w-3 shrink-0 rounded-full border border-ink-subtle"
-                    :style="tag.color ? { backgroundColor: tag.color } : null"
-                />
-                {{ tag.name }}
-            </UiCheckbox>
-
-            <p
-                v-if="tagError"
-                id="tags-error"
-                role="alert"
-                tabindex="-1"
-                class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
-            >
-                {{ tagError }}
-            </p>
-        </fieldset>
+                :options="tags"
+                mode="multiple"
+                :described-by="describedBy"
+            />
+        </FormField>
 
         <p v-else class="text-body text-ink-muted">
             {{ t('item.form.tags_empty') }}

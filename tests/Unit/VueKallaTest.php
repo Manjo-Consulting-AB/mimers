@@ -75,3 +75,14 @@ it('kastar RuntimeException när mall eller fil saknas', function () {
 it('vueMall på ItemRow.vue tar inte med kommentarens ContainerMapNode', function () {
     expect(vueMall('js/components/ItemRow.vue'))->not->toContain('ContainerMapNode');
 });
+
+it('taxonomiväljarens mall bär combobox-rollerna och inte kommentarens ord', function () {
+    $mall = vueMall('js/components/TaxonomyPicker.vue');
+    $skript = vueSkript('js/components/TaxonomyPicker.vue');
+
+    expect($mall)->toContain('role="combobox"');
+    expect($mall)->toContain('role="listbox"');
+    expect($mall)->not->toContain('preventDefault');
+    expect($skript)->toContain("event.key === 'Backspace'");
+    expect($skript)->not->toContain('Tangentbordet är combobox-mönstret');
+});

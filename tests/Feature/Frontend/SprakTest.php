@@ -527,6 +527,7 @@ it('hämtar formulärets och väljarens strängar ur ui.php', function () {
     foreach ([
         'js/components/ItemForm.vue',
         'js/components/ParentPicker.vue',
+        'js/components/TaxonomyPicker.vue',
     ] as $fil) {
         preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 
