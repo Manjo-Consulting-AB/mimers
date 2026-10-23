@@ -987,11 +987,11 @@ it('har varje ny schemanyckel och ingen svensk sträng i vyerna', function () {
  * `item.schedule.*` står kvar (Beslut 2) — bara texten användaren läser byter,
  * och datamodellen och koden heter fortfarande `schedule`.
  */
-it('kallar itemets uppgiftssektion Tasks och knappen New task', function () {
+it('kallar itemets uppgiftssektion To do och knappen New task', function () {
     // Beslut 1: exakt dessa fem nycklar byter värde. `t()` skriver nyckeln
     // själv om den saknas, så `toBe` binder både närvaron och ordalydelsen.
     $varden = [
-        'ui.item.schedule.heading' => 'Tasks',
+        'ui.item.schedule.heading' => 'To do',
         'ui.item.schedule.empty' => 'The item has no tasks.',
         'ui.item.schedule.add' => 'New task',
         'ui.item.schedule.create.title' => 'New task',

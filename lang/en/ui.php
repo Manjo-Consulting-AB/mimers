@@ -169,8 +169,9 @@ return [
             'item' => 'Item below',
             // En `related`-länk till ett annat item.
             'relation' => 'Relation',
-            // En bilaga.
-            'attachment' => 'Image or document',
+            // Ett dokument. Singular som övriga rader, se [[ADR-0068 Itemets sida
+            // och skapandet]] § 1.
+            'attachment' => 'Document',
             // Ett schema.
             'schedule' => 'Task',
             // En kostnadsrad på itemet (issue 168). Raden leder till itemets
@@ -2941,6 +2942,9 @@ return [
         ],
 
         'show' => [
+            // The words on this page follow the table in [[ADR-0068 Itemets sida
+            // och skapandet]] § 1.
+            //
             // The tab with no section of its own to borrow a word from, see
             // issue 102 · [[M17 Designsystemet]] § 102. The other six read the
             // heading of the section they carry — one surface, one word, and
@@ -2995,7 +2999,7 @@ return [
             'serial_number' => 'Serial number',
             'purchased_at' => 'Purchase date',
             'warranty_until' => 'Warranty until',
-            'position_note' => 'Location',
+            'position_note' => 'Storage location',
             'category' => 'Category',
             'tags' => 'Tags',
             // The tags tab with no tag on the item. Until now the panel drew
@@ -3014,7 +3018,7 @@ return [
             // keys about tasks above. One English word cannot mean both a
             // task's occurrence and a spot in the structure — that is what
             // [[ADR-0032 Produktens ord]] exists to prevent. *Location* is
-            // taken as well: `position_note` above reads 'Location', and it
+            // taken as well: `position_note` above reads 'Storage location', and it
             // answers a different question.
             //
             // `placements` heads the list, and the list points at that heading
@@ -3029,7 +3033,7 @@ return [
             // `placement_go` is the LINK on every OTHER row — the mockup's
             // *Gå till* — and it is the row's only clickable surface, so the
             // breadcrumb above it stays text (issue 633).
-            'placements' => 'Placements in the structure',
+            'placements' => 'Placements',
             'placement_current' => 'Current',
             'placement_go' => 'Go to',
             'breadcrumb' => 'Where this item sits',
@@ -3203,9 +3207,8 @@ return [
         ],
 
         // The form's field labels, see issue 57b decision 9. The product's
-        // words and not the column names: *Purchased* and *Warranty until* is
-        // what the field asks, unlike the detail view's summarising *Purchase
-        // date*. Hence its own keys rather than reusing `show.*`.
+        // words and not the column names: *Purchase date* and *Warranty until* are
+        // what the fields ask. Hence their own keys rather than reusing `show.*`.
         'form' => [
             'name' => 'Name',
             'description' => 'Description',
@@ -3214,9 +3217,9 @@ return [
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',
-            'purchased_at' => 'Purchased',
+            'purchased_at' => 'Purchase date',
             'warranty_until' => 'Warranty until',
-            'position_note' => 'Where it is',
+            'position_note' => 'Storage location',
 
             // An item sits in AT MOST one category ([[ADR-0004 Fria taggar
             // och kategorier]]). The top row of the selector is a choice, not
@@ -3451,7 +3454,7 @@ return [
         // upload with the login sentence on `email`, which would be a lie
         // here), and `dismiss` closes a failed row (decision 4).
         'attachment' => [
-            'heading' => 'Attachments',
+            'heading' => 'Documents',
             'empty' => 'The item has no attachments.',
 
             'kind' => [
@@ -3650,7 +3653,7 @@ return [
         // resources/js/components/schedulePresentation.js picks by the number,
         // the same rule as the days in 62a.
         'schedule' => [
-            'heading' => 'Tasks',
+            'heading' => 'To do',
             'empty' => 'The item has no tasks.',
             'add' => 'New task',
 
