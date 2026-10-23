@@ -2958,17 +2958,18 @@ return [
             // heading of the section they carry — one surface, one word, and
             // no second place for *Relations* to drift from.
             //
-            // `overview` is the item's own text and the resting tab: it is
-            // written without `tab`, and it carries the description, *Quick
-            // facts* and the note's own box. The rows `itemFields` returns
-            // stood on the information tab until issue 332 removed it.
+            // `overview` is the item's own text and the resting tab: the cover
+            // and every filled field in a grid, the description, the quick
+            // actions, an open loan, the note's own box and the recent
+            // activity ([[ADR-0068 Itemets sida och skapandet]] § 5).
             'overview' => 'Overview',
 
-            // The item's summary on the overview: manufacturer, model and
-            // serial number — the three fields a reader looks for first, and
-            // only the ones that carry a value. The heading is not drawn when
-            // none of them does.
-            'quick_facts' => 'Quick facts',
+            // The quick actions on the overview, in this order. Each opens the
+            // same form as the matching row of the plus menu.
+            'add_document' => 'Add document',
+            'add_task' => 'Add task',
+            'add_cost' => 'Add cost',
+            'add_relation' => 'Add relation',
 
             'description' => 'Description',
             // Issue 96. `description` says what the item IS, `notes` what the
@@ -2988,6 +2989,8 @@ return [
             // overview carries (issue 172) and the same word — one panel, one
             // word.
             'activity' => 'Recent activity',
+            // The link under the activity panel, to the History tab.
+            'activity_all' => 'All history',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',

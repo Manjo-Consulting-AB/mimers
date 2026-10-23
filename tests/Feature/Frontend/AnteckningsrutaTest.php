@@ -56,13 +56,13 @@ function anteckningsrutaTagg(string $kod, string $komponent): string
  *
  * Ordningen läses i mallen. `<dl>`-formen som bar beskrivningen och
  * anteckningen före den här issuen är borta: beskrivningen är ett stycke
- * ovanför `ItemQuickFacts`, och anteckningen har flyttat ned i sin egen ruta.
+ * under `ItemFieldGrid`, och anteckningen har flyttat ned i sin egen ruta.
  */
 it('ritar översikten i ordningen beskrivning, snabbfakta, alla fält, anteckningen och aktiviteten', function () {
     $vy = anteckningsrutaKod('pages/Containers/Items/Show.vue');
 
     $beskrivning = strpos($vy, '{{ item.description }}');
-    $snabbfakta = strpos($vy, '<ItemQuickFacts');
+    $snabbfakta = strpos($vy, '<ItemFieldGrid');
     $anteckningen = strpos($vy, '<ItemNotes');
     $aktiviteten = strpos($vy, '<ItemActivityPanel');
 
@@ -71,8 +71,8 @@ it('ritar översikten i ordningen beskrivning, snabbfakta, alla fält, antecknin
         ->and($anteckningen)->not->toBeFalse('anteckningen står inte på översikten')
         ->and($aktiviteten)->not->toBeFalse('aktiviteten står inte på översikten');
 
-    expect($beskrivning)->toBeLessThan($snabbfakta)
-        ->and($snabbfakta)->toBeLessThan($anteckningen)
+    expect($snabbfakta)->toBeLessThan($beskrivning)
+        ->and($beskrivning)->toBeLessThan($anteckningen)
         ->and($anteckningen)->toBeLessThan($aktiviteten);
 
     $anteckningsrutan = anteckningsrutaTagg($vy, 'ItemNotes');

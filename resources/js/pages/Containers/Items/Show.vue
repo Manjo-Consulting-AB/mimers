@@ -8,6 +8,7 @@ import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemActionMenu from '../../../components/ItemActionMenu.vue';
+import ItemFieldGrid from '../../../components/ItemFieldGrid.vue';
 import ItemIcon from '../../../components/ItemIcon.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
@@ -15,7 +16,7 @@ import ItemMapPanel from '../../../components/ItemMapPanel.vue';
 import ItemNotes from '../../../components/ItemNotes.vue';
 import ItemOverviewCover from '../../../components/ItemOverviewCover.vue';
 import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
-import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
+import ItemQuickActions from '../../../components/ItemQuickActions.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
@@ -24,7 +25,7 @@ import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { coverUrl } from '../../../components/coverPresentation.js';
-import { itemFields } from '../../../components/itemPresentation.js';
+import { formatDateOnly, itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 defineOptions({
@@ -436,8 +437,15 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
  * *Visa alla fält* leder till det som står.
  */
 const overviewEmpty = computed(
-    () => ! props.item.description && ! props.item.notes && fields.value.length === 0 && categoryName.value === null,
+    () => ! props.item.description
+        && ! props.item.notes
+        && fields.value.length === 0
+        && categoryName.value === null
+        && (props.events === null || props.events.length === 0),
 );
+
+/* Adressen till historikfliken, för länken under *Recent activity*. */
+const historyHref = computed(() => tabs.value.find((tab) => tab.key === 'history')?.href ?? null);
 
 /*
  * Anteckningens egen rutt (M42 · issue 325 · [[ADR-0066 Itemets
@@ -945,50 +953,29 @@ function toggleFavorite() {
             <UiTabs class="mt-8" :tabs="tabs" :label="item.name" />
 
             <!--
-                Översikten (M42 · issue 325 · [[ADR-0066 Itemets
-                anteckning]] § 4): bilden, beskrivningen och snabbfakta i en
-                rad, sedan *Visa alla fält*, anteckningen och till sist
-                händelsepanelen.
+                Översikten ([[ADR-0068 Itemets sida och skapandet]] § 5):
+                bilden och fältrutnätet, beskrivningen, snabbåtgärderna, den
+                pågående utlåningen, anteckningen och till sist
+                händelsepanelen med länken till historiken.
 
-                **Beskrivningen står ovanför snabbfakta** i radens högra
-                spalt. Det är två fält sedan issue 96 — beskrivningen säger
-                vad itemet ÄR, anteckningen vad användaren VET om det — och
-                `<dl>`-formen de hade före den här issuen är borta.
-                Anteckningen bor i `ItemNotes.vue` och har flyttat ned
-                nedanför fälten.
+                **Fälten bor i `ItemFieldGrid`** och beskrivningen under dem.
+                Det finns ingen rubrik *Quick facts* och ingen länk *Show all
+                fields*: varje ifyllt fält står här, och informationsfliken
+                är borta. Ingen sektion listar fler än fem rader.
 
-                **Fältlistan flyttade till informationsfliken i issue
-                154.** Översikten är den sammanfattning en läsare möter
-                först: tillverkaren, modellen och serienumret ur
-                `ItemQuickFacts`, och raden *Visa alla fält* som öppnar
-                fliken där resten står. Formen är mobilmockupens — bild 4
-                ritar omslaget, *Snabbfakta*, raden och uppgifterna — och
-                fälten bor därmed på ETT ställe: en avskrift här hade varit
-                samma uppgifter i två vyer som glider isär.
-
-                Ett item utan både stycken och fält är oskrivet och inte
-                trasigt, och raden i stället för innehållet säger vilket:
-                fliken är den första en läsare möter, och en tom panel där
-                hade sagt att sidan är sönder. Raden är kvar sedan issue 102
-                och svarar på HELA itemet — inte på den här fliken — så ett
-                item vars enda uppgift är inköpsdatum är fortfarande
-                skrivet, även om ingenting av det står här.
+                Ett item utan fält, beskrivning, anteckning och aktivitet är
+                oskrivet och inte trasigt, och raden i stället för innehållet
+                säger vilket: fliken är den första en läsare möter, och en
+                tom panel där hade sagt att sidan är sönder. Åtgärden *Edit*
+                visas bara för den som får ändra.
             -->
             <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
                 <!--
-                    Omslagsbilden, beskrivningen och snabbfakta (issue 307 ·
-                    [[M35 Itemets ikon och kartans kort]] § 307, M42 · issue
-                    325): bilden till vänster och beskrivningen ovanför
-                    snabbfakta till höger från `md:`, och bilden ovanför
-                    under `md:`. Utan bild ritas ingen bildruta och
-                    spalten tar hela bredden — flexraden har då bara ett
-                    barn. Ett item med bild men utan snabbfakta visar bara
-                    bilden.
-
-                    Snabbfakta (issue 154): komponenten ritar ingenting när
-                    ingen av de tre uppgifterna har ett värde — ingen
-                    rubrik över en tom lista — och urvalet bor i
-                    itemPresentation.js så att regeln går att pröva i node.
+                    Omslagsbilden och fälten (issue 307, ADR-0068 § 5): bilden
+                    till vänster och fältrutnätet med beskrivningen under det
+                    till höger från `md:`, och bilden ovanför under `md:`.
+                    Utan bild ritas ingen bildruta och spalten tar hela
+                    bredden — flexraden har då bara ett barn.
                 -->
                 <div class="flex flex-col gap-6 md:flex-row md:items-start">
                     <ItemOverviewCover
@@ -998,10 +985,30 @@ function toggleFavorite() {
                         class="md:w-64 md:shrink-0"
                     />
                     <div class="flex min-w-0 flex-col gap-6 md:flex-1">
+                        <ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName" />
                         <p v-if="item.description" class="whitespace-pre-line text-ink">{{ item.description }}</p>
-                        <ItemQuickFacts :item="item" :locale="locale" />
                     </div>
                 </div>
+
+                <ItemQuickActions :create="create" />
+
+                <!--
+                    Den pågående utlåningen (ADR-0068 § 5, punkt 4): en rad med
+                    låntagare och återlämningsdatum, bara när itemet är utlånat.
+                    Flaggan för försening är serverns, aldrig klientens
+                    jämförelse. Raden leder till utlåningsfliken.
+                -->
+                <Link
+                    v-if="openLoan"
+                    :href="tabs.find((tab) => tab.key === 'loans').href"
+                    class="flex min-h-11 flex-wrap items-center gap-x-4 gap-y-1 rounded border border-border bg-surface px-4 py-3 text-sm"
+                >
+                    <span class="font-medium text-ink">{{ t('item.loan.borrowed_by', { name: openLoan.borrower_name }) }}</span>
+                    <span class="text-ink-muted">
+                        {{ openLoan.due_at ? t('item.loan.due_at', { date: formatDateOnly(openLoan.due_at, locale) }) : t('item.loan.no_due_at') }}
+                    </span>
+                    <span v-if="openLoanOverdue" class="font-medium text-danger">{{ t('item.loan.overdue') }}</span>
+                </Link>
 
                 <!--
                     Anteckningen (M42 · issue 325 · [[ADR-0066 Itemets
@@ -1018,7 +1025,16 @@ function toggleFavorite() {
                     :update-url="notesUrl"
                 />
 
-                <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
+                <p v-if="overviewEmpty" class="text-sm text-ink-muted">
+                    {{ t('item.show.overview_empty') }}
+                    <Link
+                        v-if="can.update"
+                        :href="editUrl"
+                        class="ml-1 inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                    >
+                        {{ t('item.edit.action') }}
+                    </Link>
+                </p>
 
                 <!--
                     Händelsepanelen (issue 213): itemets fem senaste
@@ -1032,6 +1048,13 @@ function toggleFavorite() {
                     se ItemController::show() och `events`-proppen ovan.
                 -->
                 <ItemActivityPanel v-if="events !== null" :events="events" />
+                <Link
+                    v-if="events !== null && historyHref !== null"
+                    :href="historyHref"
+                    class="-mt-4 inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                >
+                    {{ t('item.show.activity_all') }}
+                </Link>
             </section>
 
             <!--

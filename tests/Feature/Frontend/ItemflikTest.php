@@ -400,7 +400,7 @@ it('alla sex befintliga propar når sin flik', function () {
 
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
-        'overview' => ['<ItemQuickFacts', ':item="item"'],
+        'overview' => ['<ItemFieldGrid', ':item="item"'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
@@ -438,8 +438,12 @@ it('alla sex befintliga propar når sin flik', function () {
     // Och de sex proparna är desamma som förut: ingen ny ändpunkt, ingen ny
     // fråga. Fälten kommer ur `itemFields`, de fem listorna ur detaljvyns
     // props — se ItemController::show().
-    expect($vy)->toContain("import { itemFields } from '../../../components/itemPresentation.js'")
-        ->toContain('itemFields(props.item, locale.value)');
+    expect($vy)->toContain('<ItemFieldGrid :item="item" :locale="locale"');
+
+    $rutnat = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/components/ItemFieldGrid.vue')));
+
+    expect($rutnat)->toContain("import { itemFields } from './itemPresentation.js'")
+        ->toContain('itemFields(props.item, props.locale)');
 
     // Länken *Show all fields* är borta (issue 332): informationsfliken finns
     // inte längre, och fältrutnätet byggs i issue 333.
