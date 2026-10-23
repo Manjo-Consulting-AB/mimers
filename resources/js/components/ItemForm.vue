@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemIcon from './ItemIcon.vue';
@@ -53,19 +53,23 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * FormRequesten kräver — ingen egen datumtolkning i JavaScript, och ingen
  * `maxlength` på `description`, som är TEXT och inte har någon längdregel.
  *
- * **Anteckningen lämnar redigeringsläget** (M42 · issue 325 ·
- * [[ADR-0066 Itemets anteckning]] § 9). Fältet ritas bara när ett item
- * SKAPAS: när ett item ändras sparas anteckningen i sin egen ruta på
- * översikten och formuläret skickar inte `notes` alls. Annars hade
- * formulärets gamla text skrivit över det som sparats av sig självt.
- * `UpdateItemRequest` tar fortfarande emot fältet, så `/api` och webbens
- * PATCH fungerar som förut.
+ * **Anteckningen finns inte i formuläret** (M42 · issue 325 ·
+ * [[ADR-0066 Itemets anteckning]] § 9, och sedan issue 338
+ * [[ADR-0068 Itemets sida och skapandet]] § 8). Den skrivs i sin egen ruta på
+ * itemets översikt, och formuläret skickar aldrig `notes`: två textfält bredvid
+ * varandra gjorde skillnaden mot beskrivningen otydlig. `StoreItemRequest` och
+ * `UpdateItemRequest` tar fortfarande emot fältet, så `/api` fungerar som förut.
  *
- * Fältet är ett eget fält bredvid beskrivningen (issue 96) och inte en
- * fortsättning på den: beskrivningen säger vad itemet ÄR, anteckningen vad
- * användaren VET om det. `notes` är TEXT som `description` och har därför
- * ingen `maxlength`; ett tömt fält skickas som tom sträng, vilket
- * `sometimes|nullable` gör till `null`.
+ * **Skapandet har två nivåer** (issue 338 · [[ADR-0068 Itemets sida och
+ * skapandet]] § 8). Direkt synliga är namn, plats, kategori, taggar och ikon.
+ * Resten — beskrivning, tillverkare, modell, serienummer, inköpsdatum, garanti,
+ * förvaringsplats och, med fler än ett konto, kontot — står i en `<details>`
+ * med rubriken *More details*, hopfälld från början. Fälten ligger alltid i
+ * DOM:en, och det är `<details>` som fäller ihop dem, inte en `v-if`
+ * (samma linje som AccessLevelField). Kommer servern tillbaka med ett fel på
+ * ett av dem fälls avsnittet ut av sig självt, så att felet går att se och
+ * att flytta fokus till. Redigeringen behåller sina fält i dagens ordning, utan
+ * rubriken.
  *
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
  * felen renderas av FormField vid sitt fält ([[ADR-0021 Frontendteknik]]).
@@ -107,14 +111,11 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * Skapandeläget skickar inte `cover` alls — itemet har inga bilagor än, och
  * `StoreItemRequest` tar inte emot fältet.
  *
- * **Ikonen väljs i redigeringsläget och bara där** (issue 302 ·
- * [[ADR-0060 Itemets ikon]] § 8). Ett item som just skapas har ingen ikon att
- * visa, och sektionen ritas därför i samma gren som omslagsbilden: `item` är
- * inte null. De nuvarande värdena är itemets egna kolumner i `ItemResource`,
- * och de skickas alltid med PATCH — `UpdateItemRequest` säger
- * `sometimes|nullable`, så ett uttryckligt `null` tömmer båda. Väljaren
- * (ItemIconPicker.vue) håller inget eget utkast: varje klick skriver det
- * valda paret här, och *Done* stänger bara arket.
+ * **Ikonen väljs i båda lägena** (issue 302 · [[ADR-0060 Itemets ikon]] § 8,
+ * och sedan issue 338 även vid skapandet). `icon` och `icon_color` skickas alltid:
+ * `StoreItemRequest` och `UpdateItemRequest` tar emot dem, och ett uttryckligt
+ * `null` är ett item utan ikon. Väljaren (ItemIconPicker.vue) håller inget eget
+ * utkast: varje klick skriver det valda paret här, och *Done* stänger bara arket.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -148,11 +149,11 @@ const { focusFirstError } = useErrorFocus();
 const options = computed(() => categoryOptions(props.categories));
 
 /*
- * Ett enda konto ritas som en läsbar rad i stället för en väljare (Beslut 4):
- * ett val mellan ett alternativ är ingen fråga. Värdet är ändå förvalt, så
- * formuläret skickar rätt konto.
+ * Kontot ritas bara när det finns något att välja mellan (Beslut 4 och issue
+ * 338): ett val mellan ett alternativ är ingen fråga. Värdet är ändå förvalt,
+ * så formuläret skickar rätt konto.
  */
-const singleAccount = computed(() => (props.accounts.length === 1 ? props.accounts[0] : null));
+const showAccount = computed(() => props.item === null && props.accounts.length > 1);
 
 /*
  * Väljaren ritas bara när det finns något att välja mellan: i
@@ -165,13 +166,6 @@ const showCover = computed(() => props.item !== null && props.images.length > 0)
 const fields = {
     name: props.item?.name ?? '',
     description: props.item?.description ?? '',
-    /*
-     * `notes` följer bara med när itemet skapas (M42 · issue 325 ·
-     * [[ADR-0066 Itemets anteckning]] § 9). I redigeringsläget ägs
-     * anteckningen av sin egen ruta på översikten, och ett `notes` här hade
-     * skrivit över det som sparats av sig självt.
-     */
-    ...(props.item === null ? { notes: '' } : {}),
     manufacturer: props.item?.manufacturer ?? '',
     model: props.item?.model ?? '',
     serial_number: props.item?.serial_number ?? '',
@@ -188,14 +182,11 @@ const fields = {
      */
     ...(showCover.value ? { cover: props.cover ?? null } : {}),
     /*
-     * Ikonen och färgen (issue 302): itemets egna kolumner, bara i
-     * redigeringsläget. Ett item som skapas har inget val att bära, och
-     * `StoreItemRequest` får dem inte heller av det här formuläret.
+     * Ikonen och färgen (issue 302, och vid skapandet issue 338): itemets egna
+     * kolumner, eller null för ett nytt item.
      */
-    ...(props.item !== null ? {
-        icon: props.item.icon ?? null,
-        icon_color: props.item.icon_color ?? null,
-    } : {}),
+    icon: props.item?.icon ?? null,
+    icon_color: props.item?.icon_color ?? null,
 };
 
 const form = useForm(props.item === null
@@ -250,6 +241,31 @@ function removeIcon() {
     form.icon = null;
     form.icon_color = null;
 }
+
+/*
+ * *More details* (issue 338): hopfälld från början, och utfälld av sig själv
+ * när servern svarar med ett fel på ett fält under rubriken. `toggle` håller
+ * `detailsOpen` i takt med det användaren själv gör med `<summary>`.
+ */
+const detailFields = [
+    'description',
+    'manufacturer',
+    'model',
+    'serial_number',
+    'purchased_at',
+    'warranty_until',
+    'position_note',
+    'account',
+];
+const detailsOpen = ref(false);
+
+const detailsHasError = computed(() => detailFields.some((name) => form.errors[name] !== undefined));
+
+watch(detailsHasError, (hasError) => {
+    if (hasError) {
+        detailsOpen.value = true;
+    }
+});
 
 /*
  * Taggfelet ligger på `tags.0`, `tags.1`, ... och inte på `tags` — regeln bor
@@ -432,8 +448,7 @@ function submit() {
 
         <!-- Ikonen: den nuvarande ikonen med sin ruta, eller den neutrala,
              och knappen som öppnar väljaren (issue 302 · [[ADR-0060 Itemets
-             ikon]] § 8). Sektionen ritas bara i redigeringsläget — ett item
-             som just skapas har ingen ikon att visa. -->
+             ikon]] § 8). I redigeringen står den under namnet, som förut. -->
         <div v-if="item !== null" class="flex flex-col gap-2">
             <p class="text-body font-medium text-ink">{{ t('item.form.icon') }}</p>
 
@@ -450,8 +465,78 @@ function submit() {
             </div>
         </div>
 
+        <template v-if="item === null">
+            <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
+            <FormField
+                v-if="options.length > 0 || canManageTaxonomy"
+                v-slot="{ describedBy }"
+                :label="t('item.form.category')"
+                id="category"
+                :error="form.errors.category ?? taxonomyErrors.category"
+            >
+                <TaxonomyPicker
+                    id="category"
+                    v-model="form.category"
+                    :options="options"
+                    mode="single"
+                    :can-create="canManageTaxonomy && ! taxonomyCreating"
+                    :disabled="taxonomyCreating"
+                    @create="(name) => createTaxonomy('category', name)"
+                    :described-by="describedBy"
+                />
+            </FormField>
+
+            <!-- Tom container utan rätt att skapa: en rad, aldrig en tom väljare. -->
+            <p v-else class="text-body text-ink-muted">
+                {{ t('item.form.categories_empty') }}
+            </p>
+
+            <!-- Taggarna: samma väljare, flera värden. -->
+            <FormField
+                v-if="tags.length > 0 || canManageTaxonomy"
+                v-slot="{ describedBy }"
+                :label="t('item.form.tags')"
+                id="tags"
+                :error="tagError ?? taxonomyErrors.tags"
+            >
+                <TaxonomyPicker
+                    id="tags"
+                    v-model="form.tags"
+                    :options="tags"
+                    mode="multiple"
+                    :can-create="canManageTaxonomy && ! taxonomyCreating"
+                    :disabled="taxonomyCreating"
+                    @create="(name) => createTaxonomy('tags', name)"
+                    :described-by="describedBy"
+                />
+            </FormField>
+
+            <p v-else class="text-body text-ink-muted">
+                {{ t('item.form.tags_empty') }}
+            </p>
+        </template>
+
+        <!-- Ikonen: den nuvarande ikonen med sin ruta, eller den neutrala,
+             och knappen som öppnar väljaren (issue 302 · [[ADR-0060 Itemets
+             ikon]] § 8). Vid skapandet (issue 338) står den sist av de
+             synliga fälten, efter kategorin och taggarna. -->
+        <div v-if="item === null" class="flex flex-col gap-2">
+            <p class="text-body font-medium text-ink">{{ t('item.form.icon') }}</p>
+
+            <div class="flex items-center gap-2">
+                <ItemIcon :name="form.icon" :color="form.icon_color" :size="24" tile />
+
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="openIconPicker($event.currentTarget)"
+                >
+                    {{ t('item.form.icon_choose') }}
+                </button>
+            </div>
+        </div>
+
         <ItemIconPicker
-            v-if="item !== null"
             :open="iconPickerOpen"
             :icon="form.icon"
             :color="form.icon_color"
@@ -485,199 +570,202 @@ function submit() {
             </UiSelect>
         </FormField>
 
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.description')"
-            id="description"
-            :error="form.errors.description"
+        <!--
+            Beskrivningen och de övriga fälten (issue 338 · [[ADR-0068 Itemets
+            sida och skapandet]] § 8). Vid skapandet står de i en `<details>`
+            med rubriken *More details*, hopfälld från början och utfälld av
+            sig själv vid ett serverfel på något av dem. I redigeringen är
+            omslaget ett `display: contents`-element: fälten ligger direkt i
+            formuläret i dagens ordning, och ingen rubrik ritas.
+        -->
+        <component
+            :is="item === null ? 'details' : 'div'"
+            :class="item === null ? 'rounded-control border border-border bg-surface' : 'contents'"
+            v-bind="item === null ? { open: detailsOpen } : {}"
+            @toggle="item === null && (detailsOpen = $event.target.open)"
         >
-            <UiTextarea
-                id="description"
-                v-model="form.description"
-                :described-by="describedBy"
-                name="description"
-            />
-        </FormField>
-
-        <!-- Anteckningen: ett eget fält bredvid beskrivningen (issue 96), och
-             bara i skapandeläget (M42 · issue 325 · [[ADR-0066 Itemets
-             anteckning]] § 9). Ett item som redan finns sparar sin anteckning
-             i sin egen ruta på översikten; formuläret skickar den inte. -->
-        <FormField
-            v-if="item === null"
-            v-slot="{ describedBy }"
-            :label="t('item.form.notes')"
-            id="notes"
-            :error="form.errors.notes"
-        >
-            <UiTextarea
-                id="notes"
-                v-model="form.notes"
-                :described-by="describedBy"
-                name="notes"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.manufacturer')"
-            id="manufacturer"
-            :error="form.errors.manufacturer"
-        >
-            <UiInput
-                id="manufacturer"
-                v-model="form.manufacturer"
-                :described-by="describedBy"
-                name="manufacturer"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.model')"
-            id="model"
-            :error="form.errors.model"
-        >
-            <UiInput
-                id="model"
-                v-model="form.model"
-                :described-by="describedBy"
-                name="model"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.serial_number')"
-            id="serial_number"
-            :error="form.errors.serial_number"
-        >
-            <UiInput
-                id="serial_number"
-                v-model="form.serial_number"
-                :described-by="describedBy"
-                name="serial_number"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.purchased_at')"
-            id="purchased_at"
-            :error="form.errors.purchased_at"
-        >
-            <UiInput
-                id="purchased_at"
-                v-model="form.purchased_at"
-                :described-by="describedBy"
-                type="date"
-                name="purchased_at"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.warranty_until')"
-            id="warranty_until"
-            :error="form.errors.warranty_until"
-        >
-            <UiInput
-                id="warranty_until"
-                v-model="form.warranty_until"
-                :described-by="describedBy"
-                type="date"
-                name="warranty_until"
-            />
-        </FormField>
-
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('item.form.position_note')"
-            id="position_note"
-            :error="form.errors.position_note"
-        >
-            <UiInput
-                id="position_note"
-                v-model="form.position_note"
-                :described-by="describedBy"
-                name="position_note"
-            />
-        </FormField>
-
-        <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
-        <FormField
-            v-if="options.length > 0 || canManageTaxonomy"
-            v-slot="{ describedBy }"
-            :label="t('item.form.category')"
-            id="category"
-            :error="form.errors.category ?? taxonomyErrors.category"
-        >
-            <TaxonomyPicker
-                id="category"
-                v-model="form.category"
-                :options="options"
-                mode="single"
-                :can-create="canManageTaxonomy && ! taxonomyCreating"
-                :disabled="taxonomyCreating"
-                @create="(name) => createTaxonomy('category', name)"
-                :described-by="describedBy"
-            />
-        </FormField>
-
-        <!-- Tom container utan rätt att skapa: en rad, aldrig en tom väljare. -->
-        <p v-else class="text-body text-ink-muted">
-            {{ t('item.form.categories_empty') }}
-        </p>
-
-        <!-- Taggarna: samma väljare, flera värden. -->
-        <FormField
-            v-if="tags.length > 0 || canManageTaxonomy"
-            v-slot="{ describedBy }"
-            :label="t('item.form.tags')"
-            id="tags"
-            :error="tagError ?? taxonomyErrors.tags"
-        >
-            <TaxonomyPicker
-                id="tags"
-                v-model="form.tags"
-                :options="tags"
-                mode="multiple"
-                :can-create="canManageTaxonomy && ! taxonomyCreating"
-                :disabled="taxonomyCreating"
-                @create="(name) => createTaxonomy('tags', name)"
-                :described-by="describedBy"
-            />
-        </FormField>
-
-        <p v-else class="text-body text-ink-muted">
-            {{ t('item.form.tags_empty') }}
-        </p>
-
-        <!-- Ett enda konto: värdet är förvalt och visas som text (Beslut 4). -->
-        <div v-if="item === null && singleAccount" class="flex flex-col gap-1">
-            <p class="text-body font-medium text-ink">{{ t('item.form.account') }}</p>
-            <p>{{ singleAccount.name }}</p>
-        </div>
-
-        <FormField
-            v-else-if="item === null"
-            v-slot="{ describedBy }"
-            :label="t('item.form.account')"
-            id="account"
-            :error="form.errors.account"
-        >
-            <UiSelect
-                id="account"
-                v-model="form.account"
-                :described-by="describedBy"
-                name="account"
-                required
+            <summary
+                v-if="item === null"
+                class="min-h-11 cursor-pointer rounded-control px-3 py-2.5 text-body font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
-                <option v-for="account in accounts" :key="account.ulid" :value="account.ulid">
-                    {{ account.name }}
-                </option>
-            </UiSelect>
-        </FormField>
+                {{ t('item.form.more_details') }}
+            </summary>
+
+            <div :class="item === null ? 'flex flex-col gap-4 border-t border-border p-3' : 'contents'">
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.description')"
+                    id="description"
+                    :error="form.errors.description"
+                >
+                    <UiTextarea
+                        id="description"
+                        v-model="form.description"
+                        :described-by="describedBy"
+                        name="description"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.manufacturer')"
+                    id="manufacturer"
+                    :error="form.errors.manufacturer"
+                >
+                    <UiInput
+                        id="manufacturer"
+                        v-model="form.manufacturer"
+                        :described-by="describedBy"
+                        name="manufacturer"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.model')"
+                    id="model"
+                    :error="form.errors.model"
+                >
+                    <UiInput
+                        id="model"
+                        v-model="form.model"
+                        :described-by="describedBy"
+                        name="model"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.serial_number')"
+                    id="serial_number"
+                    :error="form.errors.serial_number"
+                >
+                    <UiInput
+                        id="serial_number"
+                        v-model="form.serial_number"
+                        :described-by="describedBy"
+                        name="serial_number"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.purchased_at')"
+                    id="purchased_at"
+                    :error="form.errors.purchased_at"
+                >
+                    <UiInput
+                        id="purchased_at"
+                        v-model="form.purchased_at"
+                        :described-by="describedBy"
+                        type="date"
+                        name="purchased_at"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.warranty_until')"
+                    id="warranty_until"
+                    :error="form.errors.warranty_until"
+                >
+                    <UiInput
+                        id="warranty_until"
+                        v-model="form.warranty_until"
+                        :described-by="describedBy"
+                        type="date"
+                        name="warranty_until"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.position_note')"
+                    id="position_note"
+                    :error="form.errors.position_note"
+                >
+                    <UiInput
+                        id="position_note"
+                        v-model="form.position_note"
+                        :described-by="describedBy"
+                        name="position_note"
+                    />
+                </FormField>
+
+                <!-- Kontot: bara med fler än ett konto att välja mellan (Beslut 4 och
+                     issue 338). Ett enda konto är förvalt och ritas inte alls. -->
+                <FormField
+                    v-if="showAccount"
+                    v-slot="{ describedBy }"
+                    :label="t('item.form.account')"
+                    id="account"
+                    :error="form.errors.account"
+                >
+                    <UiSelect
+                        id="account"
+                        v-model="form.account"
+                        :described-by="describedBy"
+                        name="account"
+                        required
+                    >
+                        <option v-for="account in accounts" :key="account.ulid" :value="account.ulid">
+                            {{ account.name }}
+                        </option>
+                    </UiSelect>
+                </FormField>
+            </div>
+        </component>
+
+        <template v-if="item !== null">
+            <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
+            <FormField
+                v-if="options.length > 0 || canManageTaxonomy"
+                v-slot="{ describedBy }"
+                :label="t('item.form.category')"
+                id="category"
+                :error="form.errors.category ?? taxonomyErrors.category"
+            >
+                <TaxonomyPicker
+                    id="category"
+                    v-model="form.category"
+                    :options="options"
+                    mode="single"
+                    :can-create="canManageTaxonomy && ! taxonomyCreating"
+                    :disabled="taxonomyCreating"
+                    @create="(name) => createTaxonomy('category', name)"
+                    :described-by="describedBy"
+                />
+            </FormField>
+
+            <!-- Tom container utan rätt att skapa: en rad, aldrig en tom väljare. -->
+            <p v-else class="text-body text-ink-muted">
+                {{ t('item.form.categories_empty') }}
+            </p>
+
+            <!-- Taggarna: samma väljare, flera värden. -->
+            <FormField
+                v-if="tags.length > 0 || canManageTaxonomy"
+                v-slot="{ describedBy }"
+                :label="t('item.form.tags')"
+                id="tags"
+                :error="tagError ?? taxonomyErrors.tags"
+            >
+                <TaxonomyPicker
+                    id="tags"
+                    v-model="form.tags"
+                    :options="tags"
+                    mode="multiple"
+                    :can-create="canManageTaxonomy && ! taxonomyCreating"
+                    :disabled="taxonomyCreating"
+                    @create="(name) => createTaxonomy('tags', name)"
+                    :described-by="describedBy"
+                />
+            </FormField>
+
+            <p v-else class="text-body text-ink-muted">
+                {{ t('item.form.tags_empty') }}
+            </p>
+        </template>
 
         <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ submitLabel }}

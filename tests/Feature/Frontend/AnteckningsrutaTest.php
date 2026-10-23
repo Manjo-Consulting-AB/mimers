@@ -243,28 +243,24 @@ it('låter en läsare se anteckningen utan fält', function () {
 });
 
 /*
- * Klart när: *Edit item* har inget fält för anteckningen och skickar inte
- * `notes`, och formuläret för ett nytt item har kvar fältet.
+ * Klart när: varken *Edit item* eller *New item* har ett fält för anteckningen,
+ * och formuläret skickar inte `notes`.
  *
- * Fältet ritas bara när `item` är null, och `notes` ligger i samma gren av
- * fältobjektet — annars hade formulärets gamla text skrivit över det som
- * sparats av sig självt (ADR-0066 § 9).
+ * Anteckningen skrivs i sin egen ruta på översikten (ADR-0066 § 9). Sedan issue
+ * 338 ([[ADR-0068 Itemets sida och skapandet]] § 8) saknar också skapaformuläret
+ * fältet, och orden `item.form.notes` är borta ur katalogen.
  */
-it('ritar anteckningsfältet bara när itemet skapas och skickar det inte vid ändring', function () {
+it('ritar inget anteckningsfält i itemformuläret och skickar inte notes', function () {
     $form = anteckningsrutaKod('components/ItemForm.vue');
 
-    $position = strpos($form, "t('item.form.notes')");
+    expect($form)->not->toContain("t('item.form.notes')")
+        ->and($form)->not->toContain('form.notes')
+        ->and($form)->not->toContain('name="notes"')
+        ->and($form)->not->toContain('notes: ');
 
-    expect($position)->not->toBeFalse('anteckningsfältet finns inte kvar');
+    $en = require lang_path('en/ui.php');
 
-    $start = strrpos(substr($form, 0, (int) $position), '<FormField');
-    $tagg = substr($form, (int) $start, strpos($form, '>', (int) $start) - (int) $start + 1);
-
-    expect($tagg)->toContain('v-if="item === null"');
-
-    // Fältet följer bara med i skapandets gren av fältobjektet.
-    expect($form)->toContain("...(props.item === null ? { notes: '' } : {})")
-        ->and($form)->not->toContain('notes: props.item?.notes');
+    expect($en['item']['form'])->not->toHaveKey('notes');
 });
 
 /*

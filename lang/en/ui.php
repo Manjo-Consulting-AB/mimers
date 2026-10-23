@@ -3216,8 +3216,11 @@ return [
         'form' => [
             'name' => 'Name',
             'description' => 'Description',
-            // Issue 96. The same distinction as `item.show.notes` above.
-            'notes' => 'Notes',
+            // Issue 338. The heading of the collapsed section of the create
+            // form that holds every field but name, place, category, tags and
+            // icon. The note is not in the form at all: it is written in its
+            // own box on the item's overview.
+            'more_details' => 'More details',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',

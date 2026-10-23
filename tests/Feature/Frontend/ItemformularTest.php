@@ -224,8 +224,8 @@ it('skapar ett item med kategori och taggar och landar på detaljvyn', function 
  *
  * Kravet på `account` är serverns — det finns inget "aktivt konto" (§ Beslut
  * 4) — men en väljare med ett val är brus. Regeln är klientens, och den prövas
- * därför i mallen: ItemForm ritar en läsbar rad när `auth.accounts` har exakt
- * ett element, och en väljare annars. `auth.accounts` är den DELADE propen och
+ * därför i mallen: ItemForm ritar ingen rad alls när `auth.accounts` har exakt
+ * ett element, och en väljare under *More details* annars. `auth.accounts` är den DELADE propen och
  * aldrig en egen sidprop (Beslut 4, samma linje som issue 54 § Beslut 5).
  *
  * Skapandet prövas servervänt i samma test: kontot är det enda hon är medlem
@@ -253,9 +253,11 @@ it('ritar inget kontoval för en medlem i exakt ett konto', function () {
 
     $form = File::get(resource_path('js/components/ItemForm.vue'));
 
-    // Ett konto: läsbar rad. Flera: väljare. Ingetdera i redigeringsläget.
-    expect($form)->toContain('v-if="item === null && singleAccount"')
-        ->toContain('v-else-if="item === null"');
+    // Fler än ett konto: väljare under *More details*. Ett konto eller redigering:
+    // inget alls, kontot är förvalt.
+    expect($form)->toContain('const showAccount = computed(() => props.item === null && props.accounts.length > 1);')
+        ->toContain('v-if="showAccount"');
+    expect($form)->not->toContain('singleAccount');
 
     $create = File::get(resource_path('js/pages/Containers/Items/Create.vue'));
 
@@ -832,4 +834,145 @@ it('skickar category som ULID eller null och tags som ULID-lista ur väljaren', 
         ->toContain('v-model="form.tags"');
 
     expect($kod)->not->toContain('<UiCheckbox');
+});
+
+/*
+ * Issue 338 · Skapaformuläret i två nivåer ([[ADR-0068 Itemets sida och
+ * skapandet]] § 8). Proven läser ItemForm.vue utan kommentarer, eftersom
+ * formuläret är en komponent utan egen rutt.
+ */
+
+/**
+ * ItemForm.vue utan kommentarer.
+ */
+function itemformKomponent(): string
+{
+    $kod = File::get(resource_path('js/components/ItemForm.vue'));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return $kod;
+}
+
+it('visar namn, plats, kategori, taggar och ikon i skapandet utan att något fälls ut', function () {
+    $kod = itemformKomponent();
+
+    $skapande = substr($kod, (int) strpos($kod, '<template v-if="item === null">'));
+    $detaljer = (int) strpos($kod, "t('item.form.more_details')");
+
+    expect($detaljer)->toBeGreaterThan(0);
+
+    // Före rubriken, i den ordning issuen säger.
+    $ordning = [
+        "t('item.form.name')",
+        "t('item.form.location')",
+        "t('item.form.category')",
+        "t('item.form.tags')",
+        "t('item.form.icon')",
+    ];
+    $senast = 0;
+
+    foreach ($ordning as $nyckel) {
+        $plats = (int) strpos($kod, $nyckel, $senast);
+
+        expect($plats)->toBeGreaterThan($senast);
+        expect($plats)->toBeLessThan($detaljer);
+
+        $senast = $plats;
+    }
+
+    expect($skapande)->toContain('v-model="form.category"');
+});
+
+it('lägger de övriga fälten under More details som är hopfällt från början', function () {
+    $kod = itemformKomponent();
+
+    expect($kod)->toContain("t('item.form.more_details')")
+        ->toContain('const detailsOpen = ref(false);')
+        ->toContain("item === null ? 'details' : 'div'")
+        ->toContain('{ open: detailsOpen }');
+
+    $rubrik = (int) strpos($kod, "t('item.form.more_details')");
+    $slut = (int) strpos($kod, '</component>', $rubrik);
+    $avsnitt = substr($kod, $rubrik, $slut - $rubrik);
+
+    foreach (['description', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'account'] as $falt) {
+        expect($avsnitt)->toContain("id=\"{$falt}\"");
+    }
+
+    foreach (['category', 'tags'] as $falt) {
+        expect($avsnitt)->not->toContain("id=\"{$falt}\"");
+    }
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['item']['form']['more_details'])->toBe('More details');
+});
+
+it('fäller ut More details när servern ger ett fel på ett fält under rubriken', function () {
+    $kod = itemformKomponent();
+
+    foreach (['description', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'account'] as $falt) {
+        expect($kod)->toContain("'{$falt}',");
+    }
+
+    expect($kod)->toContain('detailFields.some((name) => form.errors[name] !== undefined)')
+        ->toContain('watch(detailsHasError, (hasError) => {')
+        ->toContain('detailsOpen.value = true;')
+        ->toContain('@toggle="item === null && (detailsOpen = $event.target.open)"');
+});
+
+it('skickar icon och icon_color vid skapandet', function () {
+    $kod = itemformKomponent();
+
+    // Paret ligger i fälten som delas av båda lägena, inte i en gren för redigering.
+    expect($kod)->toContain('icon: props.item?.icon ?? null,')
+        ->toContain('icon_color: props.item?.icon_color ?? null,');
+    expect($kod)->not->toContain('...(props.item !== null ? {');
+
+    [$konto, $anvandare, $container] = itemformKontext();
+
+    actingAs($anvandare)->post("/containers/{$container->ulid}/items", itemformKropp($konto, [
+        'icon' => 'droplet',
+        'icon_color' => 'blue',
+    ]))->assertRedirect();
+
+    $item = Item::query()->where('container_id', $container->id)->sole();
+
+    expect($item->icon)->toBe('droplet')
+        ->and($item->icon_color)->toBe('blue');
+});
+
+it('har ingen anteckning i skapaformuläret och behåller redigeringens ordning', function () {
+    $kod = itemformKomponent();
+
+    expect($kod)->not->toContain('notes');
+
+    // Redigeringen: ikon, omslag, de sju fälten och sist kategori och taggar.
+    $ordning = [
+        "t('item.form.name')",
+        "t('item.form.cover')",
+        "t('item.form.description')",
+        "t('item.form.manufacturer')",
+        "t('item.form.model')",
+        "t('item.form.serial_number')",
+        "t('item.form.purchased_at')",
+        "t('item.form.warranty_until')",
+        "t('item.form.position_note')",
+    ];
+    $senast = 0;
+
+    foreach ($ordning as $nyckel) {
+        $plats = (int) strpos($kod, $nyckel, $senast);
+
+        expect($plats)->toBeGreaterThan($senast);
+
+        $senast = $plats;
+    }
+
+    $andra = (int) strpos($kod, '<template v-if="item !== null">');
+
+    expect($andra)->toBeGreaterThan($senast)
+        ->and(strpos($kod, "t('item.form.category')", $andra))->not->toBeFalse()
+        ->and(strpos($kod, "t('item.form.tags')", $andra))->not->toBeFalse();
 });

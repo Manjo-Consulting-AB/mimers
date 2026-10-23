@@ -128,14 +128,13 @@ it('ger redigeringsvyn itemets ikon och färg', function () {
 });
 
 /*
- * Klart när: *Edit item* visar sektionen *Icon* och *New item* gör det inte.
+ * Klart när: *Edit item* och *New item* visar båda sektionen *Icon*.
  *
- * Skapandeläget har ingen `item`-prop alls — Create.vue skickar ingen, och
- * ItemForm:s förval är `null` — och sektionen ritas därför bara i
- * redigeringsläget. Provet håller båda halvorna: sidan saknar proppen, och
- * mallen binder sektionen till `item !== null`.
+ * Skapandeläget har ingen `item`-prop — Create.vue skickar ingen, och
+ * ItemForm:s förval är `null` — men ikonen och färgen är ändå fält i
+ * formuläret (issue 338), och väljaren ritas ovillkorligen.
  */
-it('ritar ikonsektionen bara i redigeringsläget', function () {
+it('ritar ikonsektionen i båda lägena', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemikonvaljareKontext();
@@ -150,10 +149,14 @@ it('ritar ikonsektionen bara i redigeringsläget', function () {
 
     $form = itemikonvaljareKod('components/ItemForm.vue');
 
+    // Sektionen ritas i en gren för varje läge, och väljaren utan villkor.
+    expect(substr_count($form, "t('item.form.icon')"))->toBe(2);
     expect($form)
-        // Sektionen och väljaren står båda i redigeringslägets gren.
-        ->toMatch('/v-if="item !== null"[\s\S]*?t\(\'item\.form\.icon\'\)/')
-        ->toMatch('/<ItemIconPicker\s+v-if="item !== null"/')
+        ->toMatch('/<div v-if="item !== null"[^>]*>\s*<p[^>]*>\{\{ t\(\'item\.form\.icon\'\) \}\}/')
+        ->toMatch('/<div v-if="item === null"[^>]*>\s*<p[^>]*>\{\{ t\(\'item\.form\.icon\'\) \}\}/')
+        ->toMatch('/<ItemIconPicker\s+:open=/')
+        ->toContain('icon: props.item?.icon ?? null')
+        ->toContain('icon_color: props.item?.icon_color ?? null')
         ->toContain('<ItemIcon :name="form.icon" :color="form.icon_color" :size="24" tile />')
         ->toContain("t('item.form.icon_choose')");
 });
