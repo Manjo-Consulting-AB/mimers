@@ -1,6 +1,6 @@
 # ADR-0068 Itemets sida och skapandet
 
-**Status:** Utkast 2026-10-23, väntar på Tonys beslut i § Öppna frågor · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · [[ADR-index]]
+**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · [[ADR-index]]
 
 Underlaget är en UX-granskning av itemvyerna 2026-10-23 och två arkitekters genomgång av den. Förlagan är `docs/Design/struktur - item.jpeg`, samma bild som [[ADR-0041 Itemets vy]] byggde på.
 
@@ -35,7 +35,7 @@ Förlagan har tre paneler, sju flikar (Översikt, Detaljer, Relationer, Dokument
 
 ### Sidan
 
-**2. Tre paneler som utgångspunkt, med sidopanelerna infällbara.** Från `lg:` står strukturen, itemet och kartan bredvid varandra som i förlagan och [[ADR-0041 Itemets vy]]. Struktur- och kartpanelen kan var för sig fällas ihop till en smal list. Valet sparas per webbläsare (`localStorage`), och en hopfälld panel fälls ut med ett klick. Under `lg:` visas strukturen som en utfällbar rad ovanför itemet, och kartan flyttar in på översikten (§ 5). *Se öppen fråga 1.*
+**2. Tre paneler som utgångspunkt, med sidopanelerna infällbara.** Från `lg:` står strukturen, itemet och kartan bredvid varandra som i förlagan och [[ADR-0041 Itemets vy]]. Struktur- och kartpanelen kan var för sig fällas ihop till en smal list. Valet sparas per webbläsare (`localStorage`), och en hopfälld panel fälls ut med ett klick. Under `lg:` visas strukturen som en utfällbar rad ovanför itemet, och kartan flyttar in på översikten (§ 5).
 
 **3. Huvudet.** Huvudet visar ikonen eller omslagets miniatyr, namnet, kategorin som chip och **taggarna som chips** direkt under namnet. Till höger står favoritstjärnan, **primärknappen *Edit*** och en **⋯-meny** med *New item under this one* och sist *Move to trash*. Ingen åtgärd står som fristående textlänk. Brödsmulan börjar med containerns namn, som leder till itemfliken.
 
@@ -43,7 +43,7 @@ Förlagan har tre paneler, sju flikar (Översikt, Detaljer, Relationer, Dokument
 - *Detaljer/Information* utgår. Itemet har åtta fält, och översikten visar alla som är ifyllda (§ 5). En flik med samma fält en gång till är en dubblett.
 - *Loans* läggs till, före History. Utlåningen fick egen flik i issue 102 just för att en yta ingen hittar är samma sak som en yta som inte finns. Det skälet gäller fortfarande.
 - *Tags* utgår som flik och ritas i huvudet (§ 3).
-- **En flik med noll rader bär ingen räknare.** Det ändrar issue 99:s regel att `0` ritas. *Se öppen fråga 2.*
+- **En flik med noll rader bär ingen räknare.** Det ändrar issue 99:s regel att `0` ritas.
 
 **5. Översikten är sammanfattningar med tak.** Översikten ritar, uppifrån och ned:
 1. **Bild och fält.** Omslaget till vänster och **varje ifyllt fält** i ett rutnät med två kolumner: kategori, tillverkare, modell, serienummer, inköpsdatum, garanti och förvaringsplats. Ingen rubrik *Quick facts* och ingen länk *Show all fields*.
@@ -68,7 +68,7 @@ Ingen sektion på översikten listar fler än fem rader. Den som vill se mer fö
 
 **10. Formuläret varnar innan inmatning går förlorad.** Lämnar användaren ett ändrat formulär utan att spara frågar appen först, med samma dialog som § 6. Det gäller skapandet och redigeringen.
 
-**11. En bild vid skapandet laddas upp efter att itemet skapats, i samma gest.** Formuläret har ett fält *Image*. Vid *Save* skapas itemet först, och sedan laddas bilden upp mot itemets **befintliga** uppladdningsändpunkt. Bilden blir omslag genom regeln i ADR-0041: utan ett val är omslaget itemets äldsta bild. Ingen fil finns alltså i systemet utan ett item, och deduplicering, referensräkning och kvot går genom samma väg som varje annan uppladdning. Misslyckas uppladdningen, till exempel för att kvoten är slut, finns itemet ändå. Användaren landar på itemets sida med felet och fliken Documents öppen. Ingen ny ändpunkt byggs. *Se öppen fråga 3.*
+**11. En bild vid skapandet laddas upp efter att itemet skapats, i samma gest.** Formuläret har ett fält *Image*. Vid *Save* skapas itemet först, och sedan laddas bilden upp mot itemets **befintliga** uppladdningsändpunkt. Bilden blir omslag genom regeln i ADR-0041: utan ett val är omslaget itemets äldsta bild. Ingen fil finns alltså i systemet utan ett item, och deduplicering, referensräkning och kvot går genom samma väg som varje annan uppladdning. Misslyckas uppladdningen, till exempel för att kvoten är slut, finns itemet ändå. Användaren landar på itemets sida med felet och fliken Documents öppen. Ingen ny ändpunkt byggs.
 
 **12. Omslaget väljs bland miniatyrer.** I redigeringen ersätts väljaren med filnamn av ett rutnät med itemets bilder och rutan *No cover*. I fliken Documents får varje bild raden *Use as cover*.
 
@@ -102,11 +102,13 @@ Ingen sektion på översikten listar fler än fem rader. Den som vill se mer fö
 - `ItemQuickFacts` och `itemQuickFacts()` ersätts av fältrutnätet. `ItemPlacementsPanel` står kvar i högerpanelen.
 - `item.show.all_fields`, `item.show.quick_facts`, `item.form.notes`, `item.form.categories_empty_link` och `item.form.tags_empty_link` utgår ur `lang/en/ui.php`.
 
-## Öppna frågor till Tony
+## Tonys beslut 2026-10-23
 
-1. **Sidopanelerna.** Ska struktur och karta vara permanenta på desktop, eller infällbara som i § 2? Rekommendation: infällbara, med valet ihågkommet. Panelerna är förlagans identitet, men en användare som skriver anteckningar eller läser dokument behöver bredden.
-2. **Räknaren noll.** Ska en tom flik sakna räknare (§ 4) i stället för att visa `0` (issue 99)? Rekommendation: ingen räknare. Förlagan visar ingen på *Kostnader* och *Historik*, och nio nollor är brus.
-3. **Bild vid skapandet.** Räcker § 11, med uppladdning efter skapandet i samma gest, eller ska bilden väljas först efter att itemet skapats? Rekommendation: § 11. Den är bara frontend och ger användaren det hen bad om.
+Utkastet hade tre öppna frågor. Tony följde rekommendationen i alla tre:
+
+1. **Sidopanelerna fälls ihop** enligt § 2, och valet sparas per webbläsare.
+2. **En flik med noll rader bär ingen räknare** enligt § 4. Det ändrar issue 99.
+3. **Bilden vid skapandet laddas upp efter itemet, i samma gest,** enligt § 11.
 
 ## Alternativ
 
