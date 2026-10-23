@@ -7,6 +7,7 @@ import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemCostSection from '../../../components/ItemCostSection.vue';
+import ItemActionMenu from '../../../components/ItemActionMenu.vue';
 import ItemIcon from '../../../components/ItemIcon.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
@@ -18,9 +19,11 @@ import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
+import UiButton from '../../../components/UiButton.vue';
 import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
+import { coverUrl } from '../../../components/coverPresentation.js';
 import { itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
@@ -677,9 +680,26 @@ const TRASH_DAYS = 30;
 const confirmOpen = ref(false);
 const destroyTrigger = ref(null);
 
-function askDestroy(event) {
-    destroyTrigger.value = event.currentTarget;
+function askDestroy(trigger) {
+    destroyTrigger.value = trigger;
     confirmOpen.value = true;
+}
+
+/*
+ * Huvudet (issue 331 · [[ADR-0068 Itemets sida och skapandet]] § 3 och 7).
+ * Miniatyren ritas bara när omslaget har varianten `thumb` — `coverUrl` faller
+ * annars tillbaka på originalet, och en stor bild i en liten ruta är fel
+ * åtgärd — och annars står ikonen som förut. *Edit* är UiButtons primärknapp
+ * och navigerar med Inertia; *New item under this one* och *Move to trash* bor
+ * i ItemActionMenu, bakom `can.create` och `can.delete`.
+ */
+const thumbUrl = computed(() => (props.cover?.variants?.includes('thumb') ? coverUrl(props.cover, 'thumb') : null));
+
+const editUrl = computed(() => `/containers/${props.container.ulid}/items/${props.item.ulid}/edit`);
+const createChildUrl = computed(() => `/containers/${props.container.ulid}/items/create?parent=${props.item.ulid}`);
+
+function goEdit() {
+    router.visit(editUrl.value);
 }
 
 function destroy() {
@@ -778,27 +798,43 @@ function toggleFavorite() {
                 `breadcrumb` är ordet för ytan, inte för någon av förekomsterna.
             -->
             <nav
-                v-if="currentPath"
                 :aria-label="t('item.show.breadcrumb')"
                 class="mb-2 text-sm text-ink-muted"
             >
                 <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <li
-                        v-for="(node, index) in currentPath.nodes"
-                        :key="`${node.ulid}-${index}`"
-                        class="flex items-center gap-2"
-                    >
+                    <!--
+                        Första ledet är containerns namn (issue 331 · ADR-0068
+                        § 3) och leder till itemfliken.
+                    -->
+                    <li class="flex items-center gap-2">
                         <Link
-                            v-if="index < currentPath.nodes.length - 1"
-                            :href="pathHref(currentPath.nodes.slice(0, index + 1))"
+                            :href="`/containers/${container.ulid}/items`"
                             class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                         >
-                            {{ node.name }}
+                            {{ container.name }}
                         </Link>
-                        <span v-else aria-current="page">{{ node.name }}</span>
 
-                        <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
+                        <span v-if="currentPath" aria-hidden="true">›</span>
                     </li>
+
+                    <template v-if="currentPath">
+                        <li
+                            v-for="(node, index) in currentPath.nodes"
+                            :key="`${node.ulid}-${index}`"
+                            class="flex items-center gap-2"
+                        >
+                            <Link
+                                v-if="index < currentPath.nodes.length - 1"
+                                :href="pathHref(currentPath.nodes.slice(0, index + 1))"
+                                class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                            >
+                                {{ node.name }}
+                            </Link>
+                            <span v-else aria-current="page">{{ node.name }}</span>
+
+                            <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
+                        </li>
+                    </template>
                 </ol>
             </nav>
 
@@ -827,86 +863,105 @@ function toggleFavorite() {
                 sätts av en tabb och inte av kod.
             -->
             <div class="flex items-start justify-between gap-4">
-                <div class="flex min-w-0 items-center gap-3">
+                <div class="flex min-w-0 items-start gap-3">
                     <!--
-                        Itemets egen ikon står före rubriken, i storleken 24
-                        (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9). Ett
-                        item utan ikon ritar den neutrala i samma storlek, så
-                        att rubriken står på samma plats.
+                        Omslagets miniatyr när itemet har ett omslag med
+                        `thumb`, annars itemets egen ikon i storleken 24
+                        (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9, och
+                        issue 331). Ett item utan ikon ritar den neutrala i
+                        samma storlek, så att rubriken står på samma plats.
+                        Miniatyren är pynt bredvid namnet, alltså tom alt-text.
                     -->
+                    <img
+                        v-if="thumbUrl"
+                        :src="thumbUrl"
+                        alt=""
+                        class="h-12 w-12 shrink-0 rounded-control object-contain"
+                    >
                     <ItemIcon
+                        v-else
                         :name="item.icon"
                         :color="item.icon_color"
                         :size="24"
                         tile
                         class="shrink-0"
                     />
-                    <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+
+                    <div class="min-w-0">
+                        <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+
+                        <!--
+                            Kategorin och taggarna som chips under namnet
+                            (ADR-0068 § 3). Ett item utan taggar säger det i en
+                            mening, och bara med `can.update` följer länken dit
+                            taggarna sätts (§ 7).
+                        -->
+                        <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <span
+                                v-if="categoryName"
+                                class="rounded-control bg-surface-sunken px-2 py-0.5 text-xs text-ink-muted"
+                            >
+                                {{ categoryName }}
+                            </span>
+
+                            <ItemTagList v-if="item.tags.length > 0" :tags="item.tags" />
+
+                            <p v-else class="text-sm text-ink-muted">
+                                {{ t('item.show.tags_empty') }}
+                                <Link
+                                    v-if="can.update"
+                                    :href="editUrl"
+                                    class="ml-1 font-medium text-accent hover:underline"
+                                >
+                                    {{ t('item.show.tags_add') }}
+                                </Link>
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                <button
-                    type="button"
-                    :aria-pressed="isFavorite ? 'true' : 'false'"
-                    :aria-label="isFavorite ? t('item.show.favorite_remove') : t('item.show.favorite_add')"
-                    :disabled="favoritePending"
-                    class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-                    :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
-                    @click="toggleFavorite"
-                >
-                    <UiIcon
-                        name="favorite"
-                        :size="24"
-                        class="h-6 w-6"
-                        :class="isFavorite ? 'fill-current' : ''"
+                <div class="flex shrink-0 items-center gap-2">
+                    <button
+                        type="button"
+                        :aria-pressed="isFavorite ? 'true' : 'false'"
+                        :aria-label="isFavorite ? t('item.show.favorite_remove') : t('item.show.favorite_add')"
+                        :disabled="favoritePending"
+                        class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
+                        @click="toggleFavorite"
+                    >
+                        <UiIcon
+                            name="favorite"
+                            :size="24"
+                            class="h-6 w-6"
+                            :class="isFavorite ? 'fill-current' : ''"
+                        />
+                    </button>
+
+                    <UiButton v-if="can.update" @click="goEdit">
+                        {{ t('item.edit.action') }}
+                    </UiButton>
+
+                    <ItemActionMenu
+                        :can-create="can.create"
+                        :can-delete="can.delete"
+                        :create-href="createChildUrl"
+                        @trash="askDestroy"
                     />
-                </button>
+                </div>
             </div>
 
-            <div class="mt-4 flex flex-wrap gap-4 text-sm">
-                <Link
-                    v-if="can.update"
-                    :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                >
-                    {{ t('item.edit.action') }}
-                </Link>
-
-                <button
-                    v-if="can.delete"
-                    type="button"
-                    :disabled="pending"
-                    class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
-                    @click="askDestroy"
-                >
-                    {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
-                </button>
-
-                <UiConfirmDialog
-                    :open="confirmOpen"
-                    :heading="t('item.destroy.confirm_heading', { name: item.name })"
-                    :body="t('item.destroy.confirm_body', { name: item.name, days: TRASH_DAYS })"
-                    :confirm-label="t('item.destroy.action')"
-                    tone="danger"
-                    :pending="pending"
-                    :trigger="destroyTrigger"
-                    @confirm="destroy"
-                    @cancel="confirmOpen = false"
-                />
-
-                <!--
-                    Barn-itemet (issue 58 § Beslut 7). Föräldern kommer ur länken
-                    och formuläret visar den som en rad text — den här vyn är
-                    detaljvyn för just det itemet, så frågan "under vad?" är redan
-                    besvarad och ställs inte igen.
-                -->
-                <Link
-                    v-if="can.create"
-                    :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
-                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                >
-                    {{ t('item.links.create_child.action') }}
-                </Link>
-            </div>
+            <UiConfirmDialog
+                :open="confirmOpen"
+                :heading="t('item.destroy.confirm_heading', { name: item.name })"
+                :body="t('item.destroy.confirm_body', { name: item.name, days: TRASH_DAYS })"
+                :confirm-label="t('item.destroy.action')"
+                tone="danger"
+                :pending="pending"
+                :trigger="destroyTrigger"
+                @confirm="destroy"
+                @cancel="confirmOpen = false"
+            />
 
             <!--
                 Förekomstpanelen under `md:` (issue 95 och 633 ·
