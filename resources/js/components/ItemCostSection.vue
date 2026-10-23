@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import UiButton from './UiButton.vue';
+import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import { formatAmount } from './CostDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
@@ -120,6 +121,15 @@ function loadSuppliers() {
 }
 
 onMounted(loadSuppliers);
+
+/*
+ * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
+ * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
+ * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ */
+function focusForm() {
+    document.getElementById('cost-incurred-on')?.focus();
+}
 
 /*
  * Kostnadskrokens datum ur adressen (Beslut 4). Formen prövas med ett
@@ -442,7 +452,13 @@ function destroy(cost) {
             Listan. Serverns ordning, aldrig vyns: `incurred_on` fallande med
             `id` fallande, så den senaste kostnaden står först.
         -->
-        <p v-if="costs.length === 0" class="text-body text-ink-muted">{{ t('item.cost.empty') }}</p>
+        <UiEmptyState v-if="costs.length === 0">
+            {{ t('item.cost.empty') }}
+
+            <template v-if="can.create" #action>
+                <UiButton type="button" @click="focusForm">{{ t('item.show.add_cost') }}</UiButton>
+            </template>
+        </UiEmptyState>
 
         <ul v-else class="flex flex-col gap-2">
             <li

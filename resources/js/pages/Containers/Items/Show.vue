@@ -16,6 +16,7 @@ import ItemMapPanel from '../../../components/ItemMapPanel.vue';
 import ItemNotes from '../../../components/ItemNotes.vue';
 import ItemOverviewCover from '../../../components/ItemOverviewCover.vue';
 import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
+import UiEmptyState from '../../../components/UiEmptyState.vue';
 import ItemQuickActions from '../../../components/ItemQuickActions.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
@@ -1177,9 +1178,9 @@ function toggleFavorite() {
             <section v-if="activeTab === 'history'" class="mt-8">
                 <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
 
-                <p v-if="history.length === 0" class="mt-2 text-sm text-ink-muted">
+                <UiEmptyState v-if="history.length === 0" class="mt-2">
                     {{ t('audit.history.empty') }}
-                </p>
+                </UiEmptyState>
 
                 <ul v-else class="mt-2">
                     <HistoryRow v-for="row in history" :key="row.ulid" :row="row" />

@@ -5,6 +5,7 @@ import ItemMap from './ItemMap.vue';
 import FormField from './FormField.vue';
 import ItemViewSwitch from './ItemViewSwitch.vue';
 import UiButton from './UiButton.vue';
+import UiEmptyState from './UiEmptyState.vue';
 import UiSelect from './UiSelect.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -160,6 +161,15 @@ const form = useForm({
     relation: '',
 });
 
+/*
+ * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
+ * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
+ * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ */
+function focusForm() {
+    document.getElementById('item')?.focus();
+}
+
 function submit() {
     form.post(`/containers/${props.containerUlid}/items/${props.itemUlid}/links`, {
         // Sidan är en lista, och ett hopp till toppen efter en skriven rad
@@ -284,7 +294,13 @@ function remove(counterpart) {
                 </template>
             </template>
 
-            <p v-else class="mt-4 text-sm text-ink-muted">{{ t('item.links.empty') }}</p>
+            <UiEmptyState v-else class="mt-4">
+                {{ t('item.links.empty') }}
+
+                <template v-if="can.update && counterparts.length > 0" #action>
+                    <UiButton type="button" @click="focusForm">{{ t('item.show.add_relation') }}</UiButton>
+                </template>
+            </UiEmptyState>
 
             <template v-if="can.update">
                 <h3 class="mt-8 text-base font-semibold">{{ t('item.links.form_heading') }}</h3>

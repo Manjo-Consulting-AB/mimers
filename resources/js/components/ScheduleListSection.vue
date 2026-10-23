@@ -4,6 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import UiCard from './UiCard.vue';
+import UiEmptyState from './UiEmptyState.vue';
 import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -240,9 +241,18 @@ const itemName = computed(() => page.props.item?.name ?? '');
             grupperna OCH *Done* — annars hade en lista med bara avbockade
             rader sagt att itemet saknar uppgifter.
         -->
-        <p v-if="!hasAnyTask" class="mt-4 text-sm text-slate-600">
+        <UiEmptyState v-if="!hasAnyTask" class="mt-4">
             {{ t('item.schedule.empty') }}
-        </p>
+
+            <template v-if="can.create" #action>
+                <Link
+                    :href="createUrl"
+                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    {{ t('item.show.add_task') }}
+                </Link>
+            </template>
+        </UiEmptyState>
 
         <!--
             Listan (Beslut 4): grupperna i den ordning servern gav dem, sedan
