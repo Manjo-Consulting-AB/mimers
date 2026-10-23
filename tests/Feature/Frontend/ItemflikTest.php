@@ -276,41 +276,33 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Nio flikar sedan issue 168: kostnaden har fått sin, och historiken
-    // (issue 116) är fortfarande den sista.
-    //
-    // **Kostnadsfliken kom med issue 168** och är bildens *Kostnader* — den
-    // rad issue 102 lämnade utanför därför att ytan inte fanns i webben. Den
-    // ligger näst sist, före historiken, precis som i containerns egen flikrad
-    // ([[ADR-0050 Desktopdesignen]] § 4). **Informationsfliken kom med issue
-    // 154** och är bildens *Detaljer* — på mobilmockupen *Information*, och
-    // den flik *Visa alla fält* öppnar.
+    // Sju flikar sedan issue 332 ([[ADR-0068 Itemets sida och skapandet]]
+    // § 4): Overview, Relations, Documents, Costs, To do, Loans, History.
+    // Informations- och taggfliken har utgått; nycklarna `attachments` och
+    // `schedules` står still.
     expect(itemflikNycklar($vy))->toBe([
         'overview',
-        'information',
         'relations',
         'attachments',
+        'costs',
         'schedules',
         'loans',
-        'tags',
-        'costs',
         'history',
     ]);
 
-    // Etiketten slås upp och skrivs aldrig i filen: `t()` hade skrivit nyckeln
-    // själv på skärmen om den saknades. Sex av dem är sektionens eget ord —
-    // fliken och rubriken strax under den ska inte kunna säga olika saker.
     expect(itemflikEtiketter($vy))->toBe([
         'item.show.overview',
-        'item.show.information',
         'item.links.heading',
         'item.attachment.heading',
+        'item.cost.heading',
         'item.schedule.heading',
         'item.loan.heading',
-        'item.show.tags',
-        'item.cost.heading',
         'audit.history.heading',
     ]);
+
+    // Och de visade orden är ADR:ens.
+    expect(array_map(fn (string $nyckel): string => trans("ui.{$nyckel}", [], 'en'), itemflikEtiketter($vy)))
+        ->toBe(['Overview', 'Relations', 'Documents', 'Costs', 'To do', 'Loans', 'History']);
 
     foreach (itemflikEtiketter($vy) as $nyckel) {
         $mening = trans("ui.{$nyckel}", [], 'en');
@@ -337,7 +329,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['information', 'relations', 'attachments', 'schedules', 'loans', 'tags', 'costs', 'history']);
+    expect($träffar[1])->toBe(['relations', 'attachments', 'costs', 'schedules', 'loans', 'history']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -370,16 +362,15 @@ it('har fliken Kostnader i itemets flikrad', function () {
 
     expect($nycklar)->toContain('costs');
 
-    // Näst sist: historiken (issue 116) ligger efter den, och det är ordningen
-    // bilden och containerns egen flikrad ger.
-    expect(array_search('costs', $nycklar, true))->toBe(count($nycklar) - 2);
+    // Före To do, Loans och History (ADR-0068 § 4).
+    expect(array_search('costs', $nycklar, true))->toBe(3);
     expect($nycklar[count($nycklar) - 1])->toBe('history');
 
     $rad = itemflikRader($vy)['costs'];
 
     expect($rad)->toContain("label: t('item.cost.heading')")
         ->toContain("href: tabHref('costs')")
-        ->toContain('count: props.costs.length');
+        ->toContain('props.costs.length');
 
     expect(itemflikPaneler($vy)['costs'])->toContain('<ItemCostSection');
 });
@@ -409,13 +400,11 @@ it('alla sex befintliga propar når sin flik', function () {
 
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
-        'overview' => ['<ItemQuickFacts', ':item="item"', "t('item.show.all_fields')"],
-        'information' => ['v-for="field in fields"', 'field.value'],
+        'overview' => ['<ItemQuickFacts', ':item="item"'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
-        'tags' => ['<ItemTagList', ':tags="item.tags"'],
         'costs' => ['<ItemCostSection', ':costs="costs"', ':cost-defaults="costDefaults"'],
         'history' => ['<HistoryRow', 'v-for="row in history"', ':row="row"'],
     ];
@@ -452,13 +441,11 @@ it('alla sex befintliga propar når sin flik', function () {
     expect($vy)->toContain("import { itemFields } from '../../../components/itemPresentation.js'")
         ->toContain('itemFields(props.item, locale.value)');
 
-    // *Visa alla fält* står på översikten och pekar på informationsflikens
-    // EGEN adress — hämtad ur `tabs` och inte byggd en gång till — så raden
-    // bär den aktuella förekomsten precis som flikraden gör (issue 154).
-    expect(itemflikPaneler($vy)['overview'])->toContain('t(\'item.show.all_fields\')')
-        ->toContain(':href="informationHref"');
+    // Länken *Show all fields* är borta (issue 332): informationsfliken finns
+    // inte längre, och fältrutnätet byggs i issue 333.
+    expect(itemflikPaneler($vy)['overview'])->not->toContain('item.show.all_fields');
 
-    expect($vy)->toContain('tabs.value.find((tab) => tab.key === \'information\')?.href');
+    expect($vy)->not->toContain('informationHref');
 });
 
 /*
@@ -481,15 +468,10 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
     expect($rader['overview'])->toContain('count: null');
 
     $listor = [
-        // Informationsfliken ritar fältraderna och kategorin, och räknaren är
-        // deras antal — `fields` ur itemPresentation.js plus kategorin, som är
-        // ett strukturerat fält och ingen tagg (issue 154).
-        'information' => ['fields.value.length', 'categoryName'],
         'relations' => ['props.links'],
         'attachments' => ['props.attachments'],
         'schedules' => ['props.schedules'],
         'loans' => ['props.loanHistory', 'props.openLoan'],
-        'tags' => ['props.item.tags'],
         // Kostnadsfliken ritar itemets rader, och räknaren är deras antal —
         // en nolla säger att listan är tom (issue 168).
         'costs' => ['props.costs'],
@@ -497,6 +479,7 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
 
     foreach ($listor as $nyckel => $proppar) {
         expect($rader[$nyckel])->not->toContain('count: null');
+        expect($rader[$nyckel])->toContain('count: rows(');
 
         foreach ($proppar as $propp) {
             expect(str_contains($rader[$nyckel], $propp))->toBeTrue(
@@ -668,21 +651,10 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
         ->toContain('<ItemNotes')
         ->toContain(':notes-html="notesHtml"');
 
-    // **Fältlistan står på informationsfliken sedan issue 154** — det är
-    // bildens *Information*, och dit leder *Visa alla fält*. Översikten bär
-    // snabbfakta och de två styckena; fälten bor på ett ställe och inte i två
-    // avskrifter.
-    expect($paneler['information'])->toContain('v-for="field in fields"');
-
-    expect(str_contains($paneler['overview'], 'v-for="field in fields"'))->toBeFalse(
-        'fältlistan står både på översikten och på informationsfliken',
-    );
-
+    // Informationsfliken är borta (issue 332); fältrutnätet på översikten
+    // byggs i issue 333. Ingen flik bär fältlistan under tiden.
     expect(itemflikNycklar($vy))->not->toContain('details');
-
-    foreach (['item.description', 'item.notes'] as $falt) {
-        expect(str_contains($paneler['information'], $falt))->toBeFalse("{$falt} står i fältlistan");
-    }
+    expect(itemflikNycklar($vy))->not->toContain('information');
 
     // Regeln bor i modulen. Ett item med både beskrivning och anteckning ger
     // därför EN rad i fältlistan — tillverkaren — och de två styckena står
@@ -704,22 +676,71 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
 });
 
 /*
- * Taggfliken utan taggar. Fliken ritade tidigare ingenting alls när itemet
- * saknade taggar och lät räknaren säga det — men en tom yta efter ett tryck på
- * en flik läses som ett fel, samma skäl som informationsflikens tomma rad.
- * Raden säger att itemet saknar taggar, och länken till redigeringen — där
- * taggarna sätts — står bara för den som får redigera.
+ * Klart när: det finns ingen flik Information eller Tags, och `?tab=information`
+ * och `?tab=tags` visar översikten (issue 332).
+ *
+ * Taggarna står i huvudet sedan issue 331 (ItemhuvudTest prövar deras tomma
+ * rad). Ett okänt `?tab=` ger översikten via `activeTab`, och servern svarar
+ * som för översikten.
  */
-it('säger att itemet saknar taggar i stället för att rita en tom flik', function () {
-    $panel = itemflikPaneler(itemflikKod('pages/Containers/Items/Show.vue'))['tags'];
+it('har ingen flik Information eller Tags och låter de gamla adresserna visa översikten', function () {
+    withoutVite();
 
-    expect($panel)->toContain('v-if="item.tags.length > 0"')
-        ->toContain('v-else')
-        ->toContain("t('item.show.tags_empty')")
-        ->toContain('v-if="can.update"')
-        ->toContain('/edit`')
-        ->toContain("t('item.show.tags_add')");
+    $vy = itemflikKod('pages/Containers/Items/Show.vue');
 
-    expect(__('ui.item.show.tags_empty'))->not->toBe('ui.item.show.tags_empty')
-        ->and(__('ui.item.show.tags_add'))->not->toBe('ui.item.show.tags_add');
+    expect(itemflikNycklar($vy))->not->toContain('information');
+    expect(itemflikNycklar($vy))->not->toContain('tags');
+
+    $paneler = itemflikPaneler($vy);
+
+    expect(array_key_exists('information', $paneler))->toBeFalse();
+    expect(array_key_exists('tags', $paneler))->toBeFalse();
+
+    // Fallbacken: ett `?tab=` som inte är någon fliks ger översikten.
+    expect($vy)->toContain("tabs.value.some((tab) => tab.key === requested) ? requested : 'overview'");
+
+    [, $anvandare, $container] = itemflikKontext();
+    $motorn = itemflikItem($container, 'Motorn');
+
+    foreach (['information', 'tags'] as $gammal) {
+        actingAs($anvandare)->get(itemflikUrl($container, $motorn)."?tab={$gammal}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Containers/Items/Show')
+                ->where('item.ulid', $motorn->ulid)
+            );
+    }
+});
+
+/*
+ * Klart när: en flik med noll rader ritar ingen räknare och en med rader ritar
+ * talet (issue 332 · [[ADR-0068 Itemets sida och skapandet]] § 4).
+ *
+ * Regeln bor i en hjälpare i flikradens egen `computed`. Provet läser att den
+ * gör `0` till `null` och att varje listflik går genom den, och att
+ * `UiTabs` och containerns flikar är orörda.
+ */
+it('ritar ingen räknare på en flik med noll rader', function () {
+    $vy = itemflikKod('pages/Containers/Items/Show.vue');
+
+    expect(itemflikTabbar($vy))->toContain('const rows = (n) => (n === 0 ? null : n);');
+
+    foreach (itemflikRader($vy) as $nyckel => $rad) {
+        if ($nyckel === 'overview') {
+            continue;
+        }
+
+        expect($rad)->toContain('rows(');
+    }
+
+
+    // Historiken är `null` så länge raderna inte hämtats, och talet därefter.
+    expect(itemflikRader($vy)['history'])->toContain('props.history === null ? null : rows(props.history.length)');
+
+    // Containerns flikar och UiTabs räknar som förut: `0` ritas där.
+    $uitabs = itemflikKod('components/UiTabs.vue');
+    $container = itemflikKod('layouts/containerSections.js');
+
+    expect($uitabs)->not->toContain('rows(');
+    expect($container)->not->toContain('rows(');
 });

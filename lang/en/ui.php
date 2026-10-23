@@ -2961,28 +2961,14 @@ return [
             // `overview` is the item's own text and the resting tab: it is
             // written without `tab`, and it carries the description, *Quick
             // facts* and the note's own box. The rows `itemFields` returns
-            // stood here until issue 154 and stand on the information tab now.
+            // stood on the information tab until issue 332 removed it.
             'overview' => 'Overview',
 
-            // The second tab, and the one *Show all fields* opens (issue 154 ·
-            // [[M23 Mobilen och kartan]] § 154). The mobile mockup draws the
-            // item as *Overview · Information · Documents*, and the word is
-            // the mockup's: the tab carries the field rows the overview
-            // summarises in *Quick facts*.
-            'information' => 'Information',
             // The item's summary on the overview: manufacturer, model and
             // serial number — the three fields a reader looks for first, and
             // only the ones that carry a value. The heading is not drawn when
             // none of them does.
             'quick_facts' => 'Quick facts',
-            // The row that opens the information tab. Not a tab of its own:
-            // the fields live there once, and this is the way to them.
-            'all_fields' => 'Show all fields',
-            // The information tab with no field filled in at all. The row
-            // says the item is unwritten and not that the page is broken —
-            // the tab is reached by pressing a row, and an empty panel there
-            // had said the same thing as an empty overview had.
-            'information_empty' => 'No fields are filled in for this item yet.',
 
             'description' => 'Description',
             // Issue 96. `description` says what the item IS, `notes` what the
@@ -3010,11 +2996,9 @@ return [
             'position_note' => 'Storage location',
             'category' => 'Category',
             'tags' => 'Tags',
-            // The tags tab with no tag on the item. Until now the panel drew
-            // nothing and left it to the counter in the tab, but a reader who
-            // presses a tab and meets a blank panel reads it as broken — the
-            // same reasoning as `information_empty` above. Tags are set in the
-            // edit form, so `tags_add` leads there when the reader may edit.
+            // The header's tag row with no tag on the item (issue 331). Tags
+            // are set in the edit form, so `tags_add` leads there when the
+            // reader may edit.
             'tags_empty' => 'This item has no tags yet.',
             'tags_add' => 'Add tags',
 
