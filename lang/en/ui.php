@@ -3233,12 +3233,19 @@ return [
             'categories_empty' => 'The container has no categories yet.',
             'categories_empty_link' => 'Create categories',
 
-            // The tags are checkboxes, one per tag in the container. A new tag is
-            // created on the tags page and not here: one way to the same write
+            // The tags are chips in a searchable picker, one choice per tag in the
+            // container. A new tag is created on the tags page and not here: one way to the same write
             // in two places is two rules to keep in step (decision 5).
             'tags' => 'Tags',
             'tags_empty' => 'The container has no tags yet.',
             'tags_empty_link' => 'Create tags',
+
+            // The picker for categories and tags (issue 336 · [[ADR-0068
+            // Itemets sida och skapandet]] § 13). `taxonomy_remove` is the
+            // accessible name of a chip, which removes the value on press.
+            'taxonomy_search' => 'Search',
+            'taxonomy_remove' => 'Remove :name',
+            'taxonomy_no_matches' => 'No matches',
 
             // The account the row is attributed to — the yard, not the
             // employee. Only on creation: who created the row is history

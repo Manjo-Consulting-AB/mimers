@@ -340,6 +340,17 @@ it('bär inga råa färgklasser i de fem migrerade formulären', function () {
     }
 });
 
+it('bär inga råa färgklasser i taxonomiväljaren', function () {
+    // Väljaren ur issue 336 är ny och bygger på rollerna ur @theme från början.
+    // Den ligger utanför `designFormular()` med flit: den listan är de fem
+    // formulär issue 425 migrerade, och provet för dem räknar fem.
+    $sokvag = 'components/TaxonomyPicker.vue';
+    $kod = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+
+    expect($kod)->toContain('bg-accent-soft');
+    expect(designRaaFargklasser($sokvag, $kod))->toBe([]);
+});
+
 it('bär inga råa färgklasser i itemets sektioner', function () {
     // Samma regel och samma `$palett` som provet för de fem migrerade
     // formulären ovan, men över de fyra filer issue 182 rör. De har flest råa
