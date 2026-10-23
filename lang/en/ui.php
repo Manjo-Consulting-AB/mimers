@@ -2998,6 +2998,13 @@ return [
             'position_note' => 'Location',
             'category' => 'Category',
             'tags' => 'Tags',
+            // The tags tab with no tag on the item. Until now the panel drew
+            // nothing and left it to the counter in the tab, but a reader who
+            // presses a tab and meets a blank panel reads it as broken — the
+            // same reasoning as `information_empty` above. Tags are set in the
+            // edit form, so `tags_add` leads there when the reader may edit.
+            'tags_empty' => 'This item has no tags yet.',
+            'tags_add' => 'Add tags',
 
             // The paths from a root down to the item — the mockup's
             // *Förekomster i struktur*, see issue 95 and [[ADR-0041 Itemets

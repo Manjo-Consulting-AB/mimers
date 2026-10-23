@@ -702,3 +702,24 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
 
     expect($rader)->toBe('["manufacturer"]');
 });
+
+/*
+ * Taggfliken utan taggar. Fliken ritade tidigare ingenting alls när itemet
+ * saknade taggar och lät räknaren säga det — men en tom yta efter ett tryck på
+ * en flik läses som ett fel, samma skäl som informationsflikens tomma rad.
+ * Raden säger att itemet saknar taggar, och länken till redigeringen — där
+ * taggarna sätts — står bara för den som får redigera.
+ */
+it('säger att itemet saknar taggar i stället för att rita en tom flik', function () {
+    $panel = itemflikPaneler(itemflikKod('pages/Containers/Items/Show.vue'))['tags'];
+
+    expect($panel)->toContain('v-if="item.tags.length > 0"')
+        ->toContain('v-else')
+        ->toContain("t('item.show.tags_empty')")
+        ->toContain('v-if="can.update"')
+        ->toContain('/edit`')
+        ->toContain("t('item.show.tags_add')");
+
+    expect(__('ui.item.show.tags_empty'))->not->toBe('ui.item.show.tags_empty')
+        ->and(__('ui.item.show.tags_add'))->not->toBe('ui.item.show.tags_add');
+});
