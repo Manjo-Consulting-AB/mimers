@@ -1170,15 +1170,62 @@ class ItemController extends Controller
 
         $tree = $resolveItemTree->handle($user, $container);
 
+        $categories = $listCategories->handle($user, $container);
+
         return Inertia::render('Containers/Items/Create', [
             'container' => ContainerResource::make($container)->resolve($request),
-            'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
+            'categories' => CategoryResource::collection($categories)->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
             'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
+            'preselected' => $this->defaultCategoryUlid($request, $categories),
+            'created' => $this->createdItem($request),
             'structure' => $this->pickableStructure($tree->roots(), $this->creatable($user, $container, $tree)),
             'can_create_root' => $canCreateRoot,
             'can' => $this->taxonomyAbilities($user, $container),
         ]);
+    }
+
+    /**
+     * `?category=` på skapandeformuläret (issue 339 · [[ADR-0068 Itemets sida
+     * och skapandet]] § 9): kategorin som formuläret förväljer efter *Save
+     * and add another*.
+     *
+     * Värdet slås upp i listan `ListCategories` redan gav — containerns egna
+     * och omfångsfiltrerade kategorier — så en ULID från en annan container,
+     * en okänd ULID eller en kategori mottagaren inte når ger `null` och inget
+     * förval. Allt annat än en sträng (`?category[]=…`) läses som "inget
+     * förval", samma linje som `parentUlid()`.
+     *
+     * @param  Collection<int, Category>  $categories
+     */
+    private function defaultCategoryUlid(Request $request, Collection $categories): ?string
+    {
+        $ulid = $request->query('category');
+
+        if (! is_string($ulid)) {
+            return null;
+        }
+
+        return $categories->contains('ulid', $ulid) ? $ulid : null;
+    }
+
+    /**
+     * Itemet som just skapades med *Save and add another*, ur sessionsflashen
+     * `created_item` som `store()` sätter. Flashen lever en request, så
+     * raden försvinner vid nästa sidladdning. Den delade flashen i
+     * HandleInertiaRequests rörs inte.
+     *
+     * @return array{ulid: string, name: string}|null
+     */
+    private function createdItem(Request $request): ?array
+    {
+        $created = $request->session()->get('created_item');
+
+        if (! is_array($created) || ! is_string($created['ulid'] ?? null) || ! is_string($created['name'] ?? null)) {
+            return null;
+        }
+
+        return ['ulid' => $created['ulid'], 'name' => $created['name']];
     }
 
     /**
@@ -1351,9 +1398,20 @@ class ItemController extends Controller
         // lista betyder "inga taggar" och inte "rör dem inte" (§ Beslut 6).
         $tags = Tag::whereIn('ulid', $request->validated('tags') ?? [])->get();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'another']));
 
         $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
+
+        // *Save and add another* (issue 339): ett nytt formulär med samma plats
+        // och samma kategori, och en flash som säger vilket item som skapades.
+        if ($request->boolean('another')) {
+            return redirect()
+                ->route('containers.items.create', array_merge([$container], array_filter([
+                    'parent' => $parent?->ulid,
+                    'category' => $category?->ulid,
+                ])))
+                ->with('created_item', ['ulid' => $item->ulid, 'name' => $item->name]);
+        }
 
         return redirect()
             ->route('containers.items.show', [$container, $item])
