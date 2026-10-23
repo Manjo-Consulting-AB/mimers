@@ -575,10 +575,12 @@ it('gör varje klickbar yta till en knapp, en länk eller ett inmatningsfält', 
     // rot-element är precis den `<div>` regeln handlar om.
     $tillåtna = ['button', 'a', 'summary', 'input', 'label', 'select', 'textarea'];
 
-    // Ett enda komponentnamn står utanför listan: Inertias `<Link>`, som alltid
-    // renderar ett `<a href>` och därför är tabbbart. Undantaget är namngivet
-    // och motiverat för att det ska vara svårt att utöka i förbigående.
-    $tillåtnaKomponenter = ['Link'];
+    // Två komponentnamn står utanför listan: Inertias `<Link>`, som alltid
+    // renderar ett `<a href>`, och `<UiButton>`, vars enda rot är en `<button>`
+    // (issue 330, bekräftelsedialogen). Båda är därför tabbbara. Undantagen är
+    // namngivna och motiverade för att det ska vara svårt att utöka i
+    // förbigående.
+    $tillåtnaKomponenter = ['Link', 'UiButton'];
 
     $granskade = 0;
 

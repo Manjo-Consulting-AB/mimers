@@ -18,6 +18,7 @@ import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
+import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
@@ -664,14 +665,30 @@ function pathHref(nodes) {
  */
 const pending = ref(false);
 
-function destroy() {
-    if (! window.confirm(t('item.destroy.confirm'))) {
-        return;
-    }
+/*
+ * Bekräftelsen är appens egen dialog (issue 330 · [[ADR-0068 Itemets sida
+ * och skapandet]] § 6), inte `window.confirm`. Knappen öppnar den och är
+ * dialogens `trigger`, dit fokus går tillbaka; *Cancel* stänger den, och
+ * *Delete* skickar raderingen. Dagarna är papperskorgens retention
+ * ([[ADR-0008 Soft delete och papperskorg]]).
+ */
+const TRASH_DAYS = 30;
 
+const confirmOpen = ref(false);
+const destroyTrigger = ref(null);
+
+function askDestroy(event) {
+    destroyTrigger.value = event.currentTarget;
+    confirmOpen.value = true;
+}
+
+function destroy() {
     router.delete(`/containers/${props.container.ulid}/items/${props.item.ulid}`, {
         onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onFinish: () => {
+            pending.value = false;
+            confirmOpen.value = false;
+        },
     });
 }
 
@@ -859,10 +876,22 @@ function toggleFavorite() {
                     type="button"
                     :disabled="pending"
                     class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
-                    @click="destroy"
+                    @click="askDestroy"
                 >
                     {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
                 </button>
+
+                <UiConfirmDialog
+                    :open="confirmOpen"
+                    :heading="t('item.destroy.confirm_heading', { name: item.name })"
+                    :body="t('item.destroy.confirm_body', { name: item.name, days: TRASH_DAYS })"
+                    :confirm-label="t('item.destroy.action')"
+                    tone="danger"
+                    :pending="pending"
+                    :trigger="destroyTrigger"
+                    @confirm="destroy"
+                    @cancel="confirmOpen = false"
+                />
 
                 <!--
                     Barn-itemet (issue 58 § Beslut 7). Föräldern kommer ur länken
