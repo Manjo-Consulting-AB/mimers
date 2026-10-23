@@ -4,6 +4,7 @@ import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
+import UiEmptyState from './UiEmptyState.vue';
 import UiIcon from './UiIcon.vue';
 import UiSelect from './UiSelect.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
@@ -166,6 +167,15 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+
+/*
+ * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
+ * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
+ * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ */
+function focusForm() {
+    document.getElementById('attachment-file')?.focus();
+}
 const { focusFirstError } = useErrorFocus();
 const page = usePage();
 
@@ -734,9 +744,13 @@ function toInbox(attachment) {
 
         <!-- En tom container och ett item utan bilagor säger samma sak: det finns
              ingen rad att visa, och vyn hittar inte på en. -->
-        <p v-if="rows.length === 0" class="mt-2 text-sm text-ink-muted">
+        <UiEmptyState v-if="rows.length === 0" class="mt-2">
             {{ t('item.attachment.empty') }}
-        </p>
+
+            <template v-if="can.create" #action>
+                <UiButton type="button" @click="focusForm">{{ t('item.show.add_document') }}</UiButton>
+            </template>
+        </UiEmptyState>
 
         <ul v-else class="mt-2 flex flex-col gap-2">
             <li

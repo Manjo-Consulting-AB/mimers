@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import UiButton from './UiButton.vue';
+import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import UiTextarea from './UiTextarea.vue';
 import { formatDateOnly } from './itemPresentation.js';
@@ -94,6 +95,15 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+
+/*
+ * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
+ * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
+ * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ */
+function focusForm() {
+    document.getElementById('borrower_name')?.focus();
+}
 const { focusFirstError } = useErrorFocus();
 const page = usePage();
 
@@ -302,7 +312,13 @@ function destroy(loan) {
             </form>
         </div>
 
-        <p v-else class="mt-4 text-sm text-ink-muted">{{ t('item.loan.not_lent') }}</p>
+        <UiEmptyState v-else class="mt-4">
+            {{ t('item.loan.not_lent') }}
+
+            <template v-if="can.create" #action>
+                <UiButton type="button" @click="focusForm">{{ t('item.loan.form_heading') }}</UiButton>
+            </template>
+        </UiEmptyState>
 
         <!--
             Utlåningsformuläret (§ Beslut 3 och 6). Det ritas bara när itemet
