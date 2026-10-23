@@ -3082,6 +3082,12 @@ return [
             // (issue 154 · [[ADR-0046 Containerns karta]]).
             'expand' => 'Expand :name',
             'collapse' => 'Collapse :name',
+            // The side panel's own button from `lg:` (issue 335 · [[ADR-0068
+            // Itemets sida och skapandet]] § 2): the panel folds into a thin
+            // strip, and the strip unfolds it again. The names say what a
+            // press does, since both buttons are icon-only.
+            'panel_collapse' => 'Collapse the structure panel',
+            'panel_expand' => 'Expand the structure panel',
         ],
 
         // The tree table in the item tab (issue 294 · [[ADR-0058 Trädet som
@@ -3164,6 +3170,9 @@ return [
         // visible word — the two modes name themselves.
         'map' => [
             'heading' => 'Map',
+            // The same pair for the map panel (issue 335).
+            'panel_collapse' => 'Collapse the map panel',
+            'panel_expand' => 'Expand the map panel',
 
             'view' => [
                 'label' => 'Relations view',
