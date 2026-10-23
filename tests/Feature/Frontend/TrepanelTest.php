@@ -737,9 +737,11 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
         'lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]',
     );
 
-    preg_match('/lg:grid-cols-\[([^\]]+)\]/', $vy, $träff);
+    // Det utfällda läget är grenen där ingen panel är hopfälld: den som har
+    // `minmax(…rem)` i båda sidospåren. De hopfällda grenarna prövas nedan.
+    preg_match('/lg:grid-cols-\[(minmax\([^\]_]+\)_[^\]_]+_minmax\([^\]_]+\))\]/', $vy, $träff);
 
-    expect($träff)->not->toBeEmpty('vyn sätter ingen lg:grid-cols-');
+    expect($träff)->not->toBeEmpty('vyn sätter ingen utfälld lg:grid-cols-');
 
     $spår = explode('_', $träff[1]);
 
@@ -749,6 +751,24 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
     expect($spår[0])->toStartWith('minmax(')->toEndWith('rem)')
         ->and($spår[2])->toStartWith('minmax(')->toEndWith('rem)')
         ->and($spår[1])->toContain('1fr');
+
+    // En hopfälld sidopanel är en list på `2.75rem`, aldrig ett minmax-spår.
+    preg_match_all('/lg:grid-cols-\[([^\]]+)\]/', $vy, $alla);
+
+    expect($alla[1])->toHaveCount(4);
+
+    foreach ($alla[1] as $uppsattning) {
+        $delar = explode('_', $uppsattning);
+
+        expect($delar)->toHaveCount(3)
+            ->and($delar[1])->toContain('1fr');
+
+        foreach ([$delar[0], $delar[2]] as $sida) {
+            expect(str_starts_with($sida, 'minmax(') || $sida === '2.75rem')->toBeTrue("oväntat spår: {$sida}");
+        }
+    }
+
+    expect($alla[1])->toContain('2.75rem_minmax(0,1fr)_2.75rem');
 });
 
 /*
