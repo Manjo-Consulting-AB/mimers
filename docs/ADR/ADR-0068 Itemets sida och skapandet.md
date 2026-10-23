@@ -95,7 +95,7 @@ Ingen sektion på översikten listar fler än fem rader. Den som vill se mer fö
 ## Konsekvenser
 
 - Byggs som en ny milstolpe, *Itemets sida*. Ordningen är ordlistan (§ 1), huvudet och raderingsdialogen (§ 3, 6), flikarna och översikten (§ 4, 5, 7), panelerna (§ 2), väljaren (§ 13, 14), skapaformuläret (§ 8–11), omslaget (§ 12) och listan (§ 16).
-- **Ingen issue i milstolpen får etiketten `Build`.** Etiketten lägger en issue i den automatiska kön (`.github/scripts/process_next_issue.py`), och den här milstolpen ska inte byggas därifrån. Tonys beslut 2026-10-23.
+- **Ingen issue i milstolpen får etiketten `Build`.** Etiketten lägger en issue i den automatiska kön (`.github/scripts/process_next_issue.py`), och den här milstolpen ska inte byggas därifrån. Issuerna implementeras i stället av Sonnet-subagenter som en Opus-session styr. Det avviker från [[ADR-0026 Implementering och granskning efter riskaxlar]], där Deepseek implementerar och Sonnet granskar, och gäller bara den här milstolpen. Tonys beslut 2026-10-23.
 - Alla issues utom § 11 och § 14 rör bara frontend och strängar: `risk_class: none`.
 - **§ 11 och § 14 är `risk_class: elevated`.** De rör uppladdning respektive skapande under en behörighetsgrind, även om de inte ändrar någon regel. Granskningen ska bekräfta att ingen ny ändpunkt och ingen ny grind tillkommit. Kräver implementationen något av det, ska den stanna och fråga.
 - `ItemflikTest` byter flikförteckning och räknarregel. Proven för Information och Tags går ut, liksom provet för taggflikens tomma rad (2026-10-23).
