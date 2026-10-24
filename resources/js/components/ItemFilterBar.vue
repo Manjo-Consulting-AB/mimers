@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import TaxonomyPicker from './TaxonomyPicker.vue';
 import { categoryOptions } from './categoryTree.js';
 import { activeFilters } from './itemFilter.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -66,6 +67,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Ingen sträng i JavaScript** (59a § Beslut 8). Varje text kommer ur `t()`
  * med en nyckel under `item.index.filter*`.
+ *
+ * **Taggarna väljs i `TaxonomyPicker`** (issue 343 · [[ADR-0068 Itemets sida
+ * och skapandet]] § 16), i läget `multiple` och utan *Create "X"*. Filtrets
+ * adress och regler är de samma: `tags[]` med ULID:n. Sökfältet har en
+ * platshållare och `aria-label` i stället för en synlig etikett.
  *
  * **Raden är responsiv** (ADR-0062 § 8). Under `sm:` tar sökfältet och
  * kategorin hela bredden var för sig, och taggarna bryter under dem. Från
@@ -280,6 +286,12 @@ function submitSearch() {
     search();
 }
 
+/* Väljaren ger hela den nya listan; den skickas direkt, som kryssrutorna gjorde. */
+function selectTags(ulids) {
+    selectedTags.value = ulids;
+    apply({ tags: ulids });
+}
+
 /* Ett kryss tar bort ETT filter och behåller resten. */
 function remove(entry) {
     if (entry.key === 'q') {
@@ -314,20 +326,20 @@ onBeforeUnmount(() => {
         :aria-label="t('item.index.filter_heading')"
         @submit.prevent="submitSearch"
     >
-        <label
-            for="item-filter-q"
-            class="flex w-full flex-col gap-1 text-sm font-medium text-ink sm:min-w-48 sm:flex-1"
-        >
-            {{ t('item.index.filter_q') }}
+        <!-- Sökfältet har en platshållare och ett tillgängligt namn, ingen
+             egen synlig etikett (issue 343 · ADR-0068 § 16). -->
+        <div class="flex w-full flex-col gap-1 text-sm font-medium text-ink sm:min-w-48 sm:flex-1">
             <input
                 id="item-filter-q"
                 v-model="q"
                 type="text"
                 name="q"
+                :placeholder="t('item.index.filter_q')"
+                :aria-label="t('item.index.filter_q')"
                 class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink"
                 @input="onSearchInput"
             >
-        </label>
+        </div>
 
         <!-- Kategorin: samma trädväljare som 57b:s formulär, byggd ur samma
              flata lista. Ingen kategori i containern, inget fält. -->
@@ -351,35 +363,23 @@ onBeforeUnmount(() => {
             </select>
         </label>
 
-        <!-- Taggarna: kryssrutor med sin färgprick, samma prick som TagRow
-             och ItemTagList ritar. Ingen tagg i omfånget, inget fält. -->
-        <fieldset v-if="tags.length > 0" class="flex w-full flex-col gap-1 sm:w-auto">
-            <legend class="text-sm font-medium text-ink">{{ t('item.index.filter_tags') }}</legend>
+        <!-- Taggarna väljs i samma väljare som itemformuläret, i läget
+             `multiple` och utan raden Create "X" (`can-create` är av).
+             Värdet är ULID:n som förut, så adressen är densamma. Ingen tagg
+             i omfånget, inget fält. -->
+        <div v-if="tags.length > 0" class="flex w-full flex-col gap-1 sm:w-72">
+            <label for="item-filter-tags" class="text-sm font-medium text-ink">
+                {{ t('item.index.filter_tags') }}
+            </label>
 
-            <div class="flex flex-wrap gap-x-4 gap-y-1">
-                <label
-                    v-for="tag in tags"
-                    :key="tag.ulid"
-                    :for="`item-filter-tag-${tag.ulid}`"
-                    class="flex min-h-11 min-w-11 items-center gap-2 text-sm font-normal text-ink"
-                >
-                    <input
-                        :id="`item-filter-tag-${tag.ulid}`"
-                        v-model="selectedTags"
-                        type="checkbox"
-                        name="tags[]"
-                        :value="tag.ulid"
-                        @change="apply()"
-                    >
-                    <span
-                        aria-hidden="true"
-                        class="inline-block h-3 w-3 shrink-0 rounded-full border border-ink-subtle"
-                        :style="tag.color ? { backgroundColor: tag.color } : null"
-                    />
-                    {{ tag.name }}
-                </label>
-            </div>
-        </fieldset>
+            <TaxonomyPicker
+                id="item-filter-tags"
+                :model-value="selectedTags"
+                :options="tags"
+                mode="multiple"
+                @update:model-value="selectTags"
+            />
+        </div>
     </form>
 
     <p v-if="filter.dropped" class="mt-2 text-sm text-ink-muted">

@@ -57,6 +57,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * gånger i trädet är två rader — med samma siffror, för siffrorna hör till
  * itemet (§ 3).
  *
+ * **Hela raden är klickbar** (issue 343 · [[ADR-0068 Itemets sida och
+ * skapandet]] § 16). Namnets `Link` bär en `::after` som täcker raden
+ * (`tr` är `relative`), så ett klick var som helst landar på samma adress som
+ * namnet och tangentbordet och skärmläsaren har samma väg som förut. Ingen
+ * `@click` på raden: ett klickbart element utan tabbstopp är det GenomgangTest
+ * förbjuder. Fällknappen ligger över ytan med `z-10` och behåller sitt klick.
+ *
  * **Länken bär vägen i querysträngen**, precis som `ItemStructureTree` gör:
  * ett klick på ett led landar på samma förekomst och inte på en godtycklig.
  * Adressen byggs här och aldrig på serversidan.
@@ -205,6 +212,11 @@ function extraTags(node) {
     return Math.max((cells(node).tags ?? []).length - 2, 0);
 }
 
+/* Noll dokument eller uppgifter är en tom cell och inte en `0` (issue 343 · § 16). */
+function countText(count) {
+    return count > 0 ? String(count) : '';
+}
+
 /* Träffen skiljs från vägen med vikten, och bara i ett filtrerat träd (§ 5). */
 function isMatch(node) {
     return props.filtered && node.match === true;
@@ -282,35 +294,38 @@ function isMatch(node) {
             <tr
                 v-for="row in visibleRows"
                 :key="row.key"
-                class="border-b border-border hover:bg-surface-sunken"
+                class="relative border-b border-border hover:bg-surface-sunken"
             >
                 <td class="py-1 pr-4 text-body">
                     <div class="flex items-center gap-1" :style="{ paddingLeft: `${row.depth * 20}px` }">
                         <!--
-                            Fällknappen finns bara på en rad med barn — ett
-                            löv har inget att fälla upp. Den står före ledet,
-                            som i ItemStructureTree.
+                            Fällknappens kolumn är lika bred på varje rad
+                            (issue 343 · [[ADR-0068 Itemets sida och
+                            skapandet]] § 16), så att namnen står i linje.
+                            Knappen finns bara på en rad med barn — ett löv
+                            har inget att fälla upp — och på ett löv står
+                            kolumnen tom, utan ruta. Knappen ligger över
+                            radens länkyta och behåller sitt eget klick.
                         -->
-                        <button
-                            v-if="row.node.children.length > 0"
-                            type="button"
-                            :aria-expanded="isOpen(row.key) ? 'true' : 'false'"
-                            :aria-label="isOpen(row.key)
-                                ? t('item.structure.collapse', { name: row.node.name })
-                                : t('item.structure.expand', { name: row.node.name })"
-                            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                            @click="toggle(row.key)"
-                        >
-                            <UiIcon
-                                name="chevron-right"
-                                :size="16"
-                                class="h-4 w-4"
-                                :class="isOpen(row.key) ? 'rotate-90' : ''"
-                            />
-                        </button>
-
-                        <!-- Håller namnet i linje med de rader som har en knapp. -->
-                        <span v-else class="inline-block min-w-11 shrink-0" aria-hidden="true"></span>
+                        <span class="inline-flex w-11 shrink-0 items-center justify-center">
+                            <button
+                                v-if="row.node.children.length > 0"
+                                type="button"
+                                :aria-expanded="isOpen(row.key) ? 'true' : 'false'"
+                                :aria-label="isOpen(row.key)
+                                    ? t('item.structure.collapse', { name: row.node.name })
+                                    : t('item.structure.expand', { name: row.node.name })"
+                                class="relative z-10 inline-flex min-h-11 w-full items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                                @click="toggle(row.key)"
+                            >
+                                <UiIcon
+                                    name="chevron-right"
+                                    :size="16"
+                                    class="h-4 w-4"
+                                    :class="isOpen(row.key) ? 'rotate-90' : ''"
+                                />
+                            </button>
+                        </span>
 
                         <!--
                             Rutan mellan fällknappen (eller platshållaren) och
@@ -363,7 +378,7 @@ function isMatch(node) {
                         <div class="flex min-w-0 flex-col">
                             <Link
                                 :href="nodeHref(row)"
-                                class="inline-flex min-h-11 items-center rounded-control px-2 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                                class="inline-flex min-h-11 items-center rounded-control px-2 text-body outline-none after:absolute after:inset-0 after:content-[''] focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                                 :class="isMatch(row.node)
                                     ? 'font-semibold text-ink'
                                     : 'text-ink-muted hover:bg-surface-sunken'"
@@ -393,11 +408,11 @@ function isMatch(node) {
                 </td>
 
                 <td class="hidden py-1 pr-4 text-body text-ink-muted md:table-cell">
-                    {{ cells(row.node).documents }}
+                    {{ countText(cells(row.node).documents) }}
                 </td>
 
                 <td class="hidden py-1 pr-4 text-body text-ink-muted md:table-cell">
-                    {{ cells(row.node).tasks }}
+                    {{ countText(cells(row.node).tasks) }}
                 </td>
 
                 <td class="hidden py-1 pr-4 text-body text-ink-muted md:table-cell">

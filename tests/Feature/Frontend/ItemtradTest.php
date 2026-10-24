@@ -788,9 +788,10 @@ it('ritar rutans fyra val i ordningen vald bild, ikon, automatisk bild, grå rut
 it('ställer rötternas fällknappar i samma kolumn som containerns ikon', function () {
     $kod = itemtradKod('components/ItemTreeTable.vue');
 
-    // Tre 44 px-kolumner: containerns ikon, fällknappen och platshållaren
-    // för ett löv.
-    expect(substr_count($kod, 'min-w-11'))->toBe(3);
+    // Containerns ikon har sin 44 px-kolumn; itemradernas kolumn är en egen
+    // `w-11`-ruta runt knappen (issue 343), lika bred på löv och förälder.
+    expect(substr_count($kod, 'min-w-11'))->toBe(1)
+        ->and(substr_count($kod, 'inline-flex w-11 shrink-0'))->toBe(1);
 
     expect($kod)->toContain('${row.depth * 20}px')
         ->toContain('walk(props.nodes, [], 0, [])');
@@ -951,4 +952,77 @@ it('börjar om i utgångsläget vid en ny filtrering utan att röra adressen', f
     expect($vy)->not->toContain('router.')
         ->and($vy)->not->toContain('usePage')
         ->and($vy)->not->toContain('page.url');
+});
+
+/*
+ * Klart när (issue 343 · [[ADR-0068 Itemets sida och skapandet]] § 16): ett
+ * klick var som helst på raden öppnar itemet, och fällknappen fäller utan att
+ * öppna.
+ *
+ * Raden bär ingen `@click` — GenomgangTest tillåter inte ett klick på en
+ * `<tr>` — utan namnets `Link` lägger en `::after` över raden, och knappen
+ * ligger över den med `z-10`. Namnet är kvar som länk, så tangentbordet har
+ * samma väg som förut.
+ */
+it('gör hela itemraden klickbar genom namnlänkens yta och låter fällknappen ligga över den', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    $start = (int) strpos($kod, 'v-for="row in visibleRows"');
+    $slut = (int) strpos($kod, '</tr>', $start);
+    $rad = substr($kod, $start, $slut - $start);
+
+    expect($rad)->toContain('class="relative border-b border-border hover:bg-surface-sunken"')
+        ->toContain('after:absolute after:inset-0');
+
+    // Länken är den som bär ytan, och knappen står över den.
+    $lank = substr($rad, (int) strpos($rad, '<Link'));
+    $knapp = substr($rad, (int) strpos($rad, '<button'), 900);
+
+    expect($lank)->toContain('after:absolute after:inset-0')
+        ->toContain(':href="nodeHref(row)"');
+    expect($knapp)->toContain('relative z-10')
+        ->toContain('@click="toggle(row.key)"');
+
+    // Raden själv har ingen klickhanterare.
+    expect(substr_count($rad, '@click'))->toBe(1);
+});
+
+/*
+ * Klart när (issue 343): en kolumn med noll dokument eller uppgifter är tom.
+ */
+it('ritar noll dokument och noll uppgifter som tomma celler', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('{{ countText(cells(row.node).documents) }}')
+        ->toContain('{{ countText(cells(row.node).tasks) }}')
+        ->toContain("return count > 0 ? String(count) : '';");
+    expect($kod)->not->toContain('{{ cells(row.node).documents }}');
+    expect($kod)->not->toContain('{{ cells(row.node).tasks }}');
+});
+
+/*
+ * Klart när (issue 343): namnen på löv och föräldrar står i linje, och en
+ * löv-rad ritar ingen ruta där knappen står.
+ *
+ * Kolumnen är en `w-11`-ruta på varje rad. Knappen är barn i rutan och
+ * grindad på barn; ett löv lämnar rutan tom, utan ram, bakgrund eller
+ * platshållarelement.
+ */
+it('ger fällknappens kolumn samma bredd på varje rad och lämnar den tom på ett löv', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    $ruta = (int) strpos($kod, 'inline-flex w-11 shrink-0');
+    $knapp = (int) strpos($kod, 'v-if="row.node.children.length > 0"');
+    $slut = (int) strpos($kod, '</span>', $knapp);
+
+    expect($ruta)->toBeGreaterThan(0)
+        ->and($knapp)->toBeGreaterThan($ruta);
+
+    $kolumn = substr($kod, $ruta, $slut - $ruta);
+
+    // Samma ruta runt knappen och runt ingenting: inget `v-else` ritar något.
+    expect($kolumn)->toContain('w-full');
+    expect($kolumn)->not->toContain('v-else');
+    expect($kolumn)->not->toContain('aria-hidden');
+    expect($kod)->not->toContain('inline-block min-w-11');
 });
