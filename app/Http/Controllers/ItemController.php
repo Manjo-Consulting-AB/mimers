@@ -1451,6 +1451,10 @@ class ItemController extends Controller
         // både väljarens alternativ och uppslaget till `cover` nedan.
         $images = $resolveItemCover->images($item);
 
+        // Derivaten behövs för `hasThumb` — en fråga för alla bilder, aldrig
+        // en lazy-load per bild.
+        $images->loadMissing('storedFile.derivatives');
+
         return Inertia::render('Containers/Items/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
@@ -1486,18 +1490,18 @@ class ItemController extends Controller
      * ingen fältvis grind, för ingen del av ett befintligt item är något en
      * `create`-mottagare får ändra (issue 71 § Beslut 3).
      *
-     * **Webben skickar ALLTID `category` och `tags`** (§ Beslut 6), och
-     * därför finns ingen `has()`-gren här. `Api\ItemController::update()`
-     * skiljer på ett UTELÄMNAT fält ("rör det inte") och ett uttryckligt
-     * `null`/`[]` ("töm det") med `$request->has()`, aldrig `filled()` — en
-     * skillnad som finns för en partiell PATCH från en API-klient. Formuläret
-     * har alltid båda fälten med ett valt värde, så den grenen skulle aldrig
-     * tas, och en gren som aldrig tas är en gren ingen testar (56a § Beslut 5).
-     * API:et bär skillnaden; webben behöver den inte.
+     * **Redigeringsformuläret skickar ALLTID `category` och `tags`**
+     * (§ Beslut 6), men de rörs bara när nyckeln finns i requesten
+     * (`$request->has()`, aldrig `filled()`), precis som i
+     * `Api\ItemController::update()`: ett UTELÄMNAT fält är "rör det inte" och
+     * ett uttryckligt `null`/`[]` är "töm det". Skillnaden behövs sedan issue
+     * 342: *Use as cover* i fliken Documents skickar bara `cover`, och en
+     * PATCH utan grenen hade rensat kategori och taggar. Formulärets
+     * beteende är oförändrat.
      *
-     * **`cover` är undantaget** (issue 93): väljaren ritas bara när itemet har
-     * bilder, så fältet kan saknas i kroppen helt — och då betyder det "rör
-     * inte", se raden i metoden.
+     * **`cover` följer samma regel** (issue 93): väljaren ritas bara när
+     * itemet har bilder, så fältet kan saknas i kroppen helt — och då betyder
+     * det "rör inte", se raden i metoden.
      *
      * `account` finns inte i `UpdateItemRequest` och inte i formuläret: vem
      * som skapade raden är historik (§ Beslut 4).
@@ -1522,12 +1526,19 @@ class ItemController extends Controller
         Gate::authorize('update', $item);
 
         $item->fill($request->safe()->except(['category', 'tags', 'cover']));
-        $item->category_id = $this->category($container, $request->validated('category'))?->id;
 
-        // Omslagsbilden har en `has()`-gren, till skillnad från `category` och
-        // `tags` ovanför: ett UTELÄMNAT `cover` lämnar pekaren orörd medan ett
-        // uttryckligen skickat `cover: null` rensar den (UpdateItemRequest
-        // § docblock). Formuläret ritar ingen väljare när itemet saknar bilder
+        // Kategorin och omslaget rörs bara när nyckeln finns i requesten:
+        // ett UTELÄMNAT fält lämnar värdet orörda medan ett uttryckligen
+        // skickat `null` rensar det (UpdateItemRequest § docblock).
+        // Redigeringsformuläret skickar alltid `category`; *Use as cover* i
+        // fliken Documents skickar bara `cover`.
+        if ($request->has('category')) {
+            $item->category_id = $this->category($container, $request->validated('category'))?->id;
+        }
+
+        // Omslagsbilden: ett UTELÄMNAT `cover` lämnar pekaren orörd medan ett
+        // uttryckligen skickat `cover: null` rensar den. Formuläret ritar
+        // ingen väljare när itemet saknar bilder
         // — ett item vars enda bild ligger i papperskorgen är just det fallet —
         // och skickar då inte fältet alls. Utan grenen hade ett namnbyte där
         // rensat ett val som papperskorgen lovar ska gå att återställa.
@@ -1538,14 +1549,14 @@ class ItemController extends Controller
                 : $resolveItemCover->images($item)->firstWhere('ulid', $cover)?->id;
         }
 
-        // Taggmängden synkas ALLTID — webben skickar alltid hela mängden, så
-        // `tags: []` betyder "töm" och inte "rör inte" (§ Beslut 6).
+        // Taggmängden synkas bara när `tags` finns i requesten: `tags: []`
+        // betyder "töm", ett utelämnat `tags` betyder "rör inte".
         // Actionen skriver itemet, taggarna och loggraderna i EN transaktion
         // (issue 13b § Beslut 7, issue 109).
         $updateItem->handle(
             $item,
             $request->user(),
-            true,
+            $request->has('tags'),
             Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
         );
 
@@ -2039,7 +2050,11 @@ class ItemController extends Controller
      * ordningar av samma lista hade gjort "den äldsta" till två olika bilder.
      *
      * @param  Collection<int, Attachment>  $images
-     * @return list<array{ulid: string, filename: string}>
+     * `hasThumb` säger om bilden har en miniatyr att rita (issue 342): väljaren
+     * ritar en `<img>` bara då, och annars en ruta med filnamnet — samma regel
+     * som `variants()` ovan, och av samma skäl.
+     *
+     * @return list<array{ulid: string, filename: string, hasThumb: bool}>
      */
     private function imageOptions(Collection $images): array
     {
@@ -2047,6 +2062,7 @@ class ItemController extends Controller
             ->map(fn (Attachment $image): array => [
                 'ulid' => $image->ulid,
                 'filename' => $image->filename,
+                'hasThumb' => $image->storedFile->derivatives->contains('variant', 'thumb'),
             ])
             ->values()
             ->all();

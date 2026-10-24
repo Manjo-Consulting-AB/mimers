@@ -1193,6 +1193,7 @@ function toggleFavorite() {
                 :max-upload-bytes="maxUploadBytes"
                 :container-account="container.account"
                 :container-is-inbox="containerIsInbox"
+                :cover-ulid="cover?.ulid ?? null"
                 :can="can"
             />
 

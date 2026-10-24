@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import ItemCoverPicker from './ItemCoverPicker.vue';
 import ItemIcon from './ItemIcon.vue';
 import ItemIconPicker from './ItemIconPicker.vue';
 import ParentPicker from './ParentPicker.vue';
@@ -780,29 +781,17 @@ function submit() {
             >
         </FormField>
 
-        <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
-             (issue 93). Fältet ritas bara i redigeringsläget och bara när
+        <!-- Omslagsbilden: ett rutnät av itemets bilder som miniatyrer, med
+             *No cover* först (issue 93, issue 342). Fältet ritas bara i redigeringsläget och bara när
              itemet har bilder; `images` kommer färdigfiltrerad och sorterad
              ur App\Actions\Item\ResolveItemCover::images(). -->
-        <FormField
+        <ItemCoverPicker
             v-if="showCover"
-            v-slot="{ describedBy }"
+            v-model="form.cover"
             :label="t('item.form.cover')"
-            id="cover"
+            :images="images"
             :error="form.errors.cover"
-        >
-            <UiSelect
-                id="cover"
-                v-model="form.cover"
-                :described-by="describedBy"
-                name="cover"
-            >
-                <option :value="null">{{ t('item.form.cover_none') }}</option>
-                <option v-for="image in images" :key="image.ulid" :value="image.ulid">
-                    {{ image.filename }}
-                </option>
-            </UiSelect>
-        </FormField>
+        />
 
         <!--
             Beskrivningen och de övriga fälten (issue 338 · [[ADR-0068 Itemets
