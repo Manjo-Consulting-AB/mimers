@@ -762,9 +762,10 @@ it('tar bort Filter-knappen och nyckeln och skickar direkt från kategorin och t
     expect($rad)->not->toContain('type="submit"');
     expect($rad)->not->toContain('filter_submit');
 
-    // Kategorin och varje taggkryss anropar `apply()` på `change`, alltså
-    // direkt och utan fördröjning.
-    expect(substr_count($rad, '@change="apply()"'))->toBe(2);
+    // Kategorin anropar `apply()` på `change`, och taggväljaren anropar den
+    // direkt via `selectTags()` — alltså utan fördröjning.
+    expect(substr_count($rad, '@change="apply()"'))->toBe(1)
+        ->and($rad)->toContain('apply({ tags: ulids })');
 
     $en = require lang_path('en/ui.php');
 
@@ -785,7 +786,7 @@ it('gör filterraden responsiv med designsystemets tokens', function () {
     // Full bredd under sm:, och sökfältet växer med en minsta bredd från sm:.
     expect($rad)->toContain('flex w-full flex-col gap-1 text-sm font-medium text-ink sm:min-w-48 sm:flex-1')
         ->toContain('flex w-full flex-col gap-1 text-sm font-medium text-ink sm:w-auto')
-        ->toContain('flex w-full flex-col gap-1 sm:w-auto');
+        ->toContain('flex w-full flex-col gap-1 sm:w-72');
 
     // 44 px höga fält med rollerna ur @theme.
     expect($rad)->toContain('min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink')
@@ -1062,4 +1063,54 @@ it('ger kartans träffar samma rader som trädet med samma filter', function () 
 
     expect(itemfilterTradUlids($trad))->toBe(array_column($karta['nodes'], 'ulid'))
         ->and($karta['total'])->toBe(count(itemfilterNamn($trad)));
+});
+
+/*
+ * Klart när (issue 343 · [[ADR-0068 Itemets sida och skapandet]] § 16):
+ * filterradens taggar väljs i väljaren och ger samma adress som förut.
+ *
+ * `TaxonomyPicker` i `multiple`, utan `can-create` och därmed utan raden
+ * *Create "X"*. Värdet är ULID:n, och `apply()` skriver dem som `tags` precis
+ * som kryssrutorna gjorde. Adressen prövas mot servern: samma `tags[]` ger
+ * samma träffar.
+ */
+it('väljer filterradens taggar i väljaren utan Create och med samma tags-adress', function () {
+    withoutVite();
+
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+    $mall = vueMall('js/components/ItemFilterBar.vue');
+
+    expect($rad)->toContain("import TaxonomyPicker from './TaxonomyPicker.vue'");
+    expect($mall)->toContain('<TaxonomyPicker')
+        ->toContain('mode="multiple"')
+        ->toContain('id="item-filter-tags"')
+        ->toContain('for="item-filter-tags"')
+        ->toContain('@update:model-value="selectTags"');
+    expect($mall)->not->toContain('can-create');
+    expect($mall)->not->toContain('type="checkbox"');
+    expect($mall)->not->toContain('name="tags[]"');
+    expect($rad)->toContain('params.tags = tags');
+
+    ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
+
+    $svar = actingAs($anvandare)
+        ->get(itemfilterUrl($container, ['tags' => [$taggar['Motor']->ulid]]))
+        ->assertOk();
+
+    expect(itemfilterTradUlids($svar))->not->toBe([]);
+});
+
+/*
+ * Klart när (issue 343): sökfältet har platshållare och `aria-label` men
+ * ingen synlig etikett.
+ */
+it('ger sökfältet platshållare och aria-label men ingen etikett', function () {
+    $mall = vueMall('js/components/ItemFilterBar.vue');
+
+    preg_match('/<input\b[^>]*id="item-filter-q"[^>]*>/', $mall, $falt);
+
+    expect($falt)->toHaveCount(1);
+    expect($falt[0])->toContain(":placeholder=\"t('item.index.filter_q')\"")
+        ->toContain(":aria-label=\"t('item.index.filter_q')\"");
+    expect($mall)->not->toContain('for="item-filter-q"');
 });
