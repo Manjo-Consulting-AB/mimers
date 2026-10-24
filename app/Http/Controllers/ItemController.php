@@ -48,6 +48,7 @@ use App\Support\Frontend\CreateTarget;
 use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -1453,7 +1454,7 @@ class ItemController extends Controller
 
         // Derivaten behövs för `hasThumb` — en fråga för alla bilder, aldrig
         // en lazy-load per bild.
-        $images->loadMissing('storedFile.derivatives');
+        (new EloquentCollection($images->all()))->loadMissing('storedFile.derivatives');
 
         return Inertia::render('Containers/Items/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
