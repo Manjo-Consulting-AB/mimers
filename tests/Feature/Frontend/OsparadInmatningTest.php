@@ -106,5 +106,5 @@ it('har frågans ord i ui.php', function () {
         expect(Lang::get("ui.item.form.{$nyckel}", [], 'en'))->not->toBe("ui.item.form.{$nyckel}");
     }
 
-    expect(osparadSkript())->toContain("t('item.form.leave_heading')");
+    expect(vueMall('js/components/ItemForm.vue'))->toContain("t('item.form.leave_heading')");
 });
