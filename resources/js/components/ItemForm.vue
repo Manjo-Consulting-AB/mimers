@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemIcon from './ItemIcon.vue';
@@ -7,6 +7,7 @@ import ItemIconPicker from './ItemIconPicker.vue';
 import ParentPicker from './ParentPicker.vue';
 import TaxonomyPicker from './TaxonomyPicker.vue';
 import UiButton from './UiButton.vue';
+import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiInput from './UiInput.vue';
 import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
@@ -202,6 +203,70 @@ const form = useForm(props.item === null
         category: props.preselected,
     }
     : fields);
+
+const leaveVisit = ref(null);
+let leaveConfirmed = false;
+
+function guardNavigation(event) {
+    const visit = event.detail.visit;
+
+    if (
+        leaveConfirmed
+        || ! form.isDirty
+        || visit.prefetch
+        || visit.method !== 'get'
+        || visit.url.pathname === window.location.pathname
+    ) {
+        return;
+    }
+
+    leaveVisit.value = visit;
+
+    return false;
+}
+
+function confirmLeave() {
+    const visit = leaveVisit.value;
+
+    leaveVisit.value = null;
+    leaveConfirmed = true;
+
+    try {
+        router.visit(visit.url.href, {
+            method: 'get',
+            replace: visit.replace,
+            preserveScroll: visit.preserveScroll,
+        });
+    } finally {
+        leaveConfirmed = false;
+    }
+}
+
+function warnBeforeUnload(event) {
+    event.preventDefault();
+    event.returnValue = '';
+}
+
+const removeBeforeListener = router.on('before', guardNavigation);
+
+watch(
+    () => form.isDirty,
+    (dirty) => {
+        if (dirty) {
+            window.addEventListener('beforeunload', warnBeforeUnload);
+
+            return;
+        }
+
+        window.removeEventListener('beforeunload', warnBeforeUnload);
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    removeBeforeListener();
+    window.removeEventListener('beforeunload', warnBeforeUnload);
+});
 
 /*
  * Platsen: containern och föräldern, och det val väljaren gör (issue 153).
@@ -829,5 +894,15 @@ function submit() {
                 </Link>
             </template>
         </div>
+
+        <UiConfirmDialog
+            :open="leaveVisit !== null"
+            :heading="t('item.form.leave_heading')"
+            :body="t('item.form.leave_body')"
+            :confirm-label="t('item.form.leave_confirm')"
+            tone="danger"
+            @confirm="confirmLeave"
+            @cancel="leaveVisit = null"
+        />
     </form>
 </template>

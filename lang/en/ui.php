@@ -3274,6 +3274,12 @@ return [
             'location_hint' => 'Created as a child of :name',
             'location_change' => 'Change',
 
+            // Issue 340 · ADR-0068 § 10: the question when a changed form is
+            // left without saving.
+            'leave_heading' => 'Leave without saving?',
+            'leave_body' => 'What you have entered will be lost.',
+            'leave_confirm' => 'Leave',
+
             /*
              * The picker behind *Change*. `parent_heading` names what is
              * being chosen — an item, and one of the three relations
