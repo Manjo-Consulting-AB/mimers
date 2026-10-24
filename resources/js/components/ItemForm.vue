@@ -12,6 +12,7 @@ import UiInput from './UiInput.vue';
 import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
 import { categoryOptions } from './categoryTree.js';
+import { useCreationUpload } from '../composables/useCreationUpload.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -150,6 +151,7 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+const { failure: creationFailure } = useCreationUpload();
 
 const options = computed(() => categoryOptions(props.categories));
 
@@ -448,14 +450,115 @@ const createdUrl = computed(() => (props.created
  * formulärets tillstånd eller i `isDirty`.
  */
 function submitAnother() {
+    uploadImageAfterCreate();
+
     form.transform((data) => ({ ...data, another: true }))
         .post(`/containers/${props.containerUlid}/items`, { onError: focusFirstError });
+}
+
+/*
+ * Bilden vid skapandet (issue 341 · [[ADR-0068 Itemets sida och skapandet]]
+ * § 11). Bilden ligger i en egen ref och aldrig i `form`: den följer inte med
+ * skapandets POST och hamnar inte i `isDirty`. Itemet skapas först, som förut,
+ * och när svaret kommit står sidan på itemet — då laddas bilden upp med ETT
+ * `router.post` mot den befintliga bilageändpunkten, med samma fält som
+ * ItemAttachmentSection skickar (`file` och `account`). Ingen hash och ingen
+ * `cover` skickas: servern räknar hashen, kvoten räknas på kontot formuläret
+ * skapade itemet med, och omslaget är itemets äldsta bild (ADR-0041).
+ *
+ * Lyssnaren sätts per sparande och tas bort av sig själv. Den bor utanför
+ * komponentens livscykel med flit: på *Save* byts sidan mot itemets vy och
+ * formuläret avmonteras innan `success` hunnit levereras.
+ */
+const image = ref(null);
+const imageInput = ref(null);
+const imageError = ref(null);
+const imageUploading = ref(false);
+
+function chooseImage(event) {
+    const file = event.target.files?.[0] ?? null;
+
+    imageError.value = null;
+
+    if (file !== null && ! file.type.startsWith('image/')) {
+        event.target.value = '';
+        image.value = null;
+        imageError.value = t('item.form.image_only');
+
+        return;
+    }
+
+    image.value = file;
+}
+
+function clearImage() {
+    image.value = null;
+    imageError.value = null;
+
+    if (imageInput.value !== null) {
+        imageInput.value.value = '';
+    }
+}
+
+function uploadImageAfterCreate() {
+    const file = image.value;
+    const account = form.account;
+
+    if (file === null) {
+        return;
+    }
+
+    const stops = [];
+    const stop = () => stops.forEach((off) => off());
+
+    stops.push(router.on('success', (event) => {
+        stop();
+        clearImage();
+        uploadImage(file, account, event.detail.page);
+    }));
+    stops.push(router.on('error', stop));
+    stops.push(router.on('finish', stop));
+}
+
+function uploadImage(file, account, page) {
+    const itemUlid = page.props.item?.ulid ?? page.props.created?.ulid ?? null;
+
+    if (itemUlid === null) {
+        return;
+    }
+
+    const itemUrl = `/containers/${props.containerUlid}/items/${itemUlid}`;
+
+    /*
+     * Misslyckas uppladdningen finns itemet ändå. Felet bärs till itemets
+     * Documents-flik, som ritar det, och sidan byts dit.
+     */
+    const fail = (message) => {
+        creationFailure.value = { item: itemUlid, message };
+        router.get(`${itemUrl}?tab=attachments`, {}, { replace: true, preserveScroll: true });
+    };
+
+    router.post(`${itemUrl}/attachments`, { file, account }, {
+        forceFormData: true,
+        preserveScroll: true,
+        onStart: () => {
+            imageUploading.value = true;
+        },
+        onError: (errors) => fail(errors.file ?? errors.account ?? null),
+        onHttpException: () => fail(null),
+        onNetworkError: () => fail(null),
+        onFinish: () => {
+            imageUploading.value = false;
+        },
+    });
 }
 
 function submit() {
     const url = `/containers/${props.containerUlid}/items`;
 
     if (props.item === null) {
+        uploadImageAfterCreate();
+
         form.transform((data) => data).post(url, { onError: focusFirstError });
 
         return;
@@ -654,6 +757,28 @@ function submit() {
             @remove="removeIcon"
             @close="iconPickerOpen = false"
         />
+
+        <!-- Bilden vid skapandet (issue 341): en bild och ingen annan fil. Den
+             laddas upp efter att itemet skapats och blir omslaget. -->
+        <FormField
+            v-if="item === null"
+            v-slot="{ describedBy }"
+            :label="t('item.form.image')"
+            id="image"
+            :error="imageError"
+        >
+            <input
+                id="image"
+                ref="imageInput"
+                type="file"
+                name="image"
+                accept="image/*"
+                :aria-describedby="describedBy"
+                :disabled="form.processing || imageUploading"
+                class="block w-full text-sm"
+                @change="chooseImage"
+            >
+        </FormField>
 
         <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
              (issue 93). Fältet ritas bara i redigeringsläget och bara när

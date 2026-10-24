@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
@@ -27,6 +27,7 @@ import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { coverUrl } from '../../../components/coverPresentation.js';
 import { formatDateOnly, itemFields } from '../../../components/itemPresentation.js';
+import { useCreationUpload } from '../../../composables/useCreationUpload.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 defineOptions({
@@ -405,6 +406,17 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const page = usePage();
+
+/*
+ * Felet från bilden vid skapandet (issue 341). Ritas på Documents-fliken
+ * ovanför bilagorna, bara för det här itemet, och glöms när sidan lämnas.
+ */
+const { failure: creationFailure } = useCreationUpload();
+const creationUploadFailed = computed(() => creationFailure.value?.item === props.item.ulid);
+
+onBeforeUnmount(() => {
+    creationFailure.value = null;
+});
 
 const locale = computed(() => page.props.locale);
 
@@ -1162,6 +1174,15 @@ function toggleFavorite() {
             <!-- Bilagorna (issue 60 § Beslut 1): itemets innehåll och inte en egen
                  vy. `container.account` är containerns ägarkonto — sektionens
                  förval när användaren är medlem i det. -->
+            <div
+                v-if="activeTab === 'attachments' && creationUploadFailed"
+                role="alert"
+                class="mb-4 rounded-control border border-danger p-3 text-body text-danger"
+            >
+                <p class="font-medium">{{ t('item.create.image_failed') }}</p>
+                <p v-if="creationFailure.message">{{ creationFailure.message }}</p>
+            </div>
+
             <ItemAttachmentSection
                 v-if="activeTab === 'attachments'"
                 :container-ulid="container.ulid"

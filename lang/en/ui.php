@@ -3321,6 +3321,9 @@ return [
              * too — the test reads the list from that module.
              */
             'icon' => 'Icon',
+            // Issue 341 · ADR-0068 § 11: the image taken at creation.
+            'image' => 'Image',
+            'image_only' => 'Choose an image file.',
             'icon_choose' => 'Choose icon',
             'icon_heading' => 'Choose an icon',
             'icon_search' => 'Search icons',
@@ -3373,6 +3376,9 @@ return [
             'submit_another' => 'Save and add another',
             'cancel' => 'Cancel',
             'created' => 'Created :name',
+            // Issue 341 · ADR-0068 § 11: the item exists, the image did not
+            // arrive. The server's own sentence follows on the next line.
+            'image_failed' => 'The item was created, but the image could not be uploaded.',
         ],
 
         // `action` is the link on the detail view; `title`/`heading`/`submit`
