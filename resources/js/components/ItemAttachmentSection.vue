@@ -163,6 +163,12 @@ const props = defineProps({
      * rutten hade svarat 422 `attachment.already_in_inbox`.
      */
     containerIsInbox: { type: Boolean, default: false },
+    /*
+     * Ulid för bilagan som är itemets omslag just nu (issue 342) — den
+     * upplösta bilden, ur detaljvyns `cover`. Raden *Use as cover* ritas inte
+     * på den. Null när itemet saknar omslag.
+     */
+    coverUlid: { type: String, default: null },
     can: { type: Object, required: true },
 });
 
@@ -563,6 +569,37 @@ function chooseTarget(target) {
 }
 
 /*
+ * *Use as cover* (issue 342 · [[ADR-0068 Itemets sida och skapandet]] § 12).
+ * Raden står på varje bild som inte redan är omslaget, och bara med
+ * `can.update` — samma grind som itemets egen PATCH, som servern prövar på
+ * nytt. Anropet går mot itemets befintliga uppdatering och skickar BARA
+ * `cover`: kategori, taggar och övriga fält är utelämnade, och servern rör
+ * dem inte när nyckeln saknas. `preserveScroll` håller raden kvar under
+ * fingret. Ett fel ritas på raden, som flyttens.
+ */
+function useAsCover(attachment) {
+    router.patch(itemUrl(), { cover: attachment.ulid }, {
+        preserveScroll: true,
+        onStart: () => {
+            pending.value = attachment.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => { pending.value = null; },
+        onError: (errors) => {
+            actionError.value = { ulid: attachment.ulid, message: errors.cover };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: attachment.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
+
+/*
  * *Back to Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 6). En egen
  * handling och inte ett val i väljaren: den går alltid till användarens EGEN
  * inbox, och den skapas om den saknas. Knappen står bakom `can.delete`, som
@@ -875,6 +912,20 @@ function toInbox(attachment) {
                         @click="openPicker(attachment, 'copy', $event)"
                     >
                         {{ t('item.attachment.copy') }}
+                    </button>
+
+                    <!--
+                        *Use as cover* (issue 342): på varje bild utom den som
+                        redan är omslaget, och bara med `can.update`.
+                    -->
+                    <button
+                        v-if="can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid"
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="useAsCover(attachment)"
+                    >
+                        {{ t('item.attachment.use_as_cover') }}
                     </button>
 
                     <button
