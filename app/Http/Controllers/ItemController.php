@@ -2049,11 +2049,11 @@ class ItemController extends Controller
      * § Beslut 8): det är ordningen upplösningens steg 2 väljer ur, och två
      * ordningar av samma lista hade gjort "den äldsta" till två olika bilder.
      *
-     * @param  Collection<int, Attachment>  $images
      * `hasThumb` säger om bilden har en miniatyr att rita (issue 342): väljaren
      * ritar en `<img>` bara då, och annars en ruta med filnamnet — samma regel
      * som `variants()` ovan, och av samma skäl.
      *
+     * @param  Collection<int, Attachment>  $images
      * @return list<array{ulid: string, filename: string, hasThumb: bool}>
      */
     private function imageOptions(Collection $images): array
