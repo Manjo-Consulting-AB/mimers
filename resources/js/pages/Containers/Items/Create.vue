@@ -56,6 +56,10 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Kategorin ur `?category` (issue 339), eller null när ingen är vald. */
+    preselected: { type: String, default: null },
+    /* Itemet som just skapades med *Save and add another*: `{ulid, name}` eller null. */
+    created: { type: Object, default: null },
     /* Väljarens träd, med `can_create` per nod (issue 153). */
     structure: { type: Array, default: () => [] },
     /* Får användaren lägga itemet på toppnivån? Ur `can_create_root`. */
@@ -91,6 +95,8 @@ const account = computed(() => {
         :accounts="accounts"
         :account="account"
         :parent="parent"
+        :preselected="preselected"
+        :created="created"
         :structure="structure"
         :can-create-root="canCreateRoot"
         :can-manage-taxonomy="can.manage_taxonomy"

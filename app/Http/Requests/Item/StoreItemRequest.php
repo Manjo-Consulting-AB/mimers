@@ -125,6 +125,9 @@ class StoreItemRequest extends FormRequest
             'tags' => ['sometimes', 'array'],
             'tags.*' => ['string', Rule::in($validTagUlids)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
+            // *Save and add another* (issue 339): webbformuläret ber om ett nytt
+            // formulär i stället för itemets sida. API:et ignorerar fältet.
+            'another' => ['sometimes', 'boolean'],
         ];
     }
 }

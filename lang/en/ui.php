@@ -3362,6 +3362,11 @@ return [
             'title' => 'New item',
             'heading' => 'New item',
             'submit' => 'Create',
+            // Issue 339 · ADR-0068 § 9: the buttons beside *Create* and the row
+            // above the form after *Save and add another*.
+            'submit_another' => 'Save and add another',
+            'cancel' => 'Cancel',
+            'created' => 'Created :name',
         ],
 
         // `action` is the link on the detail view; `title`/`heading`/`submit`

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemIcon from './ItemIcon.vue';
 import ItemIconPicker from './ItemIconPicker.vue';
@@ -133,6 +133,10 @@ const props = defineProps({
     item: { type: Object, default: null },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Kategorins ULID ur `?category` (issue 339), förvald vid skapandet. */
+    preselected: { type: String, default: null },
+    /* Itemet som just skapades med *Save and add another*: `{ulid, name}` eller null. */
+    created: { type: Object, default: null },
     /* Containerns namn, till placeringsraden och väljarens översta rad. */
     containerName: { type: String, default: '' },
     /* Väljarens träd, med `can_create` per nod (issue 153). */
@@ -190,7 +194,13 @@ const fields = {
 };
 
 const form = useForm(props.item === null
-    ? { account: props.account, parent: props.parent?.ulid ?? null, ...fields }
+    ? {
+        account: props.account,
+        parent: props.parent?.ulid ?? null,
+        ...fields,
+        /* Kategorin ur `?category` efter *Save and add another* (issue 339). */
+        category: props.preselected,
+    }
     : fields);
 
 /*
@@ -354,11 +364,34 @@ function createTaxonomy(kind, name) {
     });
 }
 
+/*
+ * *Cancel* (issue 339 · [[ADR-0068 Itemets sida och skapandet]] § 9): tillbaka
+ * dit användaren kom ifrån — förälderns sida när formuläret har en förälder,
+ * annars itemfliken.
+ */
+const cancelUrl = computed(() => (props.parent
+    ? `/containers/${props.containerUlid}/items/${props.parent.ulid}`
+    : `/containers/${props.containerUlid}/items`));
+
+const createdUrl = computed(() => (props.created
+    ? `/containers/${props.containerUlid}/items/${props.created.ulid}`
+    : null));
+
+/*
+ * *Save and add another* skickar samma formulär med `another: true`. Fältet
+ * läggs på i `transform` och inte i `form`, så att det aldrig hamnar i
+ * formulärets tillstånd eller i `isDirty`.
+ */
+function submitAnother() {
+    form.transform((data) => ({ ...data, another: true }))
+        .post(`/containers/${props.containerUlid}/items`, { onError: focusFirstError });
+}
+
 function submit() {
     const url = `/containers/${props.containerUlid}/items`;
 
     if (props.item === null) {
-        form.post(url, { onError: focusFirstError });
+        form.transform((data) => data).post(url, { onError: focusFirstError });
 
         return;
     }
@@ -369,6 +402,17 @@ function submit() {
 
 <template>
     <form class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <!-- Raden efter *Save and add another* (issue 339): vilket item som
+             just skapades, med en länk till det. -->
+        <p v-if="created && createdUrl" role="status" class="text-body">
+            <Link
+                :href="createdUrl"
+                class="text-accent underline outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                {{ t('item.create.created', { name: created.name }) }}
+            </Link>
+        </p>
+
         <FormField
             v-slot="{ describedBy }"
             :label="t('item.form.name')"
@@ -767,8 +811,23 @@ function submit() {
             </p>
         </template>
 
-        <UiButton type="submit" :pending="form.processing" class="self-start">
-            {{ submitLabel }}
-        </UiButton>
+        <div class="flex flex-wrap items-center gap-2">
+            <UiButton type="submit" :pending="form.processing">
+                {{ submitLabel }}
+            </UiButton>
+
+            <template v-if="item === null">
+                <UiButton variant="secondary" :pending="form.processing" @click="submitAnother">
+                    {{ t('item.create.submit_another') }}
+                </UiButton>
+
+                <Link
+                    :href="cancelUrl"
+                    class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    {{ t('item.create.cancel') }}
+                </Link>
+            </template>
+        </div>
     </form>
 </template>
