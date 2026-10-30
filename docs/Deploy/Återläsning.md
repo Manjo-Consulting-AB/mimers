@@ -4,6 +4,8 @@ Att läsa tillbaka en backup är sista utvägen, inte första. Den här runbooke
 
 Kedjan i korthet: produktionsservern hos inleed dumpas dagligen och synkas veckovis till utvecklings-VPS:en via `deploy/drift/mimers-backup.sh` och `deploy/drift/hamta-backup.sh`, `deploy/drift/vakt.sh` larmar när något blir tyst, och `deploy/drift/aterlasningstest.sh` bevisar kvartalsvis att dumparna går att läsa tillbaka. Besluten bakom finns i [[ADR-0015 Backup]] och [[ADR-0008 Soft delete och papperskorg]]; miljöer och utrullning i övrigt står i [[Pipeline]].
 
+**Avstängd sedan 2026-10-30.** Alla fem cron-raderna på utvecklings-VPS:en — de tre `hamta-backup.sh`, `vakt.sh` och `aterlasningstest.sh` — är bortkommenterade: systemet har inga riktiga användare ännu och har inte flyttats till sin riktiga VPS, och körningarna misslyckades så att vakten larmade varje timme. Slå på dem igen vid flytten, enligt Installationsavsnittet nedan.
+
 ## Börja i papperskorgen
 
 > Har en användare tappat ett item, en container eller en bilaga — gå till papperskorgen först. Nästan varje "jag har tappat data"-ärende löses där, utan att backupen rörs ([[ADR-0008 Soft delete och papperskorg]]). Retentionen står i `config/files.php`. Gå vidare i det här dokumentet **först** när innehållet är hårdraderat, äldre än retentionen, eller när databasen eller filerna är trasiga på riktigt.
