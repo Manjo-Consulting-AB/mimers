@@ -314,6 +314,7 @@ it('ger 403 och ändrar inget utan write på itemet, den gamla föräldern eller
     // Utan write på itemet: bara den nya föräldern är delad.
     flyttPost($container, $i, ['to_parent' => $x->ulid], flyttMottagare($container, $x, 'write'))
         ->assertForbidden();
+
     // Utan write på den gamla föräldern: itemet och den nya föräldern är delade.
     $mottagare = User::factory()->create();
     foreach ([$c, $x] as $delat) {
