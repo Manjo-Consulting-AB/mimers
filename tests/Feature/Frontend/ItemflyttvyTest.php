@@ -360,8 +360,8 @@ it('visar felet från servern i väljaren', function () {
     $flyttgrenen = explode('emit(\'choose\', chosen.value);', $val[0] ?? '')[0];
 
     expect($flyttgrenen)->toContain('if (props.move)')
-        ->toContain('return;')
-        ->not->toContain('close()');
+        ->toContain('return;');
+    expect($flyttgrenen)->not->toContain('close()');
 });
 
 /*
@@ -442,10 +442,10 @@ it('låter skapandets väljare fungera som förut', function () {
 
     $formulär = flyttvyKod('components/ItemForm.vue');
 
-    expect($formulär)->toContain('<ParentPicker')
-        ->not->toContain('item-ulid')
-        ->not->toContain(':parents=')
-        ->not->toMatch('/<ParentPicker[^>]*\smove\b/s');
+    expect($formulär)->toContain('<ParentPicker');
+    expect($formulär)->not->toContain('item-ulid');
+    expect($formulär)->not->toContain(':parents=');
+    expect($formulär)->not->toMatch('/<ParentPicker[^>]*\smove\b/s');
 
     expect(flyttvyKod('components/ItemStructureTree.vue'))
         ->toContain("pickFlag: { type: String, default: 'can_create' }");
