@@ -382,7 +382,9 @@ it('filtrerar trädet på namn i väljaren', function () {
 
     // Ett tryck på ett led markerar det; *Välj här* skickar valet vidare.
     expect($väljaren)->toContain('item.form.parent_choose')
-        ->toContain('@choose="chosen = $event"')
+        ->toContain('@choose="pickNode"')
+        ->toContain('function pickNode(node)')
+        ->toContain('chosen.value = node')
         ->toContain("emit('choose', chosen.value)");
 });
 
@@ -391,7 +393,11 @@ it('går inte att välja ett item utan skapandebehörighet', function () {
 
     // Pick-läget: samma noder, ett annat element — och `can_create` ur
     // proppen stänger knappen. Komponenten frågar aldrig servern om lov.
-    expect($trädet)->toContain(':disabled="!node.can_create"')
+    // Förvalet är `can_create`; flyttväljaren (issue 345) byter flagga med
+    // `pickFlag` och rör inte skapandets läge.
+    expect($trädet)->toContain(':disabled="!isPickable(node)"')
+        ->toContain("pickFlag: { type: String, default: 'can_create' }")
+        ->toContain('node[props.pickFlag] === true')
         ->toContain("emit('choose', node)")
         ->toContain('v-if="pick"');
 

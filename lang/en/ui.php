@@ -3410,7 +3410,23 @@ return [
         // `trash` is the last row and only opens the confirmation dialog.
         'menu' => [
             'label' => 'More actions',
+            'move' => 'Move',
             'trash' => 'Move to trash',
+        ],
+
+        // The move picker, see issue 345 · [[ADR-0069 Flytta ett item inom
+        // containern]] § 11. It is `ParentPicker` in its move mode, so the
+        // search field and the cancel button are the creation picker's own
+        // words (`item.form.parent_*`). `heading` names what is being done,
+        // `choose` confirms the highlighted row, `current` marks the place the
+        // item stands in now, and `placement_heading` is the step before the
+        // tree when the item has more than one parent.
+        'move' => [
+            'heading' => 'Move :name to',
+            'choose' => 'Move here',
+            'current' => 'Current place',
+            'placement_heading' => 'Which placement do you want to move?',
+            'placement_back' => 'Back',
         ],
 
         // The deletion is SOFT ([[ADR-0008 Soft delete och papperskorg]]), and

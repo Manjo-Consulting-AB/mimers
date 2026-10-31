@@ -6,7 +6,11 @@ import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * ⋯-menyn i itemets huvud, se issue 331 · [[ADR-0068 Itemets sida och
- * skapandet]] § 3: *New item under this one* och sist *Move to trash*.
+ * skapandet]] § 3: *New item under this one*, *Move* (issue 345 ·
+ * [[ADR-0069 Flytta ett item inom containern]] § 11) och sist *Move to
+ * trash*. *Move* öppnar ingenting själv: den lämnar över till anroparen med
+ * `move`, som öppnar ParentPicker i flyttläget, och ⋯-knappen följer med som
+ * väljarens `trigger` av samma skäl som för papperskorgen.
  *
  * **Var och en bara med sin rättighet.** Anroparen skickar `canCreate` och
  * `canDelete` ur `can`-flaggorna, och en rad utan sin flagga ritas inte. Är
@@ -33,11 +37,13 @@ defineProps({
     canCreate: { type: Boolean, default: false },
     /* Sant med `can.delete`: raden *Move to trash*. */
     canDelete: { type: Boolean, default: false },
+    /* Sant med `can.update`: raden *Move*. */
+    canMove: { type: Boolean, default: false },
     /* Adressen raden *New item under this one* leder till. */
     createHref: { type: String, required: true },
 });
 
-const emit = defineEmits(['trash']);
+const emit = defineEmits(['trash', 'move']);
 
 const { t } = useTranslations();
 
@@ -109,12 +115,19 @@ function trash() {
     emit('trash', trigger);
 }
 
+function move() {
+    const trigger = toggle.value;
+
+    close(false);
+    emit('move', trigger);
+}
+
 onMounted(() => document.addEventListener('click', onOutside));
 onBeforeUnmount(() => document.removeEventListener('click', onOutside));
 </script>
 
 <template>
-    <div v-if="canCreate || canDelete" ref="root" class="relative" @keydown="onKeydown">
+    <div v-if="canCreate || canMove || canDelete" ref="root" class="relative" @keydown="onKeydown">
         <button
             ref="toggle"
             type="button"
@@ -143,6 +156,16 @@ onBeforeUnmount(() => document.removeEventListener('click', onOutside));
             >
                 {{ t('item.links.create_child.action') }}
             </Link>
+
+            <button
+                v-if="canMove"
+                type="button"
+                role="menuitem"
+                class="flex min-h-11 items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus"
+                @click="move"
+            >
+                {{ t('item.menu.move') }}
+            </button>
 
             <button
                 v-if="canDelete"

@@ -86,3 +86,15 @@ it('taxonomiväljarens mall bär combobox-rollerna och inte kommentarens ord', f
     expect($skript)->toContain("event.key === 'Backspace'");
     expect($skript)->not->toContain('Tangentbordet är combobox-mönstret');
 });
+
+it('flyttväljarens mall bär placeringssteget och felet och inte kommentarens ord', function () {
+    $mall = vueMall('js/components/ParentPicker.vue');
+    $skript = vueSkript('js/components/ParentPicker.vue');
+
+    expect($mall)->toContain('v-if="move && step === \'placement\'"');
+    expect($mall)->toContain('role="alert"');
+    expect($mall)->toContain("t('item.move.choose')");
+    expect($mall)->not->toContain('Flyttläget');
+    expect($skript)->toContain('const blocked = computed(');
+    expect($skript)->not->toContain('Flyttläget');
+});

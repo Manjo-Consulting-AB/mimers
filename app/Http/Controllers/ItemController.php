@@ -679,7 +679,7 @@ class ItemController extends Controller
         // `container` sätts ur den redan hämtade containern, så att
         // `ItemPolicy::allows()` slipper slå upp den per nod — policyn läser
         // `$item->container->account`, och kontot är laddat ovan. Samma
-        // resonemang som i `counterparts()` och `creatable()`.
+        // resonemang som i `counterparts()` och `abilities()`.
         $candidates = $listItems->handle($user, $container)
             ->each(fn (Item $candidate) => $candidate->setRelation('container', $container));
 
@@ -876,6 +876,23 @@ class ItemController extends Controller
             // och `categories`: `ItemResource` är `/api`:s format och har inte
             // bett om fältet.
             'structure' => $this->structure($tree),
+
+            // Trädet till flyttväljaren (issue 345 · [[ADR-0069 Flytta ett
+            // item inom containern]] § 11): samma noder som `structure`, med
+            // `can_create` och `can_update` per nod. BARA för den som får ändra
+            // itemet — raden *Move* ritas bakom `can.update`, och en yta ingen
+            // ser ska inte kosta en fråga. `null` annars.
+            //
+            // Egen prop och inte fler fält i `structure`: panelen i vänsterkolumnen
+            // ska få ordagrant det den fick förut (issue 103).
+            'moveStructure' => Gate::forUser($user)->allows('update', $item)
+                ? $this->pickableStructure($tree->roots(), $this->abilities($user, $container, $tree))
+                : null,
+
+            // Containerraden i flyttväljaren: toppnivån, valbar bara med
+            // `ContainerPolicy::createItem` — samma flagga och samma grind som
+            // `can_create_root` i skapandet.
+            'moveCanCreateRoot' => Gate::forUser($user)->allows('createItem', $container),
 
             'attachments' => AttachmentResource::collection($attachments)->resolve($request),
             'maxUploadBytes' => (int) config('files.max_upload_bytes'),
@@ -1180,7 +1197,7 @@ class ItemController extends Controller
             'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
             'preselected' => $this->defaultCategoryUlid($request, $categories),
             'created' => $this->createdItem($request),
-            'structure' => $this->pickableStructure($tree->roots(), $this->creatable($user, $container, $tree)),
+            'structure' => $this->pickableStructure($tree->roots(), $this->abilities($user, $container, $tree)),
             'can_create_root' => $canCreateRoot,
             'can' => $this->taxonomyAbilities($user, $container),
         ]);
@@ -1246,7 +1263,9 @@ class ItemController extends Controller
 
     /**
      * Trädet till föräldraväljaren (issue 153): samma noder som
-     * `structure()` ger detaljvyn, och varje nod bär dessutom `can_create`.
+     * `structure()` ger detaljvyn, och varje nod bär dessutom `can_create` och
+     * `can_update` (issue 345 · [[ADR-0069 Flytta ett item inom containern]]
+     * § 11).
      *
      * Egen metod och inte en flagga på `structure()`, av samma skäl som
      * `structure()` själv är en avskrift av `ItemTreeNode`: detaljvyns svar
@@ -1254,25 +1273,27 @@ class ItemController extends Controller
      * behörighetsflagga hade ändrat en yta ingen issue rörde.
      *
      * @param  list<ItemTreeNode>  $nodes
-     * @param  array<string, bool>  $canCreate  item-ULID → får anroparen skapa ett barn?
-     * @return list<array{ulid: string, name: string, can_create: bool, children: list<array<string, mixed>>}>
+     * @param  array{create: array<string, bool>, update: array<string, bool>}  $abilities  item-ULID → får anroparen skapa under / ändra itemet?
+     * @return list<array{ulid: string, name: string, can_create: bool, can_update: bool, children: list<array<string, mixed>>}>
      */
-    private function pickableStructure(array $nodes, array $canCreate): array
+    private function pickableStructure(array $nodes, array $abilities): array
     {
         return array_map(
             fn (ItemTreeNode $node): array => [
                 'ulid' => $node->ulid(),
                 'name' => $node->name(),
-                'can_create' => $canCreate[$node->ulid()] ?? false,
-                'children' => $this->pickableStructure($node->children(), $canCreate),
+                'can_create' => $abilities['create'][$node->ulid()] ?? false,
+                'can_update' => $abilities['update'][$node->ulid()] ?? false,
+                'children' => $this->pickableStructure($node->children(), $abilities),
             ],
             $nodes,
         );
     }
 
     /**
-     * item-ULID → får anroparen skapa ett barn under itemet? — EN fråga, och
-     * samma policy som `store()` prövar på föräldern.
+     * item-ULID → får anroparen skapa ett barn under itemet (`create`, samma
+     * policy som `store()` prövar på föräldern) och får hon ändra det
+     * (`update`, som flytten prövar på den nya föräldern)? EN fråga för båda.
      *
      * Bara noderna i trädet prövas, aldrig containerns alla items: trädet är
      * redan omfångsfiltrerat, och frågan ställs därför inte om ett item
@@ -1282,16 +1303,17 @@ class ItemController extends Controller
      * `$item->container->account` för regel 4, och en lat hämtning per nod
      * hade varit en fråga per nod. Omfånget självt kostar inga frågor —
      * ResolveItemScope memoiserar per `{user, container}` och
-     * ResolveItemTree har redan löst upp det.
+     * ResolveItemTree har redan löst upp det. `can_update` räknas i samma
+     * varv som `can_create` och kostar därför ingen fråga till.
      *
-     * @return array<string, bool>
+     * @return array{create: array<string, bool>, update: array<string, bool>}
      */
-    private function creatable(User $user, Container $container, ItemTree $tree): array
+    private function abilities(User $user, Container $container, ItemTree $tree): array
     {
         $ulids = $this->treeUlids($tree->roots());
 
         if ($ulids === []) {
-            return [];
+            return ['create' => [], 'update' => []];
         }
 
         $items = Item::query()
@@ -1301,13 +1323,14 @@ class ItemController extends Controller
             ->get(['id', 'ulid', 'container_id']);
 
         $gate = Gate::forUser($user);
-        $canCreate = [];
+        $abilities = ['create' => [], 'update' => []];
 
         foreach ($items as $item) {
-            $canCreate[$item->ulid] = $gate->allows('create', $item);
+            $abilities['create'][$item->ulid] = $gate->allows('create', $item);
+            $abilities['update'][$item->ulid] = $gate->allows('update', $item);
         }
 
-        return $canCreate;
+        return $abilities;
     }
 
     /**
