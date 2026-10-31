@@ -7,6 +7,7 @@ use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -91,7 +92,7 @@ function flyttTabellen(): array
  * @param  array<string, mixed>  $kropp
  * @param  array<string, string>  $headers
  */
-function flyttPost(Container $container, Item $item, array $kropp, array $headers): Illuminate\Testing\TestResponse
+function flyttPost(Container $container, Item $item, array $kropp, array $headers): TestResponse
 {
     auth()->forgetGuards();
 
@@ -101,7 +102,7 @@ function flyttPost(Container $container, Item $item, array $kropp, array $header
 /**
  * @param  array<string, string>  $headers
  */
-function flyttHamta(Container $container, Item $item, array $headers): Illuminate\Testing\TestResponse
+function flyttHamta(Container $container, Item $item, array $headers): TestResponse
 {
     auth()->forgetGuards();
 
@@ -313,7 +314,6 @@ it('ger 403 och ändrar inget utan write på itemet, den gamla föräldern eller
     // Utan write på itemet: bara den nya föräldern är delad.
     flyttPost($container, $i, ['to_parent' => $x->ulid], flyttMottagare($container, $x, 'write'))
         ->assertForbidden();
-
     // Utan write på den gamla föräldern: itemet och den nya föräldern är delade.
     $mottagare = User::factory()->create();
     foreach ([$c, $x] as $delat) {
