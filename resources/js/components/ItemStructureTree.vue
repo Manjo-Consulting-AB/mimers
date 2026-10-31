@@ -103,6 +103,22 @@ const props = defineProps({
      * öppet och lämnar flaggan falsk.
      */
     collapsible: { type: Boolean, default: false },
+    /*
+     * Vilken flagga på noden som gör ledet valbart i pick-läget. `can_create`
+     * är skapandets och förvalet; flyttväljaren (issue 345) skickar
+     * `can_update`.
+     */
+    pickFlag: { type: String, default: 'can_create' },
+    /*
+     * ULID:n som inte går att välja alls i pick-läget — flyttens item och dess
+     * ättlingar. Tom i skapandet.
+     */
+    blocked: { type: Array, default: () => [] },
+    /*
+     * ULID:n för den nuvarande platsen i flyttläget, eller null. Ledet markeras
+     * med ordet och går inte att välja.
+     */
+    current: { type: String, default: null },
 });
 
 const emit = defineEmits(['choose']);
@@ -155,6 +171,12 @@ function isCurrent(node) {
  * markera bara ett av dem hade påstått att valet gällde en förekomst, och en
  * förälder är ett item och inte en väg.
  */
+function isPickable(node) {
+    return node[props.pickFlag] === true
+        && ! props.blocked.includes(node.ulid)
+        && node.ulid !== props.current;
+}
+
 function isChosen(node) {
     return props.selected !== null && props.selected === node.ulid;
 }
@@ -192,7 +214,7 @@ function isChosen(node) {
                 <button
                     v-if="pick"
                     type="button"
-                    :disabled="!node.can_create"
+                    :disabled="!isPickable(node)"
                     :aria-current="isChosen(node) ? 'true' : null"
                     class="inline-flex min-h-11 items-center rounded-control px-2 text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                     :class="isChosen(node)
@@ -201,6 +223,9 @@ function isChosen(node) {
                     @click="emit('choose', node)"
                 >
                     {{ node.name }}
+                    <span v-if="current !== null && node.ulid === current" class="ml-2 text-meta">
+                        {{ t('item.move.current') }}
+                    </span>
                 </button>
 
                 <Link
@@ -230,6 +255,9 @@ function isChosen(node) {
                 :pick="pick"
                 :selected="selected"
                 :collapsible="collapsible"
+                :pick-flag="pickFlag"
+                :blocked="blocked"
+                :current="current"
                 @choose="emit('choose', $event)"
             />
         </li>

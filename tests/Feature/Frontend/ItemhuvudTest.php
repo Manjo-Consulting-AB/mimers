@@ -123,13 +123,13 @@ it('har New item under this one före Move to trash, var och en bakom sin rätti
         ->toContain('/items/create?parent=${props.item.ulid}`');
 });
 
-it('ritar ingen ⋯-knapp när varken create eller delete finns', function () {
+it('ritar ingen ⋯-knapp när varken create, move eller delete finns', function () {
     $meny = huvudKod('components/ItemActionMenu.vue');
 
     // Hela roten, knappen inräknad, hänger på att minst en rad finns.
-    expect($meny)->toContain('<div v-if="canCreate || canDelete"');
+    expect($meny)->toContain('<div v-if="canCreate || canMove || canDelete"');
 
-    $start = strpos($meny, '<div v-if="canCreate || canDelete"');
+    $start = strpos($meny, '<div v-if="canCreate || canMove || canDelete"');
     $knapp = strpos($meny, 'aria-haspopup="menu"');
 
     expect($start)->not->toBeFalse()

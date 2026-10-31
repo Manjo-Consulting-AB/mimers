@@ -18,6 +18,7 @@ import ItemOverviewCover from '../../../components/ItemOverviewCover.vue';
 import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
 import UiEmptyState from '../../../components/UiEmptyState.vue';
 import ItemQuickActions from '../../../components/ItemQuickActions.vue';
+import ParentPicker from '../../../components/ParentPicker.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
@@ -217,6 +218,15 @@ const props = defineProps({
      * ordagrant det hon hade sett om resten inte fanns (issue 73 § Beslut 6).
      */
     structure: { type: Array, required: true },
+    /*
+     * Trädet till flyttväljaren (issue 345 · [[ADR-0069 Flytta ett item inom
+     * containern]] § 11): `structure` med `can_create` och `can_update` per
+     * nod, eller null när användaren inte får ändra itemet. Egen prop så att
+     * vänsterpanelens träd förblir ordagrant det det var.
+     */
+    moveStructure: { type: Array, default: null },
+    /* Får användaren lägga ett item på toppnivån? Containerraden i flyttväljaren. */
+    moveCanCreateRoot: { type: Boolean, default: false },
     /*
      * Itemets bilagor ur App\Http\Resources\AttachmentResource, nyast först —
      * samma lista och samma ordning som `/api` ger (issue 60 § Beslut 2).
@@ -741,6 +751,45 @@ const thumbUrl = computed(() => (props.cover?.variants?.includes('thumb') ? cove
 const editUrl = computed(() => `/containers/${props.container.ulid}/items/${props.item.ulid}/edit`);
 const createChildUrl = computed(() => `/containers/${props.container.ulid}/items/create?parent=${props.item.ulid}`);
 
+/*
+ * Flytten (issue 345). Menyraden *Move* öppnar ParentPicker i flyttläget; valet
+ * skickas som POST mot `containers.items.move` med `to_parent` och, när itemet
+ * har en synlig förälder, `from_parent` (den valda eller enda placeringen; servern kräver den bara vid flera, men prövar den alltid, och listan är omfångsfiltrerad). Lyckas flytten svarar servern med en
+ * omdirigering till den här sidan (flashen `item-moved`) och väljaren stängs;
+ * misslyckas den kommer felet på `to_parent` och visas i väljaren.
+ */
+const moveOpen = ref(false);
+const moveTrigger = ref(null);
+const moveError = ref(null);
+const movePending = ref(false);
+
+const itemParents = computed(() => props.links.parent.map((link) => link.item));
+
+function askMove(trigger) {
+    moveTrigger.value = trigger;
+    moveError.value = null;
+    moveOpen.value = true;
+}
+
+function move(node, fromParent) {
+    const data = { to_parent: node === null ? null : node.ulid };
+
+    if (fromParent !== null && fromParent !== undefined) {
+        data.from_parent = fromParent;
+    }
+
+    router.post(`/containers/${props.container.ulid}/items/${props.item.ulid}/move`, data, {
+        preserveScroll: true,
+        onStart: () => {
+            movePending.value = true;
+            moveError.value = null;
+        },
+        onSuccess: () => { moveOpen.value = false; },
+        onError: (errors) => { moveError.value = errors.to_parent ?? Object.values(errors)[0] ?? null; },
+        onFinish: () => { movePending.value = false; },
+    });
+}
+
 function goEdit() {
     router.visit(editUrl.value);
 }
@@ -983,11 +1032,34 @@ function toggleFavorite() {
                     <ItemActionMenu
                         :can-create="can.create"
                         :can-delete="can.delete"
+                        :can-move="can.update"
                         :create-href="createChildUrl"
                         @trash="askDestroy"
+                        @move="askMove"
                     />
                 </div>
             </div>
+
+            <!--
+                Flyttväljaren (issue 345): ParentPicker i flyttläget. Ritas bara
+                för den som får ändra itemet — `moveStructure` är annars null.
+            -->
+            <ParentPicker
+                v-if="moveStructure !== null"
+                move
+                :open="moveOpen"
+                :container-name="container.name"
+                :structure="moveStructure"
+                :can-create-root="moveCanCreateRoot"
+                :item-ulid="item.ulid"
+                :item-name="item.name"
+                :parents="itemParents"
+                :error="moveError"
+                :pending="movePending"
+                :trigger="moveTrigger"
+                @choose="move"
+                @close="moveOpen = false"
+            />
 
             <UiConfirmDialog
                 :open="confirmOpen"
