@@ -94,6 +94,13 @@ class AuditLog extends Model
     public const ACTION_ITEM_RESTORED = 'item.restored';
 
     /**
+     * Itemet bytte placering ([[ADR-0069 Flytta ett item inom containern]]
+     * § 8). `meta` bär `{from, to}`: förälderns ULID, eller `null` för
+     * toppnivån. Flytten skriver ingen `item_link.*`-rad.
+     */
+    public const ACTION_ITEM_MOVED = 'item.moved';
+
+    /**
      * Taggmängden byttes. Egen handling och inte ett fält på `item.updated`:
      * en tagg är en koppling till en annan tabell, och `meta` bär vilka
      * taggar som lades till och togs bort som ULID:er — aldrig deras namn.

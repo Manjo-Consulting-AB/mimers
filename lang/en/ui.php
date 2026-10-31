@@ -683,6 +683,7 @@ return [
         'item-updated' => 'The item has been saved.',
         'item-deleted' => 'The item is in the trash. It can be restored within 30 days.',
         'item-link-created' => 'The relation has been created.',
+        'item-moved' => 'The item has been moved.',
         // Unlinking removes the connection and nothing else — the row is
         // deleted hard (issue 14 decision 10), but both items remain.
         'item-link-removed' => 'The link is gone. Both items remain.',
@@ -951,6 +952,18 @@ return [
                 'related' => 'a related item',
             ],
             'cycle' => 'That direction would make a circle: this item is already above the counterpart, directly or through other items.',
+        ],
+
+        // The move's six domain errors, see issue 344 and ADR-0069 decision
+        // 5. They become field errors on `to_parent` in
+        // App\Http\Controllers\ItemMoveController.
+        'item_move' => [
+            'from_parent_required' => 'This item has more than one parent. Choose which placement to move.',
+            'not_a_parent' => 'The chosen placement is not a parent of this item.',
+            'same_parent' => 'The item is already there.',
+            'cycle' => 'An item cannot be moved into itself or into one of its own descendants.',
+            'already_child' => 'The item is already under that item, as another placement. Remove the placement on the relations tab instead.',
+            'pair_exists' => 'The item and the new parent already have another relation. Remove it first.',
         ],
 
         // The loan domain error on the web, see issue 67a decision 6 and issue
@@ -2761,6 +2774,7 @@ return [
                 'updated' => ':user changed :fields on :item',
                 'deleted' => ':user moved :item to the trash',
                 'restored' => ':user restored :item from the trash',
+                'moved' => ':user moved :item',
                 // Its own action and not a field on `item.updated`: a tag is
                 // a link to another table, and `meta` carries which tags were
                 // added and removed (issue 109).
