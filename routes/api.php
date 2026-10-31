@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
+use App\Http\Controllers\Api\ItemMoveController;
 use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MailgunWebhookController;
@@ -333,6 +334,11 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'index']);
     Route::post('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'store']);
     Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy']);
+
+    // Issue 344 · Flytta ett item, se App\Http\Controllers\Api\ItemMoveController
+    // och [[ADR-0069 Flytta ett item inom containern]] § 9. 204 utan kropp;
+    // {item} binds av gruppens scopeBindings().
+    Route::post('/containers/{container}/items/{item}/move', [ItemMoveController::class, 'store']);
 
     // Issue 21 · Scheman — regeln för återkommande underhåll, noll eller
     // flera per item, se App\Http\Controllers\Api\ScheduleController och

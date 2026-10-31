@@ -37,6 +37,7 @@ use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
+use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
@@ -1131,6 +1132,16 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.links.destroy');
+
+    /*
+     * Issue 344 · Flytten på servern, se App\Http\Controllers\ItemMoveController
+     * och [[ADR-0069 Flytta ett item inom containern]] § 9. `scopeBindings()`
+     * som itemets övriga rutter. 302 tillbaka till itemets sida med `status`
+     * `item-moved`, eller tillbaka med felet på `to_parent`.
+     */
+    Route::post('/containers/{container}/items/{item}/move', [ItemMoveController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.move');
 
     /*
      * Issue 60 · Bilagorna på itemets detaljvy — uppladdning och mjuk
