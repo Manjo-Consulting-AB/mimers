@@ -754,7 +754,7 @@ const createChildUrl = computed(() => `/containers/${props.container.ulid}/items
 /*
  * Flytten (issue 345). Menyraden *Move* öppnar ParentPicker i flyttläget; valet
  * skickas som POST mot `containers.items.move` med `to_parent` och, när itemet
- * har flera föräldrar, `from_parent`. Lyckas flytten svarar servern med en
+ * har en synlig förälder, `from_parent` (den valda eller enda placeringen; servern kräver den bara vid flera, men prövar den alltid, och listan är omfångsfiltrerad). Lyckas flytten svarar servern med en
  * omdirigering till den här sidan (flashen `item-moved`) och väljaren stängs;
  * misslyckas den kommer felet på `to_parent` och visas i väljaren.
  */

@@ -266,7 +266,7 @@ function choose() {
     }
 
     if (props.move) {
-        emit('choose', chosen.value, props.parents.length > 1 ? placement.value : null);
+        emit('choose', chosen.value, placement.value);
 
         return;
     }

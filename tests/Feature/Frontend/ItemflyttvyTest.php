@@ -319,13 +319,39 @@ it('frågar först vilken placering som flyttas när itemet har två föräldrar
     expect($väljaren)->toContain("step.value = props.parents.length > 1 ? 'placement' : 'tree'")
         ->toContain('v-if="move && step === \'placement\'"')
         ->toContain("t('item.move.placement_heading')")
-        ->toContain("emit('choose', chosen.value, props.parents.length > 1 ? placement.value : null)");
+        ->toContain("emit('choose', chosen.value, placement.value)");
+    expect($väljaren)->not->toContain('props.parents.length > 1 ? placement.value : null');
 
     $vy = flyttvyKod('pages/Containers/Items/Show.vue');
 
     expect($vy)->toContain('data.from_parent = fromParent')
         ->toContain('props.links.parent.map((link) => link.item)')
         ->toContain(':parents="itemParents"');
+});
+
+it('skickar en ensam synlig förälder som from_parent', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = flyttvyKontext();
+
+    $a = flyttvyItem($container, 'A');
+    $c = flyttvyItem($container, 'C');
+    $barn = flyttvyItem($container, 'Barnet');
+    flyttvyKant($a, $barn);
+
+    // Väljaren sätter placeringen till den enda föräldern och skickar den.
+    actingAs($anvandare)->get(flyttvyUrl($container, $barn))->assertInertia(
+        fn (AssertableInertia $page) => $page->has('links.parent', 1)->where('links.parent.0.item.ulid', $a->ulid),
+    );
+
+    expect(flyttvyKod('components/ParentPicker.vue'))
+        ->toContain('placement.value = props.parents.length === 1 ? props.parents[0].ulid : null');
+
+    actingAs($anvandare)
+        ->post(flyttvyUrl($container, $barn).'/move', ['to_parent' => $c->ulid, 'from_parent' => $a->ulid])
+        ->assertSessionHas('status', 'item-moved');
+
+    expect(ItemLink::query()->where('from_item_id', $c->id)->where('to_item_id', $barn->id)->exists())->toBeTrue();
 });
 
 it('visar felet från servern i väljaren', function () {
