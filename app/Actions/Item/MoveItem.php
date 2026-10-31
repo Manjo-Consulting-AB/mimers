@@ -85,7 +85,7 @@ class MoveItem
                 throw ApiException::make('item_move.not_a_parent', ['item' => $item->ulid], 422);
             }
 
-            $fromParentId = $fromParent?->id ?? ($currentParentIds[0] ?? null);
+            $fromParentId = $fromParent->id ?? ($currentParentIds[0] ?? null);
 
             if ($fromParentId === $toParent?->id) {
                 throw ApiException::make('item_move.same_parent', [
@@ -119,7 +119,7 @@ class MoveItem
                     ->where('relation', 'parent')
                     ->delete();
 
-                $fromUlid = $fromParent?->ulid ?? Item::withTrashed()->whereKey($fromParentId)->value('ulid');
+                $fromUlid = $fromParent->ulid ?? Item::withTrashed()->whereKey($fromParentId)->value('ulid');
             }
 
             if ($toParent !== null) {
