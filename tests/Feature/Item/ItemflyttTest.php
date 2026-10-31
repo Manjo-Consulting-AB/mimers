@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Access\ResolveItemScope;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -87,7 +88,9 @@ function itemflyttTabellen(): array
 
 /**
  * POST .../move med en ny identitet per anrop: guarden cachar annars den
- * första användaren inom testet, se somAnvandare().
+ * första användaren inom testet, se somAnvandare(). Behörighetsupplösningen
+ * minns dessutom omfånget per instans, så den töms mellan anropen: i drift är
+ * varje request en ny instans.
  *
  * @param  array<string, mixed>  $kropp
  * @param  array<string, string>  $headers
@@ -95,6 +98,7 @@ function itemflyttTabellen(): array
 function itemflyttPost(Container $container, Item $item, array $kropp, array $headers): TestResponse
 {
     auth()->forgetGuards();
+    app(ResolveItemScope::class)->flush();
 
     return postJson("/api/containers/{$container->ulid}/items/{$item->ulid}/move", $kropp, $headers);
 }
@@ -105,6 +109,7 @@ function itemflyttPost(Container $container, Item $item, array $kropp, array $he
 function itemflyttHamta(Container $container, Item $item, array $headers): TestResponse
 {
     auth()->forgetGuards();
+    app(ResolveItemScope::class)->flush();
 
     return getJson("/api/containers/{$container->ulid}/items/{$item->ulid}", $headers);
 }

@@ -1086,6 +1086,9 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         // och ingen ny mottagare läggs till.
         'containers/{container}/items/{item}/costs',
         'containers/{container}/items/{item}/links',
+        // Issue 344: flytten av ett item. Den byter en `item_link`-kant och rör
+        // inga `container_access`-rader.
+        'containers/{container}/items/{item}/move',
         'containers/{container}/items/{item}/attachments',
         // Issue 242: flytten och kopian av en bilaga. Ingen av dem rör några
         // `container_access`-rader: flytten kräver `delete` på källans item

@@ -194,6 +194,7 @@ it('har ingen ny rutt för skapandet', function () {
         'containers.items.destroy',
         'containers.items.edit',
         'containers.items.index',
+        'containers.items.move',
         'containers.items.show',
         'containers.items.store',
         'containers.items.update',
