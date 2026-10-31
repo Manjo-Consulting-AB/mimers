@@ -74,6 +74,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0066 Itemets anteckning]] | Itemets anteckning är Markdown som servern ritar, redigeras direkt på översikten ovanför *Recent activity*, sparas av sig själv, den som sparar sist vinner och loggen får en rad per arbetspass | Frontend, [[Items och organisation]] |
 | [[ADR-0067 Itemfliken utan listläge]] | Itemflikens listläge tas bort; växeln är *Tree* och *Map* med trädet som förval, en gammal adress landar i trädet och trädets rad får listans ruta med bild eller ikon | Frontend, [[Items och organisation]] |
 | [[ADR-0068 Itemets sida och skapandet]] | Itemets ord kompletterar ADR-0032; sju flikar ur förlagan utan Information och Tags; översikten är sammanfattningar med tak; *Edit* som primärknapp och radering i egen dialog; skapaformuläret i två nivåer med *Save and add another*; bild laddas upp efter itemet; taggar och kategorier skapas i väljaren under befintlig grind; sidopanelerna fälls ihop; ingen räknare på noll | Frontend, [[Items och organisation]] |
+| [[ADR-0069 Flytta ett item inom containern]] | Ett item flyttas med sitt underträd till toppnivån eller under ett annat item i samma container, en placering i taget och i en transaktion; reglerna prövas mot grafen efter flytten; `write` i varje ände; att lägga in mellan och att vända är två flyttar | Frontend, [[Items och organisation]], [[Konton och åtkomst]] |
 
 ## Om att ändra ett beslut
 
