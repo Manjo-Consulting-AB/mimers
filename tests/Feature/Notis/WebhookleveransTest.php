@@ -596,7 +596,7 @@ it('jobbet är schemalagt varje minut', function () {
     expect($händelse->getExpression())->toBe('* * * * *');
 
     // Schemalagd som en closure (Schedule::call), inte som ett
-    // Artisan-kommando — se AGENTS.md § Driftmiljön saknar proc_open.
+    // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
     expect($händelse->withoutOverlapping)->toBeTrue();
 });

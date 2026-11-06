@@ -304,6 +304,6 @@ it('jobbet är schemalagt dagligen före drain-queue', function () {
     expect($händelse->getExpression())->toBe('0 0 * * *');
 
     // Schemalagd som en closure (Schedule::call), inte som ett Artisan-kommando
-    // — se AGENTS.md § Driftmiljön saknar proc_open.
+    // — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
 });

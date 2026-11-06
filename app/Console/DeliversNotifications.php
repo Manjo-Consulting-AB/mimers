@@ -58,7 +58,7 @@ use Throwable;
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command` och aldrig `->runInBackground()` — se AGENTS.md §
- * Driftmiljön saknar proc_open.
+ * Subprocesser i driftmiljön.
  */
 class DeliversNotifications
 {

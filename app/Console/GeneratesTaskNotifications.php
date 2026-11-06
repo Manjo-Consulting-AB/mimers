@@ -66,7 +66,7 @@ use Throwable;
  * container hen når, samtidigt, resten av natten.
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
- * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön.
  */
 class GeneratesTaskNotifications
 {

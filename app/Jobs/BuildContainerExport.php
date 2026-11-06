@@ -27,7 +27,7 @@ use Throwable;
  *
  * Kön dras med `queue:work` och jobbet är ett vanligt `ShouldQueue` — inget
  * `->runInBackground()`, ingen Schedule::command, se AGENTS.md §
- * Driftmiljön saknar proc_open.
+ * Subprocesser i driftmiljön.
  */
 class BuildContainerExport implements ShouldQueue
 {

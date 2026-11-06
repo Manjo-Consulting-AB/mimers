@@ -38,9 +38,9 @@ Artisan::command('inspire', function () {
  * schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open. En closure körs i stället i samma PHP-process som
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön. En closure körs i stället i samma PHP-process som
  * schemaläggningskörningen (`schedule:run`, som i sin tur triggas av en
  * riktig cron-rad hos inleed — se [[Pipeline]] för hur, rört inte här).
  */
@@ -57,9 +57,9 @@ Schedule::call(fn () => app(PrunesExpiredMagicLinkTokens::class)->handle())
  * är bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(PurgesExpiredStoredFiles::class)->handle())
     ->daily()
@@ -74,9 +74,9 @@ Schedule::call(fn () => app(PurgesExpiredStoredFiles::class)->handle())
  * tests/Feature/Trash/GallringTest.php; det här är bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör gärna i
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör gärna i
  * samma nattliga fönster som purge-expired-stored-files (17b), men det finns
  * inget beroende mellan dem: bilagor som gallras i natt markerar bytes som
  * får en egen 30-dagarsfrist ändå.
@@ -95,9 +95,9 @@ Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
  * bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Körs i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Körs i samma
  * nattliga fönster som purge-expired-stored-files (17b) och
  * purge-expired-trash (20b).
  */
@@ -117,9 +117,9 @@ Schedule::call(fn () => app(PurgesExpiredExports::class)->handle())
  * gallringsjobben.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(PrunesRegistrationIps::class)->handle())
     ->daily()
@@ -133,9 +133,9 @@ Schedule::call(fn () => app(PrunesRegistrationIps::class)->handle())
  * tests/Feature/Kvot/AvstamningTest.php; det här är bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör i samma
  * nattliga fönster som gallringsjobben: en drift ska vara lagad innan
  * kontrollpunkterna (27a/27b) läser räknaren nästa dag.
  */
@@ -154,9 +154,9 @@ Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
  * schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  *
  * `->dailyAt('01:00')`, inte `->daily()`: avstämningen ovan (26b) körs 00:00,
  * och den här rapporten läser den räknare avstämningen just rättat. En rapport
@@ -178,9 +178,9 @@ Schedule::call(fn () => app(ReportsAbuseSignals::class)->handle())
  * [[Notiser]] § Kön.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(GeneratesTaskNotifications::class)->handle())
     ->everyFifteenMinutes()
@@ -195,9 +195,9 @@ Schedule::call(fn () => app(GeneratesTaskNotifications::class)->handle())
  * nattliga fönster, så varningen bygger på ett rättat tal (Beslut 2).
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(GeneratesQuotaWarnings::class)->handle())
     ->daily()
@@ -212,9 +212,9 @@ Schedule::call(fn () => app(GeneratesQuotaWarnings::class)->handle())
  * nattliga fönster som kvotvarningarna ovan.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(GeneratesLoanNotifications::class)->handle())
     ->daily()
@@ -230,9 +230,9 @@ Schedule::call(fn () => app(GeneratesLoanNotifications::class)->handle())
  * schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör i samma
  * nattliga fönster som gallringsjobben: en nedgradering ska vara klar innan
  * kontrollpunkterna (27a/27b) läser räknaren nästa dag.
  */
@@ -250,9 +250,9 @@ Schedule::call(fn () => app(EnforcesDowngrades::class)->handle())
  * Kör i samma nattliga fönster som gallrings- och nedgraderingsjobben.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
     ->daily()
@@ -268,9 +268,9 @@ Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
  * tests/Feature/Konto/KontoraderingTest.php; det här är bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör i samma
  * nattliga fönster som 29a och de andra jobben.
  */
 Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
@@ -288,9 +288,9 @@ Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
  * när nästa minut slår till inte läser samma `pending`-rader en gång till.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(DeliversNotifications::class)->handle())
     ->everyMinute()
@@ -308,9 +308,9 @@ Schedule::call(fn () => app(DeliversNotifications::class)->handle())
  * när nästa minut slår till inte läser samma `pending`-rader en gång till.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
     ->everyMinute()
@@ -333,9 +333,9 @@ Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
  * mejltyp.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan.
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
  */
 Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
     ->weeklyOn(1, '06:00')
@@ -354,9 +354,9 @@ Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
  * ligga sist — se tests/Feature/Drift/KoarbetareTest.php.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör i samma
  * nattliga fönster som de andra jobben.
  */
 Schedule::call(fn () => app(AggregatesUsageMetrics::class)->handle())
@@ -379,9 +379,9 @@ Schedule::call(fn () => app(AggregatesUsageMetrics::class)->handle())
  * sist — se tests/Feature/Drift/KoarbetareTest.php.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
- * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
- * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
- * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Kör i samma
  * nattliga fönster som de andra gallringsjobben.
  */
 Schedule::call(fn () => app(PrunesLogs::class)->handle())
@@ -399,7 +399,7 @@ Schedule::call(fn () => app(PrunesLogs::class)->handle())
  * `Artisan::call` kör kommandot i schemaläggarens egen process — ingen
  * `Schedule::command(...)` eller `->runInBackground()`, båda går via Symfony
  * Process/proc_open, avstängt hos inleed i både webb-SAPI och CLI, se
- * AGENTS.md § Driftmiljön saknar proc_open. `queue:work` är i sig en loop i
+ * AGENTS.md § Subprocesser i driftmiljön. `queue:work` är i sig en loop i
  * samma process; det är `queue:listen` som startar barnprocesser.
  *
  * Posten ligger SIST med flit, flytta den aldrig uppåt: slår ett jobb i

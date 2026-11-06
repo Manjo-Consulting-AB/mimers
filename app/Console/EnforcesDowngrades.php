@@ -51,7 +51,7 @@ use Throwable;
  * kontona blir klara. Nästa natt tar om det som fallerade.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
- * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
  * Klassens enda beroende (TrashAttachment) injiceras för att testerna ska
  * kunna låta en bilaga kasta — samma mönster som PurgesExpiredTrash.
  */

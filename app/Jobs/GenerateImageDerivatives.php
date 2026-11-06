@@ -34,7 +34,7 @@ use Throwable;
  * InteractsWithQueue, Queueable och SerializesModels), konstruktorn tar
  * modellen, `handle()` gör arbetet. Kön är databasdriven (Beslut 8) — på
  * servern dras den med `queue:work`, aldrig `queue:listen` (AGENTS.md §
- * Driftmiljön saknar proc_open).
+ * Subprocesser i driftmiljön).
  *
  * Ett derivat kan alltid genereras om, så ett fel får aldrig fälla uppladdningen
  * eller retrya för evigt (Beslut 5): `handle()` fångar `Throwable`, loggar och

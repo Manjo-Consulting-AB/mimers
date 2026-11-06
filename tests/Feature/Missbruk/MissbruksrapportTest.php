@@ -627,6 +627,6 @@ it('jobbet är schemalagt dagligen 01:00 med call, inte command', function () {
     expect($händelse->getExpression())->toBe('0 1 * * *');
 
     // Schemalagd som en closure (Schedule::call), inte som ett
-    // Artisan-kommando — se AGENTS.md § Driftmiljön saknar proc_open.
+    // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
 });

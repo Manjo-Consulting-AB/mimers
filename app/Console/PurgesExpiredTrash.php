@@ -55,7 +55,7 @@ use Throwable;
  * App\Console\PurgesExpiredStoredFiles rör bara filer utan referenser.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
- * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open. Av
+ * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön. Av
  * samma skäl som PrunesExpiredMagicLinkTokens är klassen medvetet fri från
  * Artisan-beroenden: den anropas som en ren closure-kallbar.
  */

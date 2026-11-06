@@ -1,6 +1,6 @@
 # ADR-0031 Köarbetaren körs av schemaläggaren
 
-**Status:** Antagen 2026-09-08 · [[ADR-index]]
+**Status:** Antagen 2026-09-08 · § *Beslut* ersatt 2026-11-06 av [[ADR-0070 Subprocesser hos inleed]], som ger arbetaren en egen process och behåller den här vägen som reserv · [[ADR-index]]
 
 ## Kontext
 
@@ -11,7 +11,7 @@ Ingen skada har skett ännu: `storage/files` är tom i båda miljöerna, så ing
 Driftmiljön är hos inleed, och den avgör vad som är möjligt:
 
 - **Ingen processövervakare.** Ingen supervisor, ingen systemd-enhet, ingen väg att hålla en daemon vid liv.
-- **`proc_open` är avstängt**, i både webb-SAPI och CLI. `Schedule::command(...)` och `->runInBackground()` fungerar därför inte — se [[ADR-0018 Utvecklingsprocess och deploy]] och AGENTS.md § *Driftmiljön saknar proc_open*.
+- **`proc_open` är avstängt**, i både webb-SAPI och CLI. `Schedule::command(...)` och `->runInBackground()` fungerar därför inte — se [[ADR-0018 Utvecklingsprocess och deploy]] och AGENTS.md § *Subprocesser i driftmiljön*.
 - **Cron är per konto**, en enda crontab som delas med kontots övriga domäner. Där ligger redan en minutrad per miljö som kör `artisan schedule:run`.
 - **CLI-PHP är 8.4 med `memory_limit=128M` och `max_execution_time=0`.** `pcntl` och `posix` är laddade, men `posix_kill` står i `disable_functions`.
 

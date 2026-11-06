@@ -39,7 +39,7 @@ use Throwable;
  * All filhantering går genom `Storage::disk('files')` (Beslut 6), aldrig
  * `unlink()` eller absolut sökväg. Tomma prefixkataloger städas inte
  * (Beslut 7). Schemaläggs i routes/console.php med `Schedule::call`, aldrig
- * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open — och
+ * `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön — och
  * klassen är medvetet fri från Artisan-beroenden, av samma skäl som
  * App\Console\PrunesExpiredMagicLinkTokens.
  */

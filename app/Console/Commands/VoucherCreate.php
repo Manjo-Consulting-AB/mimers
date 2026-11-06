@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
  *
  * Kommandot körs för hand över SSH av Tony när en testare ska bjudas in, och
  * schemaläggs aldrig: det är därför det inte berörs av att `proc_open`
- * saknas hos inleed (AGENTS.md § Driftmiljön saknar proc_open).
+ * saknas hos inleed (AGENTS.md § Subprocesser i driftmiljön).
  *
  * Koden skrivs ut EN gång. Den finns bara som hash i databasen efteråt
  * (ADR-0055 § 4 och § 5), så en tappad kod går inte att läsa fram ur

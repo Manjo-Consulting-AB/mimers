@@ -16,7 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
  * för hela livscykeln.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
- * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
  * Klassen är medvetet fri från Artisan-beroenden (inget `Command`, inget
  * `Schedulable`-interface) just för att den ska gå att köra som en ren
  * closure-kallbar utan att öppna dörren för att någon av misstag

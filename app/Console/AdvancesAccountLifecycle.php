@@ -55,7 +55,7 @@ use Throwable;
  * urvalsfrågor inte växer med antalet konton.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
- * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
  * Klassens enda uppgift är att driva förloppet; den är en vanlig
  * closure-kallbar, testad direkt i tests/Feature/Konto/LivscykelTest.php.
  */

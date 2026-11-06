@@ -40,7 +40,7 @@ use Throwable;
  * i ett eget try/catch och ett fångat fel loggas som en varning.
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
- * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön.
  */
 class GeneratesQuotaWarnings
 {
