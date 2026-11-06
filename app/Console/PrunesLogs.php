@@ -58,7 +58,7 @@ use Illuminate\Support\Facades\DB;
  * för alltid. Se routes/console.php och tests/Feature/Drift/KoarbetareTest.php
  * — `drain-queue` ska fortsätta ligga sist. Schemaläggs med
  * `Schedule::call(...)`, aldrig `Schedule::command(...)` — se AGENTS.md
- * § Driftmiljön saknar proc_open. Klassen är medvetet fri från
+ * § Subprocesser i driftmiljön. Klassen är medvetet fri från
  * Artisan-beroenden av samma skäl som App\Console\PrunesRegistrationIps, så
  * att ingen av misstag schemalägger den som ett kommando.
  */

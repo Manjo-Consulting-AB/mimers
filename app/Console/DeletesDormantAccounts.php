@@ -62,7 +62,7 @@ use Throwable;
  * Ett konto i taget, en transaktion per konto, och ett fel stoppar inte de
  * andra (Beslut 8). Schemaläggs i routes/console.php med
  * `Schedule::call(...)`, aldrig `Schedule::command(...)` — se AGENTS.md §
- * Driftmiljön saknar proc_open.
+ * Subprocesser i driftmiljön.
  */
 class DeletesDormantAccounts
 {

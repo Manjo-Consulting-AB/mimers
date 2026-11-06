@@ -33,8 +33,8 @@ namespace App\Support\Notification;
  * antas.
  *
  * DNS-uppslaget görs med PHP:s egna funktioner (dns_get_record), aldrig ett
- * externt program — exec och proc_open är avstängda hos inleed (AGENTS.md §
- * Driftmiljön saknar proc_open). Resolver-callbacken är injicerbar så att
+ * externt program — exec är avstängt hos inleed (AGENTS.md §
+ * Subprocesser i driftmiljön). Resolver-callbacken är injicerbar så att
  * testsviten aldrig slår upp riktiga värdnamn (issue 37a § Att se upp med).
  */
 final class UrlSafetyValidator

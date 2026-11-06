@@ -20,7 +20,7 @@ return [
     | (se .github/workflows/staging.yml § Paketera), och faller tillbaka på
     | `dev` när filen inte finns — i ett lokalt träd och i testerna. Filen
     | ligger i .gitignore: den hör till releasen och inte till källkoden, och
-    | `git` får inte anropas vid körning (proc_open är avstängt hos inleed).
+    | `git` får inte anropas vid körning (`exec` är avstängt hos inleed).
     | Värdet cachas av config:cache per release, vilket är rätt.
     */
 

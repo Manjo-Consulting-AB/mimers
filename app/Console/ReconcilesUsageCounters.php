@@ -42,7 +42,7 @@ use Illuminate\Support\Facades\Log;
  * är ofarligt är att låsa, och det gör jobbet aldrig.
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
- * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open — och
+ * `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön — och
  * klassen är medvetet fri från Artisan-beroenden, av samma skäl som
  * App\Console\PurgesExpiredStoredFiles.
  */

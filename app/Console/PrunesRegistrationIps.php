@@ -23,7 +23,7 @@ use App\Models\Account;
  * andra körningen samma natt nollar noll rader.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
- * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open.
+ * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
  * Klassen är medvetet fri från Artisan-beroenden (inget `Command`, inget
  * `Schedulable`-interface) av samma skäl som
  * App\Console\PrunesExpiredMagicLinkTokens: så att ingen av misstag

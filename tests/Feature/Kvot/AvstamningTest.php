@@ -401,7 +401,7 @@ it('jobbet är schemalagt dagligen med call, inte command', function () {
     expect($händelse->getExpression())->toBe('0 0 * * *');
 
     // Schemalagd som en closure (Schedule::call), inte som ett
-    // Artisan-kommando — se AGENTS.md § Driftmiljön saknar proc_open.
+    // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     // CallbackEvent (Schedule::call/job) har inget `command`-strängvärde,
     // till skillnad från Schedule::command() som bygger en "php artisan
     // ..."-sträng avsedd att köras via Symfony Process.

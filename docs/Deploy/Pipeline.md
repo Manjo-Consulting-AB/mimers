@@ -98,7 +98,7 @@ crontab -e
 
 **Cron är per konto, inte per site.** Det är en enda crontab och den delas med övriga domäner på kontot. Använd absolut sökväg till PHP: crontabens egen `PATH` börjar med `/usr/local/php81/bin`, så ett naket `php` blir fel version. `/usr/local/bin/php` är 8.5.
 
-**Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
+**Uppgifter som schemaläggs är `->call()` eller `->job()`.** `proc_open` är öppen sedan 2026-11-06, men bara genom en panelinställning per PHP-version, så `->command(...)` används bara där en ADR beslutat det. Se [[ADR-0070 Subprocesser hos inleed]].
 
 **Kön behöver ingen egen rad här.** `QUEUE_CONNECTION=database` i båda miljöerna, och arbetaren är schemalagd i `routes/console.php` — minutcronen ovan kör den, som allt annat. Det finns alltså ingen `queue:work` att starta för hand, ingen daemon att hålla vid liv, och inget som behöver göras om på en ny server utöver cron-raden. Talen och skälet står i [[ADR-0031 Köarbetaren körs av schemaläggaren]].
 

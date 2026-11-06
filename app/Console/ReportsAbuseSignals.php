@@ -71,7 +71,7 @@ use Illuminate\Support\Facades\Log;
  *     spridning.
  *
  * Schemaläggs i routes/console.php med `Schedule::call` och `->dailyAt('01:00')`,
- * aldrig `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open —
+ * aldrig `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön —
  * och klassen är medvetet fri från Artisan-beroenden av samma skäl som
  * App\Console\ReconcilesUsageCounters. 01:00 och inte 00:00: rapporten läser
  * den räknare avstämningen (26b) just rättat, och en rapport som läser den tio

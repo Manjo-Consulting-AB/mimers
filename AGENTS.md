@@ -114,16 +114,15 @@ Gäller **alla** tabeller. Detaljerna och undantagen står i [Datamodell – öv
 
 **Migrationer rullas aldrig tillbaka i produktion.** Expand/contract: additiva steg i en release, destruktiva i en senare, när ingen kod längre använder kolumnen. Fel åtgärdas framåt.
 
-## Driftmiljön saknar proc_open
+## Subprocesser i driftmiljön
 
-`exec`, `system`, `passthru`, `shell_exec`, `proc_open`, `proc_close` och `popen` är avstängda hos inleed — i både webb-SAPI och CLI. Det är inte förhandlingsbart och går inte att kringgå.
+`exec`, `system`, `passthru`, `shell_exec` och `popen` är avstängda hos inleed. `proc_open` är öppen, men bara genom en panelinställning som kan återställas.
 
-- **Schemalägg med `->call(...)` eller `->job(...)`, aldrig `->command(...)`.** Det senare körs genom Symfony Process och kraschar på servern även om det fungerar på din maskin.
-- **Använd inte `->runInBackground()`.** Samma sak.
+- **Schemalägg med `->call(...)` eller `->job(...)`.** `->command(...)` och `->runInBackground()` bara där en ADR beslutat det.
 - **Köer dras med `queue:work`, aldrig `queue:listen`.**
-- Behöver du köra ett externt program — det går inte. Fråga istället.
+- Behöver du köra ett externt program — fråga.
 
-Se [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md).
+Se [ADR-0070](docs/ADR/ADR-0070%20Subprocesser%20hos%20inleed.md).
 
 ## Felformat i API:et
 

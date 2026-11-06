@@ -41,7 +41,7 @@ use Throwable;
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command(...)` eller `->runInBackground()` — se AGENTS.md §
- * Driftmiljön saknar proc_open. Klassen är medvetet fri från Artisan-beroenden
+ * Subprocesser i driftmiljön. Klassen är medvetet fri från Artisan-beroenden
  * och testas direkt.
  */
 class PurgesExpiredExports

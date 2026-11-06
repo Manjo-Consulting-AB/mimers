@@ -1,6 +1,6 @@
 # ADR-0018 Utvecklingsprocess och deploy
 
-**Status:** Antagen 2026-08-04 · Utökad 2026-09-03 med § Befordranstakt · [[ADR-index]]
+**Status:** Antagen 2026-08-04 · Utökad 2026-09-03 med § Befordranstakt · § *proc_open är avstängt* ersatt 2026-11-06 av [[ADR-0070 Subprocesser hos inleed]] · [[ADR-index]]
 
 ## Kontext
 
@@ -95,6 +95,8 @@ Den tekniska uppsättningen — workflow-filer, deploy-skript, kataloglayout —
 Uppsättningen på servern är gjord: `~/mimers` och `~/mimers-staging` med `incoming/`, `releases/` och `shared/storage/`, samt en minutcron per miljö. Kvar står `shared/.env` för varje miljö, som skapas för hand och bara på servern.
 
 ### proc_open är avstängt, och det begränsar schemaläggaren
+
+*Ersatt 2026-11-06 av [[ADR-0070 Subprocesser hos inleed]]: `proc_open` går att öppna per PHP-version i inleeds panel och är öppen på 8.5. Texten nedan beskriver läget 2026-08-23.*
 
 Det tyngsta fyndet stod inte på frågelistan. `disable_functions` hos inleed täcker `exec`, `system`, `passthru`, `shell_exec`, `proc_open`, `proc_close` och `popen` — i både webb-SAPI och CLI, på samtliga PHP-versioner.
 
