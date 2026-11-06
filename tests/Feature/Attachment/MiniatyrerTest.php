@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\SkippedWithMessageException;
 
 use function Pest\Laravel\postJson;
 
@@ -449,22 +450,44 @@ it('en uppladdning lyckas även om derivatgenereringen misslyckas', function () 
  */
 function miniatyrImagickBild(string $format, int $bredd, int $höjd, ?int $orientering = null, int $sidor = 1): string
 {
-    $bild = new Imagick;
+    $fil = tempnam(sys_get_temp_dir(), 'miniatyr');
+    $byten = '';
 
-    for ($i = 0; $i < $sidor; $i++) {
-        $sida = new Imagick;
-        // Första sidan har den givna storleken, övriga är mindre så att
-        // ett prov kan se vilken sida derivatet kom ifrån.
-        $sida->newPseudoImage($i === 0 ? $bredd : 10, $i === 0 ? $höjd : 10, 'gradient:red-blue');
-        if ($orientering !== null) {
-            $sida->setImageOrientation($orientering);
+    try {
+        $bild = new Imagick;
+
+        for ($i = 0; $i < $sidor; $i++) {
+            $sida = new Imagick;
+            // Första sidan har den givna storleken, övriga är mindre så att
+            // ett prov kan se vilken sida derivatet kom ifrån. En enfärgad yta
+            // komprimeras kraftigt och håller fixturen under planens gräns.
+            $sida->newPseudoImage($i === 0 ? $bredd : 10, $i === 0 ? $höjd : 10, $i === 0 ? 'xc:red' : 'xc:blue');
+            $sida->setImageFormat($format);
+            if ($format === 'tiff') {
+                $sida->setImageCompression(Imagick::COMPRESSION_LZW);
+            }
+            if ($orientering !== null) {
+                $sida->setImageOrientation($orientering);
+            }
+            $bild->addImage($sida);
         }
-        $bild->addImage($sida);
-    }
 
-    $bild->setImageFormat($format);
-    $byten = $bild->getImagesBlob();
-    $bild->clear();
+        $bild->setImageFormat($format);
+        // writeImages till en fil i stället för getImagesBlob: det kodar
+        // även flersidig TIFF på löparen.
+        $bild->writeImages($fil, true);
+        $byten = (string) file_get_contents($fil);
+        $bild->clear();
+
+        if ($byten === '') {
+            throw new ImagickException('Tom fixtur.');
+        }
+    } catch (ImagickException $e) {
+        // Löparens ImageMagick kan t.ex. läsa HEIC utan att kunna skriva det.
+        throw new SkippedWithMessageException("Imagick kan inte skapa en {$format}-fixtur här: ".$e->getMessage());
+    } finally {
+        @unlink($fil);
+    }
 
     return $byten;
 }
