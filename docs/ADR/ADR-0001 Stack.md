@@ -1,4 +1,4 @@
-# ADR-0001 Stack: PHP 8.4 + Laravel
+# ADR-0001 Stack: PHP 8.5 + Laravel
 
 **Status:** Antagen 2026-08-03 · versionen justerad 2026-08-23 efter verifiering på servern · [[ADR-index]]
 
@@ -10,9 +10,11 @@ Tony skriver inte koden själv. Han agerar produktägare och låter arkitekten b
 
 ## Beslut
 
-**PHP 8.4 med Laravel.**
+**PHP 8.5 med Laravel.**
 
 Beslutet skrevs först som 8.3, vilket var den högsta version leverantörens marknadsföringsmaterial angav. Vid verifiering på servern 2026-08-23 visade sig kontot redan stå på **8.4.23**, med 8.5 installerad vid sidan om. Versionen är därmed höjd till 8.4 — själva valet, PHP med Laravel, är oförändrat.
+
+Kontot höjdes sedan till **8.5.12** den 2026-11-06. Valet — PHP med Laravel — är oförändrat; kravet `^8.4` i `composer.json` står kvar, medan CI, utvecklingsmiljön och composers plattform följer kontot.
 
 ## Motivering
 

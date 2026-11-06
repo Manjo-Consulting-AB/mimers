@@ -96,7 +96,7 @@ crontab -e
 
 **Symlänken fungerar** — LiteSpeed följer den genom `current` hela vägen till releasen. Testat med en attrapprelease på `mimers.app`, som just nu svarar 503 från den i väntan på första riktiga utrullningen.
 
-**Cron är per konto, inte per site.** Det är en enda crontab och den delas med övriga domäner på kontot. Använd absolut sökväg till PHP: crontabens egen `PATH` börjar med `/usr/local/php81/bin`, så ett naket `php` blir fel version. `/usr/local/bin/php` är 8.4.
+**Cron är per konto, inte per site.** Det är en enda crontab och den delas med övriga domäner på kontot. Använd absolut sökväg till PHP: crontabens egen `PATH` börjar med `/usr/local/php81/bin`, så ett naket `php` blir fel version. `/usr/local/bin/php` är 8.5.
 
 **Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
@@ -217,7 +217,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           extensions: fileinfo, mbstring, pdo_sqlite, sqlite3, zip
           coverage: none
 
@@ -301,7 +301,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
 
       - uses: actions/setup-node@v4
         with:
