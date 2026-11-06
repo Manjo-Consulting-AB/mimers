@@ -10,11 +10,11 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
-      # composer.json kräver ^8.4. Standardtilläggen täcker CI:s lista
+      # composer.json kräver ^8.4; kontot kör 8.5. Standardtilläggen täcker CI:s lista
       # (fileinfo, mbstring, pdo_sqlite, sqlite3, zip, pdo_mysql); redis
       # för att .env.example kör phpredis. Ingen xdebug – den gör sviten
       # långsam och behövs bara vid stegvis felsökning.
-      php = pkgs.php84.buildEnv {
+      php = pkgs.php85.buildEnv {
         extensions = { enabled, all }: enabled ++ [ all.redis ];
         extraConfig = "memory_limit = 1G";
       };

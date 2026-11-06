@@ -65,6 +65,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M44 Fynd efter v0.24.1]] | **328** | uppgiftslistan i itemets anteckning utan punkt före checkboxen |
 | [[M45 Itemets sida]] | **329–343** | itemets ord, huvudet med primärknapp och ⋯-meny, bekräftelsedialogen, sju flikar utan nollor, översikten med tak, infällbara paneler, väljaren som skapar taggar och kategorier, skapaformuläret i två nivåer med bild, omslaget bland miniatyrer och trädtabellens rader — bygger [[ADR-0068 Itemets sida och skapandet]] |
 | [[M46 Flytta ett item]] | **344–345** | ett item flyttas med sitt underträd till toppnivån eller under ett annat item i samma container, och *Move* i itemets ⋯-meny — bygger [[ADR-0069 Flytta ett item inom containern]] |
+| [[M47 Fynd 2026-11-06]] | **346** | PHP 8.5 i CI, utvecklingsmiljön och dokumentationen, efter att kontot höjts till 8.5.12 |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
