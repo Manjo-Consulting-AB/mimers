@@ -463,6 +463,9 @@ function miniatyrImagickBild(string $format, int $bredd, int $höjd, ?int $orien
             // komprimeras kraftigt och håller fixturen under planens gräns.
             $sida->newPseudoImage($i === 0 ? $bredd : 10, $i === 0 ? $höjd : 10, $i === 0 ? 'xc:red' : 'xc:blue');
             $sida->setImageFormat($format);
+            // 8 bitar per kanal: löparens ImageMagick är Q16, och en okomprimerad
+            // 16-bitars TIFF går över planens filgräns.
+            $sida->setImageDepth(8);
             if ($format === 'tiff') {
                 $sida->setImageCompression(Imagick::COMPRESSION_LZW);
             }
@@ -473,6 +476,9 @@ function miniatyrImagickBild(string $format, int $bredd, int $höjd, ?int $orien
         }
 
         $bild->setImageFormat($format);
+        if ($format === 'tiff') {
+            $bild->setCompression(Imagick::COMPRESSION_LZW);
+        }
         // writeImages till en fil i stället för getImagesBlob: det kodar
         // även flersidig TIFF på löparen.
         $bild->writeImages($fil, true);
@@ -507,7 +513,7 @@ function miniatyrMått(ImageDerivative $derivat): array
 it('en tiff större än 1024 px får thumb och medium som jpeg', function () {
     [$account, $headers, $container, $item] = miniatyrFörbered();
 
-    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('skanning.tiff', miniatyrImagickBild('tiff', 2000, 1500)));
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('skanning.tiff', miniatyrImagickBild('tiff', 1600, 1200)));
 
     $thumb = $storedFile->derivatives()->where('variant', 'thumb')->firstOrFail();
     $medium = $storedFile->derivatives()->where('variant', 'medium')->firstOrFail();
