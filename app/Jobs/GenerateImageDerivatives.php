@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Imagick;
 use RuntimeException;
 use Throwable;
 
@@ -24,7 +25,13 @@ use Throwable;
  * Sex MIME-typer får derivat, och formatet följer källan (Beslut 4):
  * jpeg och webp (kvalitet 82), avif (kvalitet 60), png, gif och bmp. En
  * animerad gif får en miniatyr av första bildrutan — det är GD:s beteende.
- * Allt annat — svg, heic, tiff, video, dokument — får inga derivat.
+ * HEIC, HEIF och TIFF läses i stället med Imagick och skrivs som JPEG
+ * (kvalitet 82) — se [[ADR-0071 Miniatyrer med Imagick]]. Båda varianterna
+ * skrivs alltid för de tre typerna, utan förstoring, och orienteringen ur
+ * EXIF tillämpas före skalningen. Formatet sätts uttryckligen före sökvägen
+ * (`HEIC:`, `TIFF:`) och resursgränser sätts före läsningen, så att en fil
+ * som utger sig för att vara något annat aldrig når en delegat som
+ * Ghostscript. Allt annat — svg, pdf, video, dokument — får inga derivat.
  * Sökvägen är originalets plus variantens namn: `ab/cd/<hash>_thumb.jpg`.
  * Samma disk `files`, samma prefixstruktur — derivaten ligger bredvid sitt
  * original, och gallringen i 17b hittar dem utan en extra fråga.
@@ -72,14 +79,57 @@ class GenerateImageDerivatives implements ShouldQueue
         'image/avif' => 'avif',
     ];
 
+    /**
+     * MIME-typ → Imagicks uttryckliga formatprefix (ADR-0071 Beslut 4).
+     * Derivaten av dessa typer skrivs alltid som JPEG.
+     *
+     * @var array<string, string>
+     */
+    private const IMAGICK_FORMAT = [
+        'image/heic' => 'HEIC',
+        'image/heif' => 'HEIF',
+        'image/tiff' => 'TIFF',
+    ];
+
+    /** JPEG-kvalitet för derivat som skrivs med Imagick (ADR-0071 Beslut 2). */
+    private const IMAGICK_QUALITY = 82;
+
+    /** Resursgränser innan Imagick läser (ADR-0071 Beslut 5). */
+    private const LIMIT_MEMORY_BYTES = 256 * 1024 * 1024;
+
+    private const LIMIT_MAP_BYTES = 512 * 1024 * 1024;
+
+    private const LIMIT_AREA_PIXELS = 64_000_000;
+
+    private const LIMIT_SIDE_PIXELS = 16_000;
+
+    /**
+     * Söm för proven: `null` läser `extension_loaded('imagick')`, `true` och
+     * `false` tvingar svaret.
+     */
+    public static ?bool $imagickLoaded = null;
+
     public function __construct(public StoredFile $storedFile) {}
 
     /**
+     * Är Imagick tillgängligt (ADR-0071 Beslut 6)?
+     */
+    private static function imagickAvailable(): bool
+    {
+        return self::$imagickLoaded ?? extension_loaded('imagick');
+    }
+
+    /**
      * Får den här MIME-typen över huvud taget derivat (Beslut 4)? StoreAttachment
-     * använder svaret för att slippa köa jobb som inte kan göra något.
+     * använder svaret för att slippa köa jobb som inte kan göra något. HEIC,
+     * HEIF och TIFF får derivat bara när Imagick är laddat; PDF aldrig.
      */
     public static function supportsMime(string $mime): bool
     {
+        if (isset(self::IMAGICK_FORMAT[$mime])) {
+            return self::imagickAvailable();
+        }
+
         return isset(self::EXTENSION[$mime]);
     }
 
@@ -88,16 +138,22 @@ class GenerateImageDerivatives implements ShouldQueue
      */
     public function handle(): void
     {
+        if (! self::supportsMime($this->storedFile->mime_type)) {
+            return;
+        }
+
+        if (isset(self::IMAGICK_FORMAT[$this->storedFile->mime_type])) {
+            $this->handleWithImagick();
+
+            return;
+        }
+
         if (! extension_loaded('gd')) {
             Log::warning('GD saknas — genererar inga miniatyrer', [
                 'stored_file_id' => $this->storedFile->id,
                 'storage_path' => $this->storedFile->storage_path,
             ]);
 
-            return;
-        }
-
-        if (! self::supportsMime($this->storedFile->mime_type)) {
             return;
         }
 
@@ -124,6 +180,122 @@ class GenerateImageDerivatives implements ShouldQueue
                 'storage_path' => $this->storedFile->storage_path,
                 'exception' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * HEIC, HEIF och TIFF: läses med Imagick och skrivs som JPEG. Fel fångas
+     * och loggas som för GD-vägen (Beslut 5) — en PDF som utger sig för att
+     * vara en TIFF stoppas av TIFF-avkodaren och ger inga derivat.
+     */
+    private function handleWithImagick(): void
+    {
+        try {
+            $format = self::IMAGICK_FORMAT[$this->storedFile->mime_type];
+            $path = Storage::disk('files')->path($this->storedFile->storage_path);
+
+            // Gränserna sätts före läsningen. De gäller processen, vilket är
+            // avsikten: ingen annan kod i appen läser bilder med Imagick.
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_MEMORY, self::LIMIT_MEMORY_BYTES);
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_MAP, self::LIMIT_MAP_BYTES);
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_AREA, self::LIMIT_AREA_PIXELS);
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_WIDTH, self::LIMIT_SIDE_PIXELS);
+            Imagick::setResourceLimit(Imagick::RESOURCETYPE_HEIGHT, self::LIMIT_SIDE_PIXELS);
+
+            $original = new Imagick;
+
+            try {
+                // Uttryckligt format före sökvägen (Beslut 4) och `[0]` för
+                // första sidan/bilden i en fil med flera.
+                $original->readImage($format.':'.$path.'[0]');
+                $original->setIteratorIndex(0);
+
+                $this->orient($original);
+                $original->setImageBackgroundColor('white');
+                $original->setImageAlphaChannel(Imagick::ALPHACHANNEL_REMOVE);
+                $original->transformImageColorspace(Imagick::COLORSPACE_SRGB);
+                $original->stripImage();
+
+                $this->generateImagickVariants($original);
+            } finally {
+                $original->clear();
+            }
+        } catch (Throwable $e) {
+            Log::error('Kunde inte generera miniatyrer', [
+                'stored_file_id' => $this->storedFile->id,
+                'storage_path' => $this->storedFile->storage_path,
+                'exception' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Tillämpar EXIF-orienteringen på pixlarna och nollställer taggen, så att
+     * en bild från en iPhone inte står på sidan (och inte roteras två gånger).
+     */
+    private function orient(Imagick $image): void
+    {
+        $degrees = match ($image->getImageOrientation()) {
+            Imagick::ORIENTATION_BOTTOMRIGHT, Imagick::ORIENTATION_BOTTOMLEFT => 180,
+            Imagick::ORIENTATION_RIGHTTOP, Imagick::ORIENTATION_RIGHTBOTTOM => 90,
+            Imagick::ORIENTATION_LEFTBOTTOM, Imagick::ORIENTATION_LEFTTOP => 270,
+            default => 0,
+        };
+
+        // Speglade orienteringar: vänd först, rotera sedan.
+        match ($image->getImageOrientation()) {
+            Imagick::ORIENTATION_TOPRIGHT, Imagick::ORIENTATION_BOTTOMLEFT, Imagick::ORIENTATION_LEFTTOP, Imagick::ORIENTATION_RIGHTBOTTOM => $image->flopImage(),
+            default => null,
+        };
+
+        if ($degrees !== 0) {
+            $image->rotateImage('white', $degrees);
+        }
+
+        $image->setImageOrientation(Imagick::ORIENTATION_TOPLEFT);
+    }
+
+    /**
+     * Skriver båda varianterna som JPEG. Längsta sidan krymps till målet men
+     * bilden förstoras aldrig — är den mindre kodas den ändå om (Beslut 3).
+     */
+    private function generateImagickVariants(Imagick $original): void
+    {
+        $width = $original->getImageWidth();
+        $height = $original->getImageHeight();
+        $longestSide = max($width, $height);
+        $disk = Storage::disk('files');
+
+        foreach (self::VARIANTS as $variant => $target) {
+            $copy = clone $original;
+
+            try {
+                if ($longestSide > $target) {
+                    $scale = $target / $longestSide;
+                    $copy->resizeImage(
+                        max(1, (int) round($width * $scale)),
+                        max(1, (int) round($height * $scale)),
+                        Imagick::FILTER_LANCZOS,
+                        1,
+                    );
+                }
+
+                $copy->setImageFormat('jpeg');
+                $copy->setImageCompression(Imagick::COMPRESSION_JPEG);
+                $copy->setImageCompressionQuality(self::IMAGICK_QUALITY);
+
+                $bytes = $copy->getImageBlob();
+            } finally {
+                $copy->clear();
+            }
+
+            $path = $this->storedFile->storage_path.'_'.$variant.'.jpg';
+            $disk->put($path, $bytes);
+
+            ImageDerivative::updateOrCreate(
+                ['stored_file_id' => $this->storedFile->id, 'variant' => $variant],
+                ['storage_path' => $path, 'byte_size' => strlen($bytes)],
+            );
         }
     }
 

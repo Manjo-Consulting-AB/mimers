@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\SkippedWithMessageException;
 
 use function Pest\Laravel\postJson;
 
@@ -40,6 +41,7 @@ beforeEach(function () {
 
 afterEach(function () {
     Carbon::setTestNow();
+    GenerateImageDerivatives::$imagickLoaded = null;
 });
 
 /**
@@ -431,4 +433,187 @@ it('en uppladdning lyckas även om derivatgenereringen misslyckas', function () 
     expect(Attachment::count())->toBe(1);
     expect(ImageDerivative::count())->toBe(0);
     $logg->shouldHaveReceived('error')->once();
+});
+
+/*
+ * Issue 348 · HEIC, HEIF och TIFF med Imagick ([[ADR-0071 Miniatyrer med
+ * Imagick]]). Fixturerna byggs i proven med Imagick — inga binära filer i
+ * repot. Proven som kräver Imagick hoppas över där tillägget saknas och körs
+ * i CI, som laddar det; HEIC kräver dessutom att ImageMagick kan formatet.
+ */
+
+/**
+ * Bygger en bild i givet format (tiff eller heic) med Imagick. En
+ * orientering sätts bara när den anges.
+ *
+ * @param  int<0, 8>|null  $orientering
+ */
+function miniatyrImagickBild(string $format, int $bredd, int $höjd, ?int $orientering = null, int $sidor = 1): string
+{
+    $fil = tempnam(sys_get_temp_dir(), 'miniatyr');
+    $byten = '';
+
+    try {
+        $bild = new Imagick;
+
+        for ($i = 0; $i < $sidor; $i++) {
+            $sida = new Imagick;
+            // Första sidan har den givna storleken, övriga är mindre så att
+            // ett prov kan se vilken sida derivatet kom ifrån. En enfärgad yta
+            // komprimeras kraftigt och håller fixturen under planens gräns.
+            $sida->newPseudoImage($i === 0 ? $bredd : 10, $i === 0 ? $höjd : 10, $i === 0 ? 'xc:red' : 'xc:blue');
+            $sida->setImageFormat($format);
+            // 8 bitar per kanal: löparens ImageMagick är Q16, och en okomprimerad
+            // 16-bitars TIFF går över planens filgräns.
+            $sida->setImageDepth(8);
+            if ($format === 'tiff') {
+                $sida->setImageCompression(Imagick::COMPRESSION_LZW);
+            }
+            if ($orientering !== null) {
+                $sida->setImageOrientation($orientering);
+            }
+            $bild->addImage($sida);
+        }
+
+        $bild->setImageFormat($format);
+        if ($format === 'tiff') {
+            $bild->setCompression(Imagick::COMPRESSION_LZW);
+        }
+        // writeImages till en fil i stället för getImagesBlob: det kodar
+        // även flersidig TIFF på löparen.
+        $bild->writeImages($fil, true);
+        $byten = (string) file_get_contents($fil);
+        $bild->clear();
+
+        if ($byten === '') {
+            throw new ImagickException('Tom fixtur.');
+        }
+    } catch (ImagickException $e) {
+        // Löparens ImageMagick kan t.ex. läsa HEIC utan att kunna skriva det.
+        throw new SkippedWithMessageException("Imagick kan inte skapa en {$format}-fixtur här: ".$e->getMessage());
+    } finally {
+        @unlink($fil);
+    }
+
+    return $byten;
+}
+
+/**
+ * Bredd och höjd för ett derivat på disken.
+ *
+ * @return array{0: int, 1: int}
+ */
+function miniatyrMått(ImageDerivative $derivat): array
+{
+    $mått = getimagesize(Storage::disk('files')->path($derivat->storage_path));
+
+    return [$mått[0], $mått[1]];
+}
+
+it('en tiff större än 1024 px får thumb och medium som jpeg', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('skanning.tiff', miniatyrImagickBild('tiff', 1600, 1200)));
+
+    $thumb = $storedFile->derivatives()->where('variant', 'thumb')->firstOrFail();
+    $medium = $storedFile->derivatives()->where('variant', 'medium')->firstOrFail();
+
+    expect($thumb->storage_path)->toEndWith('_thumb.jpg');
+    expect($medium->storage_path)->toEndWith('_medium.jpg');
+    expect(miniatyrMått($thumb))->toBe([320, 240]);
+    expect(miniatyrMått($medium))->toBe([1024, 768]);
+    expect(getimagesize(Storage::disk('files')->path($thumb->storage_path))[2])->toBe(IMAGETYPE_JPEG);
+})->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
+
+it('en tiff mindre än 320 px får båda varianterna i originalets storlek', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('liten.tiff', miniatyrImagickBild('tiff', 200, 100)));
+
+    expect($storedFile->derivatives()->count())->toBe(2);
+
+    foreach (['thumb', 'medium'] as $variant) {
+        $derivat = $storedFile->derivatives()->where('variant', $variant)->firstOrFail();
+
+        expect($derivat->storage_path)->toEndWith("_{$variant}.jpg");
+        expect(miniatyrMått($derivat))->toBe([200, 100]);
+    }
+})->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
+
+it('en heic får båda varianterna som jpeg', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('foto.heic', miniatyrImagickBild('heic', 1600, 1200)));
+
+    expect($storedFile->mime_type)->toBe('image/heic');
+
+    $thumb = $storedFile->derivatives()->where('variant', 'thumb')->firstOrFail();
+    $medium = $storedFile->derivatives()->where('variant', 'medium')->firstOrFail();
+
+    expect($thumb->storage_path)->toEndWith('_thumb.jpg');
+    expect(max(...miniatyrMått($thumb)))->toBe(320);
+    expect(max(...miniatyrMått($medium)))->toBe(1024);
+    expect(getimagesize(Storage::disk('files')->path($medium->storage_path))[2])->toBe(IMAGETYPE_JPEG);
+})->skip(fn () => ! extension_loaded('imagick') || Imagick::queryFormats('HEIC') === [], 'Imagick eller ImageMagicks HEIC-stöd saknas lokalt — provet körs i CI om formatet finns där.');
+
+it('en tiff med EXIF-orientering 6 ger ett roterat derivat', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    // Lagrad som 600 x 300 liggande; orientering 6 (RIGHTTOP) betyder att
+    // bilden ska visas stående, alltså 300 x 600.
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('stående.tiff', miniatyrImagickBild('tiff', 600, 300, Imagick::ORIENTATION_RIGHTTOP)));
+
+    $thumb = $storedFile->derivatives()->where('variant', 'thumb')->firstOrFail();
+
+    expect(miniatyrMått($thumb))->toBe([160, 320]);
+})->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
+
+it('en tiff med flera sidor ger derivat av första sidan', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $storedFile = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('flera.tiff', miniatyrImagickBild('tiff', 400, 200, null, 3)));
+
+    $thumb = $storedFile->derivatives()->where('variant', 'thumb')->firstOrFail();
+
+    expect(miniatyrMått($thumb))->toBe([320, 160]);
+})->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
+
+it('en pdf förklädd till tiff ger inga derivat och loggas', function () {
+    $logg = Log::spy();
+
+    // Uppladdningen sniffar typen och skulle kalla filen pdf, så raden skapas
+    // direkt: mime_type säger image/tiff, bytena är en PDF.
+    $storedFile = StoredFile::factory()->create(['mime_type' => 'image/tiff']);
+    Storage::disk('files')->put($storedFile->storage_path, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF");
+
+    (new GenerateImageDerivatives($storedFile))->handle();
+
+    expect(ImageDerivative::count())->toBe(0);
+    expect(Storage::disk('files')->allFiles())->toBe([$storedFile->storage_path]);
+    $logg->shouldHaveReceived('error')->once();
+})->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
+
+it('supportsMime svarar ja för heic, heif och tiff bara när imagick är laddat', function () {
+    GenerateImageDerivatives::$imagickLoaded = true;
+
+    foreach (['image/heic', 'image/heif', 'image/tiff'] as $mime) {
+        expect(GenerateImageDerivatives::supportsMime($mime))->toBeTrue();
+    }
+
+    GenerateImageDerivatives::$imagickLoaded = false;
+
+    foreach (['image/heic', 'image/heif', 'image/tiff'] as $mime) {
+        expect(GenerateImageDerivatives::supportsMime($mime))->toBeFalse();
+    }
+
+    // De sex GD-typerna påverkas inte.
+    expect(GenerateImageDerivatives::supportsMime('image/jpeg'))->toBeTrue();
+});
+
+it('supportsMime svarar alltid nej för pdf', function () {
+    foreach ([true, false, null] as $laddat) {
+        GenerateImageDerivatives::$imagickLoaded = $laddat;
+
+        expect(GenerateImageDerivatives::supportsMime('application/pdf'))->toBeFalse();
+    }
 });
