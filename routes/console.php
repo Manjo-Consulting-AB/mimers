@@ -23,6 +23,7 @@ use App\Console\SendsWeeklyDigest;
 use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -389,49 +390,76 @@ Schedule::call(fn () => app(PrunesLogs::class)->handle())
     ->name('prune-logs');
 
 /*
- * Issue 237 · Köarbetaren: tömmer `jobs`-tabellen varje minut. Inget annat
- * startar en arbetare — `QUEUE_CONNECTION=database` står i båda miljöernas
- * shared/.env, och varken deploy.sh eller crontabben kör queue:work. Se
- * ADR-0031 för besluten. Logiken bor inte i en vanlig klass (till skillnad
- * från posterna ovan) för att den inte bär någon: ett kommandoanrop och fem
- * flaggor, och en klass runt `Artisan::call` vore ett lager utan innehåll.
+ * Issue 237, omskriven i issue 347 · Köarbetaren: tömmer `jobs`-tabellen varje
+ * minut. Inget annat startar en arbetare — `QUEUE_CONNECTION=database` står i
+ * båda miljöernas shared/.env, och varken deploy.sh eller crontabben kör
+ * queue:work. Se [[ADR-0070 Subprocesser hos inleed]] § Beslut 4–5, som
+ * ersätter [[ADR-0031 Köarbetaren körs av schemaläggaren]] § Beslut.
  *
- * `Artisan::call` kör kommandot i schemaläggarens egen process — ingen
- * `Schedule::command(...)` eller `->runInBackground()`, båda går via Symfony
- * Process/proc_open, avstängt hos inleed i både webb-SAPI och CLI, se
- * AGENTS.md § Subprocesser i driftmiljön. `queue:work` är i sig en loop i
- * samma process; det är `queue:listen` som startar barnprocesser.
+ * Posten registreras på ett av två sätt, valt när schemat laddas:
  *
- * Posten ligger SIST med flit, flytta den aldrig uppåt: slår ett jobb i
- * `--timeout` anropar Laravel `Worker::kill()`, som anropar `posix_kill`
- * (avstängt hos inleed) och därefter `exit()` — processen dör mitt i
- * schemaläggningskörningen. Ligger posten sist har allt annat som var i tur
- * redan kört, och nästa minut startar en ny process ändå.
+ * - `proc_open` finns: `Schedule::command('queue:work', ...)->runInBackground()`.
+ *   Arbetaren blir en egen process; en jobbtimeout dödar bara den, och kön får
+ *   eget minnestak. Det är den enda användningen av `proc_open` som en ADR
+ *   har beslutat, se AGENTS.md § Subprocesser i driftmiljön.
+ * - `proc_open` saknas (inleed kan stänga den igen vid en PHP-version eller en
+ *   återställning av kontot): ADR-0031:s väg, `Artisan::call` i en
+ *   `Schedule::call`, med en `Log::warning` varje gång den körs. Kön töms
+ *   fortfarande; det som går förlorat är isoleringen. Kör arbetaren i
+ *   schemaläggarens process slår en jobbtimeout (`Worker::kill()` följt av
+ *   `exit()`) ut resten av körningen, vilket är därför posten i det läget
+ *   ligger kvar sist i filen. Flytta den inte.
  *
- * `withoutOverlapping(10)` — inte förvalet 1440 minuter. `exit()` ovan
- * hoppar över mutex-städningen som annars sköts av `finish()` i ett finally
- * eller pcntl-signalhanteraren, så låset måste kunna löpa ut av sig självt
- * efter en timeout; med förvalet stannar posten i 24 timmar, tyst. Tio
- * minuter ligger säkert över den lagliga maxkörningen på `--max-time` 50 s
- * plus en sista jobbtimeout på 300 s ≈ 5,8 min, och en fastkilad post
- * självläker inom tio minuter i stället för ett dygn.
+ * Båda vägarna heter `drain-queue`, har samma fem flaggor och låset
+ * `withoutOverlapping(10)` — inte förvalet 1440 minuter. En arbetare som dör i
+ * `exit()` hoppar över mutex-städningen, så låset måste löpa ut av sig självt;
+ * tio minuter ligger över den lagliga maxkörningen (`--max-time` 50 s plus en
+ * sista jobbtimeout på 300 s ≈ 5,8 min). Båda hoppar över när `queue.default`
+ * är `sync` (ADR-0031 Beslut 4): sync-drivern kan inte poppas ifrån, och
+ * testsviten kör med den.
  *
- * Sync-grenen är inte en artighet (Beslut 4): sync-drivern kan inte poppas
- * ifrån, och testsviten kör med den.
+ * Sömmen för proven: finns bindningen `drain-queue.proc-open` i behållaren
+ * används dess värde i stället för `function_exists('proc_open')`. Bara
+ * tests/Feature/Drift/KoarbetareTest.php binder den; `proc_open` stängs aldrig
+ * av på riktigt.
+ *
+ * `--stop-when-empty` står som positionell post: `Schedule::command` skriver
+ * `true` som `--stop-when-empty='1'`, vilket inte är en flagga.
  */
-Schedule::call(function () {
-    if (config('queue.default') === 'sync') {
-        return;
-    }
+$hasProcOpen = app()->bound('drain-queue.proc-open')
+    ? (bool) app('drain-queue.proc-open')
+    : function_exists('proc_open');
 
-    Artisan::call('queue:work', [
-        '--stop-when-empty' => true,
+if ($hasProcOpen) {
+    Schedule::command('queue:work', [
+        '--stop-when-empty',
         '--max-time' => 50,
         '--timeout' => 300,
         '--memory' => 96,
         '--tries' => 1,
-    ]);
-})->everyMinute()->name('drain-queue')->withoutOverlapping(10);
+    ])
+        ->runInBackground()
+        ->everyMinute()
+        ->name('drain-queue')
+        ->withoutOverlapping(10)
+        ->skip(fn () => config('queue.default') === 'sync');
+} else {
+    Schedule::call(function () {
+        if (config('queue.default') === 'sync') {
+            return;
+        }
+
+        Log::warning('drain-queue: proc_open saknas, köarbetaren körs i schemaläggarens process.');
+
+        Artisan::call('queue:work', [
+            '--stop-when-empty' => true,
+            '--max-time' => 50,
+            '--timeout' => 300,
+            '--memory' => 96,
+            '--tries' => 1,
+        ]);
+    })->everyMinute()->name('drain-queue')->withoutOverlapping(10);
+}
 
 /*
  * Issue 112 · Den rättsliga spärren — sätts och hävs bara härifrån. Se

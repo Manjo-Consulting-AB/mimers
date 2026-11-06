@@ -26,7 +26,7 @@
 # ut, nämligen som ingen utskrift alls.
 set -uo pipefail
 
-VERSION="4"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
+VERSION="5"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
 
 # Miljön kommer från klientens kommando, som med command= i authorized_keys
 # hamnar i SSH_ORIGINAL_COMMAND i stället för att köras. Den valideras mot
@@ -195,6 +195,22 @@ if [ -n "${APP:-}" ]; then
   else
     echo 'köarbetare: INGEN hittad (varken routes/console.php, cron eller en levande process)'
   fi
+fi
+
+# ADR-0070 Beslut 6: skriv ut CLI-PHP:s disable_functions, så att en stängd
+# proc_open syns vid nästa retro och inte först när någon läser loggen. Det
+# är PHP-binären, inte Laravel, som läses (regel 2), och listan innehåller
+# inga hemligheter. Panelinställningen gäller per PHP-version, därför den
+# binär som cron och schemaläggaren faktiskt kör.
+PHP_BIN=/usr/local/bin/php
+if [ -x "$PHP_BIN" ]; then
+  DISABLED=$("$PHP_BIN" -r 'echo ini_get("disable_functions");' 2>/dev/null)
+  printf 'disable_functions: %s\n' "${DISABLED:-(tom)}"
+  case ",$(printf '%s' "$DISABLED" | tr -d ' ')," in
+    *,proc_open,*) echo 'proc_open: AVSTÄNGD – köarbetaren går i schemaläggarens process' ;;
+  esac
+else
+  echo "disable_functions: $PHP_BIN finns inte eller går inte att köra - OBESVARAT"
 fi
 
 # ---------------------------------------------------------------------------
