@@ -1490,8 +1490,9 @@ it('mäter ramen och skickar storleken till varje nod', function () {
         ->toContain('frameObserver?.disconnect()')
         ->toContain('if (props.compact ||');
 
-    // Föräldrar, båda sidorna av relaterade, mitten och barnen.
-    expect(substr_count($kartan, ':size="nodeSize"'))->toBe(5);
+    // Containern ovanför ett toppitem (issue 1031), föräldrar, båda sidorna
+    // av relaterade, mitten och barnen.
+    expect(substr_count($kartan, ':size="nodeSize"'))->toBe(6);
 });
 
 /*
@@ -1536,4 +1537,82 @@ it('ritar tre storlekar från md: med dagens kort som förval', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
 
     expect($kartan)->toContain("? { size: 'md', perRow: 4 }");
+});
+
+/*
+ * Issue 1031 · Klart när: sökvägen ovanför kartan står i `text-title`.
+ *
+ * Vägen stod i `text-meta` (12 px) och syntes knappt ovanför korten. Typskalan
+ * har fem steg ([[ADR-0042 Designsystemet]]), och `text-title` är närmaste
+ * steget uppåt.
+ */
+it('ritar vägen ovanför kartan i text-title', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)
+        ->toContain('class="mb-4 flex flex-wrap items-center justify-center gap-1 text-title text-ink-muted"');
+    expect($kartan)->not->toContain('justify-center gap-1 text-meta text-ink-muted');
+});
+
+/*
+ * Issue 1031 · Klart när: map.container bär containerns ikon.
+ *
+ * Kortet ovanför ett toppitem ritar containerns ikon, och den står inte någon
+ * annanstans i svaret när mitten är ett item.
+ */
+it('bär containerns ikon i map.container', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kartavyKontext();
+
+    $container->update(['icon' => 'sailboat', 'icon_color' => 'teal']);
+
+    $elsystem = kartavyItem($container, 'Elsystem');
+
+    actingAs($anvandare)->get(kartavyUrl($container, "view=map&focus={$elsystem->ulid}"))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('map.center.kind', 'item')
+            ->where('map.parent.total', 0)
+            ->where('map.container', [
+                'ulid' => $container->ulid,
+                'name' => $container->name,
+                'icon' => 'sailboat',
+                'icon_color' => 'teal',
+            ])
+        );
+});
+
+/*
+ * Issue 1031 · Klart när: ett toppitem har containern som kortet ovanför sig.
+ *
+ * Utan föräldrar stod raden ovanför mitten tom, och vägen tillbaka fanns bara
+ * i sökvägen. Kortet märks som förälder, så att linjelagret ritar till det,
+ * leder till kartan utan `focus` och har varken öga eller plusknapp. Med
+ * `compact` ritas det inte.
+ */
+it('ställer containern ovanför ett item utan föräldrar', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)
+        ->toContain("!props.compact && props.map.center.kind === 'item' && props.map.parent.total === 0")
+        ->toContain("kind: 'container'")
+        ->toContain('v-if="containerParent"')
+        ->toContain(':node="containerParent"');
+
+    $kortet = substr($kartan, strpos($kartan, ':node="containerParent"'), 300);
+
+    expect($kortet)->toContain('kind="parent"')
+        ->toContain("t('item.map.kind.container')")
+        ->toContain(':href="containerHref"');
+    expect($kortet)->not->toContain('open-href');
+    expect($kortet)->not->toContain(':rows');
+
+    // Kortet står före föräldrarnas rad, alltså ovanför mitten.
+    expect(strpos($kartan, 'v-if="containerParent"'))
+        ->toBeLessThan(strpos($kartan, 'v-if="parents.length > 0"'));
+
+    // Noden faller tillbaka på lådan för containern, som mitten gör.
+    expect(kartavyKod('components/ItemMapNode.vue'))
+        ->toContain(":fallback=\"node.kind === 'container' ? 'container' : undefined\"");
 });

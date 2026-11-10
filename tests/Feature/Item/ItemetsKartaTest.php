@@ -212,12 +212,13 @@ it('skickar samma karta som containerns kartläge med itemet som mitt', function
 });
 
 /*
- * Klart när: itemMap.container är {ulid, name}.
+ * Klart när: itemMap.container är {ulid, name, icon, icon_color}.
  *
  * Containern är inte en item-nod, men vägen till mitten börjar vid den i vyn
- * — samma fält och samma form som `map.container` i kartläget.
+ * — samma fält och samma form som `map.container` i kartläget. Ikonen följer
+ * med sedan issue 1031, där containern står ovanför ett toppitem.
  */
-it('bär containern som ulid och namn', function () {
+it('bär containern som ulid, namn och ikon', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemetsKartaKontext();
@@ -229,6 +230,8 @@ it('bär containern som ulid och namn', function () {
             ->where('itemMap.container', [
                 'ulid' => $container->ulid,
                 'name' => $container->name,
+                'icon' => $container->icon,
+                'icon_color' => $container->icon_color,
             ])
     );
 });

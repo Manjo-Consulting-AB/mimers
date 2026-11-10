@@ -509,8 +509,15 @@ class ItemController extends Controller
                 // Vägen till mitten (issue 298 · [[ADR-0059 Kartan med en
                 // mitt]] § 9) går från roten ned till mitten och är tom kring
                 // containern. Containerns namn står först i sökvägen i vyn, och
-                // containern är inget item — därför följer den med här.
-                'container' => ['ulid' => $container->ulid, 'name' => $container->name],
+                // containern är inget item — därför följer den med här. Ikonen
+                // följer med sedan issue 1031: kring ett toppitem står
+                // containern som kortet ovanför mitten.
+                'container' => [
+                    'ulid' => $container->ulid,
+                    'name' => $container->name,
+                    'icon' => $container->icon,
+                    'icon_color' => $container->icon_color,
+                ],
                 'path' => $map['path'],
                 'parent' => $map['parent'],
                 'child' => $map['child'],
@@ -1004,7 +1011,14 @@ class ItemController extends Controller
             // arbetsmaterial — modellen bakom menyraderna och statusfrågan.
             'itemMap' => [
                 'center' => $itemMap['center'],
-                'container' => ['ulid' => $container->ulid, 'name' => $container->name],
+                // Samma form som `map.container` i kartläget, ikonen med
+                // (issue 1031).
+                'container' => [
+                    'ulid' => $container->ulid,
+                    'name' => $container->name,
+                    'icon' => $container->icon,
+                    'icon_color' => $container->icon_color,
+                ],
                 'path' => $itemMap['path'],
                 'parent' => $itemMap['parent'],
                 'child' => $itemMap['child'],
