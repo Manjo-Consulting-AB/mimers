@@ -359,10 +359,8 @@ it('släpper innehållsytan från max-w-3xl när skalet får sin sidopanel', fun
     // eller verifieringsbannern.
     expect($layout)->not->toContain('max-w-3xl');
 
-    // Och den nya bredden står på <main>, där innehållet faktiskt ritas.
-    preg_match('/<main\b[^>]*>/', $layout, $träff);
-
-    expect($träff[0] ?? '')->toContain('max-w-[96rem]');
+    // Och <main>, där innehållet faktiskt ritas, finns kvar.
+    expect($layout)->toMatch('/<main\b[^>]*class="[^"]*w-full/');
 
     // Sidopanelen är den mörka ytan ur ADR-0042 och ritas bara över `md:`.
     expect($layout)->toContain('bg-shell')
@@ -371,6 +369,33 @@ it('släpper innehållsytan från max-w-3xl när skalet får sin sidopanel', fun
     // Menyn ritar samma sektioner — se MobilskalTest, som äger mobilskalet.
     expect(File::get(resource_path('js/components/MobileMenu.vue')))
         ->toContain('<ShellContainerList');
+});
+
+/*
+ * Issue 1026 · Innehållsytan utan tak. Klart när: `<main>`, de två topp-
+ * raderna och verifieringsbannern bär inget `max-w-*` och fyller ytan bredvid
+ * sidopanelen.
+ *
+ * Taket `max-w-[96rem]` lämnade stora tomma ytor på båda sidor om innehållet
+ * på en bred skärm. Provet läser klassattributen, inte kommentarerna, som
+ * fortfarande berättar om de gamla måtten.
+ */
+it('ger skalets ytor inget tak på bred skärm', function () {
+    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+
+    preg_match_all('/\sclass="([^"]*)"/', $layout, $klasser);
+
+    expect($klasser[1])->not->toBeEmpty();
+
+    foreach ($klasser[1] as $klass) {
+        expect($klass)->not->toMatch('/(^|\s)(md:)?max-w-/');
+    }
+
+    // Ytorna är fortfarande fulla i bredd, och ingen centreras längre.
+    preg_match('/<main\b[^>]*>/', $layout, $main);
+
+    expect($main[0] ?? '')->toContain('w-full');
+    expect($main[0] ?? '')->not->toContain('mx-auto');
 });
 
 /*

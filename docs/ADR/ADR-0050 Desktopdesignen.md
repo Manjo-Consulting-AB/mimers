@@ -104,3 +104,7 @@ Tonys beslut 2026-10-17, efter att ha gått igenom staging.
 ## Uppföljning 2026-11-10 — hjälten på itemvyn
 
 Tonys beslut 2026-11-10, issue 1023. **§ 2 gäller också itemvyn.** Den låga hjälten, med talen, står kvar när användaren öppnar ett item. Utan den försvann containerns huvud medan sidopanelen stod kvar, och det var förvirrande. Formulären och schemasidorna under itemet ritar fortfarande ingen hjälte.
+
+## Uppföljning 2026-11-10 — innehållsytan utan tak
+
+Tonys beslut 2026-11-10, issue 1026. **§ Skalet: ytan bredvid sidopanelen har inget tak.** Issue 169 satte den till `max-w-[96rem]` (1 536 px) för att den skulle bli *minst* 1 200 px. På en bred skärm stod då stora tomma ytor på båda sidor om hjälten, flikraden och innehållet. Nu fyller innehållet, toppraden och verifieringsbannern allt bredvid sidopanelen. Sidornas egna bredder, till exempel kartans fyra kort per rad, är oförändrade.

@@ -177,11 +177,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * flikrad och meny — med ett undantag: menyn får containerlistan, för dess
  * innehåll är skalets sektioner och ingenting eget.
  *
- * **Innehållsytan släpptes från 768 px till `max-w-[96rem]`** (1 536 px,
- * samma yta som Tailwinds `screen-2xl`): panelen tar sin plats bredvid den,
- * och itemets trepanel (issue 181) ska rymmas. `max-w-screen-2xl` finns inte
- * i Tailwind 4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
- * `max-w-7xl` är för smalt mot ADR-0050:s "över 1 200 px".
+ * **Innehållsytan har inget tak** (issue 1026). Den släpptes från 768 px
+ * till `max-w-[96rem]` i issue 169, så att panelen fick plats bredvid den och
+ * itemets trepanel (issue 181) rymdes. På en bred skärm lämnade taket stora
+ * tomma ytor på båda sidor om innehållet, så nu fyller ytan allt bredvid
+ * sidopanelen. ADR-0050 kräver "över 1 200 px", inte högst något.
  */
 defineProps({
     /*
@@ -377,16 +377,12 @@ const initials = computed(() => {
                 och avataren ([[ADR-0050 Desktopdesignen]] § 1), och raderna
                 den hade förut står nu i sidopanelen.
 
-                **Bredden är `max-w-[96rem]`** — 1 536 px, alltså samma yta
-                som Tailwinds `screen-2xl` — och valet står här därför att
-                issue 169 ber om det. `max-w-screen-2xl` finns inte i Tailwind
-                4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
-                `max-w-7xl` (1 280 px) är för smalt: ADR-0050 mäter bildernas
-                yta till "över 1 200 px" BREDVID sidopanelen, och itemets
-                trepanel (issue 181) ska rymmas i den.
+                **Bredden har inget tak** (issue 1026), samma som
+                innehållsytan under: raden fyller allt bredvid sidopanelen, så
+                att sökfältet står i linje med innehållets högerkant.
             -->
             <header class="hidden border-b border-slate-200 bg-white md:block">
-                <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
+                <div class="flex w-full items-center gap-2 px-4 py-2">
                     <!--
                         Sökfältet ligger på sin egen rad under `md:` och skjuts
                         till höger över det. Klasserna sitter på en omslutande
@@ -450,7 +446,7 @@ const initials = computed(() => {
                 `can`; den som har svaret ritar det.
             -->
             <header class="bg-shell text-white md:hidden">
-                <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
+                <div class="flex w-full items-center gap-2 px-4 py-2">
                     <!--
                         Målet för containerns teleport. `contents` gör att
                         omslaget inte deltar i flexraden: innehållet lägger sig
@@ -473,7 +469,7 @@ const initials = computed(() => {
                 </div>
             </header>
 
-            <div v-if="showsVerificationNotice" class="mx-auto w-full max-w-[96rem] px-4 pt-6">
+            <div v-if="showsVerificationNotice" class="w-full px-4 pt-6">
                 <p class="mb-2 text-sm font-medium text-slate-800">{{ t('auth.verify.banner') }}</p>
                 <VerifyEmailNotice />
             </div>
@@ -481,12 +477,11 @@ const initials = computed(() => {
             <FlashMessage />
 
             <!--
-                Innehållsytan. Den var 768 px — skalets gamla mått, samma som
-                toppraden — och är nu `max-w-[96rem]`: panelen till vänster tar
-                sin plats bredvid den, och en sida som ritar tre paneler
-                (itemet, issue 181) behöver bredden.
+                Innehållsytan. Den var 768 px, sedan `max-w-[96rem]` (issue
+                169), och har sedan issue 1026 inget tak: på en bred skärm ska
+                presentationen använda hela ytan bredvid sidopanelen.
             -->
-            <main class="mx-auto w-full max-w-[96rem] flex-1 px-4 pt-8 pb-24 md:pb-8">
+            <main class="w-full flex-1 px-4 pt-8 pb-24 md:pb-8">
                 <slot />
             </main>
 
