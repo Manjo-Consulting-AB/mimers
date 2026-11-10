@@ -193,11 +193,16 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
 
                 <!-- Noderna: ikonen till vänster, namnet och slagets ord till höger. -->
                 <template v-else>
+                    <!--
+                        Containern som kort ovanför ett toppitem (issue 1031)
+                        faller tillbaka på lådan, som i mitten.
+                    -->
                     <ItemIcon
                         :name="node.icon"
                         :color="node.icon_color"
                         :size="iconSize"
                         tile
+                        :fallback="node.kind === 'container' ? 'container' : undefined"
                         class="h-10 w-10 shrink-0"
                         :class="sizeClass.tile"
                     />

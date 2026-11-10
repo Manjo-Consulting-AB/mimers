@@ -169,6 +169,27 @@ const COMPACT_LIMIT = 4;
 const drawLimit = (nodes) => (props.compact ? nodes.slice(0, COMPACT_LIMIT) : nodes);
 
 const parents = computed(() => drawLimit(props.map.parent.nodes));
+
+/*
+ * Containern ovanför ett toppitem (issue 1031). Ett item direkt i containern
+ * har inga föräldrar, och utan kortet hade raden ovanför mitten stått tom —
+ * vägen tillbaka fanns bara i sökvägen. Kortet bär containerns namn och ikon
+ * och ordet *Container*, leder till kartan utan `focus` och har varken öga
+ * eller plusknapp: containern är inget item. Det märks som förälder, så att
+ * `ItemMapEdges` ritar förälderns linje till det, men teckenförklaringens
+ * *Parent* räknar fortfarande bara items. Med `compact` ritas det inte.
+ */
+const containerParent = computed(() => (
+    !props.compact && props.map.center.kind === 'item' && props.map.parent.total === 0
+        ? {
+            kind: 'container',
+            ulid: props.map.container.ulid,
+            name: props.map.container.name,
+            icon: props.map.container.icon ?? null,
+            icon_color: props.map.container.icon_color ?? null,
+        }
+        : null
+));
 const children = computed(() => drawLimit(props.map.child.nodes));
 
 /* De relaterade under barnen: alla utan `compact`, de fyra första med. */
@@ -322,7 +343,7 @@ function closeMenu() {
             <nav
                 v-if="map.path.length > 0"
                 :aria-label="t('item.map.path')"
-                class="mb-4 flex flex-wrap items-center justify-center gap-1 text-meta text-ink-muted"
+                class="mb-4 flex flex-wrap items-center justify-center gap-1 text-title text-ink-muted"
             >
                 <Link
                     :href="containerHref"
@@ -377,6 +398,19 @@ function closeMenu() {
                     minst alla föräldrar (ADR-0072). Med `compact` gäller det
                     smala avståndet på alla bredder.
                 -->
+                <ul
+                    v-if="containerParent"
+                    class="flex w-full justify-center"
+                >
+                    <ItemMapNode
+                        :node="containerParent"
+                        kind="parent"
+                        :label="t('item.map.kind.container')"
+                        :size="nodeSize"
+                        :href="containerHref"
+                    />
+                </ul>
+
                 <ul
                     v-if="parents.length > 0"
                     class="flex w-full flex-wrap justify-center gap-3"
