@@ -1550,8 +1550,8 @@ it('ritar vägen ovanför kartan i text-title', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
 
     expect($kartan)
-        ->toContain('class="mb-4 flex flex-wrap items-center justify-center gap-1 text-title text-ink-muted"')
-        ->not->toContain('justify-center gap-1 text-meta text-ink-muted');
+        ->toContain('class="mb-4 flex flex-wrap items-center justify-center gap-1 text-title text-ink-muted"');
+    expect($kartan)->not->toContain('justify-center gap-1 text-meta text-ink-muted');
 });
 
 /*
@@ -1604,9 +1604,9 @@ it('ställer containern ovanför ett item utan föräldrar', function () {
 
     expect($kortet)->toContain('kind="parent"')
         ->toContain("t('item.map.kind.container')")
-        ->toContain(':href="containerHref"')
-        ->not->toContain('open-href')
-        ->not->toContain(':rows');
+        ->toContain(':href="containerHref"');
+    expect($kortet)->not->toContain('open-href');
+    expect($kortet)->not->toContain(':rows');
 
     // Kortet står före föräldrarnas rad, alltså ovanför mitten.
     expect(strpos($kartan, 'v-if="containerParent"'))
