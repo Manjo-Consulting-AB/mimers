@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import CreateMenu from './CreateMenu.vue';
 import ItemMapEdges from './ItemMapEdges.vue';
 import ItemMapNode from './ItemMapNode.vue';
 import { useTranslations } from '../composables/useTranslations.js';
+import { mapLayout, rowWidth } from '../support/mapLayout.js';
 
 /*
  * Kartan, se issue 297 · [[M34 Kartan med en mitt]] § 297 och [[ADR-0059
@@ -33,14 +34,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * öppna-ikonen i kortets hörn. Vyn skickar slaget som propp så att noden kan
  * färga ordet rätt.
  *
- * **Rutnätet fyller panelen** (ADR-0061 § 7 och ADR-0062 § 2): föräldrarna
- * står på en rad ovanför mitten, barnen under med högst fyra per rad — bredden
- * `md:max-w-[52.5rem]` rymmer fyra kort (4 × `w-48`) och tre mellanrum på
- * 24 px, så en femte rad bryts och serverns tak på tolv ger högst tre rader —
- * och de relaterade står i en båge på var sida. Från `md:` är det `gap-6`
- * mellan korten, 24 px mellan barnens rader, `mt-14` mellan raderna föräldrar,
+ * **Rutnätet fyller ramen** (issue 349 · [[ADR-0072 Kartan fyller bredden]],
+ * som ändrar ADR-0061 § 7 och ADR-0062 § 2): föräldrarna står på en rad
+ * ovanför mitten, barnen under på högst två jämna rader med upp till sex per
+ * rad, och de relaterade i en båge på var sida. Vyn mäter ramen och låter
+ * `support/mapLayout.js` välja antalet per rad och kortens storlek; raderna får
+ * sin maxbredd ur det, så att barnen bryts där uppställningen säger. Från
+ * `md:` är det 24 px mellan barnens rader, `mt-14` mellan raderna föräldrar,
  * mitten och barnen, och `gap-12` mellan mitten och de relaterades kolumner.
- * Den mittersta på en sida — den andra noden på den sidan — står längst ut:
+ * Mellanrummet i sidled följer storleken. Den mittersta på en sida — den
+ * andra noden på den sidan — står längst ut:
  * kolumnen är riktad mot mitten och den noden skjuts ut med en marginal.
  * Korten har fast bredd, så raderna står i linje. Under `md:` gäller dagens
  * avstånd, och allt står i en kolumn med de relaterade under barnen.
@@ -186,6 +189,63 @@ const relatedRight = computed(
 );
 
 /*
+ * Uppställningen (issue 349 · [[ADR-0072 Kartan fyller bredden]] § 1–3). Ramen
+ * mäts med en `ResizeObserver`; innan den är mätt är bredden `null`, och då
+ * gäller uppställningen ur § 2. Med `compact` mäts ingenting och kartan har
+ * alltid mellanstorleken (§ 4).
+ */
+const frame = ref(null);
+const frameWidth = ref(null);
+let frameObserver = null;
+
+onMounted(() => {
+    if (props.compact || !frame.value || typeof ResizeObserver === 'undefined') {
+        return;
+    }
+
+    frameObserver = new ResizeObserver(([entry]) => {
+        frameWidth.value = entry.contentRect.width;
+    });
+    frameObserver.observe(frame.value);
+});
+
+onBeforeUnmount(() => {
+    frameObserver?.disconnect();
+    frameObserver = null;
+});
+
+const layout = computed(() => (props.compact
+    ? { size: 'md', perRow: 4 }
+    : mapLayout({
+        children: children.value.length,
+        parents: parents.value.length,
+        hasRelated: props.map.related.nodes.length > 0,
+        width: frameWidth.value,
+    })));
+
+const nodeSize = computed(() => layout.value.size);
+
+/*
+ * Radernas maxbredd från `md:`: antalet per rad gånger kortet, plus
+ * mellanrummen. Barnen bryts därmed där uppställningen säger. Föräldrarna står
+ * alltid på en rad (ADR-0061 § 7), så deras bredd rymmer minst alla
+ * föräldrar. Under `md:` och med `compact` sätts ingen bredd.
+ */
+const widthStyle = (cards) => (props.compact
+    ? {}
+    : { '--map-row': `${rowWidth(cards, layout.value.size)}px` });
+
+const childRowStyle = computed(() => widthStyle(layout.value.perRow));
+const parentRowStyle = computed(
+    () => widthStyle(Math.max(layout.value.perRow, parents.value.length)),
+);
+
+/* Mellanrummet i sidled följer storleken; mellan raderna är det 24 px (§ 5). */
+const ROW_GAPS = { lg: 'md:gap-6', md: 'md:gap-6', sm: 'md:gap-x-4 md:gap-y-6' };
+
+const rowGap = computed(() => ROW_GAPS[layout.value.size]);
+
+/*
  * Hur många noder som inte fick plats, per grupp. Noll betyder att gruppen
  * ritar allt den har och ingen *+N till*-rad finns.
  */
@@ -304,7 +364,7 @@ function closeMenu() {
             korten ligger ovanpå det. Från `md:` står de i rutnätet — under
             `md:` är ramen en kolumn, och de relaterade ritas under barnen.
         -->
-        <div data-map-frame class="relative">
+        <div ref="frame" data-map-frame class="relative">
             <!-- Linjerna hör till den fulla formen; den smala har inget lager. -->
             <template v-if="!compact">
                 <ItemMapEdges :map="map" />
@@ -312,15 +372,16 @@ function closeMenu() {
 
             <div class="relative z-10 flex w-full flex-col items-center">
                 <!--
-                    Föräldrarna ovanför, högst fyra. Från `md:` är det `gap-6`
-                    mellan korten och bredden rymmer fyra kort och tre
-                    mellanrum på 24 px, så raden bryts aldrig före serverns tak.
-                    Med `compact` gäller det smala avståndet på alla bredder.
+                    Föräldrarna ovanför, högst fyra och alltid på en rad. Från
+                    `md:` följer mellanrummet storleken, och bredden rymmer
+                    minst alla föräldrar (ADR-0072). Med `compact` gäller det
+                    smala avståndet på alla bredder.
                 -->
                 <ul
                     v-if="parents.length > 0"
                     class="flex w-full flex-wrap justify-center gap-3"
-                    :class="compact ? '' : 'md:gap-6 md:max-w-[52.5rem]'"
+                    :class="compact ? '' : [rowGap, 'md:max-w-(--map-row)']"
+                    :style="parentRowStyle"
                 >
                     <ItemMapNode
                         v-for="node in parents"
@@ -329,6 +390,7 @@ function closeMenu() {
                         kind="parent"
                         :label="t('item.map.kind.parent')"
                         :status="statusFor(node)"
+                        :size="nodeSize"
                         :href="nodeHref(node)"
                         :open-href="nodeOpenHref(node)"
                         @open-menu="openMenu"
@@ -372,6 +434,7 @@ function closeMenu() {
                             kind="related"
                             :label="t('item.map.kind.related')"
                             :status="statusFor(node)"
+                            :size="nodeSize"
                             :href="focusHref(node)"
                             :open-href="openHref(node)"
                             @open-menu="openMenu"
@@ -383,6 +446,7 @@ function closeMenu() {
                             :node="center"
                             :label="centerLabel"
                             :status="statusFor(center)"
+                            :size="nodeSize"
                             :open-href="centerOpenHref"
                             :rows="map.rows"
                             current
@@ -406,6 +470,7 @@ function closeMenu() {
                             kind="related"
                             :label="t('item.map.kind.related')"
                             :status="statusFor(node)"
+                            :size="nodeSize"
                             :href="focusHref(node)"
                             :open-href="openHref(node)"
                             @open-menu="openMenu"
@@ -423,15 +488,16 @@ function closeMenu() {
                 </div>
 
                 <!--
-                    Barnen under, högst fyra per rad. Serverns tak är tolv, så
-                    det blir högst tre rader; från `md:` rymmer bredden fyra
-                    kort och tre mellanrum på 24 px, med `gap-6` både mellan
-                    korten och mellan raderna.
+                    Barnen under, så många per rad som uppställningen säger
+                    (ADR-0072 § 2–3): högst två jämna rader med upp till sex
+                    per rad när ramen räcker. Mellanrummet i sidled följer
+                    storleken, och mellan raderna är det 24 px.
                 -->
                 <ul
                     v-if="children.length > 0"
                     class="mt-6 flex w-full flex-wrap justify-center gap-3"
-                    :class="compact ? '' : 'md:mt-14 md:gap-6 md:max-w-[52.5rem]'"
+                    :class="compact ? '' : [rowGap, 'md:mt-14 md:max-w-(--map-row)']"
+                    :style="childRowStyle"
                 >
                     <ItemMapNode
                         v-for="node in children"
@@ -440,6 +506,7 @@ function closeMenu() {
                         kind="child"
                         :label="t('item.map.kind.child')"
                         :status="statusFor(node)"
+                        :size="nodeSize"
                         :href="nodeHref(node)"
                         :open-href="nodeOpenHref(node)"
                         @open-menu="openMenu"

@@ -443,8 +443,9 @@ it('rätar den smala formen på alla bredder med compact', function () {
         ->toContain('v-if="!compact"')
         ->toContain(":class=\"compact ? '' : 'md:hidden'\"")
         // De md:-klasser som hör till den fulla formen är villkorade.
-        ->toContain(":class=\"compact ? '' : 'md:gap-6 md:max-w-[52.5rem]'\"")
-        ->toContain(":class=\"compact ? '' : 'md:mt-14 md:gap-6 md:max-w-[52.5rem]'\"");
+        // Radernas bredd ur uppställningen sedan issue 349 (ADR-0072).
+        ->toContain(":class=\"compact ? '' : [rowGap, 'md:max-w-(--map-row)']\"")
+        ->toContain(":class=\"compact ? '' : [rowGap, 'md:mt-14 md:max-w-(--map-row)']\"");
 
     // Den smala formens avstånd står kvar på båda listorna.
     expect(substr_count($kartan, 'flex-wrap justify-center gap-3'))->toBe(2)

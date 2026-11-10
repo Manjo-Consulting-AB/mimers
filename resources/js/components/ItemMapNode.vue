@@ -74,6 +74,13 @@ const props = defineProps({
     current: { type: Boolean, default: false },
     /* Mittens menyrader, `[{key, href}]` — tomma för varje annan nod. */
     rows: { type: Array, default: () => [] },
+    /*
+     * Kortets storlek från `md:` (issue 349 · [[ADR-0072 Kartan fyller
+     * bredden]] § 1): `lg`, `md` eller `sm`. Kartan väljer den ur sin
+     * uppställning; fokuskartan och den smala formen skickar ingen och får
+     * dagens kort. Under `md:` gäller `md` på alla storlekar.
+     */
+    size: { type: String, default: 'md' },
 });
 
 const emit = defineEmits(['open-menu']);
@@ -92,6 +99,22 @@ const KIND_CLASSES = {
 };
 
 const kindClass = computed(() => KIND_CLASSES[props.kind] ?? 'text-accent');
+
+/*
+ * Storlekarnas klasser (ADR-0072 § 1). Bredderna motsvarar måtten i
+ * `support/mapLayout.js` — byts en klass här ska måttet bytas där. Klasserna
+ * står utskrivna så att Tailwind hittar dem.
+ */
+const SIZE_CLASSES = {
+    lg: { card: 'md:w-60', center: 'md:w-64', tile: 'md:h-12 md:w-12', gap: '' },
+    md: { card: '', center: '', tile: '', gap: '' },
+    sm: { card: 'md:w-44', center: '', tile: 'md:h-8 md:w-8', gap: 'md:gap-2' },
+};
+
+const sizeClass = computed(() => SIZE_CLASSES[props.size] ?? SIZE_CLASSES.md);
+
+/* Ikonen ryms i den lilla rutan bara i 20 px. */
+const iconSize = computed(() => (props.size === 'sm' ? 20 : 24));
 
 /* Statusordet är översiktens (`item.index.status_*`), som i listan. */
 const overdueWord = computed(() => t('item.index.status_overdue'));
@@ -115,8 +138,8 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
                 :data-map-kind="current ? 'center' : kind"
                 class="flex min-h-11 min-w-0 items-center rounded-card border shadow-card outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="current
-                    ? 'w-56 flex-col justify-center gap-1 border-accent bg-accent-soft py-3 pl-8 pr-12 text-center'
-                    : 'w-48 gap-3 border-border bg-surface py-2 pl-3 pr-10 text-left'"
+                    ? ['w-56 flex-col justify-center gap-1 border-accent bg-accent-soft py-3 pl-8 pr-12 text-center', sizeClass.center]
+                    : ['w-48 gap-3 border-border bg-surface py-2 pl-3 pr-10 text-left', sizeClass.card, sizeClass.gap]"
             >
                 <!-- Mitten: ikonen ovanför namnet, ordet under. -->
                 <template v-if="current">
@@ -173,9 +196,10 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
                     <ItemIcon
                         :name="node.icon"
                         :color="node.icon_color"
-                        :size="24"
+                        :size="iconSize"
                         tile
                         class="h-10 w-10 shrink-0"
+                        :class="sizeClass.tile"
                     />
 
                     <span class="flex min-w-0 flex-col">
