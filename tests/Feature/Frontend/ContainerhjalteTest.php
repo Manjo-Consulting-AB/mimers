@@ -300,19 +300,23 @@ it('ritar den låga hjälten på alla inställningssidor', function () {
 });
 
 /*
- * Klart när: itemvyn ritar ingen hjälte.
+ * Klart när (issue 1023): itemvyn ritar containerns låga hjälte.
  *
- * Itemvyn, formulären, schemasidorna och inställningssidorna skickar ingenting
- * och ser ut som i dag (ADR-0050 § 2 ritar hjälten på containerns flikar, och
- * itemet är en egen sida under itemlistan). Proppen har `null` som förval, så
- * en sida som inte säger något får ingen hjälte — och namnraden över flikraden
- * står kvar precis som förut.
+ * Fram till issue 1023 skickade itemvyn ingen hjälteform, och containerns huvud
+ * försvann när man öppnade ett item medan sidopanelen stod kvar — förvirrande,
+ * och i strid med ADR-0050 § 2, som ritar hjälten på alla containersidor.
+ * Formulären och schemasidorna skickar fortfarande ingenting; proppen har
+ * `null` som förval, och för dem står namnraden över flikraden kvar.
  */
-it('ritar ingen hjälte i itemvyn', function () {
+it('ritar den låga hjälten i itemvyn', function () {
     $vy = hjalteKod('pages/Containers/Items/Show.vue');
 
-    // Kedjan står i vyn, och `ContainerLayout`-ledet bär ingen hjälteform.
-    expect($vy)->toContain('[ContainerLayout, { container: props.container }]');
+    expect($vy)->toContain("[ContainerLayout, { hero: 'compact', container: props.container }]");
+
+    foreach (['Items/Create.vue', 'Items/Edit.vue', 'Items/Schedules/Show.vue'] as $sida) {
+        expect(hjalteKod("pages/Containers/{$sida}"))
+            ->toContain('[ContainerLayout, { container: props.container }]');
+    }
 
     $skal = hjalteKod('layouts/ContainerLayout.vue');
 

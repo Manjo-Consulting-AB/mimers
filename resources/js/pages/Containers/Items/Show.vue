@@ -34,7 +34,7 @@ import { useTranslations } from '../../../composables/useTranslations.js';
 defineOptions({
     layout: (props) => [
         [AppLayout, { create: props.create }],
-        [ContainerLayout, { container: props.container }],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
     ],
 });
 

@@ -100,3 +100,7 @@ Tonys beslut 2026-10-17, efter att ha gått igenom staging.
 **§ 3: hjälten bär inga handlingar.** Knappen *Edit container* och menyknappen bredvid den, med *Change cover* som enda rad, är borttagna ur hjälten. Båda ledde till val som redan finns under fliken *Settings*, där också bildbytet står. Mobilens penna i toppraden står kvar. Hjälten visar bilden, namnet, arten, beskrivningen och talen.
 
 **§ 4: fliken *Uppgifter* heter *To do*.** Fliken och dess sidrubrik bär samma ord som huvudmenyns rad, så att samma sorts lista inte har två namn. Flikarna är fortfarande samma, i samma ordning.
+
+## Uppföljning 2026-11-10 — hjälten på itemvyn
+
+Tonys beslut 2026-11-10, issue 1023. **§ 2 gäller också itemvyn.** Den låga hjälten, med talen, står kvar när användaren öppnar ett item. Utan den försvann containerns huvud medan sidopanelen stod kvar, och det var förvirrande. Formulären och schemasidorna under itemet ritar fortfarande ingen hjälte.
