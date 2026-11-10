@@ -77,6 +77,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0069 Flytta ett item inom containern]] | Ett item flyttas med sitt underträd till toppnivån eller under ett annat item i samma container, en placering i taget och i en transaktion; reglerna prövas mot grafen efter flytten; `write` i varje ände; att lägga in mellan och att vända är två flyttar | Frontend, [[Items och organisation]], [[Konton och åtkomst]] |
 | [[ADR-0070 Subprocesser hos inleed]] | `proc_open` får användas där en ADR beslutat det; köarbetaren får en egen process med ADR-0031:s väg som reserv, och `retro-fakta` visar `disable_functions` | Drift, [[Pipeline]] |
 | [[ADR-0071 Miniatyrer med Imagick]] | HEIC, HEIF och TIFF får miniatyrer genom Imagick, skrivna som JPEG; inget PDF och ingen annan delegat | [[Filer och lagring]] |
+| [[ADR-0072 Kartan fyller bredden]] | Kartans kort har tre storlekar efter antalet barn per rad; barnen står på högst två jämna rader med upp till sex per rad; uppställningen väljs ur ramens uppmätta bredd | Frontend |
 
 ## Om att ändra ett beslut
 
