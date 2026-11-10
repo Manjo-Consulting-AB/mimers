@@ -899,18 +899,16 @@ it('ställer korten i rutnätet och ritar ett SVG-lager under dem', function () 
  * sökningen]] § 2): föräldrarna står på en rad ovanför mitten, barnen under
  * med högst fyra per rad, och luften kommer från `md:`.
  *
- * Bredden `md:max-w-[52.5rem]` rymmer fyra kort (4 × `w-48`) och tre mellanrum
- * på 24 px (`gap-6`), så en femte nod bryter raden. `gap-6` gäller både mellan
- * korten och mellan barnens rader, `mt-14` skiljer raderna, och `gap-12`
- * skiljer mitten från de relaterades kolumner. Under `md:` gäller dagens
- * avstånd: `gap-3` och `mt-6`. Ordningen i DOM:en är föräldrar, mitten, barn.
+ * Sedan issue 349 ([[ADR-0072 Kartan fyller bredden]]) kommer radernas bredd ur
+ * uppställningen i stället för ur `md:max-w-[52.5rem]`; det prövas för sig
+ * nedan. `mt-14` skiljer raderna och `gap-12` skiljer mitten från de
+ * relaterades kolumner. Under `md:` gäller dagens avstånd: `gap-3` och `mt-6`.
+ * Ordningen i DOM:en är föräldrar, mitten, barn.
  */
 it('ställer föräldrarna ovanför, barnen under och ger kartan luft från md:', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
 
-    // Fyra kort och tre mellanrum på 24 px.
-    expect(substr_count($kartan, 'md:max-w-[52.5rem]'))->toBe(2)
-        ->and(substr_count($kartan, 'md:gap-6'))->toBe(2)
+    expect(substr_count($kartan, 'md:max-w-(--map-row)'))->toBe(2)
         ->and(substr_count($kartan, 'md:mt-14'))->toBe(2)
         ->and(substr_count($kartan, 'md:gap-12'))->toBe(1);
 
@@ -1396,4 +1394,146 @@ it('bär filtret i nodernas, sökvägens och växelns länkar', function () {
 
     expect($vy)->toContain('const filterTail = query === \'\' ? \'\' : `&${query}`;')
         ->and($vy)->toContain(':filter-query="filterQuery"');
+});
+
+/**
+ * Kör ett uttryck mot resources/js/support/mapLayout.js i node och returnerar
+ * resultatet som JSON — samma teknik som taggfargKor() i
+ * TaggfargvaljareTest.php. Modulen importerar varken Vue eller webbläsaren.
+ */
+function kartuppstallning(string $anrop): mixed
+{
+    $kod = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const m = await import(pathToFileURL('
+            .json_encode(resource_path('js/support/mapLayout.js'), JSON_UNESCAPED_SLASHES).').href);',
+        "process.stdout.write(JSON.stringify({$anrop}));",
+    ]);
+
+    $rader = [];
+    $status = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($kod).' 2>&1', $rader, $status);
+
+    expect($status)->toBe(0, implode("\n", $rader));
+
+    return json_decode(implode("\n", $rader), true);
+}
+
+/** Uppställningen för 1–12 barn med en förälder och relaterade, i ramen `$bredd`. */
+function uppstallningarna(?int $bredd): array
+{
+    $ram = $bredd === null ? 'null' : (string) $bredd;
+
+    return kartuppstallning(
+        "Array.from({ length: 12 }, (_, i) => m.mapLayout({ children: i + 1, parents: 1, hasRelated: true, width: {$ram} }))",
+    );
+}
+
+/*
+ * Klart när (issue 349 · [[ADR-0072 Kartan fyller bredden]] § 2): en rad med
+ * `n` stora kort för 1–4 barn, jämna rader med stora kort för 5–8, fem per rad
+ * med mellanstorlek för 9–10 och sex per rad med små kort för 11–12 — både
+ * när ramen är okänd och när den är bred nog.
+ */
+it('ställer barnen på högst två jämna rader med storleken ur antalet per rad', function () {
+    $väntat = [
+        [1, 'lg'], [2, 'lg'], [3, 'lg'], [4, 'lg'],
+        [3, 'lg'], [3, 'lg'], [4, 'lg'], [4, 'lg'],
+        [5, 'md'], [5, 'md'],
+        [6, 'sm'], [6, 'sm'],
+    ];
+
+    foreach ([null, 1600] as $bredd) {
+        $faktiskt = array_map(fn ($l) => [$l['perRow'], $l['size']], uppstallningarna($bredd));
+
+        expect($faktiskt)->toBe($väntat);
+    }
+});
+
+/*
+ * Klart när (ADR-0072 § 3): i en smalare ram går fler kort per rad före större
+ * kort, och tolv barn i en ram på 1 000 px blir fyra mellanstora per rad — tre
+ * rader, som före issue 349.
+ */
+it('väljer fler kort per rad före större kort när ramen är smal', function () {
+    $smal = uppstallningarna(1000);
+
+    expect($smal[11])->toBe(['size' => 'md', 'perRow' => 4])
+        // Fyra barn ryms på en rad, med mindre kort än i en bred ram.
+        ->and($smal[3])->toBe(['size' => 'md', 'perRow' => 4]);
+
+    // Uppställningen ryms alltid i ramen när den alls kan rymmas.
+    foreach ([800, 1000, 1200] as $bredd) {
+        foreach (uppstallningarna($bredd) as $i => $l) {
+            $bredast = kartuppstallning(
+                "m.rowWidth(Math.min({$l['perRow']}, ".($i + 1)."), '{$l['size']}')",
+            );
+
+            expect($bredast)->toBeLessThanOrEqual($bredd);
+        }
+    }
+});
+
+/*
+ * Klart när (ADR-0072 § 3): `ItemMap.vue` mäter ramen med en `ResizeObserver`,
+ * kopplar bort den vid avmontering och skickar storleken till alla noder i den
+ * fulla formen. Med `compact` mäts ingenting.
+ */
+it('mäter ramen och skickar storleken till varje nod', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain("import { mapLayout, rowWidth } from '../support/mapLayout.js'")
+        ->toContain('<div ref="frame" data-map-frame')
+        ->toContain('new ResizeObserver(')
+        ->toContain('frameObserver.observe(frame.value)')
+        ->toContain('frameObserver?.disconnect()')
+        ->toContain('if (props.compact ||');
+
+    // Föräldrar, båda sidorna av relaterade, mitten och barnen.
+    expect(substr_count($kartan, ':size="nodeSize"'))->toBe(5);
+});
+
+/*
+ * Klart när (ADR-0072 § 2–3): `md:max-w-[52.5rem]` är borta, och radernas
+ * bredd kommer ur uppställningen. Föräldrarna står alltid på en rad, och
+ * luften mellan barnens rader är 24 px även med små kort (§ 5).
+ */
+it('ger raderna bredden ur uppställningen', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->not->toContain('52.5rem')
+        ->toContain(':style="childRowStyle"')
+        ->toContain(':style="parentRowStyle"')
+        ->toContain('rowWidth(cards, layout.value.size)')
+        ->toContain('Math.max(layout.value.perRow, parents.value.length)')
+        ->toContain("sm: 'md:gap-x-4 md:gap-y-6'");
+});
+
+/*
+ * Klart när (ADR-0072 § 1 och 4): `ItemMapNode.vue` har proppen `size` med
+ * förvalet `md`, storlekarnas klasser gäller bara från `md:`, och måtten i
+ * `mapLayout.js` motsvarar dem. Den smala formen skickar ingen storlek.
+ */
+it('ritar tre storlekar från md: med dagens kort som förval', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($noden)->toContain("size: { type: String, default: 'md' }")
+        ->toContain("lg: { card: 'md:w-60', center: 'md:w-64', tile: 'md:h-12 md:w-12', gap: '' }")
+        ->toContain("md: { card: '', center: '', tile: '', gap: '' }")
+        ->toContain("sm: { card: 'md:w-44', center: '', tile: 'md:h-8 md:w-8', gap: 'md:gap-2' }")
+        // Under md: står dagens bredder kvar.
+        ->toContain("'w-56 flex-col")
+        ->toContain("'w-48 gap-3");
+
+    expect(kartuppstallning('m.MAP_SIZES'))->toBe([
+        'lg' => ['card' => 240, 'center' => 256, 'gap' => 24],
+        'md' => ['card' => 192, 'center' => 224, 'gap' => 24],
+        'sm' => ['card' => 176, 'center' => 224, 'gap' => 16],
+    ]);
+
+    // Den smala formen: mellanstorleken och ingen mätning.
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain("? { size: 'md', perRow: 4 }");
 });
