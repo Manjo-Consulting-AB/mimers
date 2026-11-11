@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 use function Pest\Laravel\artisan;
-use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\postJson;
 
 /*
@@ -505,10 +504,9 @@ it('en återställning som spränger kvoten nekas', function () {
     $raderad = raderingBilaga($item, $user, $account, 500);
     raderingStallForbrukning($account->id, 1100);
 
-    // Bilagan mjukraderas den väg ett konto gör det själv; räknaren följer med.
-    deleteJson("/api/accounts/{$account->ulid}/storage", [
-        'attachments' => [$raderad->ulid],
-    ], $headers)->assertOk();
+    // Bilagan mjukraderas den vanliga vägen (lagringsvyn raderar för gott sedan
+    // issue 1060); räknaren följer med.
+    app(TrashAttachment::class)->handle($raderad, $user);
     expect(raderingForbrukning($account->id))->toBe(600);
 
     // Att återställa den skulle föra kontot över kvoten igen (600 + 500 >
@@ -541,9 +539,7 @@ it('en återställning som ryms fungerar som förut', function () {
     $raderad = raderingBilaga($item, $user, $account, 500);
     raderingStallForbrukning($account->id, 1100);
 
-    deleteJson("/api/accounts/{$account->ulid}/storage", [
-        'attachments' => [$raderad->ulid],
-    ], $headers)->assertOk();
+    app(TrashAttachment::class)->handle($raderad, $user);
 
     $återställning = postJson("/api/containers/{$container->ulid}/trash/restore", [
         'type' => 'attachment',

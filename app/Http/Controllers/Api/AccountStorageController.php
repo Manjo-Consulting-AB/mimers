@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Security\RecordSecurityEvent;
+use App\Actions\Trash\PurgeContent;
+use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
 use App\Http\Resources\StorageEntryResource;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\LegalHold;
 use App\Models\SecurityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +26,8 @@ use Illuminate\Support\Facades\Gate;
  * INTE mot ContainerPolicy (Beslut 4).
  *
  * GET listar bilagorna sorterade på storlek fallande — störst först, för det
- * är den ordning som gör valet snabbt. DELETE rensar ett urval: mjukraderar
- * bilagorna och minskar kontots förbrukning i en atomär transaktion (Beslut
+ * är den ordning som gör valet snabbt. DELETE rensar ett urval: raderar
+ * bilagorna för gott och minskar kontots förbrukning i en atomär transaktion (Beslut
  * 6). Ingen paginering (Beslut 2), av samma skäl som issue 15a § Beslut 8.
  *
  * INGEN behörighetslogik bor här: varje metod börjar med Gate::authorize()
@@ -94,29 +96,39 @@ class AccountStorageController extends Controller
      * 6). Grinden är AccountPolicy::manageStorage: medlemskap, ingen
      * read_only-kontroll — ett fruset konto får rensa (Beslut 4).
      *
-     * Själva rensningen går genom App\Actions\Attachment\TrashAttachment för
-     * varje bilaga, i en yttre transaktion så att ett fel mitt i batchen
-     * rullar tillbaka ALLT — bulkraderingen är atomär. Bilagorna hamnar i
-     * papperskorgen som vanligt och kan återställas (Beslut 5); bytena
-     * lämnar kontots räknare omedelbart och gallras 30 dagar senare av 20b.
+     * Själva rensningen går genom App\Actions\Trash\PurgeContent::attachment()
+     * för varje bilaga, i en yttre transaktion så att ett fel mitt i batchen
+     * rullar tillbaka ALLT — bulkraderingen är atomär. Bilagorna hamnar INTE i
+     * papperskorgen (issue 1060): när papperskorgen räknas i kvoten frigör en
+     * mjukradering ingenting, och nedgraderingens poäng är att användaren
+     * kommer under gränsen genom att välja. Raderna tas bort för gott, räknaren
+     * på filen går ned, bytena lämnar kontots förbrukning omedelbart och
+     * fysiskt gallras de av 20b. Ett omslag nollställs av främmande nyckelns
+     * ON DELETE SET NULL. Vanlig radering av en bilaga på ett item går
+     * fortfarande till papperskorgen.
+     *
+     * Täcks kontot av en rättslig spärr (LegalHold::covers) är det 422
+     * `storage.legal_hold` före transaktionen och ingenting raderas.
      *
      * Svaret bär antalet faktiskt borttagna bilagor och kontots
      * `usage_counter.storage_bytes` efter transaktionen — klienten kan visa
      * hur långt hon har kvar utan ett andra anrop. Antalet räknas INTE ur
-     * `$attachments->count()`: den SELECT:en körs före radlåset i
-     * TrashAttachment::handle, och en bilaga som någon annan mjukraderar
-     * samtidigt skulle då räknas med trots att handle() tyst hoppar över den
-     * (granskningsfynd — samma teknik som PurgeAttachment::handle).
-     * `$removed` summeras ur handle()s returvärde i stället: bara rader som
-     * faktiskt mjukraderades här räknas.
+     * `$attachments->count()`: en bilaga som någon annan hunnit radera
+     * samtidigt skulle då räknas med. PurgeContent::attachment() returnerar
+     * inget, så raden kontrolleras före och efter anropet.
      */
     public function destroy(
         RemoveStorageRequest $request,
         Account $account,
-        TrashAttachment $trashAttachment,
+        PurgeContent $purgeContent,
         RecordSecurityEvent $recordSecurityEvent,
     ): JsonResponse {
         Gate::authorize('manageStorage', $account);
+
+        // Issue 1060: en rättslig spärr stoppar raderingen innan något rörs.
+        if (LegalHold::covers($account)) {
+            throw ApiException::make('storage.legal_hold', [], 422);
+        }
 
         $attachments = Attachment::query()
             ->where('billed_account_id', $account->id)
@@ -125,12 +137,16 @@ class AccountStorageController extends Controller
             ->keyBy('ulid');
 
         $removed = 0;
-        DB::transaction(function () use ($request, $attachments, $trashAttachment, &$removed): void {
+        DB::transaction(function () use ($attachments, $purgeContent, &$removed): void {
             foreach ($attachments as $attachment) {
-                // Användaren skickas in: att tömma lagringen är ett klick av
-                // en människa, inte ett jobb. Bara nedgraderingen och
-                // gallringen skriver rader utan aktör (issue 109).
-                if ($trashAttachment->handle($attachment, $request->user())) {
+                // PurgeContent::attachment() returnerar inget: raden kontrolleras
+                // före och efter, så att en bilaga någon annan hunnit radera
+                // inte räknas.
+                $fanns = Attachment::withTrashed()->whereKey($attachment->getKey())->exists();
+
+                $purgeContent->attachment($attachment);
+
+                if ($fanns && ! Attachment::withTrashed()->whereKey($attachment->getKey())->exists()) {
                     $removed++;
                 }
             }

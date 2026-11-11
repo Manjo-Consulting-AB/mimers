@@ -2,21 +2,25 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Plan\ReadPlanUsage;
 use App\Actions\Security\RecordSecurityEvent;
+use App\Actions\Trash\PurgeContent;
+use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
 use App\Http\Resources\StorageEntryResource;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\LegalHold;
 use App\Models\SecurityLog;
+use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Number;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -50,9 +54,8 @@ use Inertia\Response;
  * ingen knapp för ett fryst konto.
  *
  * **Ingen behörighetslogik och ingen sifferlogik bor här** ([[ADR-0021
- * Frontendteknik]], [[ADR-0024 Tunna controllers och actions]]): räkningen av
- * bilagorna är App\Actions\Attachment\TrashAttachment (samma action som
- * `/api`:s bilagerutt och samma som 28 § Beslut 5 beskriver), och förbrukningen
+ * Frontendteknik]], [[ADR-0024 Tunna controllers och actions]]): raderingen av
+ * bilagorna är App\Actions\Trash\PurgeContent (samma väg som nattjobbet), och förbrukningen
  * läses ur `usage_counter` — aldrig som en egen SUM, av samma skäl som
  * ReadPlanUsage anger.
  *
@@ -174,26 +177,35 @@ class StorageController extends Controller
      * Grinden är AccountPolicy::manageStorage: medlemskap, ingen
      * read_only-kontroll (Beslut 4 och 7).
      *
-     * Rensningen är `/api`:s rensning: App\Actions\Attachment\TrashAttachment
+     * Rensningen är `/api`:s rensning: App\Actions\Trash\PurgeContent::attachment()
      * per bilaga i en yttre transaktion, så ett fel mitt i batchen rullar
-     * tillbaka allt. Bilagorna hamnar i papperskorgen och kan återställas
-     * (Beslut 5 och 6) — ingen fysisk radering och ingen tömning av
-     * papperskorgen, och ingen automatisk radering: steg 4 är ett jobb, inte en
-     * knapp.
+     * tillbaka allt. Bilagorna raderas för gott och hamnar INTE i
+     * papperskorgen (issue 1060): när papperskorgen räknas i kvoten frigör en
+     * mjukradering ingenting. Täcks kontot av en rättslig spärr blir det ett
+     * formulärfel (`storage`) och ingenting raderas.
      *
-     * `$removed` summeras ur handle()s returvärde och räknas aldrig ur
-     * antalet valda ULID:er: en bilaga som någon annan mjukraderar samtidigt
-     * hoppas tyst över av handle(), och svaret ska bära vad som FAKTISKT
-     * hände. Förbrukningen läses ur `usage_counter` EFTER transaktionen och
+     * `$removed` räknas aldrig ur antalet valda ULID:er: raden kontrolleras
+     * före och efter anropet, så en bilaga som någon annan hunnit radera inte
+     * räknas, och svaret bär vad som FAKTISKT hände. Förbrukningen läses ur
+     * `usage_counter` EFTER transaktionen och
      * formateras här — talet är serverns hela vägen ut (Beslut 8).
      */
     public function destroy(
         RemoveStorageRequest $request,
         Account $account,
-        TrashAttachment $trashAttachment,
+        PurgeContent $purgeContent,
         RecordSecurityEvent $recordSecurityEvent,
+        ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('manageStorage', $account);
+
+        // Issue 1060: en rättslig spärr stoppar raderingen. Webben gör felet till
+        // ett formulärfel, aldrig en JSON-kropp.
+        if (LegalHold::covers($account)) {
+            throw ValidationException::withMessages([
+                'storage' => $translator->message(ApiException::make('storage.legal_hold', [], 422)),
+            ]);
+        }
 
         $attachments = Attachment::query()
             ->where('billed_account_id', $account->id)
@@ -202,19 +214,23 @@ class StorageController extends Controller
             ->keyBy('ulid');
 
         $removed = 0;
-        DB::transaction(function () use ($request, $attachments, $trashAttachment, &$removed): void {
+        DB::transaction(function () use ($attachments, $purgeContent, &$removed): void {
             foreach ($attachments as $attachment) {
-                // Användaren skickas in: att tömma lagringen är ett klick av
-                // en människa, inte ett jobb. Bara nedgraderingen och
-                // gallringen skriver rader utan aktör (issue 109).
-                if ($trashAttachment->handle($attachment, $request->user())) {
+                // PurgeContent::attachment() returnerar inget: raden kontrolleras
+                // före och efter, så att en bilaga någon annan hunnit radera
+                // inte räknas.
+                $fanns = Attachment::withTrashed()->whereKey($attachment->getKey())->exists();
+
+                $purgeContent->attachment($attachment);
+
+                if ($fanns && ! Attachment::withTrashed()->whereKey($attachment->getKey())->exists()) {
                     $removed++;
                 }
             }
         });
 
         // Issue 113: tömd lagring. `removed` är antalet bilagor som faktiskt
-        // hamnade i papperskorgen — ett tal, ingen fritext, och inga filnamn.
+        // raderades för gott — ett tal, ingen fritext, och inga filnamn.
         $recordSecurityEvent->handle(
             action: SecurityLog::ACTION_STORAGE_EMPTIED,
             account: $account,

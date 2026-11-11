@@ -915,6 +915,13 @@ return [
             'legal_hold' => 'The trash cannot be emptied right now.',
         ],
 
+        // Issue 1060: the storage view deletes for good, so a legal hold stops
+        // it. The sentence is deliberately empty of reasons — a hold must not
+        // be revealed.
+        'storage' => [
+            'legal_hold' => 'Attachments cannot be deleted right now.',
+        ],
+
         // Issue 55b: the invitation error codes. Never a raw JSON body in a
         // browser, same rule as issue 54 decision 4.
         'invitation' => [
@@ -1836,7 +1843,7 @@ return [
     'storage' => [
         'title' => 'Storage',
         'heading' => 'Storage',
-        'intro' => 'Choose yourself what has to go. The attachments move to the trash and can be restored there within 30 days.',
+        'intro' => 'Choose yourself what has to go. What you remove here is deleted for good and cannot be restored.',
 
         'account_label' => 'Account',
         'usage_heading' => 'Storage space',
@@ -1869,20 +1876,21 @@ return [
         'limit_exceeded' => 'You can clear at most :max attachments at a time, and you have selected :count.',
 
         // The confirmation (decision 6): the number of files, the space
-        // freed, the trash and the 30 days.
+        // freed, and that the deletion is for good (issue 1060 — the trash
+        // would free nothing once it counts against the quota).
         'confirm' => [
-            'one' => 'One attachment moves to the trash and can be restored there within 30 days. :freed is freed now. Do you want to continue?',
-            'many' => ':count attachments move to the trash and can be restored there within 30 days. :freed is freed now. Do you want to continue?',
+            'one' => 'One attachment is deleted for good and cannot be restored. :freed is freed now. Do you want to continue?',
+            'many' => ':count attachments are deleted for good and cannot be restored. :freed is freed now. Do you want to continue?',
         ],
 
-        'submit' => 'Move to the trash',
+        'submit' => 'Delete for good',
 
         // The answer after a cleanup (decision 8). `usage` carries the
         // server's usage AFTER the cleanup, formatted with
         // Number::fileSize() — never the client's subtraction.
         'result' => [
-            'one' => 'One attachment is in the trash and can be restored there within 30 days.',
-            'many' => ':count attachments are in the trash and can be restored there within 30 days.',
+            'one' => 'One attachment has been deleted for good.',
+            'many' => ':count attachments have been deleted for good.',
             'none' => 'No attachments were removed — they were already gone.',
             'usage' => 'Usage is now :used.',
         ],

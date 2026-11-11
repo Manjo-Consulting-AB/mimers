@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
 use App\Models\User;
@@ -405,7 +406,7 @@ it('respekterar taket på 100 valda i vyn och nekar fler på servern', function 
  * Bilagorna hamnar i papperskorgen — ingen fysisk radering och ingen tömning —
  * och ITEMEN står kvar: nedgraderingen rör aldrig items, bara bilagor.
  */
-it('rensningen mjukraderar de valda bilagorna och minskar kontots förbrukning', function () {
+it('rensningen raderar de valda bilagorna för gott och minskar kontots förbrukning', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -418,7 +419,7 @@ it('rensningen mjukraderar de valda bilagorna och minskar kontots förbrukning',
         ->delete("/settings/storage/{$konto->ulid}", ['attachments' => [$vald->ulid]])
         ->assertRedirect(route('settings.storage', ['account' => $konto->ulid]));
 
-    expect($vald->fresh()->trashed())->toBeTrue()
+    expect(Attachment::withTrashed()->whereKey($vald->id)->exists())->toBeFalse()
         ->and($kvar->fresh()->trashed())->toBeFalse()
         ->and(lagringsvyForbrukning($konto))->toBe(1024 * 1024);
 
@@ -435,6 +436,28 @@ it('rensningen mjukraderar de valda bilagorna och minskar kontots förbrukning',
             'storageLabel' => Number::fileSize(1024 * 1024),
         ])
         ->and($props['usage']['usedLabel'])->toBe('1 MB');
+});
+
+/*
+ * Klart när: en rättslig spärr på kontot ger ett formulärfel på webben och
+ * raderar ingenting (issue 1060).
+ */
+it('omdirigerar tillbaka med ett formulärfel vid rättslig spärr och raderar ingenting', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = lagringsvyKonto();
+    lagringsvyRaknare($konto, 2 * 1024 * 1024);
+    $bilaga = lagringsvyBilaga($konto, $anvandare, 1024 * 1024);
+    LegalHold::factory()->create(['account_id' => $konto->id]);
+
+    actingAs($anvandare)
+        ->from("/settings/storage?account={$konto->ulid}")
+        ->delete("/settings/storage/{$konto->ulid}", ['attachments' => [$bilaga->ulid]])
+        ->assertRedirect("/settings/storage?account={$konto->ulid}")
+        ->assertSessionHasErrors(['storage' => 'Attachments cannot be deleted right now.']);
+
+    expect(Attachment::query()->whereKey($bilaga->id)->exists())->toBeTrue()
+        ->and(lagringsvyForbrukning($konto))->toBe(2 * 1024 * 1024);
 });
 
 /*
@@ -496,7 +519,7 @@ it('låter ett read_only-konto rensa', function () {
         ->delete("/settings/storage/{$konto->ulid}", ['attachments' => [$bilaga->ulid]])
         ->assertRedirect();
 
-    expect($bilaga->fresh()->trashed())->toBeTrue()
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse()
         ->and(lagringsvyForbrukning($konto))->toBe(2 * 1024 * 1024);
 
     // Vyn döljer ingen knapp för ett fruset konto: ingen `read_only`-grind i
@@ -594,7 +617,7 @@ it('avvisar en ULID som tillhör ett annat konto och raderar ingenting', functio
  * bytena frigörs direkt, och det säger bekräftelsen med antalet filer och det
  * frigjorda utrymmet.
  */
-it('säger papperskorgen och de 30 dagarna, aldrig permanent radering', function () {
+it('säger att raderingen är för gott, och nämner varken papperskorgen eller 30 dagar', function () {
     foreach (['one', 'many'] as $form) {
         lagringsvyNyckel("ui.storage.confirm.{$form}");
     }
@@ -603,11 +626,15 @@ it('säger papperskorgen och de 30 dagarna, aldrig permanent radering', function
         lagringsvyNyckel("ui.storage.result.{$form}");
     }
 
-    foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
-        $mening = (string) trans("ui.storage.{$nyckel}", [], 'en');
+    foreach (['intro', 'confirm.one', 'confirm.many', 'submit', 'result.one', 'result.many'] as $nyckel) {
+        $mening = mb_strtolower((string) trans("ui.storage.{$nyckel}", [], 'en'));
 
-        expect($mening)->toContain('30 days')
-            ->and(mb_strtolower($mening))->not->toContain('permanent');
+        expect($mening)->not->toContain('trash')
+            ->and($mening)->not->toContain('30 days');
+    }
+
+    foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
+        expect((string) trans("ui.storage.{$nyckel}", [], 'en'))->toContain('for good');
     }
 
     // Och vyn läser dem: bekräftelsen är webbläsarens egen dialog, och raden

@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\StoredFile;
 use App\Models\Subscription;
 use App\Models\User;
@@ -364,11 +365,11 @@ it('ett read_only-konto får rensa sina bilagor', function () {
     ], $headers);
 
     $rensning->assertOk();
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
+    expect(DB::table('attachment')->where('id', $bilaga->id)->exists())->toBeFalse();
     expect(nedgraderingStorageBytes($account->id))->toBe(0);
 });
 
-it('rensningen mjukraderar och minskar förbrukningen', function () {
+it('rensningen raderar för gott och minskar förbrukningen', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     [, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
     $bilaga = nedgraderingLaddaUpp($item, $user, $account, 'kvitto på impellerbytet');
@@ -380,31 +381,124 @@ it('rensningen mjukraderar och minskar förbrukningen', function () {
     ], $headers);
 
     $response->assertOk();
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
     expect(nedgraderingStorageBytes($account->id))->toBe(0);
 });
 
-it('rensade bilagor hamnar i papperskorgen och kan återställas', function () {
+it('rensade bilagor hamnar inte i papperskorgen', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     [$container, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
-    $bilaga = nedgraderingLaddaUpp($item, $user, $account, 'fick ångra mig');
-    $byteSize = $bilaga->storedFile->byte_size;
+    $första = nedgraderingLaddaUpp($item, $user, $account, 'fick ångra mig');
+    $andra = nedgraderingLaddaUpp($item, $user, $account, 'ångrar mig också');
+    $summa = $första->storedFile->byte_size + $andra->storedFile->byte_size;
+    expect(nedgraderingStorageBytes($account->id))->toBe($summa);
+
+    $response = deleteJson("/api/accounts/{$account->ulid}/storage", [
+        'attachments' => [$första->ulid, $andra->ulid],
+    ], $headers);
+
+    // Svaret: två borttagna och det nya värdet.
+    $response->assertOk();
+    expect($response->json('data'))->toMatchArray(['removed' => 2, 'storage_bytes' => 0]);
+
+    // Raderna finns inte kvar ens med withTrashed(), och räknaren har gått ned.
+    expect(Attachment::withTrashed()->whereIn('id', [$första->id, $andra->id])->count())->toBe(0);
+    expect(nedgraderingStorageBytes($account->id))->toBe(0);
+
+    // Och de syns inte i containerns papperskorg.
+    $papperskorg = getJson("/api/containers/{$container->ulid}/trash", $headers);
+    $papperskorg->assertOk();
+    $kropp = (string) json_encode($papperskorg->json());
+    expect(str_contains($kropp, $första->ulid))->toBeFalse();
+    expect(str_contains($kropp, $andra->ulid))->toBeFalse();
+});
+
+it('rensningen minskar filens räknare och sätter purge_after när den når noll', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    [, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $ensam = nedgraderingLaddaUpp($item, $user, $account, 'bara en bilaga pekar hit');
+    $delad = nedgraderingLaddaUpp($item, $user, $account, 'två bilagor delar fil');
+    $delad2 = nedgraderingLaddaUpp($item, $user, $account, 'två bilagor delar fil');
+    expect($delad2->stored_file_id)->toBe($delad->stored_file_id);
+    expect(StoredFile::find($delad->stored_file_id)->reference_count)->toBe(2);
+    expect(StoredFile::find($ensam->stored_file_id)->reference_count)->toBe(1);
+
+    deleteJson("/api/accounts/{$account->ulid}/storage", [
+        'attachments' => [$ensam->ulid, $delad->ulid],
+    ], $headers)->assertOk();
+
+    $ensamFil = StoredFile::find($ensam->stored_file_id);
+    expect($ensamFil->reference_count)->toBe(0)
+        ->and($ensamFil->purge_after)->not->toBeNull();
+
+    $deladFil = StoredFile::find($delad->stored_file_id);
+    expect($deladFil->reference_count)->toBe(1)
+        ->and($deladFil->purge_after)->toBeNull();
+});
+
+it('en vald bilaga som är itemets omslag nollställer pekaren', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    [, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $bilaga = nedgraderingLaddaUpp($item, $user, $account, 'omslagsbilden');
+    DB::table('item')->where('id', $item->id)->update(['cover_attachment_id' => $bilaga->id]);
 
     deleteJson("/api/accounts/{$account->ulid}/storage", [
         'attachments' => [$bilaga->ulid],
     ], $headers)->assertOk();
 
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
-    expect(nedgraderingStorageBytes($account->id))->toBe(0);
+    expect(DB::table('item')->where('id', $item->id)->value('cover_attachment_id'))->toBeNull();
+});
 
-    // Papperskorgen (20a) kan återställa den — ett förhastat val under en
-    // fryst månad ska gå att ångra (Beslut 5).
-    $återställning = postJson("/api/containers/{$container->ulid}/trash/restore", [
-        'type' => 'attachment',
-        'ulid' => $bilaga->ulid,
+it('en bilaga bokförd på ett annat konto raderas inte även om dess ULID skickas med', function () {
+    [$konto, $kontoUser, $kontoHeaders] = kontoMedMedlem();
+    [, $kontoItem] = nedgraderingContainerItem($konto, $kontoUser, 'Eget');
+    $egen = nedgraderingBilagaMedStorlek($kontoItem, $konto, $kontoUser, 100);
+
+    $annatKonto = Account::factory()->create();
+    $annanAnvandare = User::factory()->create();
+    [, $annatItem] = nedgraderingContainerItem($annatKonto, $annanAnvandare, 'Deras');
+    $främmande = nedgraderingBilagaMedStorlek($annatItem, $annatKonto, $annanAnvandare, 100);
+
+    deleteJson("/api/accounts/{$konto->ulid}/storage", [
+        'attachments' => [$egen->ulid, $främmande->ulid],
+    ], $kontoHeaders)->assertStatus(422);
+
+    expect(Attachment::withTrashed()->whereKey($främmande->id)->exists())->toBeTrue();
+    expect(Attachment::withTrashed()->whereKey($egen->id)->exists())->toBeTrue();
+});
+
+it('en rättslig spärr på kontot stoppar rensningen med 422 storage.legal_hold', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    [, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $bilaga = nedgraderingLaddaUpp($item, $user, $account, 'under spärr');
+    $byteSize = $bilaga->storedFile->byte_size;
+    LegalHold::factory()->create(['account_id' => $account->id]);
+
+    $response = deleteJson("/api/accounts/{$account->ulid}/storage", [
+        'attachments' => [$bilaga->ulid],
     ], $headers);
 
-    $återställning->assertOk();
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('storage.legal_hold');
+    expect(Attachment::query()->whereKey($bilaga->id)->exists())->toBeTrue();
+    expect(nedgraderingStorageBytes($account->id))->toBe($byteSize);
+});
+
+it('en vanlig radering av en bilaga på ett item går fortfarande till papperskorgen och kan återställas', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    [$container, $item] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $bilaga = nedgraderingLaddaUpp($item, $user, $account, 'raderas den vanliga vägen');
+    $byteSize = $bilaga->storedFile->byte_size;
+
+    deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$bilaga->ulid}", [], $headers)
+        ->assertNoContent();
+    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
+
+    postJson("/api/containers/{$container->ulid}/trash/restore", [
+        'type' => 'attachment',
+        'ulid' => $bilaga->ulid,
+    ], $headers)->assertOk();
+
     expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->toBeNull();
     expect(nedgraderingStorageBytes($account->id))->toBe($byteSize);
 });
