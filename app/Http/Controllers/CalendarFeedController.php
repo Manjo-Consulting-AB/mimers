@@ -139,6 +139,9 @@ class CalendarFeedController extends Controller
      * ett andra anrop är en no-op som ändå svarar som ett första (Beslut 4).
      * App\Models\CalendarFeed använder inte SoftDeletes.
      *
+     * Bara den egna feeden går att återkalla: en annan användares feed ger
+     * 404 (issue 1049), samma svar som en okänd ULID.
+     *
      * Skrivningen — låset, tidsstämpeln och `calendar_feed.revoked` — bor i
      * App\Actions\CalendarFeed\RevokeCalendarFeed sedan issue 111, och `/api`
      * anropar samma Action.
@@ -146,6 +149,8 @@ class CalendarFeedController extends Controller
     public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RevokeCalendarFeed $revokeCalendarFeed): RedirectResponse
     {
         Gate::authorize('view', $container);
+
+        abort_unless((int) $calendarFeed->user_id === (int) $request->user()->id, 404);
 
         $revokeCalendarFeed->handle($request->user(), $container, $calendarFeed);
 

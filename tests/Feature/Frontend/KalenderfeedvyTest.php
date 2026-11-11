@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -330,4 +331,40 @@ it('svarar 404 för en feed som hör till en annan container', function () {
         ->assertNotFound();
 
     expect($feed->refresh()->revoked_at)->toBeNull();
+});
+
+/*
+ * Issue 1049: bara den som äger feeden får återkalla den. Containerns ägare
+ * och en annan läsare får 404, feeden är kvar, och den egna feeden går
+ * fortfarande att återkalla.
+ */
+it('svarar 404 för en annan användares feed, även för containerns ägare', function () {
+    withoutVite();
+
+    [, $ägare, $container] = feedvyKontext();
+    $läsare = User::factory()->create();
+    beviljaAccess($container, $läsare, 'read', 'member');
+    $token = Str::random(64);
+    $läsarensFeed = feedvyRad($container, $läsare, ['token_hash' => hash('sha256', $token)]);
+    $ägarensFeed = feedvyRad($container, $ägare);
+
+    actingAs($ägare)
+        ->delete("/containers/{$container->ulid}/calendar/{$läsarensFeed->ulid}")
+        ->assertNotFound();
+    actingAs($läsare)
+        ->delete("/containers/{$container->ulid}/calendar/{$ägarensFeed->ulid}")
+        ->assertNotFound();
+
+    expect($läsarensFeed->refresh()->revoked_at)->toBeNull();
+    expect($ägarensFeed->refresh()->revoked_at)->toBeNull();
+    expect(DB::table('audit_log')->where('action', 'calendar_feed.revoked')->count())->toBe(0);
+
+    $sida = "/containers/{$container->ulid}/calendar";
+    get("/kalender/{$token}.ics")->assertOk();
+    from($sida)->actingAs($läsare)
+        ->delete("{$sida}/{$läsarensFeed->ulid}")
+        ->assertRedirect($sida);
+    expect($läsarensFeed->refresh()->revoked_at)->not->toBeNull();
+
+    get("/kalender/{$token}.ics")->assertNotFound();
 });
