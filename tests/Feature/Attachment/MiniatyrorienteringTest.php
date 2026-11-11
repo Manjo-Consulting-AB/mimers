@@ -191,7 +191,7 @@ it('en fil vars orientering inte går att läsa ger derivat som om den vore 1', 
         'utanför 1–8' => orienteringJpeg(2000, 1000, 99),
         // EXIF-posten är avklippt mitt i IFD:n.
         'trasig EXIF' => substr($jpeg, 0, 2)."\xFF\xE1\x00\x10Exif\x00\x00MM\x00\x2A\x00\x00".substr($jpeg, 2),
-        'ingen EXIF' => $jpeg,
+        default => $jpeg,
     };
 
     $fil = orienteringKör($bytes);
