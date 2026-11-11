@@ -28,7 +28,11 @@ use Throwable;
  * HEIC, HEIF och TIFF läses i stället med Imagick och skrivs som JPEG
  * (kvalitet 82) — se [[ADR-0071 Miniatyrer med Imagick]]. Båda varianterna
  * skrivs alltid för de tre typerna, utan förstoring, och orienteringen ur
- * EXIF tillämpas före skalningen. Formatet sätts uttryckligen före sökvägen
+ * EXIF tillämpas före skalningen. På GD-vägen tillämpas den också, men bara
+ * för JPEG: GD skriver derivatet utan EXIF, så en liggande miniatyr av en
+ * stående mobilbild kan inte rättas av webbläsaren. Originalfilen ändras
+ * aldrig, och en bild som inte behöver skalas får fortfarande inget derivat.
+ * Formatet sätts uttryckligen före sökvägen
  * (`HEIC:`, `TIFF:`) och resursgränser sätts före läsningen, så att en fil
  * som utger sig för att vara något annat aldrig når en delegat som
  * Ghostscript. Allt annat — svg, pdf, video, dokument — får inga derivat.
@@ -200,6 +204,14 @@ class GenerateImageDerivatives implements ShouldQueue
             // som inte kan läsa en abstraktion, nås fram till bytena.
             $original = $this->readImage($this->storedFile->mime_type, $path);
 
+            if ($this->storedFile->mime_type === 'image/jpeg') {
+                $orientation = $this->readOrientation($path);
+
+                if ($orientation !== 1) {
+                    $original = $this->applyOrientation($original, $orientation);
+                }
+            }
+
             try {
                 $this->generateVariants($original);
             } finally {
@@ -363,6 +375,74 @@ class GenerateImageDerivatives implements ShouldQueue
                 ['storage_path' => $path, 'byte_size' => strlen($bytes)],
             );
         }
+    }
+
+    /**
+     * EXIF-orienteringen (1–8) ur en JPEG. Ett värde utanför 1–8, en fil som
+     * inte går att läsa och varje fel räknas som 1 — metoden kastar aldrig.
+     */
+    private function readOrientation(string $path): int
+    {
+        try {
+            $orientation = 1;
+
+            if (function_exists('exif_read_data')) {
+                $exif = @exif_read_data($path);
+                $orientation = is_array($exif) ? ($exif['Orientation'] ?? 1) : 1;
+            } elseif (self::imagickAvailable()) {
+                $probe = new Imagick;
+
+                try {
+                    $probe->pingImage($path);
+                    // Imagick::ORIENTATION_* har EXIF:s värden; 0 = odefinierad.
+                    $orientation = $probe->getImageOrientation();
+                } finally {
+                    $probe->clear();
+                }
+            }
+
+            return is_int($orientation) && $orientation >= 1 && $orientation <= 8 ? $orientation : 1;
+        } catch (Throwable) {
+            return 1;
+        }
+    }
+
+    /**
+     * Returnerar en rättvänd bild enligt EXIF-orienteringen. Den gamla bilden
+     * förstörs; imagerotate() roterar moturs.
+     */
+    private function applyOrientation(GdImage $image, int $orientation): GdImage
+    {
+        // Speglade orienteringar: vänd först, rotera sedan.
+        $flip = match ($orientation) {
+            2, 5, 7 => IMG_FLIP_HORIZONTAL,
+            4 => IMG_FLIP_VERTICAL,
+            default => null,
+        };
+
+        $degrees = match ($orientation) {
+            3 => 180,
+            5, 8 => 90,
+            6, 7 => 270,
+            default => 0,
+        };
+
+        if ($flip !== null) {
+            imageflip($image, $flip);
+        }
+
+        if ($degrees === 0) {
+            return $image;
+        }
+
+        $rotated = imagerotate($image, $degrees, 0);
+        imagedestroy($image);
+
+        if (! $rotated instanceof GdImage) {
+            throw new RuntimeException('Bilden kunde inte roteras.');
+        }
+
+        return $rotated;
     }
 
     /**
