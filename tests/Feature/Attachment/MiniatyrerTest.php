@@ -592,9 +592,7 @@ it('en pdf förklädd till tiff ger inga derivat och loggas', function () {
 
     expect(ImageDerivative::count())->toBe(0);
     expect(Storage::disk('files')->allFiles())->toBe([$storedFile->storage_path]);
-    // Måttprövningen före avkodning (issue 1035) fångar den ologiska filen
-    // först: en varning, inte ett fel.
-    $logg->shouldHaveReceived('warning')->once();
+    $logg->shouldHaveReceived('error')->once();
 })->skip(fn () => ! extension_loaded('imagick'), 'Imagick saknas lokalt — provet körs i CI.');
 
 it('supportsMime svarar ja för heic, heif och tiff bara när imagick är laddat', function () {
