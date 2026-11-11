@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 1044, regressionsvakter — "up en gång vid lyckad migrering", "inget down/up utan current" och bash-syntaxen ska vara gröna även före ändringen; det röda provet är avbrottsfallet.
+
 /*
  * Issue 1044 · deploy.sh lämnar inte sajten i underhållsläge när utrullningen
  * faller. Skriptet körs på riktigt i en temporär katalog med en påhittad php
