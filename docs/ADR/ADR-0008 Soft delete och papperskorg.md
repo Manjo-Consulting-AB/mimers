@@ -57,6 +57,15 @@ Uppräkningen under § Retentionstiden i MVP ovan tog med `schedule` bland det s
 - **En kategori som används kan raderas, efter en varning.** Issue 11 § Beslut 7 nekade raderingen så länge kategorin satt på ett item, för att en radering inte skulle tömma klassificeringen tyst. Med papperskorgen är raderingen inte tyst längre och går att ångra: vyn säger hur många items kategorin eller taggen sitter på och frågar först. Items behåller sin `category_id` medan kategorin ligger i papperskorgen och får den tillbaka vid en återställning. Gallringen nollställer den som i dag. **En kategori raderas med hela sitt underträd:** underkategorierna mjukraderas i samma transaktion och med samma `deleted_at`. Papperskorgen visar bara den översta, och en återställning av den tar tillbaka de underkategorier som raderades med den — inte en som låg i papperskorgen sedan tidigare. Issue 150.
 - Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen.
 
+## Uppföljning 2026-11-11 — ägarbyte tömmer papperskorgen
+
+**När en container byter ägare töms dess papperskorg fysiskt, som en del av bytet.** Tonys beslut 2026-11-11, genomfört i issue 1048. Det som ägaren har slängt följde tidigare med till mottagaren och gick att återställa där. Slängda bilagor behöll dessutom avsändarens `billed_account_id`, så att en återställning bokfördes på förra ägarens kvot. Nu förblir det slängda slängt, och mottagaren får inget skräp.
+
+- **Undantag från de trettio dagarna.** Det som ligger i containerns papperskorg vid bytet gallras direkt, oavsett hur länge det legat där. Den som vill ha något kvar får återställa det före bytet. Retentionen gäller för allt annat som förut.
+- **Samma gallring som nattjobbet.** Tömningen går genom `PurgeContent`, i samma ordning som `PurgesExpiredTrash`: bilagor, items, kategorier och sist taggar. Den sker i ägarbytets transaktion. Faller bytet, till exempel på mottagarens kvot, rullas tömningen tillbaka med det.
+- **Filernas frist står kvar.** Det är raderna som raderas. Referensräknaren minskas och `purge_after` sätts som vanligt, och bytena tas av `PurgesExpiredStoredFiles` efter fristen. § Retentionstiden i MVP gäller alltså fortfarande för filerna.
+- **Rättslig spärr stoppar bytet.** Står avsändarkontot under en spärr nekas acceptansen med 422 `transfer.legal_hold`, innan något har rörts. Under en spärr får ingenting raderas fysiskt, och innehåll som omfattas av den får inte lämna kontot. En spärr på mottagarkontot hindrar inte bytet. Felmeddelandet är medvetet intetsägande, så att spärren inte avslöjas för någon av parterna.
+
 ## Alternativ
 
 **Hård radering med enbart backup som skydd.** Enklare frågor och mindre databas. Valdes bort — återläsning från backup för att rädda ett enskilt item är opraktiskt, och felet upptäcks ofta för sent.
