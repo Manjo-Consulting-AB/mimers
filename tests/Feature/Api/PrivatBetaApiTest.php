@@ -61,7 +61,7 @@ it('invite_only utan kod ger 422 validation.required på voucher_code', function
     expect(User::query()->where('email', 'utan-kod@example.com')->exists())->toBeFalse();
 });
 
-it('invite_only med giltig kod ger 201 och pro', function () {
+it('invite_only med giltig kod ger 202 och pro', function () {
     config(['konton.registration' => 'invite_only']);
 
     ['voucher' => $voucher, 'code' => $kod] = app(GenerateVoucher::class)
@@ -74,8 +74,8 @@ it('invite_only med giltig kod ger 201 och pro', function () {
         'voucher_code' => $kod,
     ]);
 
-    $svar->assertCreated();
-    $svar->assertJsonStructure(['token']);
+    $svar->assertStatus(202);
+    expect($svar->json())->toBe(['status' => 'verification_pending']);
 
     $user = User::query()->where('email', 'med-kod@example.com')->firstOrFail();
 
@@ -119,7 +119,7 @@ it('en giltig invitation_token släpper in utan kod och ger free', function () {
         'invitation_token' => $token,
     ]);
 
-    $svar->assertCreated();
+    $svar->assertStatus(202);
 
     $user = User::query()->where('email', 'inbjuden@example.com')->firstOrFail();
 
@@ -150,14 +150,14 @@ it('en invitation_token till en annan adress ger 422', function () {
     expect(User::query()->where('email', 'objuden@example.com')->exists())->toBeFalse();
 });
 
-it('läget open ger 201 utan kod', function () {
+it('läget open ger 202 utan kod', function () {
     config(['konton.registration' => 'open']);
 
     postJson('/api/register', [
         'name' => 'Öppen Person',
         'email' => 'oppen@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertCreated();
+    ])->assertStatus(202);
 
     expect(User::query()->where('email', 'oppen@example.com')->exists())->toBeTrue();
 });

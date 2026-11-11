@@ -2,16 +2,12 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Actions\Auth\AdmitRegistration;
-use App\Actions\Auth\CreatesUserWithPersonalAccount;
-use App\Actions\Voucher\RedeemVoucher;
+use App\Actions\Auth\RegistersOrNotifies;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Requests\Auth\RegisterRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,9 +26,7 @@ use Inertia\Response;
 class RegisteredUserController extends Controller
 {
     public function __construct(
-        private readonly CreatesUserWithPersonalAccount $creator,
-        private readonly AdmitRegistration $admitRegistration,
-        private readonly RedeemVoucher $redeemVoucher,
+        private readonly RegistersOrNotifies $registers,
     ) {}
 
     /**
@@ -66,57 +60,27 @@ class RegisteredUserController extends Controller
     }
 
     /**
-     * Släpps hon in, och med vilken plan? (ADR-0055 § 2, § 3 och § 8.)
-     *
-     * **Transaktionen öppnas här och omsluter både inlösen och
-     * kontoskapandet.** CreatesUserWithPersonalAccount öppnar en egen
-     * DB::transaction, men den blir en nästlad sparpunkt i den här — och
-     * dess form lämnas orörd, för API:et (#790) delar den och behöver den
-     * för sin egen väg. Utan den yttre ramen kunde ett konto bli till utan
-     * att koden förbrukades, alltså ett konto som kommit in gratis.
-     *
-     * Koden prövas av RegisterRequest (RedeemableVoucher) INNAN hit, så en
-     * påhittad eller förbrukad kod har redan nekats. Kvar till
-     * AdmitRegistration är frågan regeln med flit inte svarar på: släpper
-     * koden in i det här läget, och finns en inbjudan i stället?
+     * Registreringen loggar inte in, och svaret är detsamma för en ny och en
+     * redan registrerad adress (issue 1057, ADR-0055 § 3 och § 8). Flödet
+     * står i App\Actions\Auth\RegistersOrNotifies. Inbjudningstokenet läses
+     * ur sessionen och lämnas kvar där. Den nya användaren loggar in med sitt
+     * lösenord på /login.
      */
     public function store(RegisterRequest $request): RedirectResponse
     {
-        $email = $request->string('email')->toString();
         $voucherCode = $request->input('voucher_code');
         $invitationToken = $request->session()->get(InvitationResponseController::SESSION_KEY);
 
-        $user = DB::transaction(function () use ($request, $email, $voucherCode, $invitationToken) {
-            $voucher = $this->admitRegistration->handle(
-                $email,
-                is_string($voucherCode) && $voucherCode !== '' ? $voucherCode : null,
-                is_string($invitationToken) && $invitationToken !== '' ? $invitationToken : null,
-            );
+        $this->registers->handle(
+            $request->string('name')->toString(),
+            $request->string('email')->toString(),
+            $request->string('password')->toString(),
+            is_string($voucherCode) ? $voucherCode : null,
+            is_string($invitationToken) ? $invitationToken : null,
+            $request->ip(),
+        );
 
-            $user = $this->creator->handle(
-                $request->string('name')->toString(),
-                $email,
-                $request->string('password')->toString(),
-                $request->ip(),
-            );
-
-            if ($voucher !== null) {
-                $this->redeemVoucher->handle($voucher, $user->accounts()->firstOrFail(), $user);
-            }
-
-            return $user;
-        });
-
-        $user->sendEmailVerificationNotification();
-
-        Auth::guard('web')->login($user);
-
-        $request->session()->regenerate();
-
-        // Issue 53a § Beslut 2: den nyregistrerade är inloggad och landar på
-        // /dashboard. Verifieringsbannern där är det som påminner om mejlet
-        // — registreringen kräver ingen verifiering, se routes/api.php.
-        return redirect()->intended(route('dashboard'));
+        return redirect()->route('login.create')->with('status', 'registration-pending');
     }
 
     /**

@@ -56,7 +56,7 @@ it('ger inte en intern användare Pro vid webbregistrering', function () {
         'name' => 'Tony',
         'email' => 'tony@manjo.me',
         'password' => 'giltigt-losenord',
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('login.create'));
 
     $user = User::query()->where('email', 'tony@manjo.me')->firstOrFail();
     $konto = $user->accounts()->firstOrFail();
@@ -74,7 +74,7 @@ it('ger inte en intern användare Pro vid API-registrering', function () {
         'name' => 'Tony',
         'email' => 'tony@manjo.me',
         'password' => 'giltigt-losenord',
-    ])->assertCreated();
+    ])->assertStatus(202);
 
     $user = User::query()->where('email', 'tony@manjo.me')->firstOrFail();
     $konto = $user->accounts()->firstOrFail();

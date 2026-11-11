@@ -67,7 +67,7 @@ it('webbregistrering sparar requestens IP på kontot', function () {
         'name' => 'Webb Person',
         'email' => 'webb-ip@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('login.create'));
 
     $user = User::query()->where('email', 'webb-ip@example.com')->firstOrFail();
 
@@ -82,7 +82,7 @@ it('API-registrering sparar requestens IP på kontot', function () {
         'name' => 'Api Person',
         'email' => 'api-ip@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertCreated();
+    ])->assertStatus(202);
 
     $user = User::query()->where('email', 'api-ip@example.com')->firstOrFail();
 
@@ -151,7 +151,7 @@ it('Account::toArray() och API-svaret innehåller inte registration_ip', functio
         'name' => 'Serialisering Person',
         'email' => 'serialisering@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertCreated();
+    ])->assertStatus(202);
 
     expect($response->getContent())->not->toContain('registration_ip');
 });

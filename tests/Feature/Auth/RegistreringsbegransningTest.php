@@ -37,7 +37,7 @@ function registreringsForsokApi(int $i, bool $giltigt): TestResponse
 
 it('ger 429 på det elfte API-försöket när de tio första var giltiga', function () {
     for ($i = 0; $i < 10; $i++) {
-        registreringsForsokApi($i, true)->assertCreated();
+        registreringsForsokApi($i, true)->assertStatus(202);
     }
 
     $svar = registreringsForsokApi(10, true);

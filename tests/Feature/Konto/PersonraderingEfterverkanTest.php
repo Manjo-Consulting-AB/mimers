@@ -278,7 +278,7 @@ it('en ny registrering med samma adress ger ett konto utan de gamla containrarna
         'name' => 'Ny Person',
         'email' => 'efterverkan@exempel.se',
         'password' => 'hast-och-bil-2026',
-    ])->assertRedirect('/dashboard');
+    ])->assertRedirect(route('login.create'));
 
     $ny = User::query()->where('email', 'efterverkan@exempel.se')->sole();
 

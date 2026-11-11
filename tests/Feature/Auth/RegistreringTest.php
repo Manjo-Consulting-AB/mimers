@@ -6,7 +6,6 @@ use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
-use function Pest\Laravel\assertAuthenticated;
 use function Pest\Laravel\assertGuest;
 use function Pest\Laravel\postJson;
 
@@ -44,10 +43,12 @@ it('skapar en användare med ett eget personkonto som ägare vid webbregistrerin
         'password' => 'giltigt-losenord',
     ]);
 
-    $response->assertRedirect(route('dashboard'));
+    // Issue 1057: registreringen loggar inte in.
+    $response->assertRedirect(route('login.create'));
+    $response->assertSessionHas('status', 'registration-pending');
 
     $user = User::query()->where('email', 'ny@example.com')->firstOrFail();
-    assertAuthenticated();
+    assertGuest();
 
     $account = $user->accounts()->firstOrFail();
     expect($account->type)->toBe('personal');
@@ -62,7 +63,7 @@ it('skapar en användare med ett eget personkonto som ägare vid webbregistrerin
     Notification::assertSentTo($user, VerifyEmail::class);
 });
 
-it('skapar en användare med ett eget personkonto som ägare vid API-registrering och returnerar en token', function () {
+it('skapar en användare med ett eget personkonto som ägare vid API-registrering och returnerar 202 utan token', function () {
     Notification::fake();
 
     $response = postJson('/api/register', [
@@ -71,8 +72,9 @@ it('skapar en användare med ett eget personkonto som ägare vid API-registrerin
         'password' => 'giltigt-losenord',
     ]);
 
-    $response->assertCreated();
-    $response->assertJsonStructure(['token']);
+    $response->assertStatus(202);
+    expect($response->json())->toBe(['status' => 'verification_pending']);
+    expect(DB::table('personal_access_tokens')->count())->toBe(0);
 
     $user = User::query()->where('email', 'api-ny@example.com')->firstOrFail();
 
@@ -92,17 +94,18 @@ it('skapar en användare med ett eget personkonto som ägare vid API-registrerin
     Notification::assertSentTo($user, VerifyEmail::class);
 });
 
-it('avvisar webbregistrering med redan upptagen e-post — 422, ingen krasch', function () {
+it('svarar webbregistrering med redan upptagen e-post som en ny adress — ingen krasch, inget fel', function () {
     User::factory()->create(['email' => 'upptagen@example.com']);
 
     postJson('/register', [
         'name' => 'Redan Registrerad',
         'email' => 'upptagen@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertJsonValidationErrors(['email']);
+    ])->assertRedirect(route('login.create'))
+        ->assertSessionHas('status', 'registration-pending');
 });
 
-it('avvisar API-registrering med redan upptagen e-post — validation.failed med validation.unique på email', function () {
+it('svarar API-registrering med redan upptagen e-post som en ny adress — 202 verification_pending', function () {
     User::factory()->create(['email' => 'upptagen-api@example.com']);
 
     $response = postJson('/api/register', [
@@ -111,12 +114,11 @@ it('avvisar API-registrering med redan upptagen e-post — validation.failed med
         'password' => 'giltigt-losenord',
     ]);
 
-    $response->assertStatus(422);
-    expect($response->json('error.code'))->toBe('validation.failed');
-    expect($response->json('error.data.fields.email.0.code'))->toBe('validation.unique');
+    $response->assertStatus(202);
+    expect($response->json())->toBe(['status' => 'verification_pending']);
 });
 
-it('rör inte accounts-tabellen om registreringen misslyckas', function () {
+it('rör inte accounts-tabellen när adressen redan finns', function () {
     User::factory()->create(['email' => 'finns-redan@example.com']);
 
     postJson('/register', [
