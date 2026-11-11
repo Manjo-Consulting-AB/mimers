@@ -7,7 +7,9 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Issue 1043 · Säkerhetshuvuden på varje svar i webb- och API-gruppen.
+ * Issue 1043 · Säkerhetshuvuden på varje svar från appen. Issue 1082 flyttade
+ * middlewaren från web- och api-gruppen till den globala listan, så att också
+ * svar som ett tidigare steg gett själv (401, 302, 419, 429, 404) bär dem.
  *
  * Ett huvud som svaret redan bär lämnas orört: den som satte det har
  * bestämt. X-Frame-Options sätts inte på ett svar med egen

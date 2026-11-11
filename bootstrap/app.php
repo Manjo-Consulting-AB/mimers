@@ -49,15 +49,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // sedan kontot skapades, hur ofta hen än loggade in. Se
         // App\Http\Middleware\UpdateLastActiveAt.
         //
-        // Issue 1043: SetSecurityHeaders sist i båda grupperna, så att också
-        // felsvar som renderas inne i ruttens pipeline (404, 403, 419) bär
-        // huvudena. Se App\Http\Middleware\SetSecurityHeaders.
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
-            SetSecurityHeaders::class,
         ]);
 
         // Issue 3: last_active_at uppdateras av alla autentiserade
@@ -65,7 +61,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
-            SetSecurityHeaders::class,
         ]);
 
         // Issue 4: appen körs bakom LiteSpeed hos inleed, se
@@ -81,6 +76,21 @@ return Application::configure(basePath: dirname(__DIR__))
         // domän klienten själv valde. Se tests/Feature/Auth/TrustProxiesTest.php,
         // som bevisar att en obetrodd avsändares X-Forwarded-* ignoreras.
         $middleware->trustProxies(at: ['127.0.0.1', '::1']);
+
+        // Issue 1082: SetSecurityHeaders ligger globalt, inte i web- eller
+        // api-gruppen. En gruppmiddleware ser inte ett svar som ett tidigare
+        // steg gett själv (avvisning från auth, CSRF eller anropsbegränsning,
+        // 404 från routbindningen) och inte heller en /api-adress som ingen
+        // rutt matchat — därför lämnade issue 1043:s placering sist i
+        // grupperna dem utan huvuden. En global middleware körs runt hela
+        // routningen, och Laravel gör om ett kastat undantag till ett svar i
+        // det lager där det kastas, så svaret går ut genom den också.
+        // append och inte prepend: TrustProxies är global och ska ha kört
+        // först, annars ser isSecure() alltid http bakom LiteSpeed och HSTS
+        // uteblir. Till skillnad från RestrictFileOriginToDelivery går den
+        // här bra globalt: den läser bara svaret och aldrig den matchade
+        // rutten.
+        $middleware->append(SetSecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
