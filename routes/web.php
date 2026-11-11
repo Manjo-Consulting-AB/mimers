@@ -1972,6 +1972,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore'])
         ->name('containers.trash.restore');
 
+    Route::delete('/containers/{container}/trash', [TrashController::class, 'destroy'])
+        ->name('containers.trash.empty');
+
     /*
      * M39 · issue 319 — den samlade papperskorgen, se
      * App\Http\Controllers\TrashOverviewController och

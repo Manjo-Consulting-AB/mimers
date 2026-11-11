@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Trash\EmptyTrash;
 use App\Actions\Trash\FindTrashedInContainer;
 use App\Actions\Trash\ListTrash;
 use App\Actions\Trash\RestoreContent;
@@ -16,7 +17,9 @@ use App\Models\Item;
 use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Papperskorgen för innehåll i en levande container — issue 20a. Listar
@@ -138,6 +141,28 @@ class TrashController extends Controller
         }
 
         return (new TrashEntryResource($row))->response();
+    }
+
+    /**
+     * DELETE /api/containers/{container}/trash — 204.
+     *
+     * Tömmer papperskorgen på riktigt. Grinden är `emptyTrash`: ägarsidan,
+     * aldrig en delegerad användare, och ingen kontroll av fryst konto. En
+     * rättslig spärr ger 422 `trash.legal_hold` ur actionen.
+     */
+    public function destroy(Request $request, Container $container, EmptyTrash $emptyTrash): Response
+    {
+        Gate::authorize('emptyTrash', $container);
+
+        $deleted = $emptyTrash->handle($container);
+
+        Log::info('trash.emptied', [
+            'container_ulid' => $container->ulid,
+            'user_ulid' => $request->user()->ulid,
+            'deleted' => $deleted,
+        ]);
+
+        return response()->noContent();
     }
 
     /**

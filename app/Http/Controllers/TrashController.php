@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Trash\EmptyTrash;
 use App\Actions\Trash\FindTrashedInContainer;
 use App\Actions\Trash\ListTrash;
 use App\Actions\Trash\RestoreContent;
@@ -20,6 +21,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -154,6 +156,36 @@ class TrashController extends Controller
         }
 
         return back()->with('status', 'trash-restored');
+    }
+
+    /**
+     * DELETE /containers/{container}/trash — 302 tillbaka med
+     * `status = trash-emptied`.
+     *
+     * Samma grind och action som `/api`. En rättslig spärr (`ApiException`)
+     * blir ett formulärfel på nyckeln `trash`, som i `restore()`.
+     */
+    public function destroy(
+        Request $request,
+        Container $container,
+        EmptyTrash $emptyTrash,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('emptyTrash', $container);
+
+        try {
+            $deleted = $emptyTrash->handle($container);
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['trash' => $translator->message($e)]);
+        }
+
+        Log::info('trash.emptied', [
+            'container_ulid' => $container->ulid,
+            'user_ulid' => $request->user()->ulid,
+            'deleted' => $deleted,
+        ]);
+
+        return back()->with('status', 'trash-emptied');
     }
 
     /**
