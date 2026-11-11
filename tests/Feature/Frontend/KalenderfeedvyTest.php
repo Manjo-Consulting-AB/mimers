@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -343,7 +344,8 @@ it('svarar 404 för en annan användares feed, även för containerns ägare', f
     [, $ägare, $container] = feedvyKontext();
     $läsare = User::factory()->create();
     beviljaAccess($container, $läsare, 'read', 'member');
-    $läsarensFeed = feedvyRad($container, $läsare);
+    $token = Str::random(64);
+    $läsarensFeed = feedvyRad($container, $läsare, ['token_hash' => hash('sha256', $token)]);
     $ägarensFeed = feedvyRad($container, $ägare);
 
     actingAs($ägare)
@@ -358,8 +360,11 @@ it('svarar 404 för en annan användares feed, även för containerns ägare', f
     expect(DB::table('audit_log')->where('action', 'calendar_feed.revoked')->count())->toBe(0);
 
     $sida = "/containers/{$container->ulid}/calendar";
+    get("/kalender/{$token}.ics")->assertOk();
     from($sida)->actingAs($läsare)
         ->delete("{$sida}/{$läsarensFeed->ulid}")
         ->assertRedirect($sida);
     expect($läsarensFeed->refresh()->revoked_at)->not->toBeNull();
+
+    get("/kalender/{$token}.ics")->assertNotFound();
 });
