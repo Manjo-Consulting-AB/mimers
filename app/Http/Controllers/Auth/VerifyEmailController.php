@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Plan\GrantInternalPro;
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\RedirectResponse;
@@ -40,6 +41,11 @@ class VerifyEmailController extends Controller
     public function __invoke(EmailVerificationRequest $request): RedirectResponse
     {
         $request->fulfill();
+
+        // Internt Pro ges först när adressen är verifierad. Anropet görs även
+        // när adressen redan var verifierad: actionen är idempotent och gör
+        // ingenting för en adress som inte står i listan.
+        (new GrantInternalPro)->handle($request->user());
 
         // Issue 53a § Beslut 2: den som just verifierat sin adress har
         // ärenden på /dashboard — det är där bannern försvann ifrån.

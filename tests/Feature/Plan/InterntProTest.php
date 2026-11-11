@@ -6,6 +6,12 @@ use App\Models\Account;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\URL;
+
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
 
 /*
  * Issue 656 · Internt Pro. Se [[M24 Desktopdesignen]] § Internt Pro.
@@ -30,20 +36,77 @@ function interntProKonto(string $email): array
     return [$user, $account];
 }
 
-it('ger en intern användare Pro vid registrering', function () {
+/**
+ * Den signerade länken ur verifieringsmejlet för en given användare.
+ */
+function interntProVerifieringslank(User $user): string
+{
+    return URL::temporarySignedRoute(
+        'verification.verify',
+        now()->addMinutes(60),
+        ['id' => $user->getKey(), 'hash' => sha1($user->getEmailForVerification())],
+    );
+}
+
+it('ger inte en intern användare Pro vid webbregistrering', function () {
+    Notification::fake();
+    config(['konton.registration' => 'open']);
+
+    postJson('/register', [
+        'name' => 'Tony',
+        'email' => 'tony@manjo.me',
+        'password' => 'giltigt-losenord',
+    ])->assertRedirect(route('dashboard'));
+
+    $user = User::query()->where('email', 'tony@manjo.me')->firstOrFail();
+    $konto = $user->accounts()->firstOrFail();
+
+    expect(Subscription::query()->where('external_ref', 'internal')->count())->toBe(0);
+    expect(Subscription::query()->where('account_id', $konto->id)->count())->toBe(0);
+    expect($konto->currentPlan()->code)->toBe('free');
+});
+
+it('ger inte en intern användare Pro vid API-registrering', function () {
+    Notification::fake();
+    config(['konton.registration' => 'open']);
+
+    postJson('/api/register', [
+        'name' => 'Tony',
+        'email' => 'tony@manjo.me',
+        'password' => 'giltigt-losenord',
+    ])->assertCreated();
+
+    $user = User::query()->where('email', 'tony@manjo.me')->firstOrFail();
+    $konto = $user->accounts()->firstOrFail();
+
+    expect(Subscription::query()->where('external_ref', 'internal')->count())->toBe(0);
+    expect($konto->currentPlan()->code)->toBe('free');
+});
+
+it('ger en intern användare Pro när hon följer verifieringslänken', function () {
     $user = app(CreatesUserWithPersonalAccount::class)->handle(
         'Tony',
         'tony@manjo.me',
         'giltigt-losenord',
         null,
     );
-
     $konto = $user->accounts()->firstOrFail();
 
-    expect($konto->currentPlan()->code)->toBe('pro');
+    expect($konto->subscription()->exists())->toBeFalse();
+
+    actingAs($user);
+    get(interntProVerifieringslank($user))->assertRedirect(route('dashboard'));
+
+    $subscription = Subscription::query()->where('account_id', $konto->id)->firstOrFail();
+
+    expect($subscription->plan->code)->toBe('pro');
+    expect($subscription->status)->toBe('active');
+    expect($subscription->external_ref)->toBe('internal');
+    expect($subscription->current_period_end->format('Y-m-d H:i:s'))->toBe('2037-12-31 00:00:00');
+    expect($konto->fresh()->currentPlan()->code)->toBe('pro');
 });
 
-it('ger inte en vanlig användare Pro vid registrering', function () {
+it('ger en vanlig användare ingen subscription-rad när hon verifierar', function () {
     $user = app(CreatesUserWithPersonalAccount::class)->handle(
         'Vanlig',
         'nagon@example.com',
@@ -51,22 +114,53 @@ it('ger inte en vanlig användare Pro vid registrering', function () {
         null,
     );
 
-    $konto = $user->accounts()->firstOrFail();
+    actingAs($user);
+    get(interntProVerifieringslank($user))->assertRedirect(route('dashboard'));
 
-    expect($konto->currentPlan()->code)->toBe('free');
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+    expect(Subscription::query()->count())->toBe(0);
+    expect($user->accounts()->firstOrFail()->currentPlan()->code)->toBe('free');
 });
 
-it('jämför e-posten utan hänsyn till skiftläge', function () {
+it('jämför e-posten utan hänsyn till skiftläge vid verifiering', function () {
     $user = app(CreatesUserWithPersonalAccount::class)->handle(
         'Mia',
-        'Mia@Manjo.ME',
+        'Tony@Manjo.Me',
         'giltigt-losenord',
         null,
     );
 
+    actingAs($user);
+    get(interntProVerifieringslank($user))->assertRedirect(route('dashboard'));
+
+    expect($user->accounts()->firstOrFail()->currentPlan()->code)->toBe('pro');
+});
+
+it('skriver ingenting för en intern men overifierad användare', function () {
+    [$user, $konto] = interntProKonto('tony@manjo.me');
+    $user->forceFill(['email_verified_at' => null])->save();
+
+    (new GrantInternalPro)->handle($user->fresh());
+
+    expect(Subscription::query()->where('account_id', $konto->id)->count())->toBe(0);
+    expect($konto->fresh()->currentPlan()->code)->toBe('free');
+});
+
+it('ger exakt en subscription-rad när verifieringslänken följs två gånger', function () {
+    $user = app(CreatesUserWithPersonalAccount::class)->handle(
+        'Tony',
+        'tony@manjo.me',
+        'giltigt-losenord',
+        null,
+    );
     $konto = $user->accounts()->firstOrFail();
 
-    expect($konto->currentPlan()->code)->toBe('pro');
+    actingAs($user);
+    get(interntProVerifieringslank($user));
+    get(interntProVerifieringslank($user->fresh()));
+
+    expect(Subscription::query()->where('account_id', $konto->id)->count())->toBe(1);
+    expect($konto->fresh()->currentPlan()->code)->toBe('pro');
 });
 
 it('är idempotent', function () {

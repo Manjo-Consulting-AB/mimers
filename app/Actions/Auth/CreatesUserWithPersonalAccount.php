@@ -2,7 +2,6 @@
 
 namespace App\Actions\Auth;
 
-use App\Actions\Plan\GrantInternalPro;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +15,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Delas av webbens och API:ets registreringskontroller så att kontot
  * skapas på exakt samma sätt oavsett yta.
+ *
+ * Internt Pro ges inte här: en registrering visar inte att personen äger
+ * adressen. Det sker först när adressen verifieras, se
+ * App\Http\Controllers\Auth\VerifyEmailController och
+ * App\Actions\Plan\GrantInternalPro.
  */
 class CreatesUserWithPersonalAccount
 {
@@ -68,12 +72,6 @@ class CreatesUserWithPersonalAccount
             ]);
 
             $account->users()->attach($user, ['role' => 'owner']);
-
-            // En intern adress (config('konton.internal_pro_emails')) får Pro
-            // redan här, i samma transaktion som kontot skapas — se issue 656
-            // § Beslut 4. Actionen gör ingenting för alla andra, och för en
-            // adress som redan fått Pro via migrationen är den idempotent.
-            (new GrantInternalPro)->handle($user);
 
             return $user;
         });

@@ -11,10 +11,12 @@ use Illuminate\Support\Str;
  * Ger ett internt konto Pro utan betalning — issue 656 och [[M24
  * Desktopdesignen]] § Internt Pro.
  *
- * Actionen är sömmen och har två anropare: registreringen
- * (App\Actions\Auth\CreatesUserWithPersonalAccount) för den som registrerar
- * sig senare, och datamigrationen …_grant_internal_pro för dem som redan
- * finns. Båda går genom samma metod, så regeln formulerats en gång.
+ * Actionen är sömmen och har två anropare: e-postverifieringen
+ * (App\Http\Controllers\Auth\VerifyEmailController) för den som verifierar
+ * sin adress, och datamigrationen …_grant_internal_pro för dem som redan
+ * finns. Båda går genom samma metod, så regeln formulerats en gång. Actionen
+ * ger aldrig Pro till en overifierad adress — villkoret bor här och inte hos
+ * anroparna, så att det gäller oavsett vem som anropar.
  *
  * Pro ges som DATA, inte som ett undantag i planlogiken (Beslut 1): kontot
  * får en vanlig `subscription`-rad med plan `pro`, status `active`,
@@ -56,6 +58,10 @@ class GrantInternalPro
 
     public function handle(User $user): void
     {
+        if (! $user->hasVerifiedEmail()) {
+            return;
+        }
+
         if (! $this->isInternal($user->email)) {
             return;
         }
