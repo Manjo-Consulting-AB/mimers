@@ -68,7 +68,9 @@ class NotificationDelivery extends Model
      *
      * `attempts` är SMALLINT UNSIGNED, `sent_at` en tidsstämpel och `digest`
      * en boolean — i sqlite (testsviten) ligger boolean som ett heltal, och
-     * utan castet vore `'0'` sant (issue 35 § Att se upp med).
+     * utan castet vore `'0'` sant (issue 35 § Att se upp med). `claimed_at`
+     * är tidpunkten en leveransloop tog raden i anspråk (issue 1056) och är
+     * `null` när ingen håller den.
      *
      * @return array<string, string>
      */
@@ -77,6 +79,7 @@ class NotificationDelivery extends Model
         return [
             'attempts' => 'integer',
             'sent_at' => 'datetime',
+            'claimed_at' => 'datetime',
             'digest' => 'boolean',
         ];
     }
