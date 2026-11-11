@@ -92,6 +92,17 @@ return [
     ],
 
     /*
+     * Någon försökte registrera en adress som redan har ett konto (issue
+     * 1057). Registreringens svar är detsamma för en ny och en befintlig
+     * adress; det här mejlet är det enda ägaren får se.
+     */
+    'registration_attempt' => [
+        'subject' => 'Someone tried to register with your email address',
+        'line' => 'Someone tried to create a Mimers account with this address, but you already have one. Nothing has been changed.',
+        'not_you' => 'If it was you, log in instead — you can ask for a login link if you have forgotten the password. If it was not you, you do not need to do anything.',
+    ],
+
+    /*
      * Återställningskoderna har bytts. Transaktionellt, i samma form som
      * `password_changed` ovan. Bytet kräver ingen kodbekräftelse, så mejlet
      * är det som visar ägaren ett byte hon inte gjort själv.

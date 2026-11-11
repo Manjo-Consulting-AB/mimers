@@ -49,7 +49,7 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:user,email'],
+            'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', Password::defaults()],
             'voucher_code' => ['nullable', 'string', 'max:32', new RedeemableVoucher],
             'invitation_token' => ['nullable', 'string', 'size:64'],

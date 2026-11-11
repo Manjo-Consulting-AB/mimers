@@ -121,7 +121,7 @@ it('skickar en redan inloggad besökare vidare till dashboard från registrering
     actingAs($user)->get('/login/magic-link')->assertRedirect('/dashboard');
 });
 
-it('registrerar en besökare, loggar in henne och landar på dashboard', function () {
+it('registrerar en besökare, loggar inte in henne och skickar henne till inloggningen', function () {
     withoutVite();
 
     from('/register')
@@ -130,12 +130,14 @@ it('registrerar en besökare, loggar in henne och landar på dashboard', functio
             'email' => 'ny-vy@example.com',
             'password' => 'giltigt-losenord',
         ])
-        ->assertRedirect('/dashboard');
+        ->assertRedirect(route('login.create'))
+        ->assertSessionHas('status', 'registration-pending');
 
-    assertAuthenticatedAs(User::query()->where('email', 'ny-vy@example.com')->firstOrFail());
+    assertGuest();
+    expect(User::query()->where('email', 'ny-vy@example.com')->exists())->toBeTrue();
 });
 
-it('visar en upptagen e-postadress som ett fältfel', function () {
+it('svarar likadant för en upptagen e-postadress och ger inget fältfel', function () {
     withoutVite();
 
     User::factory()->create(['email' => 'upptagen-vy@example.com']);
@@ -148,14 +150,15 @@ it('visar en upptagen e-postadress som ett fältfel', function () {
             'password' => 'giltigt-losenord',
         ])
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Auth/Register')
-            ->has('errors.email')
+            ->component('Auth/Login')
+            ->where('flash.status', 'registration-pending')
+            ->missing('errors.email')
         );
 
     assertGuest();
 });
 
-it('behåller namnet i formuläret när e-postadressen är upptagen', function () {
+it('ger inget e-postfel i sessionen när e-postadressen är upptagen', function () {
     withoutVite();
 
     User::factory()->create(['email' => 'upptagen-vy@example.com']);
@@ -174,8 +177,8 @@ it('behåller namnet i formuläret när e-postadressen är upptagen', function (
         'password' => 'giltigt-losenord',
     ]);
 
-    $svar->assertSessionHasErrors('email');
-    $svar->assertSessionHasInput('name', 'Redan Registrerad');
+    $svar->assertSessionDoesntHaveErrors('email');
+    $svar->assertRedirect(route('login.create'));
 
     assertGuest();
 });

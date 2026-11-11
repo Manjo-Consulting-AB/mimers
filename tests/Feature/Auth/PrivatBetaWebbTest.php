@@ -11,7 +11,6 @@ use Inertia\Testing\AssertableInertia;
 use function Pest\Laravel\assertGuest;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
-use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 use function Pest\Laravel\withSession;
 
@@ -97,7 +96,7 @@ it('invite_only med giltig kod skapar kontot med pro', function () {
         'email' => 'med-kod@example.com',
         'password' => 'giltigt-losenord',
         'voucher_code' => $kod,
-    ])->assertRedirect('/dashboard');
+    ])->assertRedirect(route('login.create'));
 
     $user = User::query()->where('email', 'med-kod@example.com')->firstOrFail();
 
@@ -135,11 +134,7 @@ it('en förbrukad kod nekas', function () {
         'email' => 'forsta@example.com',
         'password' => 'giltigt-losenord',
         'voucher_code' => $kod,
-    ])->assertRedirect('/dashboard');
-
-    // Ut ur sessionen mellan varven: rutten ligger bakom `guest`, och en
-    // inloggad besökare skickas till /dashboard i stället för att prövas.
-    post('/logout');
+    ])->assertRedirect(route('login.create'));
 
     $andra = from('/register')->post('/register', [
         'name' => 'Andra Personen',
@@ -167,7 +162,7 @@ it('en containerinbjudan i sessionen släpper in utan kod och ger free', functio
             'email' => 'inbjuden@example.com',
             'password' => 'giltigt-losenord',
         ])
-        ->assertRedirect('/dashboard');
+        ->assertRedirect(route('login.create'));
 
     $user = User::query()->where('email', 'inbjuden@example.com')->firstOrFail();
 
@@ -205,7 +200,7 @@ it('läget open släpper in utan kod', function () {
         'name' => 'Öppen Person',
         'email' => 'oppen@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertRedirect('/dashboard');
+    ])->assertRedirect(route('login.create'));
 
     expect(User::query()->where('email', 'oppen@example.com')->exists())->toBeTrue();
 });
@@ -235,7 +230,7 @@ it('ett tomt kodfält behandlas som ingen kod', function () {
         'email' => 'tomt-falt@example.com',
         'password' => 'giltigt-losenord',
         'voucher_code' => '',
-    ])->assertRedirect('/dashboard');
+    ])->assertRedirect(route('login.create'));
 
     expect(User::query()->where('email', 'tomt-falt@example.com')->exists())->toBeTrue();
 });

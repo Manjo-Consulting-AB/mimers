@@ -65,7 +65,7 @@ it('ger ett nyregistrerat konto en valuta utan att fråga efter den', function (
         'name' => 'Ny Person',
         'email' => 'valuta@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertRedirect(route('dashboard'));
+    ])->assertRedirect(route('login.create'));
 
     $anvandare = User::query()->where('email', 'valuta@example.com')->firstOrFail();
     $konto = $anvandare->accounts()->firstOrFail();

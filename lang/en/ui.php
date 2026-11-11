@@ -613,6 +613,7 @@ return [
 
     'flash' => [
         'verification-link-sent' => 'A new verification email has been sent.',
+        'registration-pending' => 'We have sent an email to the address you gave. You can log in once you have read it.',
         'magic-link-sent' => 'If the address exists with us, we have sent a link to it.',
         'totp-confirmed' => 'Two-factor authentication is on.',
         'totp-disabled' => 'Two-factor authentication is off.',
