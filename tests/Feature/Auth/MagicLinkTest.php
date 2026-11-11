@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\assertGuest;
+use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -252,4 +253,73 @@ it('svarar likadant på API:et oavsett om adressen finns, och skickar inget mejl
     expect($finns->getContent())->toBe($finnsInte->getContent());
 
     Notification::assertCount(1);
+});
+
+it('nollställer inte IP-räknaren vid en slutförd magic link på webben', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => null]);
+
+    for ($i = 0; $i < 9; $i++) {
+        postJson('/login', [
+            'email' => "gissning-{$i}@example.com",
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    // Länkbegäran är det tionde försöket på IP-räknaren; inlösen ger tillbaka ett.
+    get(begärLänkOchFångaUrl($user->email))->assertRedirect(route('dashboard'));
+    postJson('/logout');
+
+    postJson('/login', [
+        'email' => 'gissning-9@example.com',
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+
+    $response = from('/login')->postJson('/login', [
+        'email' => 'gissning-10@example.com',
+        'password' => 'fel-losenord',
+    ]);
+
+    $response->assertRedirect('/login');
+    $response->assertSessionHasErrors('email');
+});
+
+it('nollställer inte IP-räknaren vid en slutförd magic link på API:et', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => null]);
+
+    // Token utfärdas direkt: länkbegäran via rutten är ett försök på
+    // IP-räknaren och skulle göra att inlösen själv stoppas av taket.
+    MagicLinkBroker::issue($user->email);
+
+    $url = null;
+    Notification::assertSentTo($user, MagicLinkNotification::class, function (MagicLinkNotification $notification) use (&$url) {
+        $url = $notification->url;
+
+        return true;
+    });
+
+    for ($i = 0; $i < 9; $i++) {
+        postJson('/api/login', [
+            'email' => "gissning-{$i}@example.com",
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    postJson('/api/login/magic-link/consume', länkParametrar($url))->assertOk();
+
+    postJson('/api/login', [
+        'email' => 'gissning-9@example.com',
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+
+    $response = postJson('/api/login', [
+        'email' => 'gissning-10@example.com',
+        'password' => 'fel-losenord',
+    ]);
+
+    $response->assertStatus(429);
+    expect($response->json('error.code'))->toBe('auth.too_many_attempts');
 });
