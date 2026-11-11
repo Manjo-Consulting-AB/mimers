@@ -101,13 +101,15 @@ jobs:
           MAILGUN_SECRET: ${{ secrets.MAILGUN_SECRET }}
           MAILGUN_ENDPOINT: ${{ secrets.MAILGUN_ENDPOINT }}
           MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-          RELEASE=$(date +%Y-%m-%d)-$(echo "${{ github.sha }}" | cut -c1-7)
+          RELEASE=$(date +%Y-%m-%d)-${GITHUB_SHA::7}
 
           # DEPLOY_PATH måste vara en absolut sökväg på servern. Git Bash skriver
           # om /home/... till en Windows-sökväg när en secret sätts därifrån, och
