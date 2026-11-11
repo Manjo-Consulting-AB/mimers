@@ -1015,6 +1015,7 @@ return [
             'not_pending' => 'The transfer has already been answered or withdrawn and cannot be changed.',
             'expired' => 'The transfer has expired. The sender must send a new one.',
             'account_frozen' => 'Your account is frozen and cannot receive a container right now.',
+            'legal_hold' => 'The container cannot change owner right now.',
         ],
 
         // The close flow's domain errors on the web, see issue 63b decision 6.
