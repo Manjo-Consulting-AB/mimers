@@ -612,6 +612,7 @@ return [
     ],
 
     'flash' => [
+        'trash-emptied' => 'The trash has been emptied.',
         'verification-link-sent' => 'A new verification email has been sent.',
         'magic-link-sent' => 'If the address exists with us, we have sent a link to it.',
         'totp-confirmed' => 'Two-factor authentication is on.',
@@ -910,6 +911,7 @@ return [
         // becomes this sentence in a box above the list, never a JSON body.
         'trash' => [
             'parent_deleted' => 'It cannot be restored: what the content belongs to is still in the trash. Restore that first.',
+            'legal_hold' => 'The trash cannot be emptied right now.',
         ],
 
         // Issue 55b: the invitation error codes. Never a raw JSON body in a

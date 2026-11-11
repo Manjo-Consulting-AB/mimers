@@ -311,6 +311,26 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren tömma containerns papperskorg? Oåterkalleligt, därför
+     * bara ägarsidan: inboxens ägare för en inbox, annars en medlem i det
+     * ägande kontot. En delegerad användare får aldrig tömma, oavsett nivå —
+     * att återställa är ångerbart och följer itemets grindar, att tömma hör
+     * till ägaren.
+     *
+     * Ingen kontroll av fryst konto, med flit: att tömma minskar bara vad
+     * kontot håller, och ett konto som är `read_only` för att det ligger över
+     * kvoten ska kunna ta sig ur läget.
+     */
+    public function emptyTrash(User $user, Container $container): bool
+    {
+        if ($container->isInbox()) {
+            return (int) $container->inbox_user_id === (int) $user->id;
+        }
+
+        return $this->isMemberOfOwnerAccount($user, $container->account);
+    }
+
+    /**
      * Regel 1: är användaren medlem (någon roll) i kontot som äger
      * containern?
      */

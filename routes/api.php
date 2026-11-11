@@ -543,6 +543,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // containers är 20c.
     Route::get('/containers/{container}/trash', [TrashController::class, 'index']);
     Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore']);
+    Route::delete('/containers/{container}/trash', [TrashController::class, 'destroy']);
 
     // Issue 20c · Papperskorgen för raderade CONTAINERS — lista och
     // återställ en container som någon råkat radera, se
