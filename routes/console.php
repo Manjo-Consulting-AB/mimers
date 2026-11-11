@@ -11,6 +11,7 @@ use App\Console\EnforcesDowngrades;
 use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
+use App\Console\PrunesExpiredApiTokens;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PrunesLogs;
 use App\Console\PrunesRegistrationIps;
@@ -388,6 +389,23 @@ Schedule::call(fn () => app(AggregatesUsageMetrics::class)->handle())
 Schedule::call(fn () => app(PrunesLogs::class)->handle())
     ->daily()
     ->name('prune-logs');
+
+/*
+ * Issue 1053 · Gallringen av utgångna API-tokens: en personal access token
+ * gäller i `sanctum.expiration` minuter (90 dagar som förval) och raderas
+ * här när tiden gått ut — se App\Console\PrunesExpiredApiTokens och
+ * [[ADR-0011 Autentisering]]. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Auth/TokenutgangTest.php; det här är bara schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG Sanctums egna gallringskommando eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan. Posten ligger
+ * före `drain-queue`, som ska fortsätta ligga sist i filen.
+ */
+Schedule::call(fn () => app(PrunesExpiredApiTokens::class)->handle())
+    ->daily()
+    ->name('prune-expired-api-tokens');
 
 /*
  * Issue 237, omskriven i issue 347 · Köarbetaren: tömmer `jobs`-tabellen varje
