@@ -225,6 +225,21 @@ class AcceptOwnershipTransfer
      * delas av flyttaBokfordaByten() nedan, så summan och raderna som
      * bokförs om aldrig kan glida isär.
      */
+    private function bytesAttFlytta(Container $container, Account $fromAccount): int
+    {
+        return (int) DB::table('attachment')
+            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+            ->where(fn ($query) => $this->begransaTillContainern($query, $container))
+            ->where('attachment.billed_account_id', $fromAccount->id)
+            ->whereNull('attachment.deleted_at')
+            ->sum('stored_file.byte_size');
+    }
+
+    /**
+     * Fysiskt raderar allt mjukraderat i containern (issue 1048), genom samma
+     * PurgeContent som nattjobbet PurgesExpiredTrash och i dess ordning.
+     * Fel fångas inte: de rullar tillbaka hela ägarbytet.
+     */
     private function tomPapperskorgen(Container $container): void
     {
         $purge = app(PurgeContent::class);
@@ -248,16 +263,6 @@ class AcceptOwnershipTransfer
 
         Tag::onlyTrashed()->where('container_id', $container->id)->get()
             ->each(fn (Tag $tag) => $purge->tag($tag));
-    }
-
-    private function bytesAttFlytta(Container $container, Account $fromAccount): int
-    {
-        return (int) DB::table('attachment')
-            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-            ->where(fn ($query) => $this->begransaTillContainern($query, $container))
-            ->where('attachment.billed_account_id', $fromAccount->id)
-            ->whereNull('attachment.deleted_at')
-            ->sum('stored_file.byte_size');
     }
 
     /**
