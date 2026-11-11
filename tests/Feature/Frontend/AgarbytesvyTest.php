@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\OwnershipTransfer;
 use App\Models\Plan;
 use App\Models\Subscription;
@@ -738,6 +739,26 @@ it('nekar en accept som spränger mottagarens plan och flyttar ingenting', funct
 
     // Och ingenting flyttades: hela transaktionen rullades tillbaka.
     expect($container->fresh()->account_id)->not->toBe($mottagarkonto->id);
+    expect($rad->fresh()->status)->toBe('pending');
+});
+
+it('nekar en accept när avsändarkontot är spärrat och flyttar ingenting', function () {
+    withoutVite();
+
+    [$saljarkonto, , $container] = agarbytesvySaljare();
+    [$mottagare, $mottagarkonto] = agarbytesvyMottagare();
+    LegalHold::factory()->create(['account_id' => $saljarkonto->id]);
+
+    $rad = skapaÄgarbyteRad($container, ['to_account_id' => $mottagarkonto->id, 'to_email' => null]);
+
+    actingAs($mottagare)
+        ->post("/transfers/{$rad->ulid}/accept")
+        ->assertRedirect()
+        ->assertSessionHasErrors('transfer');
+
+    expect(session('errors')->get('transfer')[0])
+        ->toBe(trans('ui.error.transfer.legal_hold', [], 'en'));
+    expect($container->fresh()->account_id)->toBe($saljarkonto->id);
     expect($rad->fresh()->status)->toBe('pending');
 });
 

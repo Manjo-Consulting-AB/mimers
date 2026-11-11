@@ -3,17 +3,22 @@
 namespace App\Actions\OwnershipTransfer;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Trash\PurgeContent;
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\AuditLog;
+use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\OwnershipTransfer;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\Tag;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,6 +45,18 @@ use Illuminate\Support\Facades\DB;
  * account.transfer_bonus_granted_at, inne i samma transaktion. Utebliven
  * bonus rullar aldrig tillbaka ägarbytet — bara Pro-tiden uteblir.
  *
+ * Två steg till (issue 1048). Står avsändarkontot under rättslig spärr
+ * (LegalHold::covers) nekas bytet helt, `transfer.legal_hold`, INNAN
+ * transaktionen öppnas: ingenting får raderas fysiskt under en spärr och
+ * innehåll som omfattas av den ska inte lämna kontot. Spärren på
+ * MOTTAGARKONTOT hindrar inget — att ta emot raderar och flyttar inget ut.
+ * Och containerns papperskorg töms fysiskt som en del av bytet
+ * (tomPapperskorgen, genom PurgeContent) direkt efter utlyftet av de
+ * behållna itemsen och FÖRE bytena räknas: det avsändaren slängt förblir
+ * slängt, mottagaren får inget skräp och slängda bilagors `billed_account_id`
+ * blir aldrig en fråga. Tömningen ligger i transaktionen, så ett fel — även
+ * mottagarens kvot — rullar tillbaka den.
+ *
  * Anropas av App\Http\Controllers\Api\OwnershipTransferController efter att
  * den bevisat att raden är mottagarens (annars 404) och löst ut vilket
  * konto som tar emot. Mottagarkontot är upplåst (Beslut 3).
@@ -49,6 +66,7 @@ class AcceptOwnershipTransfer
     /**
      * @throws ApiException 422 `transfer.expired`, 403
      *                      `transfer.account_frozen`, 422
+     *                      `transfer.legal_hold`, 422
      *                      `transfer.not_pending`, 403 `quota.*`.
      */
     public function handle(OwnershipTransfer $transfer, Account $toAccount): Container
@@ -69,6 +87,12 @@ class AcceptOwnershipTransfer
         }
 
         $fromAccount = Account::query()->findOrFail($transfer->from_account_id);
+
+        // Issue 1048: rättslig spärr på AVSÄNDARKONTOT nekar bytet helt, före
+        // transaktionen. Överlåtelsen står kvar som pending.
+        if (LegalHold::covers($fromAccount)) {
+            throw ApiException::make('transfer.legal_hold', [], 422);
+        }
 
         return DB::transaction(function () use ($transfer, $toAccount, $fromAccount): Container {
             // Beslut 5: statusövergången är en villkorad UPDATE, först i
@@ -92,6 +116,11 @@ class AcceptOwnershipTransfer
             // och köparen nekas för byte hon aldrig får (Beslut 4). Är
             // `excluded_item_ids` tom skapas ingen container alls.
             $this->lyftUtBehallnaItems($transfer, $container, $fromAccount);
+
+            // Issue 1048: papperskorgen töms efter utlyftet och FÖRE bytena
+            // räknas — PurgeContent::item() raderar ett slängt items levande
+            // bilagor och räknar ned avsändarens förbrukning.
+            $this->tomPapperskorgen($container);
 
             $bytesSomFlyttas = $this->bytesAttFlytta($container, $fromAccount);
 
@@ -196,6 +225,31 @@ class AcceptOwnershipTransfer
      * delas av flyttaBokfordaByten() nedan, så summan och raderna som
      * bokförs om aldrig kan glida isär.
      */
+    private function tomPapperskorgen(Container $container): void
+    {
+        $purge = app(PurgeContent::class);
+
+        $itemIds = Item::withTrashed()->where('container_id', $container->id)->select('id');
+
+        // Samma ordning som nattjobbet PurgesExpiredTrash. Inget fel fångas:
+        // ett fel rullar tillbaka hela ägarbytet.
+        Attachment::onlyTrashed()
+            ->where(fn (Builder $query) => $query
+                ->where('container_id', $container->id)
+                ->orWhereIn('item_id', $itemIds))
+            ->get()
+            ->each(fn (Attachment $attachment) => $purge->attachment($attachment));
+
+        Item::onlyTrashed()->where('container_id', $container->id)->get()
+            ->each(fn (Item $item) => $purge->item($item));
+
+        Category::onlyTrashed()->where('container_id', $container->id)->get()
+            ->each(fn (Category $category) => $purge->category($category));
+
+        Tag::onlyTrashed()->where('container_id', $container->id)->get()
+            ->each(fn (Tag $tag) => $purge->tag($tag));
+    }
+
     private function bytesAttFlytta(Container $container, Account $fromAccount): int
     {
         return (int) DB::table('attachment')
