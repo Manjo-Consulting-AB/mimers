@@ -52,3 +52,21 @@ it('släpper fortfarande igenom publika adresser', function (string $url, array 
     ['https://[2606:4700:4700::1111]/', []],
     ['https://example.com/', ['93.184.216.34']],
 ]);
+
+it('resolveSafe returnerar resolverns adresser när alla är publika', function () {
+    $validator = new UrlSafetyValidator(fn (string $host): array => ['93.184.216.34', '2606:4700:4700::1111']);
+
+    expect($validator->resolveSafe('https://example.test/hook'))->toBe(['93.184.216.34', '2606:4700:4700::1111']);
+});
+
+it('resolveSafe kastar när någon adress är privat', function () {
+    $validator = new UrlSafetyValidator(fn (string $host): array => ['93.184.216.34', '10.0.0.1']);
+
+    expect(fn () => $validator->resolveSafe('https://example.test/hook'))->toThrow(UnsafeUrlException::class);
+});
+
+it('resolveSafe returnerar tom lista för en IP-literal', function () {
+    $validator = new UrlSafetyValidator(fn (string $host): array => ['10.0.0.1']);
+
+    expect($validator->resolveSafe('https://93.184.216.34/'))->toBe([]);
+});

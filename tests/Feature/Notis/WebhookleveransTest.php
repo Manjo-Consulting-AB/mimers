@@ -600,3 +600,36 @@ it('jobbet är schemalagt varje minut', function () {
     expect($händelse->command ?? null)->toBeNull();
     expect($händelse->withoutOverlapping)->toBeTrue();
 });
+
+it('anropar resolvern exakt en gång per leverans och fäster adressen', function () {
+    $anrop = 0;
+    app()->instance(UrlSafetyValidator::class, new UrlSafetyValidator(function (string $host) use (&$anrop): array {
+        $anrop++;
+
+        return ['93.184.216.34'];
+    }));
+    Http::fake(['*' => Http::response('', 200)]);
+
+    [$account] = webhookKonto();
+    $endpoint = webhookEndpoint($account);
+    webhookLeverans($endpoint);
+
+    webhookKor();
+
+    expect($anrop)->toBe(1);
+    Http::assertSentCount(1);
+});
+
+it('markerar leveransen failed utan HTTP-anrop när resolvern svarar en privat adress', function () {
+    app()->instance(UrlSafetyValidator::class, new UrlSafetyValidator(fn (string $host): array => ['10.0.0.5']));
+    Http::fake();
+
+    [$account] = webhookKonto();
+    $endpoint = webhookEndpoint($account);
+    $leverans = webhookLeverans($endpoint);
+
+    webhookKor();
+
+    expect($leverans->fresh()->status)->toBe(WebhookDelivery::STATUS_FAILED);
+    Http::assertNothingSent();
+});

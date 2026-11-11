@@ -61,6 +61,20 @@ final class UrlSafetyValidator
      */
     public function assertSafe(string $url): void
     {
+        $this->resolveSafe($url);
+    }
+
+    /**
+     * Gör kontrollen i assertSafe() och returnerar de kontrollerade adresserna,
+     * så att anroparen kan ansluta till exakt dem (DNS-pinning, se
+     * PinnedResolution).
+     *
+     * @return list<string> de kontrollerade adresserna; tom lista när värden är en IP-literal
+     *
+     * @throws UnsafeUrlException
+     */
+    public function resolveSafe(string $url): array
+    {
         $parts = parse_url($url);
 
         if ($parts === false || ! isset($parts['scheme'], $parts['host'])) {
@@ -98,7 +112,7 @@ final class UrlSafetyValidator
         if ($ip !== false) {
             $this->assertSafeIp($ip);
 
-            return;
+            return [];
         }
 
         $ips = ($this->resolver)($host);
@@ -110,6 +124,8 @@ final class UrlSafetyValidator
         foreach ($ips as $resolvedIp) {
             $this->assertSafeIp($resolvedIp);
         }
+
+        return $ips;
     }
 
     /**
