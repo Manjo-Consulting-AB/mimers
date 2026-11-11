@@ -524,3 +524,28 @@ it('har en rad i containerns navigering', function () {
     expect($sv['container']['nav']['export'])->not->toBe('');
     expect($en['container']['nav']['export'])->not->toBe('');
 });
+
+it('bär bara anroparens egna exporter i propen exports', function () {
+    withoutVite();
+
+    [, $ägare, $container] = exportvyKontext();
+    $gäst = User::factory()->create();
+    beviljaAccess($container, $gäst, 'read', 'guest');
+
+    $ägarens = exportvyRad($container, $ägare);
+    $gästens = exportvyRad($container, $gäst);
+
+    actingAs($gäst)
+        ->get(exportvyUrl($container))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('exports', 1)
+            ->where('exports.0.ulid', $gästens->ulid)
+        );
+
+    actingAs($ägare)
+        ->get(exportvyUrl($container))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->has('exports', 1)
+            ->where('exports.0.ulid', $ägarens->ulid)
+        );
+});

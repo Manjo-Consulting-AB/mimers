@@ -601,3 +601,30 @@ it('antalet databasfrågor för att bygga exporten växer inte med antalet items
     expect($frågorLiten)->toBeGreaterThan(0);
     expect($frågorStor)->toBe($frågorLiten);
 });
+
+it('index listar bara anroparens egna exporter och show ger 404 på en annans', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    [, $annan, $annanHeaders] = kontoMedMedlem();
+    beviljaAccess($container, $annan, 'read', 'member');
+
+    $min = Export::factory()->create(['container_id' => $container->id, 'requested_by_user_id' => $user->id]);
+    $deras = Export::factory()->create(['container_id' => $container->id, 'requested_by_user_id' => $annan->id]);
+
+    $lista = getJson("/api/containers/{$container->ulid}/exports", $headers)->assertOk();
+    expect(collect($lista->json('data'))->pluck('ulid')->all())->toBe([$min->ulid]);
+
+    // Samma app-instans: släpp den cachade guard-användaren mellan anropen.
+    app('auth')->forgetGuards();
+
+    $lista = getJson("/api/containers/{$container->ulid}/exports", $annanHeaders)->assertOk();
+    expect(collect($lista->json('data'))->pluck('ulid')->all())->toBe([$deras->ulid]);
+
+    app('auth')->forgetGuards();
+
+    getJson("/api/containers/{$container->ulid}/exports/{$min->ulid}", $headers)->assertOk();
+
+    getJson("/api/containers/{$container->ulid}/exports/{$deras->ulid}", $headers)
+        ->assertNotFound()
+        ->assertJsonPath('error.code', 'resource.not_found');
+});

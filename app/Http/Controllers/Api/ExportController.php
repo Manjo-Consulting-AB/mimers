@@ -27,6 +27,10 @@ use Illuminate\Support\Facades\Gate;
  * App\Jobs\BuildContainerExport på kön; klienten pollar show() tills status
  * är `ready` eller `failed`. Jobbet köas EFTER transaktionen är klar, precis
  * som GenerateImageDerivatives.
+ *
+ * En export är beställarens (`requested_by_user_id`): index() listar bara
+ * anroparens egna och show() ger 404 för någon annans. store() är oförändrad,
+ * även när den pågående exporten är någon annans.
  */
 class ExportController extends Controller
 {
@@ -101,14 +105,16 @@ class ExportController extends Controller
 
     /**
      * GET /api/containers/{container}/exports — 200. Historiken av
-     * beställningar för containern, nyaste först. Inga interna id:n —
+     * beställningar som anroparen själv gjort för containern, nyaste först — en
+     * export hör till beställaren, inte till containern. Inga interna id:n —
      * ExportResource bär ULID:erna.
      */
-    public function index(Container $container): JsonResponse
+    public function index(Request $request, Container $container): JsonResponse
     {
         Gate::authorize('view', $container);
 
         $exports = $container->exports()
+            ->where('requested_by_user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->get();
 
@@ -119,11 +125,16 @@ class ExportController extends Controller
      * GET /api/containers/{container}/exports/{export} — 200. Rader att
      * pollas av klienten tills status är `ready` eller `failed`. `{export}`
      * binds av gruppens scopeBindings() genom App\Models\Container::exports()
-     * (Beslut 5) — en export-ULID från en annan container ger 404.
+     * (Beslut 5) — en export-ULID från en annan container ger 404, liksom en
+     * annan användares export i samma container.
      */
-    public function show(Container $container, Export $export): JsonResponse
+    public function show(Request $request, Container $container, Export $export): JsonResponse
     {
         Gate::authorize('view', $container);
+
+        if ((int) $export->requested_by_user_id !== (int) $request->user()->id) {
+            abort(404);
+        }
 
         return (new ExportResource($export))->response();
     }
