@@ -49,7 +49,7 @@ use Illuminate\Support\Facades\Route;
  * RegisterRequest/LoginRequest med webbens sessionsinloggning i
  * routes/web.php — samma ogiltiga indata avvisas likadant på båda ytorna.
  */
-Route::post('/register', [RegisteredUserController::class, 'store']);
+Route::post('/register', [RegisteredUserController::class, 'store'])->middleware('throttle:register');
 
 // throttle:login · issue 7 · Rate limiting och felkodsformat. Se
 // App\Providers\AppServiceProvider::configureLoginRateLimiting().
