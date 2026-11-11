@@ -53,6 +53,48 @@ it('tillåter bara /files/{ulid} med eller utan querysträng, och förbjuder ind
     expect($htaccess)->not->toContain('RewriteCond %{ORG_REQ_URI} ^/_protected/');
 });
 
+it('tillåt-listan släpper igenom exakt /files/{ulid} och /exports/{ulid}/download', function () {
+    $htaccess = file_get_contents(base_path('deploy/protected.htaccess'));
+
+    $filesVillkor = 'RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+(\?.*)?$';
+    $exportVillkor = 'RewriteCond %{ORG_REQ_URI} !^/exports/[A-Za-z0-9]+/download(\?.*)?$';
+    $regel = 'RewriteRule ^ - [F,L]';
+
+    expect($htaccess)->toContain($filesVillkor."\n".$exportVillkor."\n".$regel);
+
+    $mönster = fn (string $villkor): string => '#'.substr($villkor, strlen('RewriteCond %{ORG_REQ_URI} !')).'#';
+    $tillåten = fn (string $uri): bool => preg_match($mönster($filesVillkor), $uri) === 1
+        || preg_match($mönster($exportVillkor), $uri) === 1;
+
+    foreach ([
+        '/files/01HZX3K9QW8E7R6T5Y4U3I2O1P',
+        '/files/01HZX3K9QW8E7R6T5Y4U3I2O1P?expires=1&signature=ab',
+        '/exports/01HZX3K9QW8E7R6T5Y4U3I2O1P/download',
+        '/exports/01HZX3K9QW8E7R6T5Y4U3I2O1P/download?expires=1&signature=ab',
+    ] as $uri) {
+        expect($tillåten($uri))->toBeTrue($uri);
+    }
+
+    foreach ([
+        '/_protected/exports/x.zip',
+        '//_protected/ab/cd/hash',
+        '/exports/../_protected/x/download',
+        '/exports/01HZ/download/extra',
+        '/exports/01HZ/',
+        '/exports/%5Fprotected/download',
+    ] as $uri) {
+        expect($tillåten($uri))->toBeFalse($uri);
+    }
+});
+
+it('har giltig bash-syntax i retro-fakta.sh och nämner inte längre att exporten ligger utanför listan', function () {
+    exec('bash -n '.escapeshellarg(base_path('deploy/retro-fakta.sh')).' 2>&1', $utdata, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $utdata));
+    expect(file_get_contents(base_path('deploy/retro-fakta.sh')))
+        ->not->toContain('Exportnedladdningen (41b) ligger utanför');
+});
+
 it('har giltig bash-syntax i deploy.sh och verifiera-filleverans.sh', function (string $skript) {
     exec('bash -n '.escapeshellarg(base_path($skript)).' 2>&1', $utdata, $kod);
 

@@ -251,8 +251,7 @@ HT="$APP/shared/storage/files/.htaccess"
 if [ -r "$HT" ]; then
   printf '.htaccess: %s rader, %s\n' "$(wc -l < "$HT" | tr -d ' ')" "$(ls -l "$HT" | awk '{print $1}')"
   # Tillåt-listan är den rad som avgör vilka URI:er som får levereras internt.
-  # Exportnedladdningen (41b) ligger utanför den i skrivande stund.
-  grep -n 'ORG_REQ_URI' "$HT" 2>/dev/null | head -3
+  grep -n 'ORG_REQ_URI' "$HT" 2>/dev/null | head -4
 else
   echo '.htaccess: saknas i shared/storage/files/'
 fi
