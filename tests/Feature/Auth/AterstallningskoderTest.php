@@ -2,9 +2,11 @@
 
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
+use App\Notifications\RecoveryCodesRegeneratedNotification;
 use App\Support\Auth\RecoveryCodeBroker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertAuthenticatedAs;
@@ -287,4 +289,73 @@ it('en gammal återställningskod fungerar inte efter att TOTP skrivits in på n
 
     $svar->assertStatus(422);
     expect($svar->json('error.code'))->toBe('auth.totp_invalid');
+});
+
+/*
+ * Issue 1052 · Mejl när återställningskoderna byts. Se
+ * App\Notifications\RecoveryCodesRegeneratedNotification.
+ */
+
+it('mejlar användaren när koderna genereras via webben — exakt en gång, svaret oförändrat', function () {
+    Notification::fake();
+    [$user] = användareMedBekräftadTotp();
+    actingAs($user);
+
+    postJson('/totp/recovery-codes')->assertRedirect();
+
+    Notification::assertSentToTimes($user, RecoveryCodesRegeneratedNotification::class, 1);
+    expect(session('recovery_codes'))->toHaveCount(10);
+});
+
+it('mejlar användaren när koderna genereras via API:et — exakt en gång, svaret oförändrat', function () {
+    Notification::fake();
+    [$user] = användareMedBekräftadTotp();
+    $token = $user->createToken('api');
+
+    $response = postJson('/api/totp/recovery-codes', [], [
+        'Authorization' => "Bearer {$token->plainTextToken}",
+    ]);
+
+    $response->assertOk();
+    expect($response->json('codes'))->toHaveCount(10);
+    Notification::assertSentToTimes($user, RecoveryCodesRegeneratedNotification::class, 1);
+});
+
+it('mejlar vid varje omgenerering, inte bara den första', function () {
+    Notification::fake();
+    [$user] = användareMedÅterställningskoder();
+    actingAs($user);
+
+    postJson('/totp/recovery-codes')->assertRedirect();
+    postJson('/totp/recovery-codes')->assertRedirect();
+
+    Notification::assertSentToTimes($user, RecoveryCodesRegeneratedNotification::class, 2);
+});
+
+it('mejlar ingen utan bekräftad TOTP, varken på webben eller i API:et', function () {
+    Notification::fake();
+    $user = User::factory()->create();
+    actingAs($user);
+
+    postJson('/totp/recovery-codes')->assertStatus(422);
+
+    $token = $user->createToken('api');
+    postJson('/api/totp/recovery-codes', [], [
+        'Authorization' => "Bearer {$token->plainTextToken}",
+    ])->assertStatus(422);
+
+    Notification::assertNothingSent();
+});
+
+it('återställningsmejlet har ämnet och de två raderna från notiser.recovery_codes_regenerated', function () {
+    $user = User::factory()->create();
+
+    $mejl = (new RecoveryCodesRegeneratedNotification)->toMail($user);
+
+    expect((new RecoveryCodesRegeneratedNotification)->via($user))->toBe(['mail'])
+        ->and($mejl->subject)->toBe(trans('notiser.recovery_codes_regenerated.subject'))
+        ->and($mejl->introLines)->toBe([
+            trans('notiser.recovery_codes_regenerated.line'),
+            trans('notiser.recovery_codes_regenerated.not_you'),
+        ]);
 });
