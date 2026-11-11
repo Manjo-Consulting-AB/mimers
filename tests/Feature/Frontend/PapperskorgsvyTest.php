@@ -853,3 +853,62 @@ it('formulerar underträdets tal och tiger när det är noll', function () {
     expect($en['trash']['subcategories']['one'])->not->toBe('');
     expect($en['trash']['subcategories']['many'])->toContain(':count');
 });
+
+/*
+ * Issue 1059 · Knappen *Empty trash*. `canEmpty` följer `emptyTrash`-grinden,
+ * och vyns källa bär knappen, dialogen, nycklarna och anropet.
+ */
+it('bär canEmpty sann för ägarkontots medlem och falsk för en delegerad med nivån delete', function () {
+    withoutVite();
+
+    [$konto, $ägare, $container] = papperskorgsvyKontext();
+    $gäst = User::factory()->create();
+    papperskorgsvyAccess($container, $gäst, 'delete');
+
+    $url = "/containers/{$container->ulid}/trash";
+
+    actingAs($ägare)->get($url)->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('canEmpty', true));
+
+    actingAs($gäst)->get($url)->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('canEmpty', false));
+});
+
+it('bär canEmpty sann för ägaren också när kontot är read_only', function () {
+    withoutVite();
+
+    [$konto, $ägare, $container] = papperskorgsvyKontext();
+    $konto->update(['status' => 'read_only']);
+
+    actingAs($ägare)->get("/containers/{$container->ulid}/trash")->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('canEmpty', true));
+});
+
+it('deklarerar canEmpty, dialogen, nycklarna och anropet i Trash.vue', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Trash.vue'));
+
+    expect($vy)
+        ->toContain('canEmpty: { type: Boolean, required: true }')
+        ->toContain('UiConfirmDialog')
+        ->toContain("t('trash.empty_action')")
+        ->toContain("t('trash.empty_confirm_title')")
+        ->toContain("t('trash.empty_confirm_body')")
+        ->toContain("t('trash.empty_confirm_submit')")
+        ->toContain('router.delete(`/containers/${props.container.ulid}/trash`');
+});
+
+it('visar knappen bara när canEmpty är sann och listan inte är tom', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Trash.vue'));
+
+    expect($vy)->toContain('v-if="canEmpty && entries.length > 0"');
+});
+
+it('har de fyra tömningsnycklarna och lämnar trash.empty oförändrad', function () {
+    $lang = require lang_path('en/ui.php');
+
+    expect($lang['trash']['empty_action'])->toBe('Empty trash')
+        ->and($lang['trash']['empty_confirm_title'])->toBe('Empty the trash?')
+        ->and($lang['trash']['empty_confirm_body'])->toBe('Everything in the trash of this container is removed for good. This cannot be undone.')
+        ->and($lang['trash']['empty_confirm_submit'])->toBe('Empty trash')
+        ->and($lang['trash']['empty'])->toBe('The trash is empty.');
+});

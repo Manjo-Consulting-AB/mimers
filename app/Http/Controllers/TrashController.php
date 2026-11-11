@@ -107,6 +107,7 @@ class TrashController extends Controller
             'entries' => TrashEntryResource::collection($list['entries'])->resolve($request),
             'canRestore' => (object) $this->canRestore($user, $container, $list),
             'subcategoryCounts' => (object) $list['subcategory_counts'],
+            'canEmpty' => Gate::forUser($request->user())->allows('emptyTrash', $container),
         ]);
     }
 

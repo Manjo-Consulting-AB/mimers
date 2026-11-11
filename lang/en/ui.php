@@ -4749,6 +4749,10 @@ return [
         'heading' => 'Trash',
         'description' => 'What has been deleted in the container. After 30 days it is removed for good.',
         'empty' => 'The trash is empty.',
+        'empty_action' => 'Empty trash',
+        'empty_confirm_title' => 'Empty the trash?',
+        'empty_confirm_body' => 'Everything in the trash of this container is removed for good. This cannot be undone.',
+        'empty_confirm_submit' => 'Empty trash',
 
         // `:date` is formatted on the client (formatDate), the words around it
         // here.

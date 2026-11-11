@@ -1,9 +1,12 @@
 <script setup>
-import { Head, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TrashRow from '../../components/TrashRow.vue';
+import UiButton from '../../components/UiButton.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({
@@ -44,22 +47,61 @@ defineOptions({
  * med sitt underträd listas som EN rad, och talet säger hur många
  * underkategorier som följde med den. Det bor utanför `TrashEntryResource`,
  * som är delad med `/api`.
+ *
+ * **`canEmpty` är presentation** (issue 1059): knappen *Empty trash* ritas ur
+ * samma grind som `DELETE /containers/{container}/trash` prövar
+ * (`ContainerPolicy::emptyTrash`), och rutten auktoriserar ändå. Knappen
+ * öppnar `UiConfirmDialog`; ett fel från servern kommer som `errors.trash`,
+ * i rutan som redan står ovanför listan.
  */
-defineProps({
+const props = defineProps({
     container: { type: Object, required: true },
     entries: { type: Array, required: true },
     canRestore: { type: Object, required: true },
     subcategoryCounts: { type: Object, required: true },
+    canEmpty: { type: Boolean, required: true },
 });
 
 const { t } = useTranslations();
 const page = usePage();
+
+const confirmOpen = ref(false);
+const emptyTrigger = ref(null);
+const pending = ref(false);
+
+function askEmpty(event) {
+    emptyTrigger.value = event?.currentTarget ?? null;
+    confirmOpen.value = true;
+}
+
+function emptyTrash() {
+    router.delete(`/containers/${props.container.ulid}/trash`, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => {
+            pending.value = false;
+            confirmOpen.value = false;
+        },
+    });
+}
 </script>
 
 <template>
     <Head :title="t('trash.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
+
+        <UiButton
+            v-if="canEmpty && entries.length > 0"
+            variant="danger"
+            :pending="pending"
+            :disabled="pending"
+            @click="askEmpty"
+        >
+            {{ t('trash.empty_action') }}
+        </UiButton>
+    </div>
     <p class="mt-1 text-sm text-slate-600">{{ t('trash.description') }}</p>
 
     <p
@@ -82,4 +124,16 @@ const page = usePage();
     </ul>
 
     <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.empty') }}</p>
+
+    <UiConfirmDialog
+        :open="confirmOpen"
+        :heading="t('trash.empty_confirm_title')"
+        :body="t('trash.empty_confirm_body')"
+        :confirm-label="t('trash.empty_confirm_submit')"
+        tone="danger"
+        :pending="pending"
+        :trigger="emptyTrigger"
+        @confirm="emptyTrash"
+        @cancel="confirmOpen = false"
+    />
 </template>
