@@ -223,7 +223,8 @@ it('en inloggningslänk som utfärdats före raderingen loggar inte in efteråt'
 
     app(DeleteUser::class)->handle($person);
 
-    get($länk)->assertForbidden();
+    parse_str((string) parse_url($länk, PHP_URL_QUERY), $länkParametrar);
+    post('/login/magic-link/confirm', $länkParametrar)->assertForbidden();
 
     assertGuest();
 });

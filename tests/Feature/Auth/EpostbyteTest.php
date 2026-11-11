@@ -382,7 +382,8 @@ it('tar bort magic link-token för den gamla adressen, och länken slutar funger
     // Consume-rutten ligger i `guest`-gruppen, så länken prövas av en utloggad
     // besökare — samma väg en riktig mottagare kommer in genom.
     post('/logout');
-    get($magicLink)->assertForbidden();
+    parse_str((string) parse_url($magicLink, PHP_URL_QUERY), $magicLinkParametrar);
+    post('/login/magic-link/confirm', $magicLinkParametrar)->assertForbidden();
 
     expect($user->fresh()->email)->toBe('ny@example.com');
 });
