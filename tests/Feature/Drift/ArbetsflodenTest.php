@@ -90,3 +90,50 @@ it('godtar giltiga taggnamn och avvisar farliga i case-satsen', function (string
     ['v1$(id)', false],
     ['v1/../x', false],
 ]);
+
+/*
+ * Issue 1047: åtgärderna i arbetsflödena pekar på fasta commits, inte rörliga taggar.
+ */
+
+/** @return array<int, array{0: string, 1: string}> fil och uses:-rad */
+function arbetsflodesUsesRader(): array
+{
+    $rader = [];
+    foreach (glob(base_path('.github/workflows/*.yml')) as $fil) {
+        foreach (explode("\n", file_get_contents($fil)) as $rad) {
+            if (preg_match('/^\s*(?:- )?uses:/', $rad)) {
+                $rader[] = [basename($fil), trim($rad)];
+            }
+        }
+    }
+
+    return $rader;
+}
+
+it('låser varje uses-rad till en 40-tecken commit-SHA', function () {
+    $rader = arbetsflodesUsesRader();
+    expect($rader)->not->toBeEmpty();
+    foreach ($rader as [$fil, $rad]) {
+        expect($rad)->toMatch('/@[0-9a-f]{40}(\s|$)/', "{$fil}: {$rad}");
+    }
+});
+
+it('har versionskommentar efter SHA:n på varje uses-rad', function () {
+    foreach (arbetsflodesUsesRader() as [$fil, $rad]) {
+        expect($rad)->toMatch('/@[0-9a-f]{40} # v\d+\s*$/', "{$fil}: {$rad}");
+    }
+});
+
+it('pekar de fyra åtgärderna på de granskade SHA:erna', function () {
+    $forvantat = [
+        'actions/checkout' => 'fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09',
+        'actions/setup-node' => 'a0853c24544627f65ddf259abe73b1d18a591444',
+        'actions/upload-artifact' => 'ea165f8d65b6e75b540449e92b4886f43607fa02',
+        'shivammathur/setup-php' => 'eb7c497e18156a6bbabfef1d3a82760b9eda3962',
+    ];
+    foreach (arbetsflodesUsesRader() as [$fil, $rad]) {
+        preg_match('/uses:\s*(\S+)@([0-9a-f]{40})/', $rad, $m);
+        expect($forvantat)->toHaveKey($m[1]);
+        expect($m[2])->toBe($forvantat[$m[1]], "{$fil}: {$rad}");
+    }
+});

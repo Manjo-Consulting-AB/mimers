@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Hela historiken: acceptanskontrollen nedan behöver baskommiten.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
 
@@ -55,13 +55,13 @@ jobs:
             echo "Bara docs/ ändrad: bygget, kodstandarden och den statiska analysen hoppas över, och bara proven som läser docs/ körs."
           fi
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: '8.5'
           extensions: fileinfo, imagick, mbstring, pdo_sqlite, sqlite3, zip
           coverage: none
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         if: steps.omfang.outputs.docs_only != 'true'
         with:
           node-version: '22'
