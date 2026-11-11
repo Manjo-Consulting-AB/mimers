@@ -116,7 +116,9 @@ class CalendarFeedController extends Controller
      *
      * Grinden är view() — samma som skapandet. Att återkalla är att minska
      * exponeringen, och den som får skapa en feed får klippa den, se Beslut
-     * 4.
+     * 4. Men bara den egna feeden: en annan användares feed ger 404, inte
+     * 403, så att svaret inte bekräftar att ULID:n hör till en feed som
+     * finns (issue 1049).
      *
      * Låset, tidsstämpeln och `calendar_feed.revoked` bor i
      * App\Actions\CalendarFeed\RevokeCalendarFeed sedan issue 111, och webben
@@ -125,6 +127,8 @@ class CalendarFeedController extends Controller
     public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RevokeCalendarFeed $revokeCalendarFeed): Response
     {
         Gate::authorize('view', $container);
+
+        abort_unless((int) $calendarFeed->user_id === (int) $request->user()->id, 404);
 
         $revokeCalendarFeed->handle($request->user(), $container, $calendarFeed);
 

@@ -11,6 +11,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
+use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
@@ -41,6 +42,7 @@ use function Pest\Laravel\postJson;
  * - en feed går att återkalla
  * - ett återkallande är idempotent
  * - en feed i en annan container går inte att återkalla
+ * - en annan användares feed går inte att återkalla (issue 1049)
  * - en oinloggad begäran avvisas
  * - en purgad container tar med sig sina feeder
  * - ett raderat konto går att radera med feeder i containern
@@ -255,6 +257,43 @@ it('en feed i en annan container går inte att återkalla', function () {
     $response->assertStatus(404);
     expect($response->json('error.code'))->toBe('resource.not_found');
     expect(DB::table('calendar_feed')->where('ulid', $feedB->ulid)->value('revoked_at'))->toBeNull();
+});
+
+it('en annan användares feed går inte att återkalla, inte ens för containerns ägare', function () {
+    [$account, $ägare, $ägarHeaders] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    [, $läsare, $läsarHeaders] = kontoMedMedlem();
+    beviljaAccess($container, $läsare, 'read', 'member');
+    $läsarensFeed = kalenderfeedRad($container, $läsare);
+    $ägarensFeed = kalenderfeedRad($container, $ägare);
+
+    foreach ([[$ägarHeaders, $läsarensFeed], [$läsarHeaders, $ägarensFeed]] as [$headers, $feed]) {
+        // Sanctum-vakten cachar användaren mellan anrop i samma test.
+        app('auth')->forgetGuards();
+
+        $response = deleteJson("/api/containers/{$container->ulid}/calendar-feeds/{$feed->ulid}", [], $headers);
+
+        $response->assertStatus(404);
+        expect($response->json('error.code'))->toBe('resource.not_found');
+        expect(DB::table('calendar_feed')->where('ulid', $feed->ulid)->value('revoked_at'))->toBeNull();
+    }
+
+    expect(DB::table('audit_log')->where('action', 'calendar_feed.revoked')->count())->toBe(0);
+});
+
+it('användaren återkallar sin egen feed och dess ics-länk ger sedan 404', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $svar = postJson("/api/containers/{$container->ulid}/calendar-feeds", [], $headers);
+    $ulid = $svar->json('data.ulid');
+    $token = kalenderfeedUrlToken($svar->json('url'));
+
+    get("/kalender/{$token}.ics")->assertOk();
+
+    deleteJson("/api/containers/{$container->ulid}/calendar-feeds/{$ulid}", [], $headers)->assertNoContent();
+
+    get("/kalender/{$token}.ics")->assertNotFound();
+    expect(DB::table('audit_log')->where('action', 'calendar_feed.revoked')->count())->toBe(1);
 });
 
 it('en oinloggad begäran avvisas', function () {
