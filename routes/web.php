@@ -375,8 +375,21 @@ Route::middleware('guest')->group(function () {
     Route::get('/login/magic-link', [MagicLinkRequestController::class, 'create'])
         ->name('magic-link.create');
 
-    Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
+    /*
+     * Issue 1054 · Mejllänken visar bara en sida med en knapp; tokenet
+     * förbrukas först av POST till `magic-link.confirm`, så att en
+     * länkförhandsgranskare inte använder upp det. Se
+     * App\Http\Controllers\Auth\MagicLinkLoginController.
+     */
+    Route::get('/login/magic-link/consume', [MagicLinkLoginController::class, 'show'])
         ->name('magic-link.consume');
+
+    Route::post('/login/magic-link/confirm', [MagicLinkLoginController::class, 'confirm'])
+        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->name('magic-link.confirm');
+
+    Route::get('/login/magic-link/code', [MagicLinkLoginController::class, 'code'])
+        ->name('magic-link.code');
 
     /*
      * Issue 80 · Steg två: engångskoden (eller återställningskoden) för det
