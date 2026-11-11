@@ -49,15 +49,17 @@ En rad per notis **och kanal**. Det är här idempotensen bor.
 |---|---|---|
 | id | | |
 | notification_id | FK | |
-| channel | VARCHAR(20) | `email` \| `webhook` |
+| channel | VARCHAR(20) | Bara `email`. Webhookleveranser bor i `webhook_delivery`. |
+| digest | BOOLEAN | Förval false. Sant för en rad som ingår i veckosammanfattningen i stället för ett direkt mejl. |
 | status | VARCHAR(20) | `pending` \| `sent` \| `failed` \| `suppressed` |
 | attempts | SMALLINT UNSIGNED | |
 | last_error | TEXT NULL | |
 | sent_at | TIMESTAMP NULL | |
+| claimed_at | TIMESTAMP NULL | Se [[#claimed_at]]. |
 
-UNIQUE `(notification_id, channel)`. Index: `(status, channel)`.
+UNIQUE `(notification_id, channel)`. Index: `(status, channel)` och `(digest, status, channel)`.
 
-ICS har ingen rad här — kalenderfeeden är en läsendpoint som genereras vid hämtning, inte något som skickas.
+Webhookleveranser har ingen rad här, de bor i [[#webhook_delivery]]. ICS har ingen rad här — kalenderfeeden är en läsendpoint som genereras vid hämtning, inte något som skickas.
 
 ## notification_preference
 
@@ -155,6 +157,30 @@ För B2B och för alla användare som vill koppla vidare själva. Med webhooks p
 Varje leverans signeras med HMAC-SHA256 över kroppen, i en header tillsammans med tidsstämpel så att mottagaren kan avvisa återuppspelning. Omförsök med exponentiell backoff.
 
 **Utgående URL:er måste valideras mot SSRF** — privata IP-intervall, `localhost` och molnens metadatatjänster ska avvisas både vid registrering och vid varje leverans, eftersom DNS kan ändras däremellan.
+
+### webhook_delivery
+
+En rad per endpoint och notis. Ett konto kan ha flera endpoints som alla ska få samma händelse, därför är kedjan egen och ligger inte i `notification_delivery`.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| webhook_endpoint_id | FK | RESTRICT |
+| notification_id | FK | RESTRICT |
+| status | VARCHAR(20) | `pending` \| `sent` \| `failed` |
+| attempts | SMALLINT UNSIGNED | |
+| response_status | SMALLINT UNSIGNED NULL | |
+| last_error | TEXT NULL | |
+| next_attempt_at | TIMESTAMP NULL | |
+| claimed_at | TIMESTAMP NULL | Se [[#claimed_at]]. |
+| delivered_at | TIMESTAMP NULL | |
+| created_at, updated_at | | |
+
+UNIQUE `(webhook_endpoint_id, notification_id)`. Index: `(status, next_attempt_at)`. Ingen `deleted_at`: raden är drifttillstånd, vilket [[Datamodell – översikt]] redan undantar.
+
+### claimed_at
+
+Gäller både `notification_delivery` och `webhook_delivery`. En arbetare tar raden i en kort transaktion och sätter `claimed_at = now()`. Anropet (SMTP eller HTTP) görs utanför transaktion, och utfallet bokförs i en andra kort transaktion som nollställer `claimed_at`. En rad med en claim yngre än tio minuter plockas inte. En äldre claim räknas som en död arbetare, och raden tas igen. Ändras raden under anropet så att den inte längre är `pending`, skrivs utfallet inte över. Garantin är fortfarande "minst en gång".
 
 ## Kön
 
