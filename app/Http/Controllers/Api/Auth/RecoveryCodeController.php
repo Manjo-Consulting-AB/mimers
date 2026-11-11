@@ -6,6 +6,7 @@ use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\SecurityLog;
+use App\Notifications\RecoveryCodesRegeneratedNotification;
 use App\Support\Auth\RecoveryCodeBroker;
 use App\Support\Auth\TotpNotConfirmedException;
 use Illuminate\Http\JsonResponse;
@@ -36,6 +37,8 @@ class RecoveryCodeController extends Controller
             ip: $request->ip(),
             userAgent: $request->userAgent(),
         );
+
+        $request->user()->notify(new RecoveryCodesRegeneratedNotification);
 
         return response()->json(['codes' => $codes]);
     }

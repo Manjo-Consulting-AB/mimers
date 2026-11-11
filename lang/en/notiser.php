@@ -92,6 +92,17 @@ return [
     ],
 
     /*
+     * Återställningskoderna har bytts. Transaktionellt, i samma form som
+     * `password_changed` ovan. Bytet kräver ingen kodbekräftelse, så mejlet
+     * är det som visar ägaren ett byte hon inte gjort själv.
+     */
+    'recovery_codes_regenerated' => [
+        'subject' => 'Your recovery codes have been replaced',
+        'line' => 'A new set of recovery codes was generated for your account. The previous codes no longer work.',
+        'not_you' => 'If this was not you, someone else has access to your account. Log in, change the password, and look through your recent logins under Settings → Security.',
+    ],
+
+    /*
      * Lösenordsbytets bekräftelselänk, se [[M20 Kontot]] § 140. Mejlet går
      * till kontots EGEN adress — till skillnad från `email_change.confirm`
      * nedan, som går till den NYA adressen — och är beviset att den som
