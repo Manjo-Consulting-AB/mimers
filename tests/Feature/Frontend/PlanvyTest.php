@@ -628,3 +628,49 @@ it('syns i inställningsnavigationen och länkar till städningsytan', function 
 
     planvyNyckel('ui.plan.downgrade.preview.cleanup_link');
 });
+
+/*
+ * Klart när (issue 1061): förhandsvisningen räknar med att steg 4 tömmer det
+ * slängda först. Räcker de slängda bytena är svaret noll levande bilagor;
+ * annars antalet levande som steg 4 slänger nyast först efter det slängda.
+ */
+it('förhandsvisar noll levande bilagor när det slängda räcker', function () {
+    withoutVite();
+
+    Carbon::setTestNow('2026-09-16 12:00:00');
+
+    [$konto, $anvandare] = planvyKonto();
+    planvyPro($konto);
+    planvyRaknare($konto, planvyGb(2));
+
+    planvyBilaga($konto, $anvandare, planvyGb(1), now()->subDays(4));
+    planvyBilaga($konto, $anvandare, planvyGb(1), now()->subDays(3))->delete();
+
+    $props = planvyProps($anvandare, $konto);
+
+    // 2 GB mot 1 GB: 1 GB över, och 1 GB ligger i papperskorgen.
+    expect($props['downgrade']['overBytes'])->toBe(planvyGb(1));
+    expect($props['downgrade']['attachmentsToRemove'])->toBe(0);
+});
+
+it('förhandsvisar bara de levande bilagor som återstår efter det slängda', function () {
+    withoutVite();
+
+    Carbon::setTestNow('2026-09-16 12:00:00');
+
+    [$konto, $anvandare] = planvyKonto();
+    planvyPro($konto);
+    planvyRaknare($konto, planvyGb(3));
+
+    planvyBilaga($konto, $anvandare, planvyGb(1), now()->subDays(4));
+    planvyBilaga($konto, $anvandare, planvyGb(1), now()->subDays(3));
+    planvyBilaga($konto, $anvandare, planvyGb(0.5), now()->subDays(2));
+    planvyBilaga($konto, $anvandare, planvyGb(0.5), now()->subDay())->delete();
+
+    $props = planvyProps($anvandare, $konto);
+
+    // 2 GB över, 0,5 GB slängt: 1,5 GB ska slängas ur de levande, nyast
+    // först — 0,5 + 1 = 1,5 GB, alltså två bilagor.
+    expect($props['downgrade']['overBytes'])->toBe(planvyGb(2));
+    expect($props['downgrade']['attachmentsToRemove'])->toBe(2);
+});

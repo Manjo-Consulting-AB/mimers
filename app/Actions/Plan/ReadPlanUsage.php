@@ -183,15 +183,16 @@ class ReadPlanUsage
      * App\Console\EnforcesDowngrades::freeStorageLimit() gör när den
      * verkställer steg 4.
      *
-     * **Räkningen följer exakt den ordning steg 4 faktiskt använder**:
-     * bilagorna nyast först (`created_at` fallande med `id` fallande som
-     * andrasortering), summerade tills kontot ryms. Ordningen står i
-     * App\Console\EnforcesDowngrades, och en förhandsvisning som sorterade
-     * annorlunda vore en gissning som inte stämmer med utfallet.
+     * **Räkningen följer exakt vad steg 4 gör** ([[ADR-0009 Kvoter och
+     * livscykel]] § Uppföljning 2026-11-11): först töms det som redan är
+     * slängt, och bara det som då återstår slängs ur de levande, nyast först
+     * (`created_at` fallande med `id` fallande som andrasortering — ordningen
+     * står i App\Console\EnforcesDowngrades).
      *
-     * **Talet är antalet bilagor som faktiskt skulle raderas**, inte ett
-     * teoretiskt minimum: räcker inte bilagorna ända fram raderas alla, precis
-     * som steg 4 gör, och siffran är då antalet som finns.
+     * **Talet är antalet LEVANDE bilagor som steg 4 kommer att slänga.** Räcker
+     * kontots slängda bytes för att komma under gränsen är svaret noll. Räcker
+     * inte bilagorna ända fram slängs alla, som steg 4 gör, och siffran är då
+     * antalet som finns.
      *
      * Räknaren är förbrukningens sanning — därför jämförs utfallet mot
      * `usage_counter` och inte mot summan av raderna nedan (Beslut 8). Raderna
@@ -211,16 +212,25 @@ class ReadPlanUsage
         }
 
         $overBytes = $usedBytes - $freeLimit;
-        $freed = 0;
         $attachments = 0;
+
+        // Slängda bilagor tömmer steg 4 först; de räknas redan i förbrukningen.
+        $trashedBytes = (int) DB::table('attachment')
+            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+            ->where('attachment.billed_account_id', $account->id)
+            ->whereNotNull('attachment.deleted_at')
+            ->sum('stored_file.byte_size');
+
+        $toFree = $overBytes - $trashedBytes;
+        $freed = 0;
 
         // Ett strömmande svep, inte en fråga per bilaga och inte hela listan i
         // minnet. Frågan är App\Models\UsageCounter::calculateStorageBytes()
-        // formulerad för urvalet — samma join mot `stored_file`, samma
-        // `deleted_at`-villkor — och `orderBy` är App\Console\EnforcesDowngrades
+        // formulerad för urvalet — samma join mot `stored_file`, de levande
+        // bilagorna — och `orderBy` är App\Console\EnforcesDowngrades
         // ordning, så förhandsvisningen räknar i exakt den ordning steg 4
         // raderar i.
-        $rows = DB::table('attachment')
+        $rows = $toFree <= 0 ? [] : DB::table('attachment')
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
             ->where('attachment.billed_account_id', $account->id)
             ->whereNull('attachment.deleted_at')
@@ -230,7 +240,7 @@ class ReadPlanUsage
             ->cursor();
 
         foreach ($rows as $row) {
-            if ($freed >= $overBytes) {
+            if ($freed >= $toFree) {
                 break;
             }
 

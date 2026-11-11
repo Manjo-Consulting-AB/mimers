@@ -146,7 +146,8 @@ class ReconcilesUsageCounters
 
     /**
      * Sanningen bakom `usage_counter.storage_bytes`: summan av bytena för
-     * kontots levande bilagor, grupperad per belastat konto. Aggregate-formen
+     * kontots bilagor — levande och slängda, papperskorgen inräknad —
+     * grupperad per belastat konto. Aggregate-formen
      * av UsageCounter::calculateStorageBytes() — samma join, samma predikat.
      *
      * @return array<int, int>
@@ -155,7 +156,6 @@ class ReconcilesUsageCounters
     {
         return DB::table('attachment')
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-            ->whereNull('attachment.deleted_at')
             ->groupBy('attachment.billed_account_id')
             ->selectRaw('attachment.billed_account_id as account_id, COALESCE(SUM(stored_file.byte_size), 0) as total')
             ->pluck('total', 'account_id')

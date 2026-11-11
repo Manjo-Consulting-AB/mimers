@@ -110,7 +110,7 @@ Når räknaren noll: markera för fysisk radering, men **vänta minst 30 dagar**
 
 ## Kvot kontra faktisk lagring
 
-Kvoten mäter vad användaren **upplever** sig lagra: summan av `byte_size` för hens levande attachments. Den faktiska diskförbrukningen är lägre, ibland mycket lägre, eftersom en populär manual bara finns i ett exemplar.
+Kvoten mäter vad användaren **upplever** sig lagra: summan av `byte_size` för hens attachments som inte är fysiskt raderade — papperskorgen inräknad, så en slängd bilaga räknas tills den gallras. Se [[ADR-0009 Kvoter och livscykel]] § Uppföljning 2026-11-11. Den faktiska diskförbrukningen är lägre, ibland mycket lägre, eftersom en populär manual bara finns i ett exemplar.
 
 Båda talen behövs. Fakturera på det första, kapacitetsplanera på det andra. Blandar du ihop dem blir prognosen fel med en faktor tio.
 

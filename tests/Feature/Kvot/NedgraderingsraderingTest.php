@@ -3,11 +3,13 @@
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Container\RemoveContainerCover;
+use App\Actions\Trash\PurgeContent;
 use App\Console\EnforcesDowngrades;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\Plan;
 use App\Models\StoredFile;
 use App\Models\Subscription;
@@ -138,11 +140,24 @@ function raderingForbrukning(int $accountId): int
 }
 
 /**
+ * Summan av kontots LEVANDE bilagors byten — det tal steg 2 i nedgraderingen
+ * styrs av.
+ */
+function raderingLevande(int $accountId): int
+{
+    return (int) DB::table('attachment')
+        ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+        ->where('attachment.billed_account_id', $accountId)
+        ->whereNull('attachment.deleted_at')
+        ->sum('stored_file.byte_size');
+}
+
+/**
  * Kör jobbet precis som schemaläggningen gör.
  */
 function raderingKör(?TrashAttachment $trashAttachment = null): void
 {
-    (new EnforcesDowngrades($trashAttachment ?? app(TrashAttachment::class)))->handle();
+    (new EnforcesDowngrades($trashAttachment ?? app(TrashAttachment::class), app(PurgeContent::class)))->handle();
 }
 
 it('inga items raderas — bara bilagor', function () {
@@ -301,7 +316,9 @@ it('bilagor raderas nyast först', function () {
     expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
     expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->not->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
-    expect(raderingForbrukning($account->id))->toBe(200);
+    // De slängda räknas kvar i förbrukningen; det är de LEVANDE som hamnar på gränsen.
+    expect(raderingForbrukning($account->id))->toBe(1200);
+    expect(raderingLevande($account->id))->toBe(200);
 });
 
 it('raderingen slutar så snart kontot ligger under gränsen', function () {
@@ -325,7 +342,8 @@ it('raderingen slutar så snart kontot ligger under gränsen', function () {
     expect(DB::table('attachment')->where('id', $äldre->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(Attachment::query()->where('billed_account_id', $account->id)->count())->toBe(2);
-    expect(raderingForbrukning($account->id))->toBe(800);
+    expect(raderingForbrukning($account->id))->toBe(1400);
+    expect(raderingLevande($account->id))->toBe(800);
 });
 
 it('målet är gratisplanens gräns', function () {
@@ -350,7 +368,8 @@ it('målet är gratisplanens gräns', function () {
     expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
     expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
-    expect(raderingForbrukning($account->id))->toBe(1000);
+    expect(raderingForbrukning($account->id))->toBe(1500);
+    expect(raderingLevande($account->id))->toBe(1000);
 });
 
 it('raderade bilagor hamnar i papperskorgen', function () {
@@ -374,7 +393,7 @@ it('raderade bilagor hamnar i papperskorgen', function () {
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
 });
 
-it('förbrukningen minskar med det som raderades', function () {
+it('förbrukningen ändras inte av det som slängdes', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     sättPlangräns('free', 'storage_bytes', 1000);
     [$account] = raderingForfalltKonto();
@@ -387,7 +406,9 @@ it('förbrukningen minskar med det som raderades', function () {
 
     raderingKör();
 
-    expect(raderingForbrukning($account->id))->toBe(700);
+    // Papperskorgen räknas: räknaren rör sig först när bilagan raderas fysiskt.
+    expect(raderingForbrukning($account->id))->toBe(1200);
+    expect(raderingLevande($account->id))->toBe(700);
     expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
 });
 
@@ -413,7 +434,8 @@ it('bilagor på ett annat konto rörs inte', function () {
     expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $deras->id)->value('deleted_at'))->toBeNull();
-    expect(raderingForbrukning($account->id))->toBe(800);
+    expect(raderingLevande($account->id))->toBe(800);
+    expect(raderingForbrukning($account->id))->toBe(1600);
 });
 
 it('kontot återgår till active och prenumerationen blir cancelled', function () {
@@ -462,7 +484,7 @@ it('ett konto som redan ligger under gränsen flyttas till active utan radering'
     expect($subscription->refresh()->status)->toBe('cancelled');
 });
 
-it('när bilagorna tar slut innan gränsen nås loggas det och kontot blir ändå active', function () {
+it('en räknare som ligger över sanningen rör inga levande bilagor som ryms', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     $logg = Log::spy();
     sättPlangräns('free', 'storage_bytes', 100);
@@ -471,31 +493,136 @@ it('när bilagorna tar slut innan gränsen nås loggas det och kontot blir änd�
     [, $item] = raderingContainerItem($account, $user);
     $bilaga = raderingBilaga($item, $user, $account, 100);
 
-    // Räknaren står på 300 — mer än vad bilagan någonsin kan frigöra (t.ex.
-    // en räknare 26b inte hunnit stämma av, eller byten på fel konto). Den
-    // enda bilagan raderas (300 → 200) och kontot ligger ÄNDÅ över gränsen.
+    // Räknaren står på 300 — mer än bilagorna väger (en räknare avstämningen
+    // inte hunnit rätta). Steg 2 styrs av de LEVANDE bytena (100, ryms), så
+    // ingen bilaga slängs; kontot blir ändå active.
     raderingStallForbrukning($account->id, 300);
 
     raderingKör();
 
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
+    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->toBeNull();
     expect($account->refresh()->status)->toBe('active');
     expect($subscription->refresh()->status)->toBe('cancelled');
-    expect(raderingForbrukning($account->id))->toBe(200);
+    expect(raderingForbrukning($account->id))->toBe(300);
 
-    $logg->shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.attachments_exhausted'
-            && ($kontext['account_ulid'] ?? null) === $account->ulid
-            && ($kontext['used_bytes'] ?? null) === 200
-            && ($kontext['limit_bytes'] ?? null) === 100,
-    );
     $logg->shouldHaveReceived('info')->once()->withArgs(
         fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.enforced'
+            && ($kontext['account_ulid'] ?? null) === $account->ulid
+            && ($kontext['purged'] ?? null) === 0
+            && ($kontext['removed'] ?? null) === 0,
+    );
+});
+
+it('steg 1: det slängda raderas fysiskt, äldst slängd först, och ingen levande bilaga rörs', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    $logg = Log::spy();
+    sättPlangräns('free', 'storage_bytes', 1000);
+    [$account] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+
+    $levande = raderingBilaga($item, $user, $account, 600);
+    $slängdÄldst = raderingBilaga($item, $user, $account, 300, ['deleted_at' => Carbon::parse('2026-08-01 12:00:00')]);
+    $slängdMellan = raderingBilaga($item, $user, $account, 300, ['deleted_at' => Carbon::parse('2026-08-10 12:00:00')]);
+    $slängdNyast = raderingBilaga($item, $user, $account, 300, ['deleted_at' => Carbon::parse('2026-08-20 12:00:00')]);
+    raderingStallForbrukning($account->id, 1500);
+
+    raderingKör();
+
+    // 1500 → 1200 (över) → 900 (under): de två äldst slängda går, den nyast
+    // slängda står kvar i papperskorgen.
+    expect(Attachment::withTrashed()->whereKey($slängdÄldst->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->whereKey($slängdMellan->id)->exists())->toBeFalse();
+    expect(Attachment::onlyTrashed()->whereKey($slängdNyast->id)->exists())->toBeTrue();
+    expect(DB::table('attachment')->where('id', $levande->id)->value('deleted_at'))->toBeNull();
+    expect(raderingForbrukning($account->id))->toBe(900);
+
+    expect($account->refresh()->status)->toBe('active');
+    $logg->shouldHaveReceived('info')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.enforced'
+            && ($kontext['purged'] ?? null) === 2
+            && ($kontext['removed'] ?? null) === 0,
+    );
+});
+
+it('steg 2: räcker det slängda inte slängs levande nyast först tills de levande ryms', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    sättPlangräns('free', 'storage_bytes', 500);
+    [$account, $subscription] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+
+    $äldst = raderingBilaga($item, $user, $account, 200, ['created_at' => Carbon::parse('2026-06-01 12:00:00')]);
+    $mellan = raderingBilaga($item, $user, $account, 200, ['created_at' => Carbon::parse('2026-07-01 12:00:00')]);
+    $nyast = raderingBilaga($item, $user, $account, 200, ['created_at' => Carbon::parse('2026-08-01 12:00:00')]);
+    $slängd = raderingBilaga($item, $user, $account, 100, ['deleted_at' => Carbon::parse('2026-08-15 12:00:00')]);
+    raderingStallForbrukning($account->id, 700);
+
+    raderingKör();
+
+    // Det slängda (100) tömmer 700 → 600, fortfarande över. De levande väger
+    // 600 och ska ner till 500: bara den nyaste slängs — inte en enda till.
+    expect(Attachment::withTrashed()->whereKey($slängd->id)->exists())->toBeFalse();
+    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
+    expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->toBeNull();
+    expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
+    expect(raderingLevande($account->id))->toBe(400);
+    expect(raderingForbrukning($account->id))->toBe(600);
+
+    expect($account->refresh()->status)->toBe('active');
+    expect($subscription->refresh()->status)->toBe('cancelled');
+    expect($subscription->grace_until)->toBeNull();
+});
+
+it('ett konto med fler levande bilagor än gränsen rymmer förlorar inte alla', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    sättPlangräns('free', 'storage_bytes', 1000);
+    [$account] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+
+    $äldst = raderingBilaga($item, $user, $account, 400, ['created_at' => Carbon::parse('2026-06-01 12:00:00')]);
+    $äldre = raderingBilaga($item, $user, $account, 400, ['created_at' => Carbon::parse('2026-06-15 12:00:00')]);
+    $yngre = raderingBilaga($item, $user, $account, 400, ['created_at' => Carbon::parse('2026-07-01 12:00:00')]);
+    $yngst = raderingBilaga($item, $user, $account, 400, ['created_at' => Carbon::parse('2026-08-01 12:00:00')]);
+    raderingStallForbrukning($account->id, 1600);
+
+    raderingKör();
+
+    expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
+    expect(DB::table('attachment')->where('id', $äldre->id)->value('deleted_at'))->toBeNull();
+    expect(DB::table('attachment')->where('id', $yngre->id)->value('deleted_at'))->not->toBeNull();
+    expect(DB::table('attachment')->where('id', $yngst->id)->value('deleted_at'))->not->toBeNull();
+    expect(raderingLevande($account->id))->toBe(800);
+});
+
+it('ett konto under rättslig spärr rörs inte av nedgraderingen', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    $logg = Log::spy();
+    sättPlangräns('free', 'storage_bytes', 100);
+    [$account, $subscription] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+    $levande = raderingBilaga($item, $user, $account, 400);
+    $slängd = raderingBilaga($item, $user, $account, 400, ['deleted_at' => Carbon::parse('2026-08-01 12:00:00')]);
+    raderingStallForbrukning($account->id, 800);
+    LegalHold::factory()->create(['account_id' => $account->id]);
+
+    raderingKör();
+
+    expect(DB::table('attachment')->where('id', $levande->id)->value('deleted_at'))->toBeNull();
+    expect(Attachment::onlyTrashed()->whereKey($slängd->id)->exists())->toBeTrue();
+    expect($account->refresh()->status)->toBe('read_only');
+    expect($subscription->refresh()->status)->toBe('past_due');
+    expect(raderingForbrukning($account->id))->toBe(800);
+
+    $logg->shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.legal_hold'
             && ($kontext['account_ulid'] ?? null) === $account->ulid,
     );
 });
 
-it('en återställning som spränger kvoten nekas', function () {
+it('en återställning lyckas även när kontot ligger över sin gräns och räknaren rörs inte', function () {
     sättPlangräns('free', 'storage_bytes', 1000);
     [$account, $user, $headers] = kontoMedMedlem();
     [$container, $item] = raderingContainerItem($account, $user);
@@ -504,30 +631,21 @@ it('en återställning som spränger kvoten nekas', function () {
     $raderad = raderingBilaga($item, $user, $account, 500);
     raderingStallForbrukning($account->id, 1100);
 
-    // Bilagan mjukraderas den vanliga vägen (lagringsvyn raderar för gott sedan
-    // issue 1060); räknaren följer med.
+    // Att slänga rör inte räknaren: bilagan räknas tills den raderas för gott.
     app(TrashAttachment::class)->handle($raderad, $user);
-    expect(raderingForbrukning($account->id))->toBe(600);
+    expect(raderingForbrukning($account->id))->toBe(1100);
 
-    // Att återställa den skulle föra kontot över kvoten igen (600 + 500 >
-    // 1000) — det hålet som Beslut 6 stänger, med samma felkod som
-    // uppladdningen ger.
     $återställning = postJson("/api/containers/{$container->ulid}/trash/restore", [
         'type' => 'attachment',
         'ulid' => $raderad->ulid,
     ], $headers);
 
-    $återställning->assertStatus(403);
-    expect($återställning->json('error.code'))->toBe('quota.storage_exceeded');
-    expect($återställning->json('error.data'))->toBe([
-        'limit_bytes' => 1000,
-        'used_bytes' => 600,
-        'file_bytes' => 500,
-    ]);
-
-    expect(DB::table('attachment')->where('id', $raderad->id)->value('deleted_at'))->not->toBeNull();
+    // Bilagan räknades hela tiden, så kvoten prövas inte och
+    // `quota.storage_exceeded` kan inte komma.
+    $återställning->assertOk();
+    expect(DB::table('attachment')->where('id', $raderad->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $kvar->id)->value('deleted_at'))->toBeNull();
-    expect(raderingForbrukning($account->id))->toBe(600);
+    expect(raderingForbrukning($account->id))->toBe(1100);
 });
 
 it('en återställning som ryms fungerar som förut', function () {

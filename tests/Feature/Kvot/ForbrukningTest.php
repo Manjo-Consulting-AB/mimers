@@ -164,7 +164,7 @@ it('två bilagor på samma innehåll räknas båda', function () {
     expect(forbrukningRad($account->id)->storage_bytes)->toBe($första->storedFile->byte_size * 2);
 });
 
-it('en mjukraderad bilaga räknas inte längre', function () {
+it('en mjukraderad bilaga räknas fortfarande', function () {
     [$account, $user, $container, $item, $headers] = forbrukningSetup();
     $bilaga = forbrukningLaddaUpp($item, $user, $account, 'ska bort');
     $byteSize = $bilaga->storedFile->byte_size;
@@ -176,11 +176,12 @@ it('en mjukraderad bilaga räknas inte längre', function () {
         $headers,
     )->assertNoContent();
 
-    // Mjukraderingen och minskningen i samma transaktion (Beslut 4).
-    expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
+    // Papperskorgen ingår: att slänga rör inte räknaren (ADR-0009,
+    // uppföljning 2026-11-11).
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe($byteSize);
 });
 
-it('en återställd bilaga räknas igen', function () {
+it('en återställd bilaga ändrar inte räknaren', function () {
     [$account, $user, $container, $item, $headers] = forbrukningSetup();
     $bilaga = forbrukningLaddaUpp($item, $user, $account, 'kommer tillbaka');
     $byteSize = $bilaga->storedFile->byte_size;
@@ -190,7 +191,7 @@ it('en återställd bilaga räknas igen', function () {
         [],
         $headers,
     )->assertNoContent();
-    expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe($byteSize);
 
     postJson(
         "/api/containers/{$container->ulid}/trash/restore",
@@ -201,7 +202,7 @@ it('en återställd bilaga räknas igen', function () {
     expect(forbrukningRad($account->id)->storage_bytes)->toBe($byteSize);
 });
 
-it('en gallrad bilaga som redan var mjukraderad minskar inte räknaren en andra gång', function () {
+it('en gallrad bilaga som var mjukraderad minskar räknaren först när den raderas fysiskt', function () {
     [$account, $user, $container, $item, $headers] = forbrukningSetup();
     $bilaga = forbrukningLaddaUpp($item, $user, $account, 'ska gallras');
     $byteSize = $bilaga->storedFile->byte_size;
@@ -211,10 +212,11 @@ it('en gallrad bilaga som redan var mjukraderad minskar inte räknaren en andra 
         [],
         $headers,
     )->assertNoContent();
-    expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe($byteSize);
 
-    // 30 dagar senare gallras bilagan — minskningen skedde redan vid
-    // mjukraderingen, ett andra avdrag vore dubbelräkning (Beslut 6).
+    // 30 dagar senare gallras bilagan — först nu lämnar bytena räknaren,
+    // och bara en gång.
+    (new PurgeAttachment)->handle($bilaga);
     (new PurgeAttachment)->handle($bilaga);
 
     expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
@@ -345,15 +347,15 @@ it('räknaren stämmer med sanningsfrågan efter en blandad följd av händelser
     $attC = forbrukningLaddaUpp($item, $user, $account, 'ccc');
     expect(forbrukningRad($account->id)->storage_bytes)->toBe(5);
 
-    // Mjukradera attA, återställ den.
+    // Mjukradera attA, återställ den — räknaren rörs aldrig.
     deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$attA->ulid}", [], $headers)->assertNoContent();
-    expect(forbrukningRad($account->id)->storage_bytes)->toBe(4);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(5);
     postJson("/api/containers/{$container->ulid}/trash/restore", ['type' => 'attachment', 'ulid' => $attA->ulid], $headers)->assertOk();
     expect(forbrukningRad($account->id)->storage_bytes)->toBe(5);
 
-    // Mjukradera attC och gallra den — minskningen sker en gång.
+    // Mjukradera attC och gallra den — minskningen sker en gång, vid gallringen.
     deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$attC->ulid}", [], $headers)->assertNoContent();
-    expect(forbrukningRad($account->id)->storage_bytes)->toBe(2);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(5);
     (new PurgeAttachment)->handle($attC);
     expect(forbrukningRad($account->id)->storage_bytes)->toBe(2);
 
@@ -374,4 +376,47 @@ it('räknaren stämmer med sanningsfrågan efter en blandad följd av händelser
     expect(forbrukningRad($account->id)->container_count)->toBe(UsageCounter::calculateContainerCount($account->id));
     expect(UsageCounter::calculateStorageBytes($account->id))->toBe(2);
     expect(UsageCounter::calculateContainerCount($account->id))->toBe(1);
+});
+
+it('en fysisk radering minskar räknaren, för både en slängd och en levande bilaga', function () {
+    [$account, $user, $container, $item, $headers] = forbrukningSetup();
+    $slängd = forbrukningLaddaUpp($item, $user, $account, 'slängd');
+    $levande = forbrukningLaddaUpp($item, $user, $account, 'levande bilaga');
+    $totalt = $slängd->storedFile->byte_size + $levande->storedFile->byte_size;
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe($totalt);
+
+    deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$slängd->ulid}", [], $headers)->assertNoContent();
+
+    $purgeContent = new PurgeContent(new PurgeAttachment);
+    $purgeContent->attachment($slängd);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe($levande->storedFile->byte_size);
+
+    $purgeContent->attachment($levande);
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
+});
+
+it('uppladda, släng, uppladda igen kan inte passera kvoten', function () {
+    sättPlangräns('free', 'storage_bytes', 1000);
+    [$account, $user, $container, $item, $headers] = forbrukningSetup();
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/attachments";
+    $ladda = fn (string $namn) => postJson($url, [
+        'file' => UploadedFile::fake()->createWithContent($namn, str_repeat($namn[0], 600)),
+        'account' => $account->ulid,
+    ], $headers);
+
+    $första = $ladda('a.pdf');
+    $första->assertCreated();
+    deleteJson("{$url}/{$första->json('data.ulid')}", [], $headers)->assertNoContent();
+
+    // Den slängda filen räknas fortfarande: 600 + 600 > 1000.
+    $andra = $ladda('b.pdf');
+    $andra->assertStatus(403);
+    expect($andra->json('error.code'))->toBe('quota.storage_exceeded');
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(600);
+
+    // Efter att papperskorgen tömts släpps uppladdningen igenom.
+    (new PurgeContent(new PurgeAttachment))->attachment(Attachment::onlyTrashed()->firstOrFail());
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(0);
+    $ladda('b.pdf')->assertCreated();
+    expect(forbrukningRad($account->id)->storage_bytes)->toBe(600);
 });

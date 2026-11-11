@@ -44,16 +44,12 @@ class PurgeAttachment
     public function handle(Attachment $attachment): void
     {
         DB::transaction(function () use ($attachment): void {
-            // Steg 1 och issue 26a § Beslut 6 — läs tillståndet INNAN raden
-            // försvinner: `billed_account_id`, `byte_size` och `deleted_at`
-            // sitter på rader som den här actionen inte kan läsa efter
-            // forceDelete. Den vanliga vägen — mjukradering, 30 dagar i
-            // papperskorgen, gallring — minskade redan kontots räknare vid
-            // mjukraderingen; ett andra avdrag här vore dubbelräkning. Men
-            // PurgeContainer och PurgeContent::item() gallrar också bilagor
-            // som ALDRIG mjukraderades, och för de raderna är det HÄR bytena
-            // lämnar räkningen. withTrashed() eftersom bilagan ofta kommer
-            // från papperskorgen.
+            // Läs tillståndet INNAN raden försvinner: `billed_account_id` och
+            // `byte_size` sitter på rader som den här actionen inte kan läsa
+            // efter forceDelete. En slängd bilaga räknas i kvoten tills den
+            // raderas fysiskt, så avdraget görs alltid här — oavsett om
+            // raden var levande eller i papperskorgen. withTrashed() eftersom
+            // bilagan ofta kommer från papperskorgen.
             //
             // lockForUpdate — en current read. När actionen körs inifrån
             // PurgeContent::item()/PurgeContainer ligger den i en redan öppen
@@ -74,7 +70,6 @@ class PurgeAttachment
             $storedFileId = $rad->stored_file_id;
             $billedAccountId = $rad->billed_account_id;
             $byteSize = (int) StoredFile::query()->whereKey($storedFileId)->value('byte_size');
-            $varLevande = ! $rad->trashed();
 
             // Öppningsraderna först (issue 177 · [[ADR-0051 Senast öppnade
             // filer]] § Beslut): `attachment_open.attachment_id` är ON DELETE
@@ -114,13 +109,10 @@ class PurgeAttachment
                 ->where('reference_count', '>', 0)
                 ->decrement('reference_count');
 
-            // issue 26a — en bilaga som var LEVANDE precis innan gallringen
-            // slutar vara levande nu, och bytena lämnar kontots räknare.
-            // Klampningen i AdjustUsage skyddar mot att en redan drivande
-            // räknare (26b:s avstämning har inte hunnit larma) går under noll.
-            if ($varLevande) {
-                (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
-            }
+            // Bytena lämnar kontots räknare nu, när raden är borta. Klampningen
+            // i AdjustUsage skyddar mot att en redan drivande räknare
+            // (avstämningen har inte hunnit larma) går under noll.
+            (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
 
             // Sist: räknaren läses om INOM transaktionen — två samtidiga
             // gallringar får inte tappa en minskning. lockForUpdate är en

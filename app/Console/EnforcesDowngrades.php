@@ -3,8 +3,10 @@
 namespace App\Console;
 
 use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Trash\PurgeContent;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\LegalHold;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
@@ -32,19 +34,28 @@ use Throwable;
  * och lämnas orört; det är ett tillstånd som bara kan ha uppstått för hand och
  * det ska synas.
  *
- * Raderingen går genom App\Actions\Attachment\TrashAttachment (Beslut 4):
- * mjukradering plus förbrukningsminskning i en transaktion, samma väg och
- * samma skyddsnät som varje annan radering i systemet. Bilagorna hamnar i
- * papperskorgen och gallras 30 dagar senare av issue 20b. Målet är
- * gratisplanens `storage_bytes` (Beslut 3), läst genom planuppslaget — aldrig
- * en konstant och aldrig kontots gamla plan.
+ * **Papperskorgen räknas i kvoten** ([[ADR-0009 Kvoter och livscykel]] §
+ * Uppföljning 2026-11-11): en slängd bilaga ligger i `usage_counter` tills
+ * den raderats fysiskt. Steg 4 går därför i två steg. Först töms det som
+ * redan är slängt — äldst `deleted_at` först, genom PurgeContent::attachment()
+ * — så länge räknaren ligger över gränsen. Räcker det inte slängs kontots
+ * LEVANDE bilagor, nyast först, genom TrashAttachment tills de levande
+ * ligger på eller under gränsen; räknaren sjunker inte av en slängning, så
+ * loopen styrs av ett levande tal som räknas en gång och dras ned lokalt.
+ * De nyslängda bilagorna ligger sedan i papperskorgen i 30 dagar och räknas
+ * under tiden, så kontot kan vara `active` på gratisnivån och ändå ligga
+ * över kvoten — uppladdningar är spärrade tills papperskorgen tömts. Det är
+ * avsett. Målet är gratisplanens `storage_bytes` (Beslut 3), läst genom
+ * planuppslaget — aldrig en konstant och aldrig kontots gamla plan.
  *
- * Förbrukningen läses ur `usage_counter`, inte som en egen SUM, och läses om
- * efter varje radering — räknaren är sanningen kontrollerna använder (26a,
- * 27b) och TrashAttachment minskar den i sin egen transaktion. Loopen slutar
- * så snart räknaren ligger lika med eller under gränsen, eller när bilagorna
- * tar slut (räknaren kan vara felställd och bytena ligga någon annanstans) —
- * den snurrar aldrig.
+ * Förbrukningen i steg 1 läses ur `usage_counter`, inte som en egen SUM, och
+ * läses om efter varje fysisk radering. Loopen slutar så snart räknaren
+ * ligger lika med eller under gränsen, eller när bilagorna tar slut — den
+ * snurrar aldrig.
+ *
+ * **Rättslig spärr:** täcks kontot av en spärr (LegalHold::covers) görs
+ * ingenting — ingen radering, ingen statusändring. `downgrade.legal_hold`
+ * loggas och kontot förblir `read_only`.
  *
  * Ett konto i taget, en transaktion per konto (Beslut 8): faller ett konto
  * rullas bara dess egen transaktion tillbaka, felet loggas och de andra
@@ -52,13 +63,14 @@ use Throwable;
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
  * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
- * Klassens enda beroende (TrashAttachment) injiceras för att testerna ska
+ * Klassens beroenden (TrashAttachment, PurgeContent) injiceras för att testerna ska
  * kunna låta en bilaga kasta — samma mönster som PurgesExpiredTrash.
  */
 class EnforcesDowngrades
 {
     public function __construct(
         private readonly TrashAttachment $trashAttachment,
+        private readonly PurgeContent $purgeContent,
     ) {}
 
     /**
@@ -120,34 +132,75 @@ class EnforcesDowngrades
                 return;
             }
 
+            // Rättslig spärr: varken radering eller statusändring. Kontot
+            // förblir read_only och spärren syns i loggen.
+            if (LegalHold::covers($row)) {
+                Log::warning('downgrade.legal_hold', ['account_ulid' => $row->ulid]);
+
+                return;
+            }
+
             $removed = 0;
+            $purged = 0;
             $bytesFreed = 0;
             $limit = $this->freeStorageLimit();
 
             // En gräns som är null betyder obegränsat (issue 25): det finns
             // inget att komma under, och ingenting att radera.
-            while ($limit !== null && $this->usedBytes($row->id) > $limit) {
-                $attachment = Attachment::query()
-                    ->where('billed_account_id', $row->id)
-                    ->orderByDesc('created_at')
-                    ->orderByDesc('id')
-                    ->first();
+            if ($limit !== null) {
+                // Steg 1: töm det som redan är slängt, äldst slängd först.
+                // En fysisk radering minskar räknaren; finns inget slängt
+                // kvar går vi vidare till de levande.
+                while ($this->usedBytes($row->id) > $limit) {
+                    $trashed = Attachment::onlyTrashed()
+                        ->where('billed_account_id', $row->id)
+                        ->orderBy('deleted_at')
+                        ->orderBy('id')
+                        ->first();
 
-                if ($attachment === null) {
-                    Log::warning('downgrade.attachments_exhausted', [
-                        'account_ulid' => $row->ulid,
-                        'used_bytes' => $this->usedBytes($row->id),
-                        'limit_bytes' => $limit,
-                    ]);
+                    if ($trashed === null) {
+                        break;
+                    }
 
-                    break;
+                    $this->purgeContent->attachment($trashed);
+                    $purged++;
                 }
 
-                $byteSize = (int) $attachment->storedFile()->value('byte_size');
+                // Steg 2: släng levande bilagor, nyast först, tills de
+                // LEVANDE ligger på eller under gränsen. Räknaren rör sig
+                // inte av en slängning, så det levande talet räknas en gång
+                // och dras ned lokalt.
+                $liveBytes = (int) DB::table('attachment')
+                    ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+                    ->where('attachment.billed_account_id', $row->id)
+                    ->whereNull('attachment.deleted_at')
+                    ->sum('stored_file.byte_size');
 
-                if ($this->trashAttachment->handle($attachment)) {
-                    $removed++;
-                    $bytesFreed += $byteSize;
+                while ($liveBytes > $limit) {
+                    $attachment = Attachment::query()
+                        ->where('billed_account_id', $row->id)
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id')
+                        ->first();
+
+                    if ($attachment === null) {
+                        Log::warning('downgrade.attachments_exhausted', [
+                            'account_ulid' => $row->ulid,
+                            'used_bytes' => $this->usedBytes($row->id),
+                            'limit_bytes' => $limit,
+                        ]);
+
+                        break;
+                    }
+
+                    $byteSize = (int) $attachment->storedFile()->value('byte_size');
+
+                    if ($this->trashAttachment->handle($attachment)) {
+                        $removed++;
+                        $bytesFreed += $byteSize;
+                    }
+
+                    $liveBytes -= $byteSize;
                 }
             }
 
@@ -164,6 +217,7 @@ class EnforcesDowngrades
 
             Log::info('downgrade.enforced', [
                 'account_ulid' => $row->ulid,
+                'purged' => $purged,
                 'removed' => $removed,
                 'bytes_freed' => $bytesFreed,
             ]);
