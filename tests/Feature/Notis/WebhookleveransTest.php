@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: de två nya leveransproven är regressionsskydd för beteende som redan gäller på basen (ett uppslag per leverans, inget HTTP-anrop vid privat adress); den nya koden bevisas av LastUppslagTest och UrlSakerhetTest.
+
 use App\Actions\Account\DeleteAccount;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Notification\CreateNotification;
