@@ -20,6 +20,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `status`, `attempts`, `response_status`, `last_error`, `next_attempt_at`
  * och `delivered_at`.
  *
+ * `claimed_at` sätts när en arbetare tar raden och nollställs när utfallet
+ * skrivits; en rad vars claim är äldre än tio minuter är ledig igen (issue
+ * 1055).
+ *
  * `ulid` finns för att en leverans ska gå att peka ut i en supportfråga utan
  * att löpnumret läcker (Beslut 1), även om ingen rutt exponerar den i MVP.
  * Inget `deleted_at` — raderna är systemgenererad bokföring, och städningen
@@ -69,6 +73,7 @@ class WebhookDelivery extends Model
             'attempts' => 'integer',
             'response_status' => 'integer',
             'next_attempt_at' => 'datetime',
+            'claimed_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];
     }
