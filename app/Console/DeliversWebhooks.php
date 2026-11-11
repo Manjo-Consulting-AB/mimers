@@ -5,6 +5,7 @@ namespace App\Console;
 use App\Models\Notification;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookEndpoint;
+use App\Support\Notification\PinnedResolution;
 use App\Support\Notification\UnsafeUrlException;
 use App\Support\Notification\UrlSafetyValidator;
 use App\Support\Notification\WebhookSignature;
@@ -134,7 +135,7 @@ class DeliversWebhooks
             // utan omförsök — en URL som blivit farlig blir inte ofarlig av
             // att man försöker igen.
             try {
-                $this->urlSafety->assertSafe($endpoint->url);
+                $ips = $this->urlSafety->resolveSafe($endpoint->url);
             } catch (UnsafeUrlException $e) {
                 $delivery->attempts = $delivery->attempts + 1;
                 $delivery->status = WebhookDelivery::STATUS_FAILED;
@@ -148,7 +149,7 @@ class DeliversWebhooks
             $body = $this->buildBody($notification);
 
             try {
-                $response = $this->send($endpoint, $delivery, $notification, $body);
+                $response = $this->send($endpoint, $delivery, $notification, $body, $ips);
             } catch (Throwable $e) {
                 $delivery->attempts = $delivery->attempts + 1;
 
@@ -227,12 +228,16 @@ class DeliversWebhooks
      * den ursprungliga URL:en. Kroppen skickas med `withBody` som EXAKT den
      * JSON-sträng som signerades (Beslut 9) — `Http::post($url, $array)`
      * serialiserar själv och skulle ge en annan sträng.
+     *
+     * @param  list<string>  $ips  adresserna SSRF-kontrollen godkände; klienten
+     *                             ansluter till exakt dem (DNS rebinding)
      */
     private function send(
         WebhookEndpoint $endpoint,
         WebhookDelivery $delivery,
         Notification $notification,
         string $body,
+        array $ips,
     ): Response {
         $timestamp = now()->getTimestamp();
 
@@ -244,6 +249,7 @@ class DeliversWebhooks
 
         return Http::withHeaders($headers)
             ->withoutRedirecting()
+            ->withOptions(PinnedResolution::options($endpoint->url, $ips))
             ->timeout((int) config('notiser.webhook.timeout_seconds', 5))
             ->withBody($body, 'application/json')
             ->post($endpoint->url);
