@@ -103,6 +103,9 @@ class GenerateImageDerivatives implements ShouldQueue
 
     private const LIMIT_SIDE_PIXELS = 16_000;
 
+    /** Byte per pixel i en GD-truecolorbild, med marginal. */
+    private const GD_BYTES_PER_PIXEL = 5;
+
     /**
      * Söm för proven: `null` läser `extension_loaded('imagick')`, `true` och
      * `false` tvingar svaret.
@@ -157,15 +160,45 @@ class GenerateImageDerivatives implements ShouldQueue
             return;
         }
 
+        $path = Storage::disk('files')->path($this->storedFile->storage_path);
+
+        // Måtten prövas före avkodning: ett minnesfel är fatalt och fångas
+        // inte av catch (Throwable) nedan — det tar köarbetaren med sig.
+        $size = @getimagesize($path);
+
+        if ($size === false) {
+            Log::warning('Bildens mått kunde inte läsas — genererar inga miniatyrer', [
+                'stored_file_id' => $this->storedFile->id,
+                'storage_path' => $this->storedFile->storage_path,
+            ]);
+
+            return;
+        }
+
+        [$width, $height] = $size;
+
+        if (
+            $width > self::LIMIT_SIDE_PIXELS
+            || $height > self::LIMIT_SIDE_PIXELS
+            || $width * $height > self::LIMIT_AREA_PIXELS
+            || ! self::fitsInMemory($width, $height, self::remainingMemoryBytes())
+        ) {
+            Log::warning('Bilden är för stor för miniatyrer', [
+                'stored_file_id' => $this->storedFile->id,
+                'storage_path' => $this->storedFile->storage_path,
+                'width' => $width,
+                'height' => $height,
+            ]);
+
+            return;
+        }
+
         try {
             // Storage::disk('files')->path() ger GD den lokala sökvägen.
             // All filhantering går genom Storage-abstraktionen
             // ([[ADR-0007 Fillagring hos inleed]]); `path()` är bara hur GD,
             // som inte kan läsa en abstraktion, nås fram till bytena.
-            $original = $this->readImage(
-                $this->storedFile->mime_type,
-                Storage::disk('files')->path($this->storedFile->storage_path),
-            );
+            $original = $this->readImage($this->storedFile->mime_type, $path);
 
             try {
                 $this->generateVariants($original);
@@ -181,6 +214,39 @@ class GenerateImageDerivatives implements ShouldQueue
                 'exception' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Ryms en avkodad bild på bredd × höjd pixlar i det minne som är kvar?
+     * `null` = obegränsat (memory_limit -1).
+     */
+    public static function fitsInMemory(int $width, int $height, ?int $remainingBytes): bool
+    {
+        return $remainingBytes === null
+            || $width * $height * self::GD_BYTES_PER_PIXEL <= $remainingBytes;
+    }
+
+    /**
+     * memory_limit minus använt minne i byte, eller null när gränsen är -1.
+     */
+    private static function remainingMemoryBytes(): ?int
+    {
+        $raw = trim((string) ini_get('memory_limit'));
+
+        if ($raw === '' || $raw === '-1') {
+            return null;
+        }
+
+        $bytes = (int) $raw;
+
+        $bytes *= match (strtoupper(substr($raw, -1))) {
+            'K' => 1024,
+            'M' => 1024 ** 2,
+            'G' => 1024 ** 3,
+            default => 1,
+        };
+
+        return max(0, $bytes - memory_get_usage(true));
     }
 
     /**
