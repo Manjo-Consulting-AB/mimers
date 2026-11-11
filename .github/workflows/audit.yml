@@ -1,0 +1,38 @@
+name: Beroendegranskning
+
+# Eget flöde, medvetet utanför ci.yml: en sårbarhet som publiceras i morgon
+# skulle annars fälla varje orelaterad PR och stoppa kön.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'composer.lock'
+      - 'package-lock.json'
+      - '.github/workflows/audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Composer audit
+        run: composer audit --locked --no-interaction
+
+      - name: npm audit
+        run: npm audit --omit=dev
