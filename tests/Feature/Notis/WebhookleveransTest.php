@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 use function Pest\Laravel\artisan;
@@ -634,4 +635,115 @@ it('markerar leveransen failed utan HTTP-anrop när resolvern svarar en privat a
 
     expect($leverans->fresh()->status)->toBe(WebhookDelivery::STATUS_FAILED);
     Http::assertNothingSent();
+});
+
+/*
+ * Issue 1055 · Anropet görs utanför databastransaktionen. Raden tas med
+ * `claimed_at` i en kort transaktion, anropet görs utan transaktion och utfallet
+ * skrivs i en andra.
+ */
+
+it('lägger till webhook_delivery.claimed_at som nullbar tidsstämpel och tar bort den i down()', function () {
+    expect(Schema::hasColumn('webhook_delivery', 'claimed_at'))->toBeTrue();
+
+    $kolumn = collect(Schema::getColumns('webhook_delivery'))->firstWhere('name', 'claimed_at');
+    expect($kolumn['nullable'])->toBeTrue();
+
+    $migration = require base_path('database/migrations/2026_11_12_000000_add_claimed_at_to_webhook_delivery_table.php');
+    $migration->down();
+    expect(Schema::hasColumn('webhook_delivery', 'claimed_at'))->toBeFalse();
+
+    $migration->up();
+    expect(Schema::hasColumn('webhook_delivery', 'claimed_at'))->toBeTrue();
+});
+
+it('gör HTTP-anropet utanför transaktion med claimed_at satt, och nollställer det efteråt', function () {
+    Carbon::setTestNow('2026-11-12 12:00:00');
+    [$account] = webhookKonto();
+    $endpoint = webhookEndpoint($account);
+    $leverans = webhookLeverans($endpoint);
+
+    $grundnivå = DB::transactionLevel();
+    $nivåUnderAnrop = null;
+    $claimedUnderAnrop = null;
+
+    Http::fake(function () use ($leverans, &$nivåUnderAnrop, &$claimedUnderAnrop) {
+        $nivåUnderAnrop = DB::transactionLevel();
+        $claimedUnderAnrop = DB::table('webhook_delivery')->where('id', $leverans->id)->value('claimed_at');
+
+        return Http::response('ok', 200);
+    });
+
+    webhookKor();
+
+    expect($nivåUnderAnrop)->toBe($grundnivå);
+    expect($claimedUnderAnrop)->not->toBeNull();
+
+    $rad = $leverans->fresh();
+    expect($rad->claimed_at)->toBeNull();
+    expect($rad->status)->toBe(WebhookDelivery::STATUS_SENT);
+    expect($rad->delivered_at)->not->toBeNull();
+});
+
+it('plockar inte en rad vars claimed_at är fem minuter gammal', function () {
+    Http::fake();
+    Carbon::setTestNow('2026-11-12 12:00:00');
+    [$account] = webhookKonto();
+    $leverans = webhookLeverans(webhookEndpoint($account), [], ['claimed_at' => now()->subMinutes(5)]);
+
+    webhookKor();
+
+    Http::assertNothingSent();
+    $rad = $leverans->fresh();
+    expect($rad->status)->toBe(WebhookDelivery::STATUS_PENDING);
+    expect($rad->attempts)->toBe(0);
+    expect($rad->claimed_at->toDateTimeString())->toBe('2026-11-12 11:55:00');
+});
+
+it('plockar och levererar en rad vars claimed_at är elva minuter gammal', function () {
+    Http::fake(['*' => Http::response('ok', 200)]);
+    Carbon::setTestNow('2026-11-12 12:00:00');
+    [$account] = webhookKonto();
+    $leverans = webhookLeverans(webhookEndpoint($account), [], ['claimed_at' => now()->subMinutes(11)]);
+
+    webhookKor();
+
+    Http::assertSentCount(1);
+    $rad = $leverans->fresh();
+    expect($rad->status)->toBe(WebhookDelivery::STATUS_SENT);
+    expect($rad->claimed_at)->toBeNull();
+});
+
+it('nollställer claimed_at efter HTTP 500 och sätter nästa försök en minut fram', function () {
+    Http::fake(['*' => Http::response('fel', 500)]);
+    Carbon::setTestNow('2026-11-12 12:00:00');
+    [$account] = webhookKonto();
+    $leverans = webhookLeverans(webhookEndpoint($account));
+
+    webhookKor();
+
+    $rad = $leverans->fresh();
+    expect($rad->claimed_at)->toBeNull();
+    expect($rad->status)->toBe(WebhookDelivery::STATUS_PENDING);
+    expect($rad->attempts)->toBe(1);
+    expect($rad->next_attempt_at->toDateTimeString())->toBe('2026-11-12 12:01:00');
+});
+
+it('skriver inte över utfallet när raden ändrats till failed medan anropet pågår', function () {
+    Carbon::setTestNow('2026-11-12 12:00:00');
+    [$account] = webhookKonto();
+    $leverans = webhookLeverans(webhookEndpoint($account));
+
+    Http::fake(function () use ($leverans) {
+        DB::table('webhook_delivery')->where('id', $leverans->id)->update(['status' => WebhookDelivery::STATUS_FAILED]);
+
+        return Http::response('ok', 200);
+    });
+
+    webhookKor();
+
+    $rad = $leverans->fresh();
+    expect($rad->status)->toBe(WebhookDelivery::STATUS_FAILED);
+    expect($rad->attempts)->toBe(0);
+    expect($rad->delivered_at)->toBeNull();
 });

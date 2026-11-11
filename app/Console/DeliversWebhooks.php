@@ -35,14 +35,23 @@ use Throwable;
  * inte. `digest` gäller mejl. `available_at` läses inte och
  * `notification_preference` frågas inte.
  *
- * En rad i taget, i en egen transaktion, med samma statuskontroll INUTI
- * transaktionen som 34a § Beslut 4 föreskriver: raden läses om under
- * `lockForUpdate()` och lämnas om den inte längre är `pending`. Det är det
- * som gör dubbelanrop omöjliga även om `Schedule::withoutOverlapping()` skulle
- * svika. `lockForUpdate()` är verkningslöst i sqlite och därmed i testsviten;
- * det som bär är statuskontrollen, inte låset. Ett fel på en rad stoppar inte
- * de andra: ett oväntat fel i deliver() fångas i handle() och loggas som
- * `webhook.delivery_failed`, precis som AdvancesAccountLifecycle gör.
+ * En rad i taget, i två korta transaktioner med anropet emellan. Först tas
+ * raden: den läses under `lockForUpdate()`, lämnas om den inte längre är
+ * `pending` eller har en `claimed_at` yngre än tio minuter, och får annars
+ * `claimed_at = now()`. Sedan görs HTTP-anropet (upp till fem sekunder) utanför
+ * varje transaktion, så att databasanslutningen och radlåset inte hålls under
+ * nätverksanropet — hundra långsamma mottagare höll dem i över åtta minuter.
+ * Till sist bokförs utfallet i en andra transaktion som läser raden om under
+ * lås och inte skriver något om den under tiden slutat vara `pending`
+ * (34a § Beslut 4), och som nollställer `claimed_at`. En arbetare som dog
+ * mitt i anropet lämnar en claim som löper ut efter tio minuter; då tas raden
+ * igen. Det är samma "minst en gång"-garanti som förut: mottagaren avduplicerar
+ * på `X-Mimers-Delivery`, radens ULID, som inte ändras mellan försök.
+ * `lockForUpdate()` är verkningslöst i sqlite och därmed i testsviten; det som
+ * bär är statuskontrollen och `claimed_at`, inte låset. Ett fel på en rad
+ * stoppar inte de andra: ett oväntat fel i deliver() fångas i handle() och
+ * loggas som `webhook.delivery_failed`, precis som AdvancesAccountLifecycle
+ * gör.
  *
  * Utfallen står i Beslut 6-tabellen i issuen. `attempts` räknas upp i alla
  * tre fallen. `consecutive_failures` på endpointen räknas BARA när en
@@ -56,6 +65,9 @@ use Throwable;
  */
 class DeliversWebhooks
 {
+    /** Hur länge en claim håller innan raden är ledig igen. */
+    private const CLAIM_TIMEOUT_MINUTES = 10;
+
     public function __construct(
         private readonly UrlSafetyValidator $urlSafety,
         private readonly WebhookSignature $signature,
@@ -74,6 +86,10 @@ class DeliversWebhooks
         $deliveryIds = DB::table('webhook_delivery')
             ->where('status', WebhookDelivery::STATUS_PENDING)
             ->where('next_attempt_at', '<=', now())
+            ->where(function ($query): void {
+                $query->whereNull('claimed_at')
+                    ->orWhere('claimed_at', '<=', now()->subMinutes(self::CLAIM_TIMEOUT_MINUTES));
+            })
             ->orderBy('id')
             ->limit($batchSize)
             ->pluck('id');
@@ -99,15 +115,17 @@ class DeliversWebhooks
     }
 
     /**
-     * Levererar en enda rad och bokför utfallet. En rad som inte längre är
-     * `pending` när turen kommer — en annan körning hann före — rörs inte och
+     * Levererar en enda rad i tre steg: ta raden, anropa utanför transaktion,
+     * bokför utfallet. En rad som inte längre är `pending` när turen kommer, är
+     * tagen av en annan arbetare eller ändrats under anropet rörs inte och
      * räknas inte in någonstans (returnerar null).
      *
      * @return 'sent'|'failed'|'pending'|null
      */
     private function deliver(int $deliveryId): ?string
     {
-        return DB::transaction(function () use ($deliveryId): ?string {
+        // Steg 1: ta raden. Transaktionen slutar innan anropet görs.
+        $delivery = DB::transaction(function () use ($deliveryId): ?WebhookDelivery {
             $delivery = WebhookDelivery::query()
                 ->whereKey($deliveryId)
                 ->lockForUpdate()
@@ -117,46 +135,86 @@ class DeliversWebhooks
                 return null;
             }
 
-            // Endpointen och notisen finns alltid: båda nycklarna är ON DELETE
-            // RESTRICT, och städningen vid kontoradering tar leveransraderna
-            // först (DeleteAccount, Beslut 10). En endpoint som INAKTIVERATS
-            // (is_active = false) får inga nya rader, men de `pending`-rader
-            // som redan ligger fortsätter försöka (Att se upp med).
-            $endpoint = $delivery->endpoint;
-            $notification = $delivery->notification;
+            if ($delivery->claimed_at !== null
+                && $delivery->claimed_at->gt(now()->subMinutes(self::CLAIM_TIMEOUT_MINUTES))) {
+                return null;
+            }
 
+            $delivery->claimed_at = now();
+            $delivery->save();
+
+            return $delivery;
+        });
+
+        if ($delivery === null) {
+            return null;
+        }
+
+        // Endpointen och notisen finns alltid: båda nycklarna är ON DELETE
+        // RESTRICT, och städningen vid kontoradering tar leveransraderna
+        // först (DeleteAccount, Beslut 10). En endpoint som INAKTIVERATS
+        // (is_active = false) får inga nya rader, men de `pending`-rader
+        // som redan ligger fortsätter försöka (Att se upp med).
+        $endpoint = $delivery->endpoint;
+        $notification = $delivery->notification;
+
+        // Steg 2: anropet, utanför varje transaktion. SSRF-kontrollen körs
+        // IGEN, före varje anrop (Beslut 7): [[ADR-0010 Notisarkitektur]] är
+        // uttrycklig om varför — "eftersom DNS kan ändras däremellan". Faller
+        // kontrollen: `failed` direkt, utan omförsök — en URL som blivit
+        // farlig blir inte ofarlig av att man försöker igen.
+        $unsafeReason = null;
+        $error = null;
+        $response = null;
+
+        try {
+            $ips = $this->urlSafety->resolveSafe($endpoint->url);
+        } catch (UnsafeUrlException $e) {
+            $ips = null;
+            $unsafeReason = $e->reason;
+        }
+
+        if ($ips !== null) {
+            $body = $this->buildBody($notification);
+
+            try {
+                $response = $this->send($endpoint, $delivery, $notification, $body, $ips);
+            } catch (Throwable $e) {
+                $error = mb_substr($e->getMessage(), 0, 1000);
+            }
+        }
+
+        // Steg 3: bokför utfallet. Raden läses om under lås; har den under
+        // tiden slutat vara `pending` skrivs inget.
+        return DB::transaction(function () use ($deliveryId, $unsafeReason, $error, $response): ?string {
+            $delivery = WebhookDelivery::query()
+                ->whereKey($deliveryId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($delivery === null || $delivery->status !== WebhookDelivery::STATUS_PENDING) {
+                return null;
+            }
+
+            $endpoint = $delivery->endpoint;
             $maxAttempts = (int) config('notiser.webhook.max_attempts', 6);
 
-            // SSRF-kontrollen körs IGEN, före varje anrop (Beslut 7):
-            // [[ADR-0010 Notisarkitektur]] är uttrycklig om varför — "eftersom
-            // DNS kan ändras däremellan". En angripare registrerar en
-            // harmlös URL, får den godkänd, och pekar sedan om A-posten mot
-            // molnets metadatatjänst. Faller kontrollen: `failed` direkt,
-            // utan omförsök — en URL som blivit farlig blir inte ofarlig av
-            // att man försöker igen.
-            try {
-                $ips = $this->urlSafety->resolveSafe($endpoint->url);
-            } catch (UnsafeUrlException $e) {
-                $delivery->attempts = $delivery->attempts + 1;
+            $delivery->claimed_at = null;
+            $delivery->attempts = $delivery->attempts + 1;
+
+            if ($unsafeReason !== null) {
                 $delivery->status = WebhookDelivery::STATUS_FAILED;
-                $delivery->last_error = mb_substr('osäker url: '.$e->reason, 0, 1000);
+                $delivery->last_error = mb_substr('osäker url: '.$unsafeReason, 0, 1000);
                 $delivery->save();
                 $this->registerEndpointFailure($endpoint);
 
                 return 'failed';
             }
 
-            $body = $this->buildBody($notification);
-
-            try {
-                $response = $this->send($endpoint, $delivery, $notification, $body, $ips);
-            } catch (Throwable $e) {
-                $delivery->attempts = $delivery->attempts + 1;
-
-                return $this->bookFailure($delivery, $endpoint, $maxAttempts, mb_substr($e->getMessage(), 0, 1000));
+            if ($response === null) {
+                return $this->bookFailure($delivery, $endpoint, $maxAttempts, (string) $error);
             }
 
-            $delivery->attempts = $delivery->attempts + 1;
             $delivery->response_status = $response->status();
 
             if ($response->successful()) {
