@@ -3,6 +3,7 @@
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RestrictFileOriginToDelivery;
 use App\Http\Middleware\SetLocale;
+use App\Http\Middleware\SetSecurityHeaders;
 use App\Http\Middleware\UpdateLastActiveAt;
 use App\Support\Api\ApiError;
 use App\Support\Api\ValidationErrorMapper;
@@ -47,11 +48,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // kört. Utan den räknades den som bara använde webben som inaktiv
         // sedan kontot skapades, hur ofta hen än loggade in. Se
         // App\Http\Middleware\UpdateLastActiveAt.
+        //
+        // Issue 1043: SetSecurityHeaders sist i båda grupperna, så att också
+        // felsvar som renderas inne i ruttens pipeline (404, 403, 419) bär
+        // huvudena. Se App\Http\Middleware\SetSecurityHeaders.
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
+            SetSecurityHeaders::class,
         ]);
 
         // Issue 3: last_active_at uppdateras av alla autentiserade
@@ -59,6 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
+            SetSecurityHeaders::class,
         ]);
 
         // Issue 4: appen körs bakom LiteSpeed hos inleed, se
