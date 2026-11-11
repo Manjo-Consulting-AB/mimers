@@ -271,7 +271,7 @@ it('nollställer inte IP-räknaren vid en slutförd magic link på webben', func
         ])->assertStatus(422);
     }
 
-    // Länkbegäran är det nionde försöket på IP-räknaren och bekräftelsen det tionde; inloggningen ger tillbaka ett.
+    // Länkbegäran är det nionde försöket på IP-räknaren och bekräftelsen (throttle:login, kravet i issue 1054) det tionde; inlösen ger tillbaka ett.
     post('/login/magic-link/confirm', länkParametrar(begärLänkOchFångaUrl($user->email)))->assertRedirect(route('dashboard'));
     postJson('/logout');
 

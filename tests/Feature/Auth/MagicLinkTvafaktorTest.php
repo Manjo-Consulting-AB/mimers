@@ -288,8 +288,7 @@ it('begränsar kodförsöken i steg två med samma takgräns som inloggningen', 
 
     post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
-    // Bekräftelsen i steg ett har redan tagit ett av de fem försöken.
-    for ($i = 0; $i < 4; $i++) {
+    for ($i = 0; $i < 5; $i++) {
         post('/login/magic-link/consume', ['email' => $user->email, 'code' => '000000'])
             ->assertSessionHasErrors('code');
     }
@@ -320,7 +319,7 @@ it('räknar kodförsöken mot kontot i sessionen, inte mot ett e-postfält i kro
     // minuten — och gissningsskyddet varit borta. Identiteten kommer i
     // stället ur väntetillståndet, se
     // App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin.
-    for ($i = 0; $i < 4; $i++) {
+    for ($i = 0; $i < 5; $i++) {
         post('/login/magic-link/consume', [
             'email' => "påhittad{$i}@example.test",
             'code' => '000000',

@@ -91,6 +91,11 @@ class MagicLinkLoginController extends Controller
             return $this->completeLogin($request, $user, $recordSecurityEvent);
         }
 
+        // Ett giltigt token är ett lyckat steg ett: begränsaren töms som vid ett
+        // lyckat lösenord, så att bekräftelsen inte äter av de fem kodförsöken.
+        // Misslyckade confirm-försök (ogiltigt token) räknas kvar.
+        LoginRateLimiter::clear($request, $user->email);
+
         PendingMagicLinkLogin::start($request, $user);
 
         // Ett POST-svar är en omdirigering, aldrig en renderad sida.
