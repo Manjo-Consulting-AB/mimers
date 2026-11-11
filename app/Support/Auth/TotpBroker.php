@@ -5,6 +5,7 @@ namespace App\Support\Auth;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -73,6 +74,14 @@ use PragmaRX\Google2FA\Google2FA;
  * ansvar ("en förbrukad tidslucka får inte gå att spela upp igen ... är
  * applikationens ansvar, inte bibliotekets"), inte något den här
  * aktiverings-/avstängningsissuen bygger.
+ *
+ * **Försöksgräns — fem felaktiga koder per minut och användare** (issue
+ * 1040, [[ADR-0011 Autentisering]] § Konsekvenser). Gäller `confirm()` och
+ * `disable()` på båda ytorna via `verifyOrFail()`. Det spärrade läget kastar
+ * samma `TotpInvalidException` som en felaktig kod, utan att koden prövas:
+ * en egen "för många försök"-yta hade krävt ändringar i kontroller,
+ * undantagshanterare och frontend för ett läge en legitim användare
+ * i praktiken aldrig når.
  */
 final class TotpBroker
 {
@@ -86,6 +95,14 @@ final class TotpBroker
      * Klockdriftfönster, se klassdokumentationen ovan.
      */
     private const WINDOW = 1;
+
+    /**
+     * Högst så här många felaktiga koder inom `VERIFY_DECAY_SECONDS`
+     * mot confirm()/disable() — se klassdokumentationen.
+     */
+    private const VERIFY_MAX_ATTEMPTS = 5;
+
+    private const VERIFY_DECAY_SECONDS = 60;
 
     /**
      * TTL för repris-spärrens cachepost — issue 6b · TOTP vid inloggning.
@@ -264,9 +281,18 @@ final class TotpBroker
      */
     private static function verifyOrFail(User $user, string $code): void
     {
+        $key = 'totp-verify:'.$user->id;
+
+        // Spärrat läge svarar som en felaktig kod, utan att koden prövas.
+        if (RateLimiter::tooManyAttempts($key, self::VERIFY_MAX_ATTEMPTS)) {
+            throw new TotpInvalidException;
+        }
+
         $secret = $user->totp_secret;
 
         if (! is_string($secret) || $secret === '') {
+            RateLimiter::hit($key, self::VERIFY_DECAY_SECONDS);
+
             throw new TotpInvalidException;
         }
 
@@ -274,8 +300,12 @@ final class TotpBroker
         // se vendor/pragmarx/google2fa/src/Google2FA.php::findValidOTP())
         // — se [[ADR-0023 TOTP-bibliotek]] § Kontext.
         if (self::engine()->verifyKey($secret, $code, self::WINDOW) === false) {
+            RateLimiter::hit($key, self::VERIFY_DECAY_SECONDS);
+
             throw new TotpInvalidException;
         }
+
+        RateLimiter::clear($key);
     }
 
     private static function engine(): Google2FA
