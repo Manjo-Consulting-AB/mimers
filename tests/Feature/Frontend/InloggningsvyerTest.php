@@ -86,7 +86,11 @@ it('renderar Auth/MagicLinkCode i stället för att logga in när kontot har tv�
         return true;
     });
 
-    get($länk)
+    parse_str((string) parse_url($länk, PHP_URL_QUERY), $parametrar);
+
+    post('/login/magic-link/confirm', $parametrar)->assertRedirect('/login/magic-link/code');
+
+    get('/login/magic-link/code')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->component('Auth/MagicLinkCode'));
 
@@ -362,7 +366,7 @@ it('renderar Error med status 403 för en manipulerad magic link', function () {
     $user = User::factory()->create();
 
     from('/login/magic-link')
-        ->get('/login/magic-link/consume?email='.$user->email.'&token=manipulerad')
+        ->post('/login/magic-link/confirm', ['email' => $user->email, 'token' => 'manipulerad'])
         ->assertForbidden()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Error')

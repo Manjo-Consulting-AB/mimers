@@ -31,7 +31,9 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\artisan;
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\get;
+use function Pest\Laravel\post;
 use function Pest\Laravel\postJson;
+use function Pest\Laravel\withoutVite;
 use function Pest\Laravel\withServerVariables;
 
 /*
@@ -243,7 +245,12 @@ it('varje uppräknad handling skriver exakt en rad via webben och via API:t', fu
 
     // ---- Inlöst magic link, webben och API:t --------------------------
     $länkWebb = User::factory()->create(['password_hash' => null]);
-    get(sakerhetsBegärLänk($länkWebb->email))->assertRedirect(route('dashboard'));
+    $webbParametrar = [];
+    parse_str((string) parse_url(sakerhetsBegärLänk($länkWebb->email), PHP_URL_QUERY), $webbParametrar);
+    withoutVite();
+    get('/login/magic-link/consume?'.http_build_query($webbParametrar))->assertOk();
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_MAGIC_LINK)->count())->toBe(0);
+    post('/login/magic-link/confirm', $webbParametrar)->assertRedirect(route('dashboard'));
 
     // Sessionen är nu inloggad, och consume-rutten ligger i `guest`-gruppen:
     // utan utloggningen hade nästa steg mötts av en omdirigering i stället

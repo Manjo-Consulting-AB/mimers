@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\MagicLinkToken;
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
 use App\Notifications\MagicLinkNotification;
@@ -91,18 +92,34 @@ it('kommer inte in via magic link utan kod när tvåfaktorn är bekräftad — k
 
     [$user] = användareMedBekräftadTotp();
 
-    $svar = get(tvafaktorLank($user->email));
+    $svar = post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
-    $svar->assertOk()
+    $svar->assertRedirect('/login/magic-link/code');
+
+    get('/login/magic-link/code')->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->component('Auth/MagicLinkCode'));
 
     assertGuest();
 });
 
+it('omdirigerar POST confirm till kodsidan, förbrukar tokenet och loggar inte in', function () {
+    [$user] = användareMedBekräftadTotp();
+
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)))
+        ->assertRedirect('/login/magic-link/code');
+
+    assertGuest();
+    expect(MagicLinkToken::query()->where('email', $user->email)->whereNull('used_at')->count())->toBe(0);
+});
+
+it('skickar GET /login/magic-link/code till inloggningen när ingen väntar', function () {
+    get('/login/magic-link/code')->assertRedirect('/login');
+});
+
 it('loggar in på webben med en giltig engångskod i steg två', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     post('/login/magic-link/consume', [
         'email' => $user->email,
@@ -122,7 +139,7 @@ it('loggar in på webben med en giltig engångskod i steg två', function () {
 it('loggar inte in vid klicket, utan först i steg två', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     assertGuest();
 
@@ -138,7 +155,7 @@ it('tar emot en återställningskod i steg två och förbrukar den', function ()
     [$user] = användareMedBekräftadTotp();
     $koder = RecoveryCodeBroker::generate($user);
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     post('/login/magic-link/consume', [
         'email' => $user->email,
@@ -153,7 +170,7 @@ it('ger samma fel i steg två oavsett om engångskoden eller återställningskod
     [$user] = användareMedBekräftadTotp();
     RecoveryCodeBroker::generate($user);
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     $felEngångskod = post('/login/magic-link/consume', [
         'email' => $user->email,
@@ -174,7 +191,7 @@ it('ger samma fel i steg två oavsett om engångskoden eller återställningskod
 it('låter ett felaktigt kodförsök ligga kvar — väntetillståndet är inte förbrukat av ett fel', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     post('/login/magic-link/consume', ['email' => $user->email, 'code' => '000000'])
         ->assertSessionHasErrors('code');
@@ -190,7 +207,7 @@ it('nekar att samma tidslucka spelas upp igen i steg två', function () {
     $kod = totpKodFör($secret);
 
     // Första försöket: koden är giltig och tidsluckan förbrukas.
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
     post('/login/magic-link/consume', ['email' => $user->email, 'code' => $kod])
         ->assertRedirect('/dashboard');
 
@@ -198,7 +215,7 @@ it('nekar att samma tidslucka spelas upp igen i steg två', function () {
 
     // Andra försöket: samma kod, samma 30-sekundersfönster — koden i sig är
     // fortfarande giltig, men tidsluckan är redan accepterad en gång.
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
     post('/login/magic-link/consume', ['email' => $user->email, 'code' => $kod])
         ->assertSessionHasErrors('code');
 
@@ -208,7 +225,7 @@ it('nekar att samma tidslucka spelas upp igen i steg två', function () {
 it('loggar inte in någon på väntetillståndet — en skyddad rutt omdirigerar fortfarande', function () {
     [$user] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     get('/dashboard')->assertRedirect('/login');
 
@@ -218,7 +235,7 @@ it('loggar inte in någon på väntetillståndet — en skyddad rutt omdirigerar
 it('släpper inte in en giltig kod efter att väntetillståndet gått ut', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     travel(PendingMagicLinkLogin::TTL_MINUTES + 1)->minutes();
 
@@ -233,7 +250,7 @@ it('släpper inte in en giltig kod efter att väntetillståndet gått ut', funct
 it('kan inte användas i en session som redan är inloggad — steg två är gästernas rutt', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     // Ett annat inloggningssätt i samma webbläsare: lösenord, i samma
     // session som länken startade.
@@ -255,7 +272,7 @@ it('är borta när sessionen bytt ägare — utloggningen tömmer den', function
     [$user, $secret] = användareMedBekräftadTotp();
     $kod = totpKodFör($secret);
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
     post('/login/magic-link/consume', ['email' => $user->email, 'code' => $kod])
         ->assertRedirect('/dashboard');
 
@@ -269,7 +286,7 @@ it('är borta när sessionen bytt ägare — utloggningen tömmer den', function
 it('begränsar kodförsöken i steg två med samma takgräns som inloggningen', function () {
     [$user] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     for ($i = 0; $i < 5; $i++) {
         post('/login/magic-link/consume', ['email' => $user->email, 'code' => '000000'])
@@ -295,7 +312,7 @@ it('begränsar kodförsöken i steg två med samma takgräns som inloggningen', 
 it('räknar kodförsöken mot kontot i sessionen, inte mot ett e-postfält i kroppen', function () {
     [$user] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     // Ett nytt påhittat email i varje försök. Vore gränsen nycklad på
     // kroppens fält hade varje rad fått en egen, orörd hink på fem i
@@ -324,7 +341,7 @@ it('räknar kodförsöken mot kontot i sessionen, inte mot ett e-postfält i kro
 it('tar emot steg två utan e-postfält — klienten skickar bara koden', function () {
     [$user, $secret] = användareMedBekräftadTotp();
 
-    get(tvafaktorLank($user->email));
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)));
 
     post('/login/magic-link/consume', ['code' => totpKodFör($secret)])
         ->assertRedirect('/dashboard');
@@ -335,7 +352,7 @@ it('tar emot steg två utan e-postfält — klienten skickar bara koden', functi
 it('loggar in ett konto utan bekräftad tvåfaktor i exakt samma antal steg som förut', function () {
     $user = User::factory()->create(['password_hash' => null]);
 
-    get(tvafaktorLank($user->email))->assertRedirect('/dashboard');
+    post('/login/magic-link/confirm', tvafaktorParametrar(tvafaktorLank($user->email)))->assertRedirect('/dashboard');
 
     assertAuthenticatedAs($user);
 });

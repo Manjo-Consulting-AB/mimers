@@ -589,6 +589,9 @@ return [
                 'submit' => 'Log in',
             ],
             'request_again' => 'Ask for a new link',
+            'confirm_heading' => 'Log in to Mimers',
+            'confirm_body' => 'You are about to log in as :email.',
+            'confirm_submit' => 'Log in',
         ],
 
         'verify' => [

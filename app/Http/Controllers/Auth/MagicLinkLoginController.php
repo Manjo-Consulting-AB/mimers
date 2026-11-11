@@ -16,6 +16,7 @@ use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
 use App\Support\Auth\TwoFactorChallenge;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -35,8 +36,8 @@ use Inertia\Response;
  *
  * **Issue 80 · "En magic link går förbi bekräftad tvåfaktor": två steg.**
  * Har kontot en bekräftad tvåfaktor (App\Support\Auth\TwoFactorChallenge)
- * loggar klicket på länken INTE in någon. `consume()` körs som förut — token
- * är förbrukad efter klicket — men i stället för `Auth::login()` läggs ett
+ * loggar knapptryckningen INTE in någon. `consume()` körs som förut — token
+ * är förbrukad efter tryckningen — men i stället för `Auth::login()` läggs ett
  * väntetillstånd i sessionen (App\Support\Auth\PendingMagicLinkLogin) och
  * Auth/MagicLinkCode renderas, som frågar efter koden. Först `store()` nedan
  * loggar in, och först där regenereras sessionen.
@@ -48,16 +49,37 @@ use Inertia\Response;
  * Avbryter användaren får hon be om en ny.
  *
  * Kontot UTAN bekräftad tvåfaktor loggar in i exakt samma antal steg som
- * förut — ett — se `__invoke()` nedan.
+ * förut — ett — se `confirm()` nedan.
+ *
+ * **Issue 1054 · GET förbrukar inte.** Mejlsystem som förhandsgranskar länkar
+ * (Outlook Safe Links, spamfilter) öppnar länken före användaren; förbrukade
+ * GET tokenet fick hon 403 när hon själv klickade. Länken visar därför en
+ * sida med en knapp (`show()`), och tokenet förbrukas först av POST
+ * (`confirm()`). `throttle:login` sitter på `confirm`, eftersom det är den
+ * som kan gissas mot.
  */
 class MagicLinkLoginController extends Controller
 {
     /**
-     * GET /login/magic-link/consume — mejllänken. Loggar in direkt när
-     * kontot inte har någon bekräftad tvåfaktor; annars väntetillståndet och
-     * kodsidan.
+     * GET /login/magic-link/consume — mejllänken. Visar bara en sida med en
+     * knapp. Den läser inte databasen och skriver ingenting: varken
+     * MagicLinkBroker::resolve() eller consume() anropas, så ett svar på
+     * en giltig länk skiljer sig inte från ett svar på en påhittad.
      */
-    public function __invoke(ConsumeMagicLinkRequest $request, RecordSecurityEvent $recordSecurityEvent): Response|RedirectResponse
+    public function show(ConsumeMagicLinkRequest $request): Response
+    {
+        return Inertia::render('Auth/MagicLinkConfirm', [
+            'email' => $request->email(),
+            'token' => $request->token(),
+        ]);
+    }
+
+    /**
+     * POST /login/magic-link/confirm — knapptryckningen. Förbrukar länken och
+     * loggar in direkt när kontot inte har någon bekräftad tvåfaktor; annars
+     * läggs väntetillståndet och användaren omdirigeras till kodsidan.
+     */
+    public function confirm(ConsumeMagicLinkRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
     {
         try {
             $user = $request->consume();
@@ -69,12 +91,31 @@ class MagicLinkLoginController extends Controller
             return $this->completeLogin($request, $user, $recordSecurityEvent);
         }
 
+        // Ett giltigt token är ett lyckat steg ett: begränsaren töms som vid ett
+        // lyckat lösenord, så att bekräftelsen inte äter av de fem kodförsöken.
+        // Misslyckade confirm-försök (ogiltigt token) räknas kvar.
+        LoginRateLimiter::clear($request, $user->email);
+
         PendingMagicLinkLogin::start($request, $user);
 
-        // Inga props: kontot försöket gäller bor i väntetillståndet i
-        // sessionen, och steg två skickar bara sin kod — `email` sätts på
-        // requesten av App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin,
-        // för takgränsens räkning och inget annat.
+        // Ett POST-svar är en omdirigering, aldrig en renderad sida.
+        return redirect()->route('magic-link.code');
+    }
+
+    /**
+     * GET /login/magic-link/code — kodsidan. Inga props: kontot försöket
+     * gäller bor i väntetillståndet i sessionen, och steg två skickar bara
+     * sin kod — `email` sätts på requesten av
+     * App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin, för
+     * takgränsens räkning och inget annat. Saknas väntetillstånd skickas
+     * användaren till inloggningen.
+     */
+    public function code(Request $request): Response|RedirectResponse
+    {
+        if (! PendingMagicLinkLogin::user($request) instanceof User) {
+            return redirect()->route('login.create');
+        }
+
         return Inertia::render('Auth/MagicLinkCode');
     }
 

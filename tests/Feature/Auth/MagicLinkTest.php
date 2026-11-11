@@ -1,20 +1,24 @@
 <?php
 
 use App\Models\MagicLinkToken;
+use App\Models\SecurityLog;
 use App\Models\User;
 use App\Notifications\MagicLinkNotification;
 use App\Support\Auth\MagicLinkBroker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
+use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\assertGuest;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\post;
 use function Pest\Laravel\postJson;
 use function Pest\Laravel\travel;
+use function Pest\Laravel\withoutVite;
 use function Pest\Laravel\withServerVariables;
 
 /*
@@ -69,7 +73,7 @@ it('loggar in en webbsession helt utan lösenord', function () {
 
     $url = begärLänkOchFångaUrl($user->email);
 
-    get($url)->assertRedirect(route('dashboard'));
+    post('/login/magic-link/confirm', länkParametrar($url))->assertRedirect(route('dashboard'));
 
     assertAuthenticatedAs($user);
 });
@@ -126,11 +130,11 @@ it('kan inte lösa in samma token två gånger på webben heller — den andra l
     $user = User::factory()->create();
     $url = begärLänkOchFångaUrl($user->email);
 
-    get($url)->assertRedirect(route('dashboard'));
+    post('/login/magic-link/confirm', länkParametrar($url))->assertRedirect(route('dashboard'));
 
     postJson('/logout');
 
-    get($url)->assertForbidden();
+    post('/login/magic-link/confirm', länkParametrar($url))->assertForbidden();
 });
 
 it('slutar fungera när token har gått ut', function () {
@@ -155,7 +159,7 @@ it('ger 403 på webben för en utgången länk, ingen krasch', function () {
 
     travel(MagicLinkBroker::TTL_MINUTES + 1)->minutes();
 
-    get($url)->assertForbidden();
+    post('/login/magic-link/confirm', länkParametrar($url))->assertForbidden();
 
     assertGuest();
 });
@@ -260,15 +264,15 @@ it('nollställer inte IP-räknaren vid en slutförd magic link på webben', func
 
     $user = User::factory()->create(['password_hash' => null]);
 
-    for ($i = 0; $i < 9; $i++) {
+    for ($i = 0; $i < 8; $i++) {
         postJson('/login', [
             'email' => "gissning-{$i}@example.com",
             'password' => 'fel-losenord',
         ])->assertStatus(422);
     }
 
-    // Länkbegäran är det tionde försöket på IP-räknaren; inlösen ger tillbaka ett.
-    get(begärLänkOchFångaUrl($user->email))->assertRedirect(route('dashboard'));
+    // Länkbegäran är det nionde försöket på IP-räknaren och bekräftelsen (throttle:login, kravet i issue 1054) det tionde; inlösen ger tillbaka ett.
+    post('/login/magic-link/confirm', länkParametrar(begärLänkOchFångaUrl($user->email)))->assertRedirect(route('dashboard'));
     postJson('/logout');
 
     postJson('/login', [
@@ -322,4 +326,75 @@ it('nollställer inte IP-räknaren vid en slutförd magic link på API:et', func
 
     $response->assertStatus(429);
     expect($response->json('error.code'))->toBe('auth.too_many_attempts');
+});
+
+// --- Issue 1054 · GET förbrukar inte, knappen gör det -------------------
+
+it('visar bekräftelsesidan på GET utan att förbruka tokenet eller logga in', function () {
+    withoutVite();
+    Notification::fake();
+
+    $user = User::factory()->create();
+    $parametrar = länkParametrar(begärLänkOchFångaUrl($user->email));
+
+    get('/login/magic-link/consume?'.http_build_query($parametrar))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Auth/MagicLinkConfirm')
+            ->where('email', $parametrar['email'])
+            ->where('token', $parametrar['token'])
+        );
+
+    assertGuest();
+    expect(MagicLinkToken::query()->where('email', $user->email)->whereNotNull('used_at')->count())->toBe(0);
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_MAGIC_LINK)->count())->toBe(0);
+});
+
+it('loggar in med POST efter att länken öppnats två gånger (förhandsgranskare)', function () {
+    withoutVite();
+    Notification::fake();
+
+    $user = User::factory()->create();
+    $parametrar = länkParametrar(begärLänkOchFångaUrl($user->email));
+    $adress = '/login/magic-link/consume?'.http_build_query($parametrar);
+
+    get($adress)->assertOk();
+    get($adress)->assertOk();
+
+    post('/login/magic-link/confirm', $parametrar)->assertRedirect('/dashboard');
+
+    assertAuthenticatedAs($user);
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_MAGIC_LINK)->count())->toBe(1);
+});
+
+it('ger samma sida på GET för ett påhittat token som för ett giltigt', function () {
+    withoutVite();
+    Notification::fake();
+
+    $user = User::factory()->create();
+    $parametrar = länkParametrar(begärLänkOchFångaUrl($user->email));
+
+    $giltig = get('/login/magic-link/consume?'.http_build_query($parametrar));
+    $påhittad = get('/login/magic-link/consume?'.http_build_query(['token' => 'pahittat'] + $parametrar));
+
+    $påhittad->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Auth/MagicLinkConfirm')
+            ->where('token', 'pahittat')
+        );
+    expect($påhittad->status())->toBe($giltig->status());
+});
+
+it('takbegränsar POST /login/magic-link/confirm: det sjätte försöket inom en minut', function () {
+    $user = User::factory()->create();
+
+    for ($i = 0; $i < 5; $i++) {
+        post('/login/magic-link/confirm', ['email' => $user->email, 'token' => 'fel'])->assertForbidden();
+    }
+
+    $blockerad = from('/login/magic-link/consume')
+        ->post('/login/magic-link/confirm', ['email' => $user->email, 'token' => 'fel']);
+
+    $blockerad->assertRedirect('/login/magic-link/consume');
+    $blockerad->assertSessionHasErrors('email');
 });
