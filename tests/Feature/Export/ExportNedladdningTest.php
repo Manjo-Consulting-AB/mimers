@@ -4,6 +4,8 @@ use App\Console\PurgesExpiredExports;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Export;
+use App\Models\Item;
+use App\Models\SecurityLog;
 use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
@@ -81,7 +83,26 @@ it('en färdig export laddas ner av ägarkontots medlem med rätt headers', func
     $response->assertHeaderMissing('X-LiteSpeed-Location');
 });
 
-it('en användare med giltig read-åtkomst kan ladda ner; en utan åtkomst får 403', function () {
+it('en delegerad läsare laddar ner sin egen export men får 403 på ägarens; en utan åtkomst får 403', function () {
+    [$account, $owner] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $export = exportNedladdningFärdig($container, $owner);
+
+    [, $delegated] = kontoMedMedlem();
+    beviljaAccess($container, $delegated, 'read', 'member');
+    $egen = exportNedladdningFärdig($container, $delegated);
+
+    $svar = actingAs($delegated)->get("/exports/{$egen->ulid}/download");
+    $svar->assertOk();
+    expect($svar->streamedContent())->toBe('zip-byten');
+
+    actingAs($delegated)->get("/exports/{$export->ulid}/download")->assertForbidden();
+
+    [, $främling] = kontoMedMedlem();
+    actingAs($främling)->get("/exports/{$export->ulid}/download")->assertForbidden();
+});
+
+it('en annans export ger 403 utan rad export.downloaded i säkerhetsloggen', function () {
     [$account, $owner] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $export = exportNedladdningFärdig($container, $owner);
@@ -89,10 +110,31 @@ it('en användare med giltig read-åtkomst kan ladda ner; en utan åtkomst får 
     [, $delegated] = kontoMedMedlem();
     beviljaAccess($container, $delegated, 'read', 'member');
 
-    actingAs($delegated)->get("/exports/{$export->ulid}/download")->assertOk();
+    actingAs($delegated)->get("/exports/{$export->ulid}/download")->assertForbidden();
 
-    [, $främling] = kontoMedMedlem();
-    actingAs($främling)->get("/exports/{$export->ulid}/download")->assertForbidden();
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_EXPORT_DOWNLOADED)->count())->toBe(0);
+});
+
+it('en användare med enbart itemnivå-åtkomst får 403 på ägarens export', function () {
+    [$account, $owner] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+    $export = exportNedladdningFärdig($container, $owner);
+
+    [, $gäst] = kontoMedMedlem();
+    $access = beviljaAccess($container, $gäst, 'read', 'member');
+    $access->item_id = $item->id;
+    $access->save();
+
+    actingAs($gäst)->get("/exports/{$export->ulid}/download")->assertForbidden();
+});
+
+it('en export utan beställare ger 403 också för containerns ägare', function () {
+    [$account, $owner] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $export = exportNedladdningFärdig($container, $owner, ['requested_by_user_id' => null]);
+
+    actingAs($owner)->get("/exports/{$export->ulid}/download")->assertForbidden();
 });
 
 it('en användare vars konto är read_only kan ladda ner sin export', function () {

@@ -65,9 +65,9 @@ class ExportController extends Controller
     /**
      * GET /containers/{container}/export — containerns exporter, nyast först.
      *
-     * Listan är containerns hela historik av beställningar, precis som
-     * API-kontrollerns index(): en export är en rad om en beställning, och
-     * den som beställt en påse ska se vad som hände med den.
+     * Listan är anroparens egna beställningar, precis som API-kontrollerns
+     * index(): en export är byggd för exakt det beställaren nådde och hör till
+     * henne — andras exporter av samma container syns inte.
      *
      * `exports` är `ExportResource`-rader, samma sex nycklar som `/api`
      * svarar med. Ingen `can`-flagga: grinden för att beställa är samma
@@ -91,6 +91,7 @@ class ExportController extends Controller
         $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $exports = $container->exports()
+            ->where('requested_by_user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->get();
 

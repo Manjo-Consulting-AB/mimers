@@ -24,11 +24,11 @@ use Symfony\Component\HttpFoundation\Response;
  * samma headers: en miljöskillnad får aldrig bli en säkerhetsskillnad (issue
  * 19a § Beslut 6).
  *
- * INGEN behörighetslogik bor här (Beslut 2): efter att exporten visat sig
- * vara `ready` anropas bara Gate::authorize('view', ...) mot den befintliga
- * grinden i App\Policies\ContainerPolicy. Läsning räcker för att ladda ner —
- * en export bär exakt det innehåll en view-innehavare redan kan hämta bilaga
- * för bilaga. `{export}` binds på exportens ULID via #[RouteKey('ulid')].
+ * Ingen egen policy bor här: efter att exporten visat sig vara `ready`
+ * anropas Gate::authorize('view', ...) mot den befintliga grinden i
+ * App\Policies\ContainerPolicy, och därefter krävs att anroparen är exportens
+ * beställare (`requested_by_user_id`) — en export är byggd för exakt det
+ * beställaren nådde, så den hör till henne och till ingen annan. `{export}` binds på exportens ULID via #[RouteKey('ulid')].
  *
  * Bara en `ready`-export levereras; alla andra statusar ger 404, liksom en
  * mjukraderad container och en artefakt som saknas på disken (Beslut 3).
@@ -56,6 +56,15 @@ class ExportDownloadController extends Controller
         }
 
         Gate::authorize('view', $export->container);
+
+        // Exporten är beställarens: den byggdes för exakt det beställaren nådde
+        // (ContainerExportBuilder), så view på containern räcker inte. En
+        // nollställd beställare ger 403 för alla. Kontrollen ligger före
+        // diskuppslaget och säkerhetsloggraden.
+        if ($export->requested_by_user_id === null
+            || (int) $export->requested_by_user_id !== (int) $request->user()->id) {
+            abort(403);
+        }
 
         // En artefakt som redan är borta från disken är 404, inte ett
         // serverfel — Storage::response() kastar annars FileNotFound.
