@@ -25,10 +25,15 @@ namespace App\Support\Notification;
  * - slår värdnamnet inte upp alls: avvisa.
  *
  * FILTER_FLAG_NO_RES_RANGE täcker 169.254.0.0/16 och därmed molnens
- * metadatatjänst på 169.254.169.254 — men den (och NO_PRIV_RANGE) täcker inte
- * 0.0.0.0/8 i alla PHP-versioner, och inte heller en privat IPv4-adress som
- * bäddats in i NAT64-prefixet 64:ff9b::/96 eller 6to4-prefixet 2002::/16 i
- * hexadecimal form — de stängs uttryckligen. parse_url() är inte en
+ * metadatatjänst på 169.254.169.254 — men filtren täcker inte allt, så följande
+ * stängs uttryckligen:
+ * - 0.0.0.0/8 (inte i alla PHP-versioner),
+ * - CGNAT 100.64.0.0/10, 192.0.0.0/24, 198.18.0.0/15 och IPv4-multicast
+ *   224.0.0.0/4, samt IPv6-multicast ff00::/8,
+ * - en IPv4-adress som bäddats in i IPv6: IPv4-mappat ::ffff:0:0/96,
+ *   IPv4-kompatibelt ::/96, NAT64 64:ff9b::/96 och 6to4 2002::/16 avkodas och
+ *   prövas mot samma regler (filtren godkänner dem, i punkt- som hexform),
+ * - NAT64:s lokala prefix 64:ff9b:1::/48, som avvisas i sin helhet. parse_url() är inte en
  * säkerhetsgräns: den accepterar skräp, så varje fält kontrolleras här, inget
  * antas.
  *
@@ -150,6 +155,19 @@ final class UrlSafetyValidator
             throw new UnsafeUrlException('reserved_ip');
         }
 
+        $this->assertNotExtraReserved($ip);
+
+        // IPv4-mappade adresser (::ffff:0:0/96) avkodas före filtret: det
+        // avvisar hela prefixet i vissa PHP-versioner (8.4) och släpper det
+        // igenom i andra (8.3), så bara den inbäddade adressen avgör.
+        $mappad = $this->mappedIpv4($ip);
+
+        if ($mappad !== null) {
+            $this->assertSafeIp($mappad);
+
+            return;
+        }
+
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
             throw new UnsafeUrlException('reserved_ip');
         }
@@ -166,8 +184,9 @@ final class UrlSafetyValidator
      * Avvisar en IPv6-adress vars prefix bäddar in en privat eller reserverad
      * IPv4-adress. FILTER_FLAG_NO_PRIV_RANGE/NO_RES_RANGE ser bara de
      * adresser vars inbäddade IPv4 står i punktform; den hexadecimala formen
-     * av samma adress passerar. IPv4-mappade adresser (::ffff:a.b.c.d)
-     * fångas redan av filtret ovan och hanteras inte här.
+     * av samma adress passerar, och IPv4-kompatibla adresser (::/96)
+     * passerar filtret i båda formerna — de avkodas därför här. IPv4-mappade
+     * adresser avkodas i assertSafeIp().
      *
      * @throws UnsafeUrlException
      */
@@ -185,6 +204,19 @@ final class UrlSafetyValidator
 
         $inbäddad = null;
 
+        // NAT64:s lokala prefix 64:ff9b:1::/48: avvisas i sin helhet.
+        if (substr($paket, 0, 6) === "\x00\x64\xff\x9b\x00\x01") {
+            throw new UnsafeUrlException('reserved_ip');
+        }
+
+        // IPv4-kompatibelt ::/96: tolv nollbyte, sedan IPv4-adressen. :: och
+        // ::1 hanteras redan av assertSafeIp().
+        if (substr($paket, 0, 12) === str_repeat("\x00", 12)
+            && $paket !== str_repeat("\x00", 16)
+            && $paket !== str_repeat("\x00", 15)."\x01") {
+            $inbäddad = substr($paket, 12, 4);
+        }
+
         // NAT64-prefixet 64:ff9b::/96: hexteten 0064 och ff9b följt av nollor,
         // och de sista 32 bitarna är IPv4-adressen.
         if (substr($paket, 0, 12) === "\x00\x64\xff\x9b".str_repeat("\x00", 8)) {
@@ -199,5 +231,64 @@ final class UrlSafetyValidator
         if ($inbäddad !== null) {
             $this->assertSafeIp(inet_ntop($inbäddad));
         }
+    }
+
+    /**
+     * Intervall som FILTER_FLAG_NO_PRIV_RANGE/NO_RES_RANGE släpper igenom:
+     * CGNAT 100.64.0.0/10, 192.0.0.0/24, 198.18.0.0/15, IPv4-multicast
+     * 224.0.0.0/4 och IPv6-multicast ff00::/8. Jämförs numeriskt.
+     *
+     * @throws UnsafeUrlException
+     */
+    private function assertNotExtraReserved(string $ip): void
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            $long = ip2long($ip);
+
+            if ($long === false) {
+                return;
+            }
+
+            $ranges = [
+                [ip2long('100.64.0.0'), ip2long('100.127.255.255')],
+                [ip2long('192.0.0.0'), ip2long('192.0.0.255')],
+                [ip2long('198.18.0.0'), ip2long('198.19.255.255')],
+                [ip2long('224.0.0.0'), ip2long('239.255.255.255')],
+            ];
+
+            foreach ($ranges as [$from, $to]) {
+                if ($long >= $from && $long <= $to) {
+                    throw new UnsafeUrlException('reserved_ip');
+                }
+            }
+
+            return;
+        }
+
+        $paket = inet_pton($ip);
+
+        if ($paket !== false && strlen($paket) === 16 && ord($paket[0]) === 0xFF) {
+            throw new UnsafeUrlException('reserved_ip');
+        }
+    }
+
+    /**
+     * Den inbäddade IPv4-adressen i en IPv4-mappad IPv6-adress
+     * (::ffff:0:0/96: tio nollbyte, ffff, sedan adressen), annars null.
+     */
+    private function mappedIpv4(string $ip): ?string
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            return null;
+        }
+
+        $paket = inet_pton($ip);
+
+        if ($paket === false || strlen($paket) !== 16
+            || substr($paket, 0, 12) !== str_repeat("\x00", 10)."\xff\xff") {
+            return null;
+        }
+
+        return inet_ntop(substr($paket, 12, 4)) ?: null;
     }
 }
