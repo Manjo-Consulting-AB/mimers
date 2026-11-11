@@ -43,10 +43,10 @@ it('ett autentiserat GET /api/containers bär samma tre huvuden', function () {
 
 it('ett 404 på webben och ett 404 på API:et bär huvudena', function () {
     $web = get('/den-har-sokvagen-finns-inte')->assertNotFound();
-    // Ett 404 ur kontrollern (någon annans export), efter routbindningen. Ett
-    // 404 från bindningen själv (okänd ulid) kastas av SubstituteBindings, som
-    // ligger FÖRE de tillagda middlewarena och passerar därför aldrig
-    // SetSecurityHeaders.
+    // Provet tar ett 404 ur kontrollern (någon annans export). Bindningens
+    // eget 404 (okänd ulid) bär också huvudena sedan issue 1082, då
+    // SetSecurityHeaders blev global; det prövas i provet 'ett 404 från
+    // routbindningen (okänd ulid) bär huvudena' längre ned i filen.
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $export = Export::factory()->create(['container_id' => $container->id]);
