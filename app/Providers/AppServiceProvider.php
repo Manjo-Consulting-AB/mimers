@@ -36,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureUploadRateLimiting();
         $this->configureMailgunWebhookRateLimiting();
         $this->configureCalendarFeedRateLimiting();
+        $this->configureRegistrationRateLimiting();
         $this->configureScheduleHeartbeat();
     }
 
@@ -147,5 +148,22 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('calendar', fn (Request $request) => Limit::perMinute(
             (int) config('notiser.calendar.rate_limit_per_minute', 60)
         )->by((string) $request->route('token')));
+    }
+
+    /**
+     * Issue 1041 · registreringens takt. `unique:user,email` i
+     * RegisterRequest körs före kodkontrollen, så utan spärr kunde vem som
+     * helst pröva obegränsat många adresser utan inbjudningskod och få veta
+     * vilka som har konto (uppräkning av adresser, ADR-0017). Registreringen
+     * var den enda oautentiserade skrivrutten utan spärr.
+     *
+     * Nyckeln är IP:n: det finns ingen användare att knyta anropet till
+     * ännu. `$request->ip()` går att lita på tack vare `trustProxies` i
+     * bootstrap/app.php. Begränsaren räknar alla försök, också lyckade, och
+     * rensas aldrig.
+     */
+    private function configureRegistrationRateLimiting(): void
+    {
+        RateLimiter::for('register', fn (Request $request) => Limit::perMinute(10)->by('register-ip:'.$request->ip()));
     }
 }

@@ -326,6 +326,7 @@ foreach (['about', 'privacy', 'terms', 'help'] as $infoPage) {
  */
 Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisteredUserController::class, 'store'])
+        ->middleware('throttle:register')
         ->name('register');
 
     /*
