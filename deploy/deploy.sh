@@ -9,8 +9,21 @@ set -euo pipefail
 APP="$1"          # t.ex. /home/tony/mimers
 RELEASE="$2"      # katalognamn för den nya releasen
 KEEP=5
+NERE=0        # 1 medan sajten ligger i underhållsläge av den här utrullningen
 
 DIR="$APP/releases/$RELEASE"
+
+# Faller något efter att `down` har körts lyfter vi underhållsläget från den
+# gamla releasen (storage är delat, så `up` därifrån räcker). Migrationerna är
+# additiva, så den gamla koden klarar en halvvägs körd migrering. Funktionen
+# avslutar inte själv: `set -e` ger skriptet dess felkod.
+lyft_underhall() {
+  if [ "$NERE" = "1" ] && [ -L "$APP/current" ]; then
+    php "$APP/current/artisan" up || true
+    echo "Utrullningen avbröts - underhållsläget lyft, föregående release ligger kvar." >&2
+  fi
+}
+trap lyft_underhall ERR
 
 mkdir -p "$DIR"
 tar -xzf "$APP/incoming/$RELEASE.tar.gz" -C "$DIR"
@@ -43,12 +56,14 @@ php artisan view:cache
 # underhållsläge på den nuvarande releasen
 if [ -L "$APP/current" ]; then
   php "$APP/current/artisan" down --retry=30 || true
+  NERE=1
 fi
 
 php artisan migrate --force
 
 ln -sfn "$DIR" "$APP/current"
 php "$APP/current/artisan" up
+NERE=0
 
 # städa
 cd "$APP/releases"
