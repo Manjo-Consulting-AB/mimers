@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: regressionsvakt för beteende som redan finns (ON DELETE SET NULL på container.cover_attachment_id); proven kan av naturen inte vara röda på basen.
+
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Plan\StartDowngrade;
 use App\Models\Account;
@@ -15,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -447,6 +450,54 @@ it('en vald bilaga som är itemets omslag nollställer pekaren', function () {
     ], $headers)->assertOk();
 
     expect(DB::table('item')->where('id', $item->id)->value('cover_attachment_id'))->toBeNull();
+});
+
+/**
+ * Containerns bild: en bilaga med container_id satt och utan item_id, och
+ * pekaren på containern satt till den.
+ */
+function nedgraderingContainerbild(Container $container, User $user, Account $account): Attachment
+{
+    $bilaga = Attachment::factory()->create([
+        'item_id' => null,
+        'container_id' => $container->id,
+        'stored_file_id' => StoredFile::factory()->create(['byte_size' => 100])->id,
+        'filename' => 'omslag.jpg',
+        'kind' => 'image',
+        'uploaded_by_user_id' => $user->id,
+        'billed_account_id' => $account->id,
+    ]);
+    DB::table('container')->where('id', $container->id)->update(['cover_attachment_id' => $bilaga->id]);
+
+    return $bilaga;
+}
+
+it('en vald bilaga som är containerns bild nollställer pekaren (API)', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    [$container] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $bilaga = nedgraderingContainerbild($container, $user, $account);
+    expect(DB::table('container')->where('id', $container->id)->value('cover_attachment_id'))->toBe($bilaga->id);
+
+    deleteJson("/api/accounts/{$account->ulid}/storage", [
+        'attachments' => [$bilaga->ulid],
+    ], $headers)->assertOk();
+
+    expect(DB::table('container')->where('id', $container->id)->value('cover_attachment_id'))->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
+});
+
+it('en vald bilaga som är containerns bild nollställer pekaren (webben)', function () {
+    [$account, $user] = kontoMedMedlem();
+    [$container] = nedgraderingContainerItem($account, $user, 'Vindil');
+    $bilaga = nedgraderingContainerbild($container, $user, $account);
+    expect(DB::table('container')->where('id', $container->id)->value('cover_attachment_id'))->toBe($bilaga->id);
+
+    actingAs($user)
+        ->delete("/settings/storage/{$account->ulid}", ['attachments' => [$bilaga->ulid]])
+        ->assertRedirect();
+
+    expect(DB::table('container')->where('id', $container->id)->value('cover_attachment_id'))->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
 });
 
 it('en bilaga bokförd på ett annat konto raderas inte även om dess ULID skickas med', function () {
