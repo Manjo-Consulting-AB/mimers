@@ -3,16 +3,13 @@
 namespace App\Actions\Trash;
 
 use App\Actions\Audit\RecordAuditEvent;
-use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
-use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
-use App\Support\Plan\Entitlements;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -50,11 +47,10 @@ use Illuminate\Support\Facades\DB;
  * den relaterade modellens SoftDeletes-scope svara null för en raderad
  * förälder, precis det fall som ska fångas här.
  *
- * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
- * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
- * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
- * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
- * räknaren genom konstruktorn vore omarbetning utan mottagare.
+ * Kvoten rörs inte: en slängd bilaga har räknats i kontots förbrukning hela
+ * tiden, så en återställning varken räknar upp eller kvotprövas och kan inte
+ * ge `quota.storage_exceeded` ([[ADR-0009 Kvoter och livscykel]] § Uppföljning
+ * 2026-11-11).
  *
  * **Händelseloggen (issue 109) skrivs i samma transaktion, och bara för
  * item och bilaga.** En återställd kategori eller tagg hör till containerns
@@ -96,18 +92,16 @@ class RestoreContent
         }
 
         DB::transaction(function () use ($model, $actor): void {
-            // Återställningen och en eventuell räknarökning i en transaktion
-            // (issue 26a): en mjukraderad bilaga som blir levande igen kommer
-            // tillbaka i kontots förbrukning, i samma transaktion som raden.
+            // Återställningen sker under radlåset (granskningsfynd 1).
             //
-            // Beslutet att öka grundas på radens tillstånd UNDER radlåset, inte
+            // Händelseloggen grundas på radens tillstånd UNDER radlåset, inte
             // på instansen som kontrollern laddade före transaktionen: två
             // samtidiga återställningar av samma rad skulle annars båda se
-            // `trashed()` och öka räknaren två gånger (granskningsfynd 1).
+            // `trashed()` och logga två gånger.
             // newQueryWithoutScopes — instansen är mjukraderad — och
             // lockForUpdate är en current read. Är raden redan borta (gallrad
             // mellan kontrollerns uppslag och den här transaktionen) finns
-            // inget att återställa och ingen räknare att röra.
+            // inget att återställa.
             $rad = $model->newQueryWithoutScopes()
                 ->whereKey($model->getKey())
                 ->lockForUpdate()
@@ -118,23 +112,6 @@ class RestoreContent
             }
 
             $varMjukraderad = $rad->trashed();
-
-            // Issue 28b Beslut 6 · Hålet som steg 5 öppnar: en bilaga som
-            // återställs kommer tillbaka i kontots förbrukning, och en
-            // återställning som skulle spränga kvoten nekas med samma kod och
-            // data som uppladdningen (Entitlements::assertStorageWithinLimit,
-            // issue 27b). Bara bilagor kostar byten — item, kategori och tagg
-            // rör ingen räknare och ingen gräns, så de grenarna är orörda.
-            // Kontrollen ligger före restore(): en nekad återställning lämnar
-            // raden i papperskorgen.
-            $byteSize = 0;
-
-            if ($model instanceof Attachment && $varMjukraderad) {
-                $byteSize = (int) $model->storedFile()->value('byte_size');
-                $konto = Account::query()->whereKey($model->billed_account_id)->firstOrFail();
-
-                (new Entitlements)->assertStorageWithinLimit($konto, $byteSize);
-            }
 
             // restore() körs på instansen även när en samtidig återställning
             // redan hunnit först — den är då en no-op i databasen som bara
@@ -150,10 +127,6 @@ class RestoreContent
             // finns för att hindra i den andra riktningen.
             if ($model instanceof Category && $varMjukraderad && $rad->deleted_at !== null) {
                 $this->restoreSubtree($model, $rad->deleted_at);
-            }
-
-            if ($model instanceof Attachment && $varMjukraderad) {
-                (new AdjustUsage)->handle($model->billed_account_id, bytesDelta: $byteSize);
             }
 
             // Bara en rad som låg i papperskorgen är en händelse — en

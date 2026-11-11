@@ -238,7 +238,7 @@ it('ett konto med containers men utan bilagor får en rad', function () {
     );
 });
 
-it('mjukraderade bilagor räknas inte in', function () {
+it('mjukraderade bilagor räknas in', function () {
     [$account, $user, , $item] = avstamningSetup();
     avstamningBilaga($item, $account, $user, avstamningStoredFil(1000));
     $raderad = avstamningBilaga($item, $account, $user, avstamningStoredFil(500));
@@ -246,15 +246,15 @@ it('mjukraderade bilagor räknas inte in', function () {
 
     UsageCounter::factory()->create([
         'account_id' => $account->id,
-        'storage_bytes' => 1500,
+        'storage_bytes' => 1000,
         'container_count' => 1,
     ]);
 
     (new ReconcilesUsageCounters)->handle();
 
-    // Bara den levande bilagan räknas — den mjukraderade är borta ur summan
-    // (Beslut 2).
-    expect(avstamningRad($account->id)->storage_bytes)->toBe(1000);
+    // Papperskorgen ingår (ADR-0009, uppföljning 2026-11-11): den slängda
+    // bilagan räknas tills raden raderats fysiskt, så 1000 + 500.
+    expect(avstamningRad($account->id)->storage_bytes)->toBe(1500);
 });
 
 it('bilagor på andra konton räknas inte in', function () {
@@ -406,4 +406,24 @@ it('jobbet är schemalagt dagligen med call, inte command', function () {
     // till skillnad från Schedule::command() som bygger en "php artisan
     // ..."-sträng avsedd att köras via Symfony Process.
     expect($händelse->command ?? null)->toBeNull();
+});
+
+it('ett konto med en levande fil på 100 och en slängd på 50 stäms av till 150 utan drift', function () {
+    [$account, $user, , $item] = avstamningSetup();
+    avstamningBilaga($item, $account, $user, avstamningStoredFil(100));
+    avstamningBilaga($item, $account, $user, avstamningStoredFil(50))->delete();
+
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => 150,
+        'container_count' => 1,
+    ]);
+    $logg = Log::spy();
+
+    expect(UsageCounter::calculateStorageBytes($account->id))->toBe(150);
+
+    (new ReconcilesUsageCounters)->handle();
+
+    expect(avstamningRad($account->id)->storage_bytes)->toBe(150);
+    $logg->shouldNotHaveReceived('warning');
 });

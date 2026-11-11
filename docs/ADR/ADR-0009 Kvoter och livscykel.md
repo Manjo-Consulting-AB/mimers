@@ -54,3 +54,11 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 **Skrivningen stryps till en per dygn.** Livscykeln räknar i månader, och en UPDATE per sidvisning ger den ingenting — kolumnen skrivs bara när den är NULL eller äldre än ett dygn.
 
 **Säkerhetsloggen övervägdes som källa och valdes bort:** den gallras efter tolv månader, och livscykeln behöver se arton månader bakåt.
+
+## Uppföljning 2026-11-11 — papperskorgen räknas i kvoten
+
+**Regeln:** `usage_counter.storage_bytes` är summan av `byte_size` för **alla** kontots bilagor, levande och slängda. En bilaga lämnar räknaren när raden raderas fysiskt, inte när den slängs. Att slänga eller återställa en bilaga rör alltså inte räknaren, och en återställning kvotprövas inte.
+
+**Varför:** bilagan räknades bort i samma ögonblick som den slängdes, men bytena låg kvar på disken i upp till 60 dagar. Den som laddade upp, slängde och laddade upp igen kunde fylla disken utan att kvoten slog i.
+
+**Steg 2 och steg 4 följer av det.** I steg 2 frigör användaren utrymme genom att radera för gott i lagringsvyn; att bara släng räcker inte. Steg 4 tömmer först det som redan är slängt (äldst slängd först) och slänger sedan levande bilagor, nyast först, tills de levande ligger på eller under gränsen. De nyslängda bilagorna ligger i papperskorgen i 30 dagar och räknas under tiden, så kontot kan vara `active` på gratisnivån och ändå ligga över kvoten; uppladdningar är spärrade tills papperskorgen tömts. Ett konto under rättslig spärr rörs inte av steg 4. Se [[Planer och kvoter]] § Nedgradering och [[Filer och lagring]] § Kvot kontra faktisk lagring.

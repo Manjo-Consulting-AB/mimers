@@ -809,3 +809,37 @@ it('jobbet är schemalagt dagligen med call, inte command', function () {
     // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
 });
+
+it('flytten tar också med de slängda bilagornas byten till ägarkontot', function () {
+    [$konto, $medlem] = kontoraderingVilande();
+    $agare = Account::factory()->create();
+    UsageCounter::factory()->create(['account_id' => $agare->id, 'storage_bytes' => 5000]);
+    $container = kontoraderingContainer($agare);
+
+    $item = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $medlem->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+
+    // En levande (2048) och en slängd (1024) bilaga: papperskorgen räknas i
+    // kontots förbrukning (ADR-0009, uppföljning 2026-11-11), så båda flyttas.
+    $levande = StoredFile::factory()->create(['byte_size' => 2048]);
+    Attachment::factory()->for($item, 'item')->create([
+        'stored_file_id' => $levande->id,
+        'uploaded_by_user_id' => $medlem->id,
+        'billed_account_id' => $konto->id,
+    ]);
+    $slängd = StoredFile::factory()->create(['byte_size' => 1024]);
+    Attachment::factory()->for($item, 'item')->create([
+        'stored_file_id' => $slängd->id,
+        'uploaded_by_user_id' => $medlem->id,
+        'billed_account_id' => $konto->id,
+        'deleted_at' => Carbon::parse('2024-06-01 12:00:00'),
+    ]);
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    kontoraderingKör();
+
+    expect((int) DB::table('usage_counter')->where('account_id', $agare->id)->value('storage_bytes'))
+        ->toBe(5000 + 3072);
+});

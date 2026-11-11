@@ -370,7 +370,7 @@ it('R6 · nedgraderingens radering går genom papperskorgen och räknaren minska
     // räknaren ställs för hand till bytenas summa.
     UsageCounter::factory()->create(['account_id' => $konto->id, 'storage_bytes' => 800, 'container_count' => 0]);
 
-    (new EnforcesDowngrades(app(TrashAttachment::class)))->handle();
+    (new EnforcesDowngrades(app(TrashAttachment::class), app(PurgeContent::class)))->handle();
 
     // Steg 4 går genom TrashAttachment — samma väg som varje annan radering i
     // systemet. Bilagan hamnar i papperskorgen, och DÄR rörs räknaren inte:

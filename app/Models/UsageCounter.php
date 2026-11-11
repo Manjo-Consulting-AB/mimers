@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Förbrukning per konto — se [[Planer och kvoter]] § usage_counter. En rad
  * per konto (`account_id` är unikt), uppdaterad transaktionellt av
- * App\Actions\Usage\AdjustUsage när en bilaga eller container blir levande
- * eller slutar vara levande (issue 26a).
+ * App\Actions\Usage\AdjustUsage när en bilaga laddas upp eller raderas fysiskt
+ * och när en container blir levande eller slutar vara det (issue 26a;
+ * ADR-0009 uppföljning 2026-11-11).
  *
  * Räknaren är en cache av två frågor, och de två sanningarna formuleras på
  * ETT ställe — i metoderna calculateStorageBytes() och
@@ -49,7 +50,7 @@ class UsageCounter extends Model
 
     /**
      * Sanningen som `storage_bytes` cachar: summan av bytena för kontots
-     * levande bilagor, mätt som LOGISK storlek. Två bilagor på samma
+     * bilagor — levande och slängda, tills raden raderats fysiskt — mätt som LOGISK storlek. Två bilagor på samma
      * stored_file räknas båda — dedupen sänker bara den faktiska
      * diskförbrukningen ([[Filer och lagring]] § Kvot kontra faktisk
      * lagring, issue 26a § Beslut 2).
@@ -59,7 +60,6 @@ class UsageCounter extends Model
         return (int) DB::table('attachment')
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
             ->where('attachment.billed_account_id', $accountId)
-            ->whereNull('attachment.deleted_at')
             ->sum('stored_file.byte_size');
     }
 

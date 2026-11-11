@@ -599,7 +599,7 @@ it('formaterar bytes i feldata och lämnar övriga nycklar orörda', function ()
 
 // --- raderingen: mjuk ---------------------------------------------------
 
-it('mjukraderar bilagan och drar av bytena utan att röra referensräknaren', function () {
+it('mjukraderar bilagan utan att röra förbrukningen eller referensräknaren', function () {
     withoutVite();
 
     [$konto, $anvandare, $container, $item] = bilagevyKontext();
@@ -627,8 +627,9 @@ it('mjukraderar bilagan och drar av bytena utan att röra referensräknaren', fu
     // Mjuk: `deleted_at` sätts och ingenting annat gallras (Beslut 7).
     expect($bilaga->fresh()->deleted_at)->not->toBeNull();
 
-    // Förbrukningen dras av direkt, i samma transaktion som raden.
-    expect(bilagevyForbrukning($konto))->toBe(0);
+    // Förbrukningen rörs inte: en slängd bilaga räknas tills den raderas
+    // fysiskt (ADR-0009, uppföljning 2026-11-11).
+    expect(bilagevyForbrukning($konto))->toBe(1500);
 
     // Men `reference_count` rörs INTE — den minskas först när bilagan lämnar
     // papperskorgen (ADR-0008, issue 17a).

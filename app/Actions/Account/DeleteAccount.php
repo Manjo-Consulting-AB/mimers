@@ -278,10 +278,10 @@ class DeleteAccount
      * Ingen soft-delete-scope på någon av sidorna: en mjukraderad bilaga, ett
      * mjukraderat item eller en mjukraderad container är fortfarande rader
      * med RESTRICT-nycklar, och en kvarlämnad `billed_account_id` blockerar
-     * account-raderingen precis som en levande. ENDAST LEVANDE BILAGOR
-     * påverkar räknaren — en mjukraderad bilaga är redan avdragen från
-     * kontots `storage_bytes` (issue 26a), och att flytta dess byten hade
-     * debiterat ägarkontot för något ingen räknar.
+     * account-raderingen precis som en levande. ALLA BILAGOR
+     * flyttar sina bytes — också de slängda, eftersom en slängd bilaga räknas
+     * i kontots `storage_bytes` tills den raderas fysiskt (ADR-0009
+     * uppföljning 2026-11-11).
      */
     private function flyttaFrammandeBilagor(Account $account): void
     {
@@ -299,14 +299,13 @@ class DeleteAccount
             ->where('container.account_id', '!=', $account->id)
             ->get([
                 'attachment.id',
-                'attachment.deleted_at',
                 'container.account_id as agarkonto_id',
                 'stored_file.byte_size',
             ]);
 
         foreach ($rader->groupBy('agarkonto_id') as $agarkontoId => $grupp) {
             $agarkontoId = (int) $agarkontoId;
-            $bytes = (int) $grupp->whereNull('deleted_at')->sum('byte_size');
+            $bytes = (int) $grupp->sum('byte_size');
 
             if ($bytes > 0) {
                 (new AdjustUsage)->handle($account->id, bytesDelta: -$bytes);

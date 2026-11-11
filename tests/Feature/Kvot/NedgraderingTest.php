@@ -570,5 +570,7 @@ it('den vanliga bilageraderingen fungerar oförändrat', function () {
     // för den befintliga rutten är oförändrat.
     $response->assertNoContent();
     expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
-    expect(nedgraderingStorageBytes($account->id))->toBe(0);
+    // Den slängda bilagan räknas tills den raderas fysiskt (ADR-0009,
+    // uppföljning 2026-11-11).
+    expect(nedgraderingStorageBytes($account->id))->toBe($byteSize);
 });

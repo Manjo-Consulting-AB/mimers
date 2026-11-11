@@ -4,17 +4,16 @@ namespace App\Actions\Attachment;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Container\RemoveContainerCover;
-use App\Actions\Usage\AdjustUsage;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Item;
-use App\Models\StoredFile;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Mjukraderar en bilaga och minskar kontots förbrukning — paret på ett
- * ställe (issue 28 § Beslut 5). Se [[Filer och lagring]] § attachment,
+ * Mjukraderar en bilaga. Kontots förbrukning rörs INTE: en slängd bilaga
+ * räknas i kvoten tills raden raderas fysiskt (PurgeAttachment), se
+ * [[ADR-0009 Kvoter och livscykel]] § Uppföljning 2026-11-11. Se [[Filer och lagring]] § attachment,
  * [[ADR-0008 Soft delete och papperskorg]] och [[Planer och kvoter]] §
  * usage_counter.
  *
@@ -22,8 +21,8 @@ use Illuminate\Support\Facades\DB;
  * App\Http\Controllers\Api\AttachmentController::destroy) och rensningen i
  * den nya storage-ytan (App\Http\Controllers\Api\AccountStorageController)
  * gör EXAKT samma sak: `deleted_at` sätts, bytena lämnar kontots räknare
- * omedelbart (issue 26a — en bilaga som slutar vara levande slutar också
- * räknas), och `stored_file.reference_count` rörs INTE — den minskas först
+ * inte (bytena ligger kvar på disken och räknas därför vidare), och
+ * `stored_file.reference_count` rörs INTE — den minskas först
  * när bilagan gallras av PurgeAttachment (issue 17a). Hade paret legat i två
  * filer skulle de glida isär första gången någon ändrar den ena.
  *
@@ -54,11 +53,8 @@ use Illuminate\Support\Facades\DB;
  * tillförlitliga signalen. En samtidig radering av samma bilaga mellan en
  * tidigare SELECT och radlåset här ska inte räknas två gånger av anroparen.
  *
- * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
- * se [[ADR-0024 Tunna controllers och actions]] och PurgeAttachments
- * docblock. Containerbilagans gren rör den inte alls: där lämnar bytena
- * räkningen genom PurgeAttachment, som gör samma avdrag för en rad som var
- * levande.
+ * Containerbilagans gren rensas direkt: där lämnar bytena räkningen genom
+ * PurgeAttachment, som alltid räknar ned när raden raderats.
  *
  * **Händelseloggen (issue 109) skrivs här, i samma transaktion — på den väg
  * som mjukraderar.** En containerbild får ingen `attachment.deleted`-rad:
@@ -115,15 +111,12 @@ class TrashAttachment
             // revisionsraden nedan beskriver ett item som inte finns. Bilden
             // bär heller ingen `deleted_at` att ångra — den som ångrar sig
             // laddar upp igen (ADR-0047). Bytena lämnar kontots räknare genom
-            // PurgeAttachment, som för en levande rad, så kvoten frigörs.
+            // PurgeAttachment, så kvoten frigörs.
             if ($rad->container_id !== null) {
                 $this->removeContainerCover->purge($rad);
 
                 return true;
             }
-
-            $billedAccountId = $rad->billed_account_id;
-            $byteSize = (int) StoredFile::query()->whereKey($rad->stored_file_id)->value('byte_size');
 
             // Itemet läses med `withTrashed()`: bilagan kan raderas medan
             // dess item redan ligger i papperskorgen, och loggraden ska då
@@ -133,8 +126,6 @@ class TrashAttachment
             $kind = $rad->kind;
 
             $rad->delete();
-
-            (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_ATTACHMENT_DELETED,
