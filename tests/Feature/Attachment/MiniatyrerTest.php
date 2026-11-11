@@ -432,7 +432,9 @@ it('en uppladdning lyckas även om derivatgenereringen misslyckas', function () 
     expect(StoredFile::count())->toBe(1);
     expect(Attachment::count())->toBe(1);
     expect(ImageDerivative::count())->toBe(0);
-    $logg->shouldHaveReceived('error')->once();
+    // Måttprövningen före avkodning (issue 1035) fångar den ologiska filen
+    // först: en varning, inte ett fel.
+    $logg->shouldHaveReceived('warning')->once();
 });
 
 /*
