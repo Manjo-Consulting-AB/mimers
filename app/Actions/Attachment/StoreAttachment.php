@@ -17,8 +17,10 @@ use App\Support\Plan\Entitlements;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 /**
  * Sparar en uppladdad fil och kopplar den till ett item eller en container,
@@ -50,6 +52,17 @@ use RuntimeException;
  * En dödlåsning på gap-låset (SQLSTATE 40001) kastas också vidare och
  * retryas av `DB::transaction` (andra argumentet = antal försök), se
  * kodgranskningsfynd 1 och 2.
+ *
+ * Två luckor kring skrivningen före transaktionen är stängda (issue 1050).
+ * Rad utan bytes: gallringen kan ha raderat fil och rad mellan skrivningen
+ * och radlåset, så transaktionen kontrollerar efter att raden låsts eller
+ * skapats att filen finns och skriver den annars igen — gallringen tar samma
+ * lås, så antingen har den redan raderat (vi skriver om) eller så väntar den
+ * på oss och ser `reference_count > 0`. Bytes utan rad: faller transaktionen
+ * efter alla försök (till exempel `quota.storage_exceeded`) och ingen
+ * `stored_file`-rad finns med hashen, raderas bytena; finns en rad hör filen
+ * till den och lämnas. Städningen sker runt hela `DB::transaction`-anropet,
+ * aldrig inne i stängningen som retryas.
  *
  * Bytena på disken är per definition identiska när hashen är densamma, så
  * en avbruten körning lämnar bara ofarliga överblivna byten (§ Beslut 10).
@@ -163,128 +176,154 @@ class StoreAttachment
         // stored_file skapades; se dispatchen efter transaktionen (Beslut 3).
         $nyStoredFile = null;
 
-        $attachment = DB::transaction(function () use ($owner, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename, $kind, &$nyStoredFile): Attachment {
-            // Nollställs per försök: retryar DB::transaction hela stängningen
-            // (dödläge 40001) får inte en skapad stored_file från ett
-            // rullat tillbaka försök dispatchen — den raden finns inte.
-            $nyStoredFile = null;
+        try {
+            $attachment = DB::transaction(function () use ($owner, $file, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename, $kind, &$nyStoredFile): Attachment {
+                // Nollställs per försök: retryar DB::transaction hela stängningen
+                // (dödläge 40001) får inte en skapad stored_file från ett
+                // rullat tillbaka försök dispatchen — den raden finns inte.
+                $nyStoredFile = null;
 
-            $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->first();
+                $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->first();
 
-            if ($storedFile === null) {
-                try {
-                    $storedFile = StoredFile::create([
-                        'content_hash' => $hash,
-                        'byte_size' => $byteSize,
-                        'mime_type' => $mimeType,
-                        'storage_path' => $storagePath,
-                        'reference_count' => 1,
-                        'scan_status' => 'skipped',
-                    ]);
+                if ($storedFile === null) {
+                    try {
+                        $storedFile = StoredFile::create([
+                            'content_hash' => $hash,
+                            'byte_size' => $byteSize,
+                            'mime_type' => $mimeType,
+                            'storage_path' => $storagePath,
+                            'reference_count' => 1,
+                            'scan_status' => 'skipped',
+                        ]);
 
-                    $nyStoredFile = $storedFile;
-                } catch (QueryException $e) {
-                    // Uniknyckelbrott på content_hash: en samtidig
-                    // uppladdning skapade raden mellan lockForUpdate-uppslaget
-                    // och den här inserten. Bytena på disken (skrivna före
-                    // transaktionen) är identiska per definition — samma hash
-                    // → samma innehåll — så dedupen faller tillbaka på
-                    // incrementsvägen. Skapa aldrig en andra rad, låt aldrig
-                    // felet nå användaren.
-                    if (! $this->isDuplicateEntry($e)) {
-                        throw $e;
+                        $nyStoredFile = $storedFile;
+                    } catch (QueryException $e) {
+                        // Uniknyckelbrott på content_hash: en samtidig
+                        // uppladdning skapade raden mellan lockForUpdate-uppslaget
+                        // och den här inserten. Bytena på disken (skrivna före
+                        // transaktionen) är identiska per definition — samma hash
+                        // → samma innehåll — så dedupen faller tillbaka på
+                        // incrementsvägen. Skapa aldrig en andra rad, låt aldrig
+                        // felet nå användaren.
+                        if (! $this->isDuplicateEntry($e)) {
+                            throw $e;
+                        }
+
+                        // lockForUpdate är en "current read" som ser det senast
+                        // committade — en vanlig consistent read kan under
+                        // REPEATABLE READ läsa ur en förlegad snapshot och missa
+                        // raden som uniknyckelbrottet just bevisade finns.
+                        // `purge_after` nollställs i samma skrivning, se Beslut 5.
+                        $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->firstOrFail();
+                        $storedFile->increment('reference_count', 1, ['purge_after' => null]);
                     }
-
-                    // lockForUpdate är en "current read" som ser det senast
-                    // committade — en vanlig consistent read kan under
-                    // REPEATABLE READ läsa ur en förlegad snapshot och missa
-                    // raden som uniknyckelbrottet just bevisade finns.
-                    // `purge_after` nollställs i samma skrivning, se Beslut 5.
-                    $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->firstOrFail();
+                } else {
+                    // Increment är en SQL-operation, inte läs-ändra-skriv i PHP —
+                    // samtidiga ökningar går förlorade om raden läses in och +1
+                    // görs i minnet (§ Att se upp med). `purge_after` nollställs i
+                    // SAMMA skrivning: en gammal gallringsmarkering från en annan
+                    // användares borttagna bilaga får inte överleva in i den nya
+                    // bilagans livslängd (issue 17a § Beslut 5).
                     $storedFile->increment('reference_count', 1, ['purge_after' => null]);
                 }
-            } else {
-                // Increment är en SQL-operation, inte läs-ändra-skriv i PHP —
-                // samtidiga ökningar går förlorade om raden läses in och +1
-                // görs i minnet (§ Att se upp med). `purge_after` nollställs i
-                // SAMMA skrivning: en gammal gallringsmarkering från en annan
-                // användares borttagna bilaga får inte överleva in i den nya
-                // bilagans livslängd (issue 17a § Beslut 5).
-                $storedFile->increment('reference_count', 1, ['purge_after' => null]);
+
+                // Lucka 1 (issue 1050): under radlåset, saknas bytena? Gallringen
+                // kan ha raderat dem efter skrivningen ovan. Skriv dem igen innan
+                // något commit:ar en rad som pekar på en fil som inte finns.
+                if (! Storage::disk('files')->exists($storagePath)) {
+                    Storage::disk('files')->putFileAs(dirname($storagePath), $file, basename($storagePath));
+                }
+
+                // Den AUKTORITATIVA kvotkontrollen, under radlåset på kontots
+                // usage_counter-rad och före attachment-raden skapas (issue 27b §
+                // Beslut 4). Kontrollern har redan gjort en billig avvisning, men
+                // den ser en siffra som kan vara inaktuell: två samtidiga
+                // uppladdningar kan båda passera den tidiga kontrollen, och
+                // lockForUpdate här serialiserar dem — den andra ser den förstas
+                // ökning och nekas. Kastet rullar tillbaka hela transaktionen,
+                // inklusive stored_file-raden som just skapades eller ökades.
+                // Räknat på $storedFile->byte_size — samma tal AdjustUsage lägger
+                // till i räknaren strax nedanför.
+                (new Entitlements)->assertStorageWithinLimit($account, $storedFile->byte_size);
+
+                $attachment = new Attachment;
+
+                // Exakt en av de två kolumnerna sätts — CHECK-villkoret i
+                // 2026_09_27_020000 upprätthåller det, och den här grenen är den
+                // enda som skriver dem.
+                if ($owner instanceof Container) {
+                    $attachment->container_id = $owner->id;
+                } else {
+                    $attachment->item_id = $owner->id;
+                }
+
+                $attachment->stored_file_id = $storedFile->id;
+                $attachment->filename = $filename;
+                $attachment->kind = $kind;
+                $attachment->uploaded_by_user_id = $user->id;
+                $attachment->billed_account_id = $account->id;
+                $attachment->save();
+
+                // Förbrukningen räknas transaktionellt (issue 26a): bilagan är
+                // levande, så kontots räknare ökar med bytena i SAMMA transaktion
+                // som raden — även i dedup-grenen, där stored_file-redan fanns
+                // (logisk storlek, inte diskförbrukning). Ökningen måste ligga
+                // inuti stängningen: DB::transaction retryar hela stängningen vid
+                // dödläge, och en ökning utanför skulle räknas en gång per försök.
+                // Bytena läses ur $storedFile->byte_size — samma kolumn som
+                // sanningsfrågan i UsageCounter::calculateStorageBytes() summerar.
+                // UploadedFile::getSize() (int|false) är en annan källa och är
+                // dessutom inte det auktoritativa värdet i dedup-grenen
+                // (granskningsfynd 3).
+                (new AdjustUsage)->handle($account->id, bytesDelta: $storedFile->byte_size);
+
+                // Händelseloggen i SAMMA transaktion som raden (issue 109): en
+                // loggrad som skrevs utanför kunde överleva ett rollback och
+                // beskriva en bilaga som inte finns. `meta` bär `kind` och aldrig
+                // filnamnet — namnet är användarens fritext och slås upp ur
+                // raden när historiken visas (issue 116).
+                // Containern raden hör till, oavsett slag: itemets för en
+                // itembilaga, ägarcontainern för en containerbilaga.
+                $container = $owner instanceof Container ? $owner : $owner->container;
+
+                $this->recordAuditEvent->handle(
+                    action: AuditLog::ACTION_ATTACHMENT_CREATED,
+                    account: $container->account,
+                    user: $user,
+                    container: $container,
+                    // Null för en containerbilaga: händelsen hör till containern
+                    // och inte till något item (issue 107, item_id är nullbar).
+                    item: $owner instanceof Item ? $owner : null,
+                    subjectType: 'attachment',
+                    subjectUlid: $attachment->ulid,
+                    meta: ['kind' => $attachment->kind],
+                );
+
+                // Resursen läser storedFile/billedAccount genom relationerna —
+                // sätt dem direkt så inget oplanerat lazy-load sker.
+                $attachment->setRelation('storedFile', $storedFile);
+                $attachment->setRelation('billedAccount', $account);
+
+                return $attachment;
+            }, 3);
+        } catch (Throwable $e) {
+            // Lucka 2 (issue 1050): alla försök är slut. Finns ingen rad med
+            // hashen ligger bytena kvar utan ägare — gallringen utgår från
+            // rader och hittar dem aldrig. Finns en rad hör filen till den.
+            try {
+                if (StoredFile::where('content_hash', $hash)->doesntExist()) {
+                    Storage::disk('files')->delete($storagePath);
+                }
+            } catch (Throwable $cleanupError) {
+                // Ett fel i städningen får aldrig dölja det ursprungliga.
+                Log::warning('Städning av föräldralösa bytes efter misslyckad uppladdning föll.', [
+                    'storage_path' => $storagePath,
+                    'error' => $cleanupError->getMessage(),
+                ]);
             }
 
-            // Den AUKTORITATIVA kvotkontrollen, under radlåset på kontots
-            // usage_counter-rad och före attachment-raden skapas (issue 27b §
-            // Beslut 4). Kontrollern har redan gjort en billig avvisning, men
-            // den ser en siffra som kan vara inaktuell: två samtidiga
-            // uppladdningar kan båda passera den tidiga kontrollen, och
-            // lockForUpdate här serialiserar dem — den andra ser den förstas
-            // ökning och nekas. Kastet rullar tillbaka hela transaktionen,
-            // inklusive stored_file-raden som just skapades eller ökades.
-            // Räknat på $storedFile->byte_size — samma tal AdjustUsage lägger
-            // till i räknaren strax nedanför.
-            (new Entitlements)->assertStorageWithinLimit($account, $storedFile->byte_size);
-
-            $attachment = new Attachment;
-
-            // Exakt en av de två kolumnerna sätts — CHECK-villkoret i
-            // 2026_09_27_020000 upprätthåller det, och den här grenen är den
-            // enda som skriver dem.
-            if ($owner instanceof Container) {
-                $attachment->container_id = $owner->id;
-            } else {
-                $attachment->item_id = $owner->id;
-            }
-
-            $attachment->stored_file_id = $storedFile->id;
-            $attachment->filename = $filename;
-            $attachment->kind = $kind;
-            $attachment->uploaded_by_user_id = $user->id;
-            $attachment->billed_account_id = $account->id;
-            $attachment->save();
-
-            // Förbrukningen räknas transaktionellt (issue 26a): bilagan är
-            // levande, så kontots räknare ökar med bytena i SAMMA transaktion
-            // som raden — även i dedup-grenen, där stored_file-redan fanns
-            // (logisk storlek, inte diskförbrukning). Ökningen måste ligga
-            // inuti stängningen: DB::transaction retryar hela stängningen vid
-            // dödläge, och en ökning utanför skulle räknas en gång per försök.
-            // Bytena läses ur $storedFile->byte_size — samma kolumn som
-            // sanningsfrågan i UsageCounter::calculateStorageBytes() summerar.
-            // UploadedFile::getSize() (int|false) är en annan källa och är
-            // dessutom inte det auktoritativa värdet i dedup-grenen
-            // (granskningsfynd 3).
-            (new AdjustUsage)->handle($account->id, bytesDelta: $storedFile->byte_size);
-
-            // Händelseloggen i SAMMA transaktion som raden (issue 109): en
-            // loggrad som skrevs utanför kunde överleva ett rollback och
-            // beskriva en bilaga som inte finns. `meta` bär `kind` och aldrig
-            // filnamnet — namnet är användarens fritext och slås upp ur
-            // raden när historiken visas (issue 116).
-            // Containern raden hör till, oavsett slag: itemets för en
-            // itembilaga, ägarcontainern för en containerbilaga.
-            $container = $owner instanceof Container ? $owner : $owner->container;
-
-            $this->recordAuditEvent->handle(
-                action: AuditLog::ACTION_ATTACHMENT_CREATED,
-                account: $container->account,
-                user: $user,
-                container: $container,
-                // Null för en containerbilaga: händelsen hör till containern
-                // och inte till något item (issue 107, item_id är nullbar).
-                item: $owner instanceof Item ? $owner : null,
-                subjectType: 'attachment',
-                subjectUlid: $attachment->ulid,
-                meta: ['kind' => $attachment->kind],
-            );
-
-            // Resursen läser storedFile/billedAccount genom relationerna —
-            // sätt dem direkt så inget oplanerat lazy-load sker.
-            $attachment->setRelation('storedFile', $storedFile);
-            $attachment->setRelation('billedAccount', $account);
-
-            return $attachment;
-        }, 3);
+            throw $e;
+        }
 
         // Beslut 3: jobbet köas först efter att transaktionen committat — en
         // arbetare som plockar jobbet innan raden finns skulle misslyckas —
