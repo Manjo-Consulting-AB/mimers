@@ -6,9 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 
 /**
- * Bygger nycklarna för inloggningsbegränsaren och rensar dem vid en lyckad
- * inloggning — se issue 7 och uppföljningen "Rensa begränsaren vid lyckad
- * inloggning". Ett enda delat ställe, så att webbens och API:ets
+ * Bygger nycklarna för inloggningsbegränsaren och ger tillbaka budgeten vid en
+ * lyckad inloggning — e-postnyckeln rensas, IP-nyckeln räknas ned med ett.
+ * Se issue 7 och uppföljningen "Rensa begränsaren vid lyckad inloggning". Ett enda delat ställe, så att webbens och API:ets
  * inloggningskontroller (App\Http\Controllers\Auth\AuthenticatedSessionController,
  * App\Http\Controllers\Api\Auth\AuthenticatedTokenController) och
  * App\Providers\AppServiceProvider::configureLoginRateLimiting() garanterat
@@ -43,17 +43,28 @@ final class LoginRateLimiter
     }
 
     /**
-     * Rensar både e-post- och IP-begränsningen för den här requesten efter
-     * en lyckad inloggning — Laravels eget mönster (Fortifys
-     * AttemptToAuthenticate gör exakt så), inte en egenbyggd begränsare.
-     * Annars äter användarens egna lyckade inloggningar (flera enheter,
-     * omlogg efter en utgången token) av samma budget som är till för att
-     * stoppa gissningsförsök.
+     * Efter en lyckad inloggning: e-postbegränsningen rensas helt, men
+     * IP-budgeten ges bara tillbaka med ETT — den lyckade inloggningens eget
+     * försök. En egen lyckad inloggning (flera enheter, omlogg efter en
+     * utgången token) ska inte äta av budgeten som är till för att stoppa
+     * gissningar. Men den ska inte heller tvätta bort andras misslyckade
+     * försök från samma adress: rensades IP-nyckeln kunde den som har ett
+     * eget konto gissa nio lösenord mot andra adresser, logga in som sig
+     * själv och börja om, så att taket på tio per minut aldrig slog i.
+     *
+     * Räknaren går aldrig under noll. Webbens mejllänk (GET) passerar ingen
+     * begränsare, så en nedräkning där utan föregående försök hade gett
+     * ett tillgodohavande som ingen betalat för.
      */
     public static function clear(Request $request, string $email): void
     {
         RateLimiter::clear(self::cacheKey(self::emailKey($email)));
-        RateLimiter::clear(self::cacheKey(self::ipKey($request)));
+
+        $ipKey = self::cacheKey(self::ipKey($request));
+
+        if (RateLimiter::attempts($ipKey) > 0) {
+            RateLimiter::decrement($ipKey, 60);
+        }
     }
 
     private static function cacheKey(string $rawKey): string

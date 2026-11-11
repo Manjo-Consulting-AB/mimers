@@ -197,3 +197,65 @@ it('begränsar webbens inloggning på samma sätt, men som ett formulärfel i st
     $response->assertRedirect('/login');
     $response->assertSessionHasErrors('email');
 });
+
+it('ger bara tillbaka sitt eget försök på IP-räknaren vid en lyckad inloggning på API:et — misslyckade försök ligger kvar', function () {
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    for ($i = 0; $i < 9; $i++) {
+        postJson('/api/login', [
+            'email' => "gissning-{$i}@example.com",
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    // Räknaren står i 9, går till 10 och räknas ned till 9 av den lyckade.
+    postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'ratt-losenord',
+    ])->assertOk();
+
+    postJson('/api/login', [
+        'email' => 'gissning-9@example.com',
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+
+    $response = postJson('/api/login', [
+        'email' => 'gissning-10@example.com',
+        'password' => 'fel-losenord',
+    ]);
+
+    $response->assertStatus(429);
+    expect($response->json('error.code'))->toBe('auth.too_many_attempts');
+});
+
+it('ger bara tillbaka sitt eget försök på IP-räknaren vid en lyckad inloggning på webben — slutar i ett takfel, inte i fel lösenord', function () {
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    for ($i = 0; $i < 9; $i++) {
+        postJson('/login', [
+            'email' => "gissning-{$i}@example.com",
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    postJson('/login', [
+        'email' => $user->email,
+        'password' => 'ratt-losenord',
+    ])->assertRedirect(route('dashboard'));
+
+    postJson('/logout');
+
+    postJson('/login', [
+        'email' => 'gissning-9@example.com',
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+
+    $response = from('/login')->postJson('/login', [
+        'email' => 'gissning-10@example.com',
+        'password' => 'fel-losenord',
+    ]);
+
+    // Takgränsen blir ett formulärfel (omdirigering), inte 422 för fel lösenord.
+    $response->assertRedirect('/login');
+    $response->assertSessionHasErrors('email');
+});
