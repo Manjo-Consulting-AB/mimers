@@ -24,6 +24,7 @@ use App\Models\ScheduleOccurrence;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -128,6 +129,7 @@ class ScheduleController extends Controller
         // nivå, för ett schema utan öppen förekomst kan inte väljas på
         // förekomstnivån.
         return $page->with([
+            ...$this->returnProps($request, $container, $item),
             'scheduleDependencies' => $scheduleDependencies,
             'occurrenceDependencies' => $occurrenceDependencies,
             'hasOpenOccurrence' => $open !== null,
@@ -225,6 +227,23 @@ class ScheduleController extends Controller
     }
 
     /**
+     * `returnTo` och `back` för uppgiftens sida och redigeringen (issue 1158):
+     * den prövade `?return=`, och tillbakaadressen — den, eller itemets To
+     * do-flik. `return` läses ur frågesträngen eller kroppen.
+     *
+     * @return array{returnTo: ?string, back: string}
+     */
+    private function returnProps(Request $request, Container $container, Item $item): array
+    {
+        $returnTo = TaskCreateController::safeReturn($request->input('return'));
+
+        return [
+            'returnTo' => $returnTo,
+            'back' => $returnTo ?? "/containers/{$container->ulid}/items/{$item->ulid}?tab=schedules",
+        ];
+    }
+
+    /**
      * GET /containers/{container}/items/{item}/schedules/{schedule}/edit —
      * formuläret.
      *
@@ -245,6 +264,7 @@ class ScheduleController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => ['ulid' => $item->ulid, 'name' => $item->name],
             'schedule' => (new ScheduleResource($schedule))->resolve($request),
+            ...$this->returnProps($request, $container, $item),
             /*
              * Den öppna förekomstens förfallodag, eller null när schemat
              * saknar en öppen förekomst (issue 702 § Beslut 3). Formuläret
@@ -296,7 +316,7 @@ class ScheduleController extends Controller
 
         $wasActive = $schedule->is_active;
 
-        $schedule->fill($request->validated());
+        $schedule->fill(Arr::except($request->validated(), ['return']));
 
         if ($schedule->recurrence_type === 'none') {
             $schedule->interval_unit = null;
@@ -317,15 +337,13 @@ class ScheduleController extends Controller
             default => 'schedule-updated',
         };
 
-        // Bara `is_active` i kroppen är pausknappen och ingen formulärsparning
-        // (Beslut 3). `keys()` läser vad klienten SKICKADE, inte
-        // `validationData()`:s sammanslagna rad — en paus ska kännas igen på
-        // sin smala kropp, inte på att de andra fälten råkade vara oförändrade.
-        $pause = $request->keys() === ['is_active'];
+        // `return` är vägen tillbaka och ingen fältändring, så den räknas inte.
+        // Pausen och formulärsparningen landar båda på uppgiftens sida, med
+        // returadressen kvar när den skickades och höll (issue 1158).
+        $returnTo = TaskCreateController::safeReturn($request->input('return'));
+        $show = route('containers.items.schedules.show', [$container, $item, $schedule]);
 
-        return ($pause
-            ? redirect()->route('containers.items.schedules.show', [$container, $item, $schedule])
-            : redirect()->route('containers.items.show', [$container, $item]))
+        return redirect($returnTo === null ? $show : $show.'?'.http_build_query(['return' => $returnTo]))
             ->with('status', $status);
     }
 
@@ -349,11 +367,13 @@ class ScheduleController extends Controller
     {
         Gate::authorize('delete', $item);
 
+        $request->validate(['return' => ['nullable', 'string']]);
+
         $deleteSchedule->handle($schedule, $request->user());
 
-        return redirect()
-            ->route('containers.items.show', [$container, $item])
-            ->with('status', 'schedule-deleted');
+        $props = $this->returnProps($request, $container, $item);
+
+        return redirect($props['back'])->with('status', 'schedule-deleted');
     }
 
     /**

@@ -111,6 +111,9 @@ class UpdateScheduleRequest extends FormRequest
             ],
             'lead_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],
+            // Vägen tillbaka från webben (issue 1158). Prövas med safeReturn()
+            // i kontrollern; ingen schemakolumn.
+            'return' => ['sometimes', 'nullable', 'string'],
             // Schemats förval (ADR-0052 § 2, M26 · issue 235 § Beslut 4).
             // Nullbar med flit: förvalet får tömmas, och `null` är då svaret på
             // "inget förval ännu" — samma tillstånd ett nytt schema föds i.

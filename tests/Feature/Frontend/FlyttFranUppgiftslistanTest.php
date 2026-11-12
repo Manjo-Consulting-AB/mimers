@@ -340,5 +340,9 @@ it('TodoRow skickar return back', function () {
 it('uppgiftens sida skickar inget return', function () {
     $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
 
-    expect($vy)->not->toContain('return:');
+    // Bara flyttanropet prövas: pausen och raderingen bär `return` sedan
+    // issue 1158, men flytten postar fortfarande utan fältet.
+    expect(preg_match('#router\.post\(`\$\{scheduleActionUrl\}/move`,\s*\{([^}]*)\}#', $vy, $träff))->toBe(1);
+    expect($träff[1])->toContain('target: target.ulid');
+    expect(str_contains($träff[1], 'return'))->toBeFalse();
 });

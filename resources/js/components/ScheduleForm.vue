@@ -108,6 +108,11 @@ const props = defineProps({
      */
     returnUrl: { type: String, default: null },
     /*
+     * Returadressen vid REDIGERING (issue 1158): skickas som `return` i PATCH:en
+     * så att svaret landar på uppgiftens sida med adressen kvar.
+     */
+    returnTo: { type: String, default: null },
+    /*
      * Om *List*-fältet ritas i ett SKAPANDE formulär. `true` — förvalet — är
      * exakt dagens beteende: itemets egen sida (issue 63a) och redigeringen
      * rörs inte. Sidan `/tasks/create` (M27 · issue 246) sätter den till
@@ -167,6 +172,7 @@ const fields = {
      * och får därför itemets detaljvy som förut.
      */
     ...(props.schedule === null && props.returnUrl !== null ? { return: props.returnUrl } : {}),
+    ...(props.schedule !== null && props.returnTo !== null ? { return: props.returnTo } : {}),
 };
 
 const form = useForm(fields);

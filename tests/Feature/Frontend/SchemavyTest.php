@@ -606,7 +606,7 @@ it('ändrar ett schema och lägger valideringsfelet på sitt eget fält', functi
         'anchor_date' => '2027-05-05',
         'lead_days' => 7,
     ])
-        ->assertRedirect(schemavyUrl($container, $item))
+        ->assertRedirect($url)
         ->assertSessionHas('status', 'schedule-updated');
 
     $schema->refresh();
@@ -647,7 +647,7 @@ it('raderar ett schema efter bekräftelse och lovar ingen papperskorg', function
 
     actingAs($anvandare)
         ->delete(schemavySchemaUrl($container, $item)."/{$schema->ulid}")
-        ->assertRedirect(schemavyUrl($container, $item))
+        ->assertRedirect(schemavyUrl($container, $item).'?tab=schedules')
         ->assertSessionHas('status', 'schedule-deleted');
 
     // Mjuk radering: raden ligger kvar med `deleted_at`, och listan visar den
@@ -894,6 +894,7 @@ it('har varje ny schemanyckel och ingen svensk sträng i vyerna', function () {
         'item.schedule.empty',
         'item.schedule.add',
         'item.schedule.back',
+        'item.schedule.back_to_list',
         'item.schedule.next_due',
         'item.schedule.no_next_due',
         'item.schedule.edit',
