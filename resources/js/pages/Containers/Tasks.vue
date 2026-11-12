@@ -1,13 +1,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerTaskQuickCreate from '../../components/ContainerTaskQuickCreate.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
-import UiIcon from '../../components/UiIcon.vue';
 import UiTabs from '../../components/UiTabs.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -236,23 +236,29 @@ const calendarUrl = () => `/containers/${props.container.ulid}/calendar`;
 const exportUrl = () => `/containers/${props.container.ulid}/export`;
 
 /*
- * *New task* (M27 · issue 246 § Beslut 2). Fliken är en av de tre ytorna som
- * bär knappen, och den leder till formuläret med INBOXEN förvald: en container
- * är inte ett item, så det finns ingen plats att ärva. Användaren byter med
- * *Change…* (resources/js/pages/Tasks/Create.vue).
+ * Registreringen sker i vyn, med snabbraden som rad noll över listan
+ * ([[ADR-0074 Registrering i vyn]] § 4 och 6, M52 · issue 358). *New task*
+ * lämnar fliken; plusknappen (`create`) leder fortfarande till
+ * hela formuläret. Raden ritas inte på *Done*: där finns inget att lägga till.
  *
- * Adressen bär `return` med den här sidan (Beslut 3), så svaret landar i
- * samma flik — `page.url` är adressen med sin querysträng, och listan och
- * underhållsfiltret man står i följer därför med tillbaka.
- *
- * **Det är en `<Link>` och inte en `<UiButton>`.** Knappen navigerar, och
- * GenomgangTest tillåter bara `<Link>` bland komponenttaggarna: en `@click` på
- * en komponent är en klickyta provet inte kan se är tabbbar. Klasserna är
- * `UiButton`s `primary`, så formen är densamma som i designsystemet.
+ * `entryUlids` är ULID:erna i de öppna grupperna just nu; snabbraden jämför
+ * dem före och efter ett svar och skickar de nya i `created`, som markeras
+ * med `bg-accent-soft` i 2000 ms.
  */
-const page = usePage();
+const entryUlids = computed(() => Object.values(props.groups).flat().map((entry) => entry.ulid));
 
-const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page.url)}`);
+const highlighted = ref(new Set());
+
+let highlightTimer = null;
+
+function onCreated(ulids) {
+    highlighted.value = new Set(ulids);
+
+    clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+        highlighted.value = new Set();
+    }, 2000);
+}
 </script>
 
 <template>
@@ -260,18 +266,6 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
 
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
-
-        <!-- *New task* (M27 · issue 246 § Beslut 2). Knappen ritas alltid:
-             inboxen är alltid ett möjligt mål, och containern behöver
-             därför ingen `can`-flagga. -->
-        <Link
-            :href="createUrl"
-            class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-        >
-            <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
-
-            {{ t('todo.new') }}
-        </Link>
     </div>
 
     <!--
@@ -301,6 +295,16 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
         >
         {{ t('container.tasks.filter_maintenance') }}
     </label>
+
+    <!-- Snabbraden: rad noll, före listan och det tomma läget (ADR-0074 § 2). -->
+    <ContainerTaskQuickCreate
+        v-if="list !== 'done'"
+        class="mt-4"
+        :container-ulid="container.ulid"
+        :list="list"
+        :entry-ulids="entryUlids"
+        @created="onCreated"
+    />
 
     <!--
         Listan till vänster och panelen till höger över `lg:`, panelen
@@ -342,6 +346,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
                             :key="entry.ulid"
                             :entry="entry"
                             :show-container="false"
+                            :class="{ 'bg-accent-soft': highlighted.has(entry.ulid) }"
                         />
                     </TaskGroup>
                 </template>

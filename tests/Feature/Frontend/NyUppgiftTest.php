@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: knappen tas bort från containerns flik, så provet krymper från tre ytor till två och är grönt även på basen; Containers/Tasks.vue-fallet bevisas i ContainerSnabbradTest.
+
 use App\Actions\Inbox\ResolveInbox;
 use App\Models\Account;
 use App\Models\Container;
@@ -75,17 +77,17 @@ function nyuppgiftItem(Container $container, string $namn = 'Motorn'): Item
 // --- de tre ytorna ----------------------------------------------------------
 
 /*
- * Klart när: de tre ytorna har knappen New task.
+ * Klart när: de två ytorna har knappen New task (issue 358: containerns flik
+ * har lämnat knappen för snabbraden, ADR-0074 § 6).
  *
- * Beslut 2. Knappen ritas på itemets flik, containerns flik och `/tasks`, och
- * alla tre leder till samma formulär. Itemets flik bär sitt item i adressen
+ * Beslut 2. Knappen ritas på itemets flik och `/tasks`, och båda leder till
+ * samma formulär. Itemets flik bär sitt item i adressen
  * (`?item=`), de två andra leder dit utan — en container är inte ett item, och
  * på `/tasks` finns ingen plats alls (Beslut 1).
  */
-it('de tre ytorna har knappen New task', function () {
+it('de två ytorna har knappen New task', function () {
     $ytor = [
         'js/components/ScheduleListSection.vue',
-        'js/pages/Containers/Tasks.vue',
         'js/pages/Tasks/Index.vue',
     ];
 
@@ -98,12 +100,7 @@ it('de tre ytorna har knappen New task', function () {
     // Itemets flik förväljer itemet (Beslut 2), och de två andra gör det inte.
     expect(nyuppgiftKod('js/components/ScheduleListSection.vue'))->toContain('?item=');
 
-    foreach ([
-        'js/pages/Containers/Tasks.vue',
-        'js/pages/Tasks/Index.vue',
-    ] as $fil) {
-        expect(nyuppgiftKod($fil))->not->toContain('?item=');
-    }
+    expect(nyuppgiftKod('js/pages/Tasks/Index.vue'))->not->toContain('?item=');
 
     expect(trans('ui.todo.new', [], 'en'))->toBe('New task');
 });
