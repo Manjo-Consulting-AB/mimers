@@ -150,3 +150,112 @@ it('har ingen synlig sträng i panelramen och orden i lang/en/ui.php', function 
             ->not->toBe("ui.container.overview.customize.{$nyckel}");
     }
 });
+
+/*
+ * Issue 1115 · draget på översikten, se ADR-0073 § 6.
+ *
+ * Flyttfunktionen är ren och körs på riktigt i node, som colorWheel.js i
+ * TaggfargvaljareTest.
+ */
+function ordningVyFlytta(string $nycklar, string $nyckel, string $mal): string
+{
+    $kod = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const m = await import(pathToFileURL('
+            .json_encode(resource_path('js/support/overviewPanels.js'), JSON_UNESCAPED_SLASHES).').href);',
+        "const list = '{$nycklar}'.split(',').map((key) => ({ key, width: 'narrow' }));",
+        "process.stdout.write(m.movePanelTo(list, '{$nyckel}', '{$mal}').map((p) => p.key).join(','));",
+    ]);
+
+    $rader = [];
+    $status = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($kod).' 2>&1', $rader, $status);
+
+    expect($status)->toBe(0, implode("\n", $rader));
+
+    return implode("\n", $rader);
+}
+
+/*
+ * Klart när: den rena flyttfunktionen flyttar en nyckel till målets plats,
+ * lämnar listan oförändrad för ett släpp på sig själv och ignorerar en okänd
+ * nyckel — ett prov per fall.
+ */
+it('flyttar en nyckel framåt till målets plats', function () {
+    expect(ordningVyFlytta('a,b,c,d', 'a', 'c'))->toBe('b,c,a,d');
+});
+
+it('flyttar en nyckel bakåt till målets plats', function () {
+    expect(ordningVyFlytta('a,b,c,d', 'd', 'b'))->toBe('a,d,b,c');
+});
+
+it('lämnar listan oförändrad vid ett släpp på sig själv', function () {
+    expect(ordningVyFlytta('a,b,c,d', 'b', 'b'))->toBe('a,b,c,d');
+});
+
+it('ignorerar en nyckel som inte finns i listan', function () {
+    expect(ordningVyFlytta('a,b,c,d', 'x', 'b'))->toBe('a,b,c,d');
+    expect(ordningVyFlytta('a,b,c,d', 'a', 'x'))->toBe('a,b,c,d');
+});
+
+/*
+ * Klart när: handtaget ritas bara i läget och bara från `lg:`, och bär
+ * aria-hidden="true".
+ */
+it('ritar draghandtaget bara i läget, bara från lg: och som aria-hidden', function () {
+    $ram = ordningVyRam();
+
+    expect($ram)->toContain('<span class="hidden lg:flex" aria-hidden="true"><UiIcon name="drag" /></span>');
+
+    // Handtaget står inuti raden som bara ritas i läget (v-if="editing").
+    expect(strpos($ram, 'name="drag"'))->toBeGreaterThan(strpos($ram, 'v-if="editing"'));
+
+    $ikoner = File::get(resource_path('js/icons/index.js'));
+
+    expect($ikoner)->toContain('drag: [')->toContain('// grip-vertical · lucide-static 1.59.0');
+});
+
+/*
+ * Klart när: ramen i läget har draggable och lyssnar på dragstart, dragover,
+ * drop och dragend, och målet markeras i border-accent.
+ */
+it('gör panelens ram draggable med de fyra dragfallen och en markering i border-accent', function () {
+    $ram = ordningVyRam();
+
+    expect($ram)->toContain(':draggable="editing ?')
+        ->toContain('@dragstart=')
+        ->toContain('@dragover=')
+        ->toContain('@drop=')
+        ->toContain('@dragend=')
+        ->toContain("dropTarget ? 'border-accent'")
+        ->toContain("setData('text/plain', props.panelKey)");
+});
+
+/*
+ * Klart när: ett släpp ändrar samma lokala lista som pilarna, och sparas
+ * genom Done.
+ */
+it('låter pilarna och släppet ändra samma lokala lista med samma funktion, och Done spara den', function () {
+    $vy = ordningVySida();
+
+    expect($vy)->toContain("import { movePanelTo } from '../../support/overviewPanels.js';")
+        ->and(substr_count($vy, '= movePanelTo(draft.value'))->toBe(2)
+        ->and($vy)->toContain('@panel-drop="dropPanel(panel.key, $event)"')
+        ->toContain('{ panels: draft.value }');
+
+    // Sparandet är oförändrat: bara Done och Reset anropar routern.
+    expect(substr_count($vy, 'router.'))->toBe(2);
+});
+
+/*
+ * Klart när: package.json är oförändrad — draget byggs utan paket.
+ */
+// vakt: ett negativt prov, grönt på basen med flit — inget paket får läggas till
+it('lägger inget dragpaket i package.json', function () {
+    $paket = strtolower(File::get(base_path('package.json')));
+
+    foreach (['sortable', 'draggable', 'dnd', 'vuedraggable'] as $namn) {
+        expect($paket)->not->toContain($namn);
+    }
+});

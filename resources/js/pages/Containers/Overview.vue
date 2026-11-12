@@ -17,6 +17,7 @@ import UiEmptyState from '../../components/UiEmptyState.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+import { movePanelTo } from '../../support/overviewPanels.js';
 
 defineOptions({
     layout: (props) => [
@@ -223,8 +224,7 @@ function movePanel(index, direction) {
         return;
     }
 
-    const next = [...draft.value];
-    [next[index], next[target]] = [next[target], next[index]];
+    const next = movePanelTo(draft.value, draft.value[index].key, draft.value[target].key);
     draft.value = next;
 
     const key = next[target].key;
@@ -235,6 +235,21 @@ function movePanel(index, direction) {
 
         document.querySelector(`[data-move="${key}-${wanted}"]`)?.focus();
     });
+}
+
+/* Draget (issue 1115): HTML5-drag på panelens ram, en genväg bredvid pilarna. */
+const dragKey = ref(null);
+const overKey = ref(null);
+
+function dropPanel(targetKey, droppedKey) {
+    draft.value = movePanelTo(draft.value, droppedKey, targetKey);
+    dragKey.value = null;
+    overKey.value = null;
+}
+
+function endDrag() {
+    dragKey.value = null;
+    overKey.value = null;
 }
 
 function finishEditing() {
@@ -331,7 +346,12 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
             :last="index === shownPanels.length - 1"
             class="mt-8"
             :class="panel.width === 'wide' ? 'lg:col-span-2' : ''"
+            :drop-target="editing && overKey === panel.key && dragKey !== panel.key"
             @move="movePanel(index, $event)"
+            @panel-dragstart="dragKey = panel.key"
+            @panel-dragover="overKey = panel.key"
+            @panel-drop="dropPanel(panel.key, $event)"
+            @panel-dragend="endDrag"
         >
             <ContainerTasksPanel v-if="panel.key === 'tasks'" :tasks="props.tasks" />
 
