@@ -2024,10 +2024,8 @@ return [
              * trash counts too (soft-deleted attachments and attachments on
              * soft-deleted items).
              *
-             * There is no empty state for the cost panel: it is not drawn at
-             * all when the container has no cost rows, and a heading over an
-             * empty ring would claim there is something to show. The two
-             * panels that DO have an empty state borrow the sentences that
+             * The cost panel has its own empty state, `costs_empty` (ADR-0073
+             * § 4). The two panels that borrow the sentences that
              * already exist for the same situation on the same container —
              * `todo.empty.nothing` and `audit.history.empty` — rather than
              * saying the same thing in a third way.
@@ -2040,6 +2038,9 @@ return [
             // Pro i kostnaderna]]), so it says *Total*. Two keys and not one:
             // the words name two different row sets.
             'costs_total' => 'Total',
+            // The empty state of the cost panel (issue 1113 · ADR-0073 § 4):
+            // the panel is always drawn and says so instead of hiding.
+            'costs_empty' => 'No costs recorded yet.',
             'activity' => 'Recent activity',
             // The image panel (issue 173). *Recent images* and not *Images*:
             // the panel is a glimpse of the newest five, not the container's

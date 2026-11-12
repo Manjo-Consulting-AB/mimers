@@ -12,6 +12,7 @@ use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\User\ReadOverviewPanels;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -392,6 +393,9 @@ class ContainerController extends Controller
             // Tipsen användaren inte dolt, i Tips ordning — samma propp och
             // samma lista som dashboarden bär (issue 128).
             'tips' => app(Tips::class)->visibleFor($user),
+            // Personens panelordning (issue 1113 · ADR-0073 § 2): översikten
+            // ritar de fem panelerna i den här ordningen och bredden.
+            'panels' => app(ReadOverviewPanels::class)->handle($user),
             // Plusknappens mål (issue 152): på översikten skapar den ett item
             // i containern, med samma grind som itemlistans skapaknapp.
             // `$parent` är null — ingen sida står på en nod ännu; trädet och

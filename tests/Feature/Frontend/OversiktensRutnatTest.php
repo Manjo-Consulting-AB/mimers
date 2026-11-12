@@ -1,30 +1,27 @@
 <?php
 
+use App\Actions\User\ReadOverviewPanels;
+use App\Models\Account;
+use App\Models\Container;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Lang;
+
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\withoutVite;
 
 /*
- * M32 · issue 288 — översiktens rutnät utan hål och de tomma lägena, se
- * resources/js/pages/Containers/Overview.vue, de fyra panelkomponenterna,
- * resources/js/components/UiEmptyState.vue och [[M32 Formspråket]] § 288.
+ * Issue 1113 · översikten ritar panelerna i personens ordning och bredd, se
+ * resources/js/pages/Containers/Overview.vue och
+ * [[ADR-0073 Översiktens ordning]] § 2–4. Provet ersätter reglerna från
+ * issue 288 och 321 (rutnätet utan hål), som ADR:en avskaffade.
  *
- * **Rutnätet ritas i webbläsaren och går inte att rendera här.** Det som går
- * att avgöra på serversidan är formen: att inga fasta rader finns, att
- * rutnätet fyller med `grid-flow-dense` och spann, att panelerna ligger i
- * samma källordning som förut, att varje panelrubrik bär en ikon ur listan,
- * och att varje tomt läge ritas av `UiEmptyState`.
- *
- * **Fyllningen prövas som en simulering.** `grid-auto-flow: dense` lägger
- * varje panel i första lediga plats, så provet läser panelernas spann ur
- * källan — de statiska klasserna och den villkorliga `:class`-ternären — och
- * lägger dem rad för rad för alla fyra kombinationer av kostnads- och
- * bildpanel. Sedan issue 321 spänner omslaget med itemen och bilderna två
- * rader när bilderna finns, och simuleringen tar hänsyn till det också. En
- * rad som inte går jämnt ut i tre kolumner är hålet issuen stänger.
- *
- * Kommentarerna rensas bort först, som i GenomgangTest och
- * DashboardlayoutTest: filerna är fulla av svensk prosa som förklarar varför,
- * och en mening om `lg:row-start-3` ska inte kunna fällas av ett prov som
- * letar efter klassen.
+ * **Rutnätet ritas i webbläsaren och går inte att rendera här.** Servern
+ * provas på proppen `panels`; formen på vyn provas som källa, med
+ * kommentarerna borta (som i GenomgangTest): filerna är fulla av svensk prosa
+ * som förklarar varför, och en mening om `lg:order-4` ska inte kunna fälla ett
+ * prov som letar efter klassen.
  *
  * Hjälparna har prefixet `rutnat` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -58,264 +55,156 @@ function rutnatKod(string $sokvag): string
 }
 
 /**
- * Öppningstaggen för panelens ram, hittad på sin ordningsklass.
- */
-function rutnatRam(string $vy, int $ordning): string
-{
-    $monster = '/<div\b([^>]*\blg:order-'.$ordning.'\b[^>]*)>/s';
-
-    expect(preg_match($monster, $vy, $träff))->toBe(
-        1,
-        "ingen panel bär lg:order-{$ordning}",
-    );
-
-    return $träff[1];
-}
-
-/**
- * Den valda klasssträngen för en ram i en kombination: den statiska `class`
- * och den villkorliga `:class`-ternären lagda efter varandra.
- */
-function rutnatKlasser(string $ram, bool $kostnader, bool $bilder): string
-{
-    $klasser = '';
-
-    // `(?<!:)` skiljer den statiska klassen från den villkorliga `:class`.
-    if (preg_match('/(?<!:)class="([^"]*)"/', $ram, $träff) === 1) {
-        $klasser = $träff[1];
-    }
-
-    if (preg_match('/:class="([^"]+)"/', $ram, $träff) !== 1) {
-        return $klasser;
-    }
-
-    $uttryck = $träff[1];
-
-    expect($uttryck)->toMatch(
-        "/^props\.(costs\.totals|recentImages)\.length \? '([^']*)' : '([^']*)'$/",
-        "oväntad :class-form i rutnätet: {$uttryck}",
-    );
-
-    preg_match(
-        "/^props\.(costs\.totals|recentImages)\.length \? '([^']*)' : '([^']*)'$/",
-        $uttryck,
-        $delar,
-    );
-
-    $sant = $delar[1] === 'costs.totals' ? $kostnader : $bilder;
-
-    return trim($klasser.' '.($sant ? $delar[2] : $delar[3]));
-}
-
-/**
- * Kolumnspannet en ram får i en kombination. Standard är en kolumn; en
- * statisk `lg:col-span-*` eller den villkorliga ternären breddar den.
- */
-function rutnatSpann(string $ram, bool $kostnader, bool $bilder): int
-{
-    return preg_match('/lg:col-span-(\d+)/', rutnatKlasser($ram, $kostnader, $bilder), $span) === 1
-        ? (int) $span[1]
-        : 1;
-}
-
-/**
- * Radspannet en ram får i en kombination. Omslaget med itemen och bilderna
- * spänner två rader när bilderna finns (issue 321), så informationsytan
- * behåller sin plats i tredje kolumnen.
- */
-function rutnatRadspann(string $ram, bool $kostnader, bool $bilder): int
-{
-    return preg_match('/lg:row-span-(\d+)/', rutnatKlasser($ram, $kostnader, $bilder), $span) === 1
-        ? (int) $span[1]
-        : 1;
-}
-
-/**
- * Panelernas spann och radspann i visuell ordning — ordningen `lg:order-*`
- * ger — för en kombination. Ett spann på noll betyder att panelen inte ritas.
+ * En container med en ägare, för de tester som ber servern om översikten.
  *
- * Ordning 6 finns inte: bilderna ligger i omslaget med itemen (issue 321),
- * och deras `v-if` styr omslagets spann i stället.
- *
- * @return array<int, array{spann: int, rader: int}>
+ * @return array{0: User, 1: Container}
  */
-function rutnatBredder(string $vy, bool $kostnader, bool $bilder): array
+function rutnatContainer(): array
 {
-    $bredder = [];
+    $konto = Account::factory()->create(['locale' => 'sv_SE']);
+    $person = User::factory()->create(['locale' => 'sv_SE']);
+    $konto->users()->attach($person, ['role' => 'owner']);
 
-    foreach ([1, 2, 3, 4, 5, 7] as $ordning) {
-        $ram = rutnatRam($vy, $ordning);
-
-        $spann = rutnatSpann($ram, $kostnader, $bilder);
-
-        // Ordning 2 är kostnaderna; panelen ritas bara när listan har något
-        // i sig, och då finns ingen panel att spänna.
-        if ($ordning === 2 && ! $kostnader) {
-            $spann = 0;
-        }
-
-        $bredder[$ordning] = [
-            'spann' => $spann,
-            'rader' => rutnatRadspann($ram, $kostnader, $bilder),
-        ];
-    }
-
-    return $bredder;
-}
-
-/**
- * Lägger panelerna som `grid-auto-flow: dense`: varje panel tar första
- * lediga plats, med början på första raden, och ett spann som inte får plats
- * flyttar till nästa rad. Ett radspann upptar celler även på följande rader.
- *
- * @param  array<int, array{spann: int, rader: int}>  $bredder  i visuell ordning, noll = ritas inte
- * @return list<int> antalet fyllda kolumner per rad
- */
-function rutnatRader(array $bredder): array
-{
-    $celler = [];
-
-    foreach ($bredder as $panel) {
-        $spann = $panel['spann'];
-
-        if ($spann === 0) {
-            continue;
-        }
-
-        $radspann = $panel['rader'];
-
-        for ($rad = 0; ; $rad++) {
-            $plats = null;
-
-            for ($kolumn = 0; $kolumn + $spann <= 3; $kolumn++) {
-                $fri = true;
-
-                for ($r = 0; $r < $radspann && $fri; $r++) {
-                    for ($i = 0; $i < $spann; $i++) {
-                        if (isset($celler[$rad + $r][$kolumn + $i])) {
-                            $fri = false;
-                            break;
-                        }
-                    }
-                }
-
-                if ($fri) {
-                    $plats = $kolumn;
-                    break;
-                }
-            }
-
-            if ($plats !== null) {
-                for ($r = 0; $r < $radspann; $r++) {
-                    for ($i = 0; $i < $spann; $i++) {
-                        $celler[$rad + $r][$plats + $i] = true;
-                    }
-                }
-
-                break;
-            }
-        }
-    }
-
-    ksort($celler);
-
-    return array_map(fn (array $rad): int => count($rad), $celler);
+    return [$person, Container::factory()->for($konto, 'account')->create()];
 }
 
 /*
- * Klart när: ingen panel i `Overview.vue` har `lg:row-start-*`.
- *
- * Placeringen sker med `grid-flow-dense` och spann, inte med fasta rader:
- * en fast rad kan inte flytta sig när kostnads- eller bildpanelen inte ritas,
- * och det var just den fasta raden som lämnade kolumnen tom.
+ * Klart när: översiktens svar har proppen `panels` lika med
+ * `ReadOverviewPanels` för den inloggade personen.
  */
-it('placerar panelerna med grid-flow-dense och spann, inte med fasta rader', function () {
-    $vy = rutnatVy();
+it('skickar proppen panels lika med ReadOverviewPanels för personen', function () {
+    withoutVite();
 
-    expect($vy)->toContain('lg:grid lg:grid-flow-dense lg:grid-cols-3')
-        ->and($vy)->not->toMatch('/lg:row-start-\d/', 'en panel har fortfarande en fast rad')
-        ->and($vy)->not->toMatch('/lg:col-start-\d/', 'en panel har fortfarande en fast kolumn');
+    [$person, $container] = rutnatContainer();
+
+    $props = actingAs($person)->get("/containers/{$container->ulid}")->assertOk()->inertiaProps();
+
+    expect($props['panels'])->toBe(app(ReadOverviewPanels::class)->handle($person))
+        ->and(array_column($props['panels'], 'key'))->toBe(['tasks', 'costs', 'details', 'items', 'activity']);
 });
 
 /*
- * Klart när: utan kostnader, utan bilder och utan båda fyller panelerna
- * varje rad över `lg:` utan tom kolumn.
- *
- * Proven simulerar `grid-auto-flow: dense` för alla fyra kombinationerna.
- * Spannen läses ur källan, så en ändrad ternär eller en ny fast kolumn fälls
- * här och inte först i webbläsaren.
+ * Klart när: för en person som sparat `activity` först står `activity` först
+ * i proppen `panels`, med den sparade bredden.
  */
-it('fyller varje rad i alla fyra kombinationer av paneler', function () {
+it('ger activity först i panels för en person som sparat den först', function () {
+    withoutVite();
+
+    [$person, $container] = rutnatContainer();
+
+    foreach (['activity' => 'wide', 'tasks' => 'narrow', 'costs' => 'narrow', 'details' => 'narrow', 'items' => 'wide'] as $nyckel => $bredd) {
+        DB::table('overview_panel')->insert([
+            'user_id' => $person->id,
+            'panel_key' => $nyckel,
+            'position' => DB::table('overview_panel')->where('user_id', $person->id)->count(),
+            'width' => $bredd,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    $panels = actingAs($person)->get("/containers/{$container->ulid}")->assertOk()->inertiaProps()['panels'];
+
+    expect($panels[0])->toBe(['key' => 'activity', 'width' => 'wide'])
+        ->and(array_column($panels, 'key'))->toBe(['activity', 'tasks', 'costs', 'details', 'items']);
+});
+
+/*
+ * Klart när: `Overview.vue` ritar panelerna i en loop över `props.panels`,
+ * och ingen panel bär `lg:order-*`. Rutnätet behåller sin form.
+ */
+it('ritar panelerna i en loop över props.panels utan lg:order', function () {
     $vy = rutnatVy();
 
-    // Ordning 2 är kostnaderna; bilderna ligger i omslaget på ordning 4
-    // (issue 321), och deras `v-if` styr omslagets spann.
-    expect(rutnatRam($vy, 2))->toContain('v-if="props.costs.totals.length"')
-        ->and(rutnatRam($vy, 4))->toContain('props.recentImages.length');
+    expect($vy)->toContain('v-for="panel in props.panels"')
+        ->toContain('lg:grid lg:grid-flow-dense lg:grid-cols-3');
+    expect($vy)->not->toMatch('/order-\d/', 'en panel bär fortfarande en ordningsklass');
+    expect($vy)->not->toMatch('/lg:row-span-\d/', 'omslaget spänner fortfarande rader');
+    expect($vy)->not->toMatch('/lg:row-start-\d/');
+    expect($vy)->not->toMatch('/lg:col-start-\d/');
 
-    foreach ([[true, true], [true, false], [false, true], [false, false]] as [$kostnader, $bilder]) {
-        $rader = rutnatRader(rutnatBredder($vy, $kostnader, $bilder));
-
-        expect($rader)->toHaveCount(3, sprintf(
-            'kostnader=%s bilder=%s gav %d rader',
-            $kostnader ? 'ja' : 'nej',
-            $bilder ? 'ja' : 'nej',
-            count($rader),
-        ));
-
-        foreach ($rader as $rad => $fyllda) {
-            expect($fyllda)->toBe(3, sprintf(
-                'kostnader=%s bilder=%s: rad %d har %d av 3 kolumner',
-                $kostnader ? 'ja' : 'nej',
-                $bilder ? 'ja' : 'nej',
-                $rad + 1,
-                $fyllda,
-            ));
-        }
+    foreach (['tasks', 'costs', 'details', 'items', 'activity'] as $nyckel) {
+        expect($vy)->toContain("panel.key === '{$nyckel}'");
     }
 });
 
 /*
- * Klart när: under `lg:` står *Items*, *Senaste bilder* och *Senaste
- * aktiviteter* i den ordningen.
- *
- * Ordningen över `lg:` sätts med `lg:order-*`, som bara gäller i rutnätet.
- * Under brytpunkten är behållaren ett block, där `order` inte har någon
- * verkan, och ingen panel får en ordningsklass utan `lg:`-prefix. Sedan
- * issue 321 ligger bilderna i samma omslag som itemen och före
- * aktiviteterna i källan, så mobilens ordning blir *Items*, *Senaste
- * bilder*, *Senaste aktiviteter*.
+ * Klart när: en panel med `wide` bär `lg:col-span-2`, och ingen panel får ett
+ * spann ur `costs.totals.length` eller `recentImages.length`.
  */
-it('ger mobilen ordningen Items, Senaste bilder, Senaste aktiviteter', function () {
+it('ger wide lg:col-span-2 och spänner inte ur innehållet', function () {
     $vy = rutnatVy();
 
-    $markörer = [
-        '<InfoPanel',
-        '<ContainerTasksPanel',
-        "t('container.overview.costs')",
-        '<ContainerDetailsPanel',
-        "t('container.overview.view_all')",
-        '<RecentImagesPanel',
-        "t('container.overview.activity')",
-    ];
+    expect($vy)->toContain("panel.width === 'wide' ? 'lg:col-span-2' : ''");
+    expect($vy)->not->toMatch('/(costs\.totals|recentImages)\.length\s*\?/', 'ett spann beror på innehållet');
+    expect($vy)->not->toContain('lg:col-span-3');
 
-    $positioner = [];
+    // Det enda spannet i filen är det som `wide` ger.
+    expect(substr_count($vy, 'col-span'))->toBe(1);
+});
 
-    foreach ($markörer as $markör) {
-        $position = strpos($vy, $markör);
+/*
+ * Klart när: Costs ritas utan kostnadsrader, med `UiEmptyState` och
+ * `container.overview.costs_empty`. Panelen har ingen `v-if` som döljer den.
+ */
+it('ritar Costs med tomt läge utan kostnadsrader', function () {
+    withoutVite();
 
-        expect($position)->not->toBeFalse("{$markör} saknas i Overview.vue");
+    [$person, $container] = rutnatContainer();
 
-        $positioner[] = (int) $position;
-    }
+    $props = actingAs($person)->get("/containers/{$container->ulid}")->assertOk()->inertiaProps();
 
-    $sorterade = $positioner;
-    sort($sorterade);
+    expect($props['costs'])->toBe(['totals' => [], 'breakdown' => []]);
 
-    expect($positioner)->toBe($sorterade, 'källordningen har ändrats');
+    $vy = rutnatVy();
 
-    // Ordningsklasserna gäller bara över `lg:`.
-    expect($vy)->not->toMatch('/(?<!lg:)order-\d/', 'en panel ordnas även under lg:');
+    expect($vy)->toMatch(
+        "~<UiEmptyState v-if=\"props\\.costs\\.totals\\.length === 0\">\\s*\\{\\{ t\\('container\\.overview\\.costs_empty'\\) \\}\\}\\s*</UiEmptyState>~s",
+    )
+        ->toMatch('~<CostDonut\s+v-else\b~s');
+    expect($vy)->not->toContain('v-if="props.costs.totals.length"');
+
+    expect(Lang::get('ui.container.overview.costs_empty', [], 'en'))->toBe('No costs recorded yet.');
+});
+
+/*
+ * Klart när: Recent images inuti `items` ritas inte utan bilder (ADR-0073 § 4)
+ * och står under Items-kortet i samma panel.
+ */
+it('ritar Recent images under Items och bara när bilder finns', function () {
+    $vy = rutnatVy();
+
+    expect(preg_match(
+        "~panel\\.key === 'items'\">(.*?)panel\\.key === 'activity'~s",
+        $vy,
+        $träff,
+    ))->toBe(1);
+
+    expect($träff[1])->toContain('<RecentImagesPanel')
+        ->and(strpos($träff[1], '<RecentImagesPanel'))->toBeGreaterThan((int) strpos($träff[1], '<ul v-else'))
+        ->and($träff[1])->toContain('v-if="props.recentImages.length"');
+});
+
+/*
+ * Klart när: informationsytan står sist, efter loopen, och ingen annan
+ * markör står efter den. Under `lg:` är källordningen panelordningen.
+ */
+it('ställer informationsytan sist, efter loopen', function () {
+    $vy = rutnatVy();
+
+    $loop = (int) strpos($vy, 'v-for="panel in props.panels"');
+    $info = strpos($vy, '<InfoPanel');
+
+    expect($info)->not->toBeFalse()
+        ->and($info)->toBeGreaterThan($loop)
+        ->and(substr_count($vy, '<InfoPanel'))->toBe(1);
+
+    // Efter informationsytan följer bara stängande taggar.
+    expect(trim((string) preg_replace('~<InfoPanel[^>]*/>~', '', substr($vy, (int) $info))))
+        ->toMatch('~^</div>\s*</div>\s*</template>$~');
+
+    // Huvudets definitionslista för mobilen står kvar före loopen.
+    expect(strpos($vy, 'md:hidden'))->toBeLessThan($loop);
 });
 
 /*
