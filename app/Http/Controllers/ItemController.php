@@ -406,6 +406,19 @@ class ItemController extends Controller
             ? null
             : $resolveItemTreeRows->handle($container, $tree);
 
+        // Registreringen i vyn (issue 1162 · [[ADR-0074 Registrering i vyn]]
+        // § 1–3 och 7): `can_create` per nod ur EN `abilities()`-körning,
+        // samma som `create()` bygger sin väljare på, så ingen fråga ställs
+        // per nod. Formulärets underlag (kategorier, taxonomigrind, förval)
+        // lämnas bara när anroparen får skapa något — på containern eller
+        // under någon nod. En läsare får tomma listor och `false`.
+        $createAbilities = $tree === null
+            ? []
+            : $this->abilities($user, $container, $tree)['create'];
+
+        $canContainerCreate = Gate::forUser($user)->allows('createItem', $container);
+        $canRegister = $canContainerCreate || in_array(true, $createAbilities, true);
+
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
 
@@ -430,7 +443,8 @@ class ItemController extends Controller
                 'dropped' => $dropped,
             ],
             'can' => [
-                'create' => Gate::forUser($user)->allows('createItem', $container),
+                'create' => $canContainerCreate,
+                'manage_taxonomy' => $canRegister && $this->taxonomyAbilities($user, $container)['manage_taxonomy'],
                 // `can.update` kom med issue 170 · [[ADR-0050 Desktopdesignen]]
                 // § 2–3: hjälten ritar *Redigera container* ur samma flagga som
                 // översikten och inställningssidan ritar sina ur, och den
@@ -477,7 +491,15 @@ class ItemController extends Controller
             // är ett svar servern HAR gett — "hon når ingenting" — och vyn
             // ska kunna skilja det från "inte hämtad" (samma form och samma
             // skäl som `history`-proppen i show()).
-            'structure' => $tree === null ? null : $this->structure($tree, true),
+            'structure' => $tree === null ? null : $this->structure($tree, true, $createAbilities),
+
+            // Formulärets underlag på *Items*-fliken (issue 1162): samma
+            // lista som `create()` ger, förvalet ur `?category=` och itemet
+            // som just registrerades (med `parent`) så att trädet kan
+            // markera raden.
+            'categories' => $canRegister ? CategoryResource::collection($categories)->resolve($request) : [],
+            'preselected' => $canRegister ? $this->defaultCategoryUlid($request, $categories) : null,
+            'createdItem' => $canRegister ? $this->createdItem($request) : null,
 
             // Trädets kolumner, item-ULID → `{category, tags, documents,
             // tasks, updated_at}`, och BARA i trädläget — samma grind och
@@ -1247,7 +1269,10 @@ class ItemController extends Controller
      * raden försvinner vid nästa sidladdning. Den delade flashen i
      * HandleInertiaRequests rörs inte.
      *
-     * @return array{ulid: string, name: string}|null
+     * `parent` följer med när flashen bär den (`store()` med en godkänd
+     * `return`, issue 1162): förälderns ULID eller `null` för ett toppitem.
+     *
+     * @return array{ulid: string, name: string, parent?: string|null}|null
      */
     private function createdItem(Request $request): ?array
     {
@@ -1257,7 +1282,13 @@ class ItemController extends Controller
             return null;
         }
 
-        return ['ulid' => $created['ulid'], 'name' => $created['name']];
+        $item = ['ulid' => $created['ulid'], 'name' => $created['name']];
+
+        if (array_key_exists('parent', $created) && (is_string($created['parent']) || $created['parent'] === null)) {
+            $item['parent'] = $created['parent'];
+        }
+
+        return $item;
     }
 
     /**
@@ -1436,7 +1467,7 @@ class ItemController extends Controller
         // lista betyder "inga taggar" och inte "rör dem inte" (§ Beslut 6).
         $tags = Tag::whereIn('ulid', $request->validated('tags') ?? [])->get();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'another']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'another', 'return']));
 
         $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
 
@@ -1449,6 +1480,18 @@ class ItemController extends Controller
                     'category' => $category?->ulid,
                 ])))
                 ->with('created_item', ['ulid' => $item->ulid, 'name' => $item->name]);
+        }
+
+        // Registreringen i vyn (issue 1162 · [[ADR-0074 Registrering i vyn]]
+        // § 1): en godkänd `return` är ytan hon kom från, och svaret landar
+        // där. `another` går före, en ogiltig adress faller tillbaka på
+        // itemets sida.
+        $return = TaskCreateController::safeReturn($request->validated('return'));
+
+        if ($return !== null) {
+            return redirect($return)
+                ->with('status', 'item-created')
+                ->with('created_item', ['ulid' => $item->ulid, 'name' => $item->name, 'parent' => $parent?->ulid]);
         }
 
         return redirect()
@@ -2171,25 +2214,28 @@ class ItemController extends Controller
      * ingenting, eller containern är tom. De två går inte att skilja åt, med
      * flit (issue 73 § Beslut 6).
      *
-     * @return list<array{ulid: string, name: string, match?: bool, children: list<array<string, mixed>>}>
+     * @param  array<string, bool>|null  $canCreate  item-ULID → `can_create` på noden, eller null för ingen flagga
+     * @return list<array{ulid: string, name: string, match?: bool, can_create?: bool, children: list<array<string, mixed>>}>
      */
-    private function structure(ItemTree $tree, bool $withMatch = false): array
+    private function structure(ItemTree $tree, bool $withMatch = false, ?array $canCreate = null): array
     {
-        return $this->structureNodes($tree->roots(), $withMatch);
+        return $this->structureNodes($tree->roots(), $withMatch, $canCreate);
     }
 
     /**
      * @param  list<ItemTreeNode>  $nodes
-     * @return list<array{ulid: string, name: string, match?: bool, children: list<array<string, mixed>>}>
+     * @param  array<string, bool>|null  $canCreate  item-ULID → `can_create` på noden, eller null för ingen flagga
+     * @return list<array{ulid: string, name: string, match?: bool, can_create?: bool, children: list<array<string, mixed>>}>
      */
-    private function structureNodes(array $nodes, bool $withMatch = false): array
+    private function structureNodes(array $nodes, bool $withMatch = false, ?array $canCreate = null): array
     {
         return array_map(
             fn (ItemTreeNode $node): array => [
                 'ulid' => $node->ulid(),
                 'name' => $node->name(),
                 ...($withMatch ? ['match' => $node->match()] : []),
-                'children' => $this->structureNodes($node->children(), $withMatch),
+                ...($canCreate !== null ? ['can_create' => $canCreate[$node->ulid()] ?? false] : []),
+                'children' => $this->structureNodes($node->children(), $withMatch, $canCreate),
             ],
             $nodes,
         );

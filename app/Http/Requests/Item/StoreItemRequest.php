@@ -128,6 +128,11 @@ class StoreItemRequest extends FormRequest
             // *Save and add another* (issue 339): webbformuläret ber om ett nytt
             // formulär i stället för itemets sida. API:et ignorerar fältet.
             'another' => ['sometimes', 'boolean'],
+            // Registrering i vyn (issue 1162): ytan hon kom från. Värdet prövas
+            // av TaskCreateController::safeReturn() i controllern; ett värde
+            // som inte duger är inget valideringsfel utan faller tillbaka på
+            // itemets sida. API:et ignorerar fältet.
+            'return' => ['nullable', 'string'],
         ];
     }
 }

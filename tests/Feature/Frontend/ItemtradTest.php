@@ -207,7 +207,6 @@ it('har trädet som förval', function () {
             // Trädet är hämtat, listans data är det inte.
             ->has('structure', 1)
             ->missing('items')
-            ->missing('categories')
             ->missing('covers')
     );
 });
@@ -278,12 +277,13 @@ it('visar containerns rötter och ett item med två föräldrar på båda ställ
                     'ulid' => $båten->ulid,
                     'name' => 'Båten',
                     'match' => true,
+                    'can_create' => true,
                     'children' => [
-                        ['ulid' => $masten->ulid, 'name' => 'Masten', 'match' => true, 'children' => [
-                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
+                        ['ulid' => $masten->ulid, 'name' => 'Masten', 'match' => true, 'can_create' => true, 'children' => [
+                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'can_create' => true, 'children' => []],
                         ]],
-                        ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => [
-                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
+                        ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'can_create' => true, 'children' => [
+                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'can_create' => true, 'children' => []],
                         ]],
                     ],
                 ],
@@ -297,7 +297,7 @@ it('visar containerns rötter och ett item med två föräldrar på båda ställ
 
     actingAs($mottagare)->get(itemtradUrl($container, 'view=tree'))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('structure', [
-            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
+            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'can_create' => false, 'children' => []],
         ])
     );
 });
@@ -455,7 +455,7 @@ it('bär filtret med sig genom växeln', function () {
             ->where('view', 'tree')
             ->where('filter.q', 'Motor')
             ->where('structure', [
-                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => []],
+                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'can_create' => true, 'children' => []],
             ])
     );
 
@@ -465,7 +465,7 @@ it('bär filtret med sig genom växeln', function () {
         fn (AssertableInertia $page) => $page
             ->where('view', 'tree')
             ->where('structure', [
-                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => []],
+                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'can_create' => true, 'children' => []],
             ])
     );
 });
