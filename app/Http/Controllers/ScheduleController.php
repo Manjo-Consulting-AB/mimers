@@ -115,25 +115,11 @@ class ScheduleController extends Controller
     ): Response {
         $page = $base->show($request, $container, $item, $schedule);
 
-        $scheduleDependencies = $this->scheduleDependencies($schedule, $request);
-
-        // Undantagen hör till den ÖPPNA förekomsten — den enda som går att
-        // lägga ett beroende på, och den enda frågan "vad väntar jag på just
-        // nu" har ett svar för (Beslut 2). Samma definition av öppen som
-        // basens lista räknar med: App\Models\Schedule::openOccurrence().
-        $open = $schedule->openOccurrence()->first();
-
-        $occurrenceDependencies = $this->occurrenceDependencies($open, $request);
-
-        // Motparterna användaren får ändra, i samma container (Beslut 3) — en per
-        // nivå, för ett schema utan öppen förekomst kan inte väljas på
-        // förekomstnivån.
+        // Visningssidan väljer inga motparter: listan är läsbar och utan
+        // formulär, så `counterparts` frågas inte fram (issue 1160).
         return $page->with([
             ...$this->returnProps($request, $container, $item),
-            'scheduleDependencies' => $scheduleDependencies,
-            'occurrenceDependencies' => $occurrenceDependencies,
-            'hasOpenOccurrence' => $open !== null,
-            'counterparts' => $this->counterparts($request, $container, $schedule, $scheduleDependencies, $occurrenceDependencies),
+            ...$this->dependencyProps($request, $container, $schedule, withCounterparts: false),
             ...$this->menuProps($request, $container, $schedule, $base),
         ]);
     }
@@ -271,19 +257,25 @@ class ScheduleController extends Controller
 
         $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
+        $open = $schedule->openOccurrence()->first();
+
         return Inertia::render('Containers/Items/Schedules/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => ['ulid' => $item->ulid, 'name' => $item->name],
             'schedule' => (new ScheduleResource($schedule))->resolve($request),
             ...$this->returnProps($request, $container, $item),
             ...$this->menuProps($request, $container, $schedule, $base),
+            // Beroendena redigeras här och inte på visningssidan (issue 1160).
+            ...$this->dependencyProps($request, $container, $schedule, withCounterparts: true),
             /*
              * Den öppna förekomstens förfallodag, eller null när schemat
              * saknar en öppen förekomst (issue 702 § Beslut 3). Formuläret
              * förifyller `anchor_date` med den, så en orörd sparning inte
              * flyttar uppgiften.
              */
-            'openDueAt' => $schedule->openOccurrence()->first()?->due_at?->toDateString(),
+            'openDueAt' => $open?->due_at?->toDateString(),
+            // Förekomstberoendets URL bärs av den öppna förekomstens ULID (issue 1160).
+            'openOccurrenceUlid' => $open?->ulid,
         ]);
     }
 
@@ -493,6 +485,37 @@ class ScheduleController extends Controller
         }
 
         return redirect('/inbox')->with('status', 'schedule-in-inbox');
+    }
+
+    /**
+     * Beroendena och, när sidan redigerar dem, motparterna att välja bland
+     * (issue 1160). Gemensam för `show()` och `edit()`.
+     *
+     * Undantagen hör till den ÖPPNA förekomsten — den enda som går att lägga
+     * ett beroende på (63c § Beslut 2). Samma definition av öppen som basens
+     * lista räknar med: App\Models\Schedule::openOccurrence().
+     *
+     * @return array<string, mixed>
+     */
+    private function dependencyProps(Request $request, Container $container, Schedule $schedule, bool $withCounterparts): array
+    {
+        $scheduleDependencies = $this->scheduleDependencies($schedule, $request);
+
+        $open = $schedule->openOccurrence()->first();
+
+        $occurrenceDependencies = $this->occurrenceDependencies($open, $request);
+
+        $props = [
+            'scheduleDependencies' => $scheduleDependencies,
+            'occurrenceDependencies' => $occurrenceDependencies,
+            'hasOpenOccurrence' => $open !== null,
+        ];
+
+        if ($withCounterparts) {
+            $props['counterparts'] = $this->counterparts($request, $container, $schedule, $scheduleDependencies, $occurrenceDependencies);
+        }
+
+        return $props;
     }
 
     /**

@@ -1,10 +1,17 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
 import ScheduleActions from '../../../../components/ScheduleActions.vue';
+import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
 import ScheduleForm from '../../../../components/ScheduleForm.vue';
+import {
+    occurrenceDependencyUrl,
+    occurrenceRows,
+    scheduleDependencyUrl,
+    scheduleRows,
+} from '../../../../components/scheduleDependencyRows.js';
 import { useTranslations } from '../../../../composables/useTranslations.js';
 
 defineOptions({
@@ -29,7 +36,7 @@ defineOptions({
  * pausen till en del av en större sparoperation — och ett pausat schema ska
  * inte kunna smyga med i en titeländring.
  */
-defineProps({
+const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     schedule: { type: Object, required: true },
@@ -45,12 +52,23 @@ defineProps({
     /* Samma grindar och inbox-flagga som schemats sida (issue 1159). */
     can: { type: Object, required: true },
     containerIsInbox: { type: Boolean, default: false },
+    /* Beroendena och motparterna att välja bland (issue 1160, 63c § Beslut 1-3). */
+    scheduleDependencies: { type: Array, required: true },
+    occurrenceDependencies: { type: Array, required: true },
+    hasOpenOccurrence: { type: Boolean, required: true },
+    counterparts: { type: Object, required: true },
+    /* Den öppna förekomstens ULID — förekomstberoendets URL bärs av den. */
+    openOccurrenceUlid: { type: String, default: null },
 });
 
 const { t } = useTranslations();
 
 /* Formulärets osparade tillstånd, för menyns fråga (issue 1159). */
 const dirty = ref(false);
+
+const scheduleDependencyRows = computed(() => scheduleRows(props.scheduleDependencies));
+
+const occurrenceDependencyRows = computed(() => occurrenceRows(props.occurrenceDependencies));
 </script>
 
 <template>
@@ -80,5 +98,29 @@ const dirty = ref(false);
         :open-due-at="openDueAt"
         :return-to="returnTo"
         @dirty="dirty = $event"
+    />
+
+    <!-- Beroendena redigeras här (issue 1160). Sidan laddas om efter en
+         tillägg eller borttagning; sektionen behåller formulärets osparade
+         ändringar med preserveState. -->
+    <ScheduleDependencySection
+        level="schedule"
+        :container-ulid="container.ulid"
+        :item-ulid="item.ulid"
+        :rows="scheduleDependencyRows"
+        :url="scheduleDependencyUrl(container.ulid, item.ulid, schedule.ulid)"
+        :counterparts="counterparts.schedule"
+        :can="can"
+    />
+
+    <ScheduleDependencySection
+        level="occurrence"
+        :container-ulid="container.ulid"
+        :item-ulid="item.ulid"
+        :rows="occurrenceDependencyRows"
+        :url="occurrenceDependencyUrl(container.ulid, item.ulid, schedule.ulid, openOccurrenceUlid)"
+        :counterparts="counterparts.occurrence"
+        :active="hasOpenOccurrence"
+        :can="can"
     />
 </template>

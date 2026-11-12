@@ -156,6 +156,11 @@ function beroendeSidaUrl(Container $container, Item $item, Schedule $schedule): 
     return beroendeItemUrl($container, $item)."/schedules/{$schedule->ulid}";
 }
 
+function beroendeRedigeraUrl(Container $container, Item $item, Schedule $schedule): string
+{
+    return beroendeSidaUrl($container, $item, $schedule).'/edit';
+}
+
 function beroendeSchemaUrl(Container $container, Item $item, Schedule $schedule): string
 {
     return beroendeSidaUrl($container, $item, $schedule).'/dependencies';
@@ -221,11 +226,115 @@ it('visar båda nivåerna som props på schemats sida, utan en egen GET', functi
     expect(Route::has('containers.items.schedules.occurrences.dependencies.store'))->toBeTrue();
     expect(Route::has('containers.items.schedules.occurrences.dependencies.destroy'))->toBeTrue();
 
-    // Och sidan ritar två sektioner, en per nivå.
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    // Och båda sidorna ritar två sektioner, en per nivå.
+    foreach (['Show', 'Edit'] as $sida) {
+        $vy = File::get(resource_path("js/pages/Containers/Items/Schedules/{$sida}.vue"));
 
-    expect($vy)->toContain('level="schedule"');
-    expect($vy)->toContain('level="occurrence"');
+        expect($vy)->toContain('level="schedule"');
+        expect($vy)->toContain('level="occurrence"');
+    }
+});
+
+/*
+ * Klart när: edit() ger scheduleDependencies, occurrenceDependencies,
+ * hasOpenOccurrence och counterparts; show() ger inte counterparts (issue 1160).
+ */
+it('ger redigeringssidan båda listorna och motparterna, och visningssidan inga motparter', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container, $item] = beroendeKontext();
+
+    $motpartItem = beroendeItem($container, $anvandare, $konto, 'Impellern');
+    $motpart = beroendeSchema($motpartItem, ['title' => 'Serva motorn']);
+    $motpartRad = beroendeRad($motpart, '2027-04-01');
+
+    $eget = beroendeSchema($item, ['title' => 'Byt impeller']);
+    $egenRad = beroendeRad($eget, '2027-05-05');
+
+    ScheduleDependency::factory()->create([
+        'schedule_id' => $eget->id,
+        'depends_on_schedule_id' => $motpart->id,
+    ]);
+
+    actingAs($anvandare)->get(beroendeRedigeraUrl($container, $item, $eget))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Schedules/Edit')
+            ->has('scheduleDependencies', 1)
+            ->has('occurrenceDependencies', 0)
+            ->where('hasOpenOccurrence', true)
+            ->where('openOccurrenceUlid', $egenRad->ulid)
+            ->has('counterparts.schedule', 0)
+            ->has('counterparts.occurrence', 1)
+            ->where('counterparts.occurrence.0.ulid', $motpartRad->ulid)
+        );
+
+    actingAs($anvandare)->get(beroendeSidaUrl($container, $item, $eget))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Schedules/Show')
+            ->has('scheduleDependencies', 1)
+            ->has('occurrenceDependencies', 0)
+            ->where('hasOpenOccurrence', true)
+            ->missing('counterparts')
+        );
+});
+
+/*
+ * Klart när: Edit.vue ritar båda sektionerna under formuläret; Show.vue ritar
+ * dem som läsbar lista (update: false) och en tom sektion ritas inte (issue 1160).
+ */
+it('ritar sektionerna redigerbara på Edit.vue och som läsbar lista på Show.vue', function () {
+    $redigera = File::get(resource_path('js/pages/Containers/Items/Schedules/Edit.vue'));
+    $visa = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+
+    // Edit: sektionerna kommer efter formuläret och bär de riktiga propparna.
+    expect(strpos($redigera, '<ScheduleDependencySection'))->toBeGreaterThan(strpos($redigera, '<ScheduleForm'));
+    expect($redigera)->toContain(':counterparts="counterparts.schedule"');
+    expect($redigera)->toContain(':counterparts="counterparts.occurrence"');
+    expect($redigera)->not->toContain('update: false');
+
+    // Show: ingen skrivyta, inga motparter och ingen sektion utan rader.
+    expect(substr_count($visa, ':can="{ update: false }"'))->toBe(2);
+    expect(substr_count($visa, ':counterparts="[]"'))->toBe(2);
+    expect($visa)->toContain('v-if="scheduleDependencyRows.length > 0"');
+    expect($visa)->toContain('v-if="occurrenceDependencyRows.length > 0"');
+
+    // Normaliseringen bor på ett ställe.
+    expect(File::exists(resource_path('js/components/scheduleDependencyRows.js')))->toBeTrue();
+    expect($visa)->not->toContain('depends_on.ulid');
+    expect($redigera)->not->toContain('depends_on.ulid');
+});
+
+/*
+ * Klart när: att lägga till ett beroende på redigeringssidan behåller osparade
+ * ändringar i formuläret och ?return= (issue 1160).
+ */
+it('behåller formuläret och ?return= när ett beroende läggs till eller tas bort på redigeringssidan', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container, $item] = beroendeKontext();
+
+    $motpartItem = beroendeItem($container, $anvandare, $konto, 'Impellern');
+    $motpart = beroendeSchema($motpartItem, ['title' => 'Serva motorn']);
+    $eget = beroendeSchema($item, ['title' => 'Byt impeller']);
+
+    // back() följer Referer, och Referer bär querysträngen.
+    $redigera = beroendeRedigeraUrl($container, $item, $eget).'?return='.urlencode(beroendeItemUrl($container, $item));
+
+    actingAs($anvandare)->from($redigera)
+        ->post(beroendeSchemaUrl($container, $item, $eget), ['depends_on' => $motpart->ulid])
+        ->assertRedirect($redigera);
+
+    actingAs($anvandare)->from($redigera)
+        ->delete(beroendeSchemaUrl($container, $item, $eget)."/{$motpart->ulid}")
+        ->assertRedirect($redigera);
+
+    // Formulärets tillstånd står kvar i webbläsaren: båda anropen är
+    // preserveState.
+    $sektion = File::get(resource_path('js/components/ScheduleDependencySection.vue'));
+
+    expect(substr_count($sektion, 'preserveState: true'))->toBe(2);
 });
 
 // --- schemaberoendet: regeln -----------------------------------------------
@@ -258,7 +367,7 @@ it('lägger till och tar bort ett schemaberoende', function () {
     // Listan visar motpartens item och titel, och väljaren erbjuder inte
     // samma schema en gång till (dubbletten är ett valideringsfel,
     // issue 23 § Beslut 9).
-    actingAs($anvandare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($anvandare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('scheduleDependencies', 1)
@@ -297,7 +406,7 @@ it('lägger till och tar bort ett förekomstberoende på den öppna förekomsten
 
     // Väljaren på förekomstnivån erbjuder motpartens ÖPPNA förekomst — det är
     // dess ULID servern tar emot.
-    actingAs($anvandare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($anvandare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('counterparts.occurrence', 1)
@@ -517,7 +626,7 @@ it('visar bara motparter i samma container som användaren får ändra', functio
     $eget = beroendeSchema($item, ['title' => 'Byt olja']);
     beroendeRad($eget, '2027-05-05');
 
-    actingAs($lasare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($lasare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('counterparts.schedule', 1)
@@ -545,7 +654,7 @@ it('sorterar motparterna på itemets namn och därefter schemats titel', functio
     $eget = beroendeSchema($item, ['title' => 'Byt olja']);
     beroendeRad($eget, '2027-05-05');
 
-    actingAs($anvandare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($anvandare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('counterparts.schedule', 3)
@@ -577,7 +686,7 @@ it('erbjuder bara scheman med öppen förekomst på förekomstnivån', function 
     $eget = beroendeSchema($item, ['title' => 'Byt olja']);
     beroendeRad($eget, '2027-05-05');
 
-    actingAs($anvandare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($anvandare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             // Båda är kandidater på SCHEMANIVÅN: regeln gäller oavsett om
@@ -884,9 +993,12 @@ it('låter en read-mottagare se beroendena men inte röra dem', function () {
             // Men ingen skrivyta: `can.update` är falskt, och det är flaggan
             // både formuläret och ta-bort-knappen hänger på.
             ->where('can.update', false)
-            // Och ingen motpart att välja: hon får inte ändra något av dem.
-            ->has('counterparts.schedule', 0)
+            // Visningssidan väljer inga motparter alls (issue 1160).
+            ->missing('counterparts')
         );
+
+    // Redigeringssidan är stängd för henne: grinden är itemets `update`.
+    actingAs($lasare)->get(beroendeRedigeraUrl($container, $item, $eget))->assertForbidden();
 
     expect(File::get(resource_path('js/components/ScheduleDependencySection.vue')))
         ->toContain('v-if="can.update"');
@@ -936,7 +1048,7 @@ it('nekar en motpart utanför omfånget utan att röja dess namn', function () {
     expect($svar->getContent())->not->toContain('Impellern');
 
     // Och motparten syns inte heller i väljaren: hon får inte ändra den.
-    actingAs($skrivare)->get(beroendeSidaUrl($container, $item, $eget))
+    actingAs($skrivare)->get(beroendeRedigeraUrl($container, $item, $eget))
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->has('counterparts.schedule', 0));
 
@@ -1062,7 +1174,9 @@ it('har varje ny beroendenyckel och ingen svensk sträng i vyn', function () {
     // regel som SprakTest kör över hela resources/js.
     foreach ([
         'components/ScheduleDependencySection.vue',
+        'components/scheduleDependencyRows.js',
         'pages/Containers/Items/Schedules/Show.vue',
+        'pages/Containers/Items/Schedules/Edit.vue',
     ] as $fil) {
         $kod = File::get(resource_path("js/{$fil}"));
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);

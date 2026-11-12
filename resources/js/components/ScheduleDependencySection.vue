@@ -86,6 +86,7 @@ const form = useForm({ depends_on: '' });
 function submit() {
     form.post(props.url, {
         preserveScroll: true,
+        preserveState: true,
         onSuccess: () => form.reset(),
         onError: focusFirstError,
     });
@@ -113,6 +114,7 @@ function remove(row) {
 
     router.delete(`${props.url}/${row.ulid}`, {
         preserveScroll: true,
+        preserveState: true,
         onStart: () => { pending.value = row.ulid; },
         onFinish: () => { pending.value = null; },
     });
