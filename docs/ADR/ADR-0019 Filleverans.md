@@ -69,6 +69,7 @@ Direkt anrop mot `/_protected/ab/cd/…` ger 403, eftersom `ORG_REQ_URI` då int
 - **Regeln har en tyst felmod.** Försvinner `.htaccess` fungerar nedladdningarna precis som förut, men katalogen är öppen. Lägg ett test som anropar `/_protected/` direkt och kräver 403.
 - **Miniatyrerna omfattas av samma skydd.** De visar innehållet och läcker lika mycket som originalet.
 - **De tre kraven i [[Filer och lagring]] § Säkerhet vid leverans står kvar** — egen origin, `Content-Disposition: attachment`, behörighetskontroll före leverans. Dokumentationen visar att headern kan sättas i samma svar som omdirigeringen, så de krockar inte.
+- **Varje *Download*-länk bär `?download=1`.** Det är nedladdningsuppsåtet från uppföljningen 2026-11-12. Länkar som *visar* en fil (miniatyrer, visarens bild och ram) bär det inte.
 - **Byte till S3 senare gör hela konstruktionen onödig.** Presignerade URL:er löser detta ur lådan. Ännu ett skäl att hålla Storage-abstraktionen ren, se [[ADR-0007 Fillagring hos inleed]].
 
 ## Verifierat på servern
@@ -134,6 +135,18 @@ Appdomänens rutt gör exakt det den gjorde förut — laddar bilagan, avvisar e
 **`.htaccess`-regeln måste tåla en querysträng.** Den signerade URL:en bär `?expires=…&signature=…`. Innehåller `%{ORG_REQ_URI}` querysträngen nekar dagens villkor `!^/files/[A-Za-z0-9]+$` **varje** signerad nedladdning, och felet syns först på servern — aldrig i testsviten. Regeln skrivs därför `!^/files/[A-Za-z0-9]+(\?.*)?$`: fortfarande en tillåt-lista, nu tolerant mot det som hänger på URL:en.
 
 **Svarshuvudena är fyra, i båda grenarna.** `Content-Type` explicit ur `stored_file.mime_type`, `Content-Disposition` enligt tillåt-listan, `X-Content-Type-Options: nosniff`, och `Content-Security-Policy: default-src 'none'; sandbox; frame-ancestors <appens origin>`. CSP:n stänger av allt en levererad HTML- eller SVG-fil skulle kunna dra in, och `frame-ancestors` säger att bara appen får rama in en PDF — vilket är vad 61b behöver för att visa den. Både den interna omdirigeringen och `Storage::disk('files')->response()` sätter samma huvuden: en miljöskillnad får aldrig bli en säkerhetsskillnad.
+
+## Uppföljning 2026-11-12 — nedladdningsuppsåtet
+
+*Download* öppnade bilder och PDF:er i webbläsaren i stället för att ladda ner dem. Orsaken är att filoriginet alltid levererar `inline` för typer på tillåt-listan, och leveransen vet inte om användaren bad om att se filen eller att ladda ner den. `<a download>` hjälper inte, eftersom webbläsaren ignorerar attributet när filen ligger på en annan origin.
+
+**Beslutet är att appdomänen signerar in `download=1` i URL:en till `files.deliver` när användaren bad om en nedladdning, och att leveransen då är `attachment`.** Appdomänens rutt läser `?download=1` på `/files/{ulid}` och tar med parametern bland de signerade parametrarna när den präglar URL:en. Filoriginet levererar `attachment` när den signerade parametern finns, och som förut annars.
+
+**Det stämmer med att dispositionen aldrig kommer från klienten** (uppföljningen 2026-09-15: *"ett `?disposition=inline` som klienten valde hade varit en väg att få en godtycklig fil renderad"*). Parametern är en del av signaturen och kan inte läggas till eller tas bort efteråt utan att länken blir ogiltig. Den kan bara skärpa leveransen till `attachment`, aldrig vidga den till `inline`. Tillåt-listan avgör som förut när `inline` över huvud taget är möjligt, och `download` kan bara stänga av det.
+
+**Utan filorigin ändras ingenting.** Då är leveransen `attachment` utan undantag (uppföljningen 2026-08-31), med eller utan parametern. Öppningsloggen skrivs som förut, också för en nedladdning.
+
+Konsekvensen för länkarna i vyerna står i § Konsekvenser.
 
 ## Alternativ
 
