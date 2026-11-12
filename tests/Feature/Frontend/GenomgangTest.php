@@ -267,7 +267,8 @@ it('sätter ett vänteläge runt varje router-anrop', function () {
         expect($vantelage)->toBeTrue(
             "{$sokvag} gör ett router-anrop utan vänteläge (onStart/onFinish eller await i try/finally)"
         );
-        expect($kod)->toMatch('/:disabled=/', "{$sokvag} gör ett router-anrop utan att inaktivera kontrollen");
+        // `:pending=` räcker: UiButton stänger knappen själv när den är sann.
+        expect($kod)->toMatch('/:(disabled|pending)=/', "{$sokvag} gör ett router-anrop utan att inaktivera kontrollen (:disabled= eller :pending=)");
     }
 
     expect($granskade)->toBeGreaterThan(10);
