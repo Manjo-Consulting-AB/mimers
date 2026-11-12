@@ -10,6 +10,7 @@ import ItemMap from '../../../components/ItemMap.vue';
 import ItemMapHits from '../../../components/ItemMapHits.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
+import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
@@ -78,6 +79,12 @@ defineOptions({
  * bara i trädläget. Efter en sparning står det kvar, och `createdItem` ur
  * svaret markerar den nya raden i 2000 ms. Döljer filtret itemet säger
  * `item.index.created_hidden` det, på samma sätt som *To do* (issue 358).
+ *
+ * **Plusset på en trädnod** (issue 1164 · [[ADR-0074 Registrering i vyn]]
+ * § 7) öppnar samma formulär under noden, med föräldern förvald. Vyn äger
+ * vilket formulär som är öppet (`openForm`), så raden ovanför trädet och
+ * nodernas formulär aldrig är öppna samtidigt; ett byte med osparade
+ * ändringar frågar först. Kartläget ritar inga plus.
  *
  * **Statusen räknas för kartans mitt och ritade noder** (issue 212 ·
  * [[ADR-0050 Desktopdesignen]], formen omgjord i issue 296 ·
@@ -227,8 +234,58 @@ const page = usePage();
  * Kontot är containerns ägarkonto när användaren är medlem i det, som i
  * Create.vue.
  */
-const createOpen = ref(false);
 const createDirty = ref(false);
+
+/*
+ * **Ett formulär åt gången** (issue 1164 · [[ADR-0074 Registrering i vyn]]
+ * § 7). `openForm` är `null`, `'root'` (raden ovanför trädet) eller ULID:n på
+ * noden vars plus man tryckte på. Raden och noderna delar det, så att ett
+ * nytt formulär aldrig öppnas bredvid ett annat. Har det öppna osparade
+ * ändringar frågar `UiConfirmDialog` med `inline_create.discard.*` först, och
+ * ingenting byts förrän hon har svarat. `childDirty` är nodformulärets
+ * rapport; raden ovanför trädet har `createDirty`.
+ */
+const openForm = ref(null);
+const childDirty = ref(false);
+const pendingForm = ref(undefined);
+
+const formDirty = computed(() => (openForm.value === 'root' ? createDirty.value : childDirty.value));
+
+function switchForm(target) {
+    openForm.value = target;
+    createDirty.value = false;
+    childDirty.value = false;
+    pendingForm.value = undefined;
+}
+
+function requestForm(target) {
+    if (openForm.value === target) {
+        return;
+    }
+
+    if (openForm.value !== null && formDirty.value) {
+        pendingForm.value = target;
+
+        return;
+    }
+
+    switchForm(target);
+}
+
+const createOpen = computed({
+    get: () => openForm.value === 'root',
+    set: (open) => {
+        if (open) {
+            requestForm('root');
+        } else if (openForm.value === 'root') {
+            /* Skalet har redan frågat (Escape) eller hon tryckte Cancel: stäng utan ny fråga. */
+            switchForm(null);
+        }
+    },
+});
+
+/* Dialogen är vyns; fokus stannar där formuläret lever, så den lånar ingen knapp. */
+const dialogTrigger = { focus() {} };
 
 const accounts = computed(() => page.props.auth?.accounts ?? []);
 
@@ -515,6 +572,17 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
                 :filtered="hasFilter"
                 :expand-all="allOpen"
                 :highlight="highlight"
+                :open-form="openForm"
+                :categories="categories"
+                :tags="tags"
+                :preselected="preselected"
+                :accounts="accounts"
+                :account="account"
+                :can-manage-taxonomy="can.manage_taxonomy ?? false"
+                :can-create-root="can.create"
+                :return-to="page.url"
+                @request-form="requestForm"
+                @dirty="childDirty = $event"
             />
 
             <p v-if="structure !== null && structure.length === 0" class="mt-8 text-slate-700">
@@ -561,4 +629,15 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             </div>
         </div>
     </section>
+
+    <!-- Frågan före ett byte av öppet formulär (issue 1164). -->
+    <UiConfirmDialog
+        :open="pendingForm !== undefined"
+        :heading="t('inline_create.discard.heading')"
+        :cancel-label="t('inline_create.discard.cancel')"
+        :confirm-label="t('inline_create.discard.confirm')"
+        :trigger="dialogTrigger"
+        @confirm="switchForm(pendingForm)"
+        @cancel="pendingForm = undefined"
+    />
 </template>

@@ -349,7 +349,7 @@ it('låter läget överleva en omladdning', function () {
     // `:return-to="page.url"` på registreringsraden och för kontolistan, men
     // inget annat: ingen läsning av `window.location`, ingen egen querysträng.
     expect($vy)->not->toContain('window.location')
-        ->and(substr_count($vy, 'page.url'))->toBe(1)
+        ->and(substr_count($vy, 'page.url'))->toBe(2)
         ->and($vy)->toContain(':return-to="page.url"');
 });
 
@@ -669,7 +669,9 @@ it('skickar containerns ikon ur sidproppen till trädet', function () {
 it('ger fällknappen bara till rader med barn och märker den med aria-expanded', function () {
     $kod = itemtradKod('components/ItemTreeTable.vue');
 
-    expect(substr_count($kod, 'aria-expanded'))->toBe(1)
+    // Två: fällknappen och, sedan issue 1164, plusknappen som bär om formuläret
+    // under raden är utfällt.
+    expect(substr_count($kod, 'aria-expanded'))->toBe(2)
         ->and($kod)->toContain('v-if="row.node.children.length > 0"')
         ->and($kod)->toContain("t('item.structure.expand', { name: row.node.name })")
         ->and($kod)->toContain("t('item.structure.collapse', { name: row.node.name })");
@@ -794,7 +796,8 @@ it('ställer rötternas fällknappar i samma kolumn som containerns ikon', funct
 
     // Containerns ikon har sin 44 px-kolumn; itemradernas kolumn är en egen
     // `w-11`-ruta runt knappen (issue 343), lika bred på löv och förälder.
-    expect(substr_count($kod, 'min-w-11'))->toBe(1)
+    // Plusknappen (issue 1164) är en andra `min-w-11`.
+    expect(substr_count($kod, 'min-w-11'))->toBe(2)
         ->and(substr_count($kod, 'inline-flex w-11 shrink-0'))->toBe(1);
 
     expect($kod)->toContain('${row.depth * 20}px')
@@ -957,7 +960,7 @@ it('börjar om i utgångsläget vid en ny filtrering utan att röra adressen', f
     // registreringsraden — knappen rör den inte.)
     expect($vy)->not->toContain('router.')
         ->and($vy)->not->toContain('window.location')
-        ->and(substr_count($vy, 'page.url'))->toBe(1);
+        ->and(substr_count($vy, 'page.url'))->toBe(2);
 });
 
 /*
@@ -989,8 +992,9 @@ it('gör hela itemraden klickbar genom namnlänkens yta och låter fällknappen 
     expect($knapp)->toContain('relative z-10')
         ->toContain('@click="toggle(row.key)"');
 
-    // Raden själv har ingen klickhanterare.
-    expect(substr_count($rad, '@click'))->toBe(1);
+    // Raden själv har ingen klickhanterare: fällknappen och, sedan issue 1164,
+    // plusknappen (också över länkytan, `relative z-10`) har var sin.
+    expect(substr_count($rad, '@click'))->toBe(2);
 });
 
 /*

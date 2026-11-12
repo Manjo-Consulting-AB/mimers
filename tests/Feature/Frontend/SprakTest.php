@@ -1186,7 +1186,10 @@ it('hämtar trädtabellens strängar ur ui.php', function () {
         ->and(Lang::get('ui.item.tree.tasks', [], 'en'))->toBe('Tasks')
         ->and(Lang::get('ui.item.tree.last_updated', [], 'en'))->toBe('Last updated')
         ->and(Lang::get('ui.item.tree.expand_all', [], 'en'))->toBe('Expand all')
-        ->and(Lang::get('ui.item.tree.collapse_all', [], 'en'))->toBe('Collapse all');
+        ->and(Lang::get('ui.item.tree.collapse_all', [], 'en'))->toBe('Collapse all')
+        ->and(Lang::get('ui.item.tree.add_child', ['name' => 'Shelf'], 'en'))->toBe('Add an item under Shelf');
+
+    expect($tabellen)->toContain("t('item.tree.add_child', { name: row.node.name })");
 });
 
 /*
