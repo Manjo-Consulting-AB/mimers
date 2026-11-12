@@ -120,13 +120,13 @@ it('låser varje uses-rad till en 40-tecken commit-SHA', function () {
 
 it('har versionskommentar efter SHA:n på varje uses-rad', function () {
     foreach (arbetsflodesUsesRader() as [$fil, $rad]) {
-        expect($rad)->toMatch('/@[0-9a-f]{40} # v\d+\s*$/', "{$fil}: {$rad}");
+        expect($rad)->toMatch('/@[0-9a-f]{40} # v\d+(\.\d+)*\s*$/', "{$fil}: {$rad}");
     }
 });
 
 it('pekar de fyra åtgärderna på de granskade SHA:erna', function () {
     $forvantat = [
-        'actions/checkout' => 'fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09',
+        'actions/checkout' => '3d3c42e5aac5ba805825da76410c181273ba90b1',
         'actions/setup-node' => 'a0853c24544627f65ddf259abe73b1d18a591444',
         'actions/upload-artifact' => 'ea165f8d65b6e75b540449e92b4886f43607fa02',
         'shivammathur/setup-php' => 'eb7c497e18156a6bbabfef1d3a82760b9eda3962',
