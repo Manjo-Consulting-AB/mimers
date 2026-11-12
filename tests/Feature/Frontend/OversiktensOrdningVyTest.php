@@ -299,6 +299,7 @@ it('låter ett byte ändra width i den lokala listan och panelen få eller tappa
 /*
  * Klart när: Done skickar bredden med i PUT /settings/overview-panels.
  */
+// vakt: Done-vägen från issue 1114 ändras inte; provet låser att draft (med width) fortsatt skickas
 it('skickar draft med width i PUT /settings/overview-panels när Done sparar', function () {
     $vy = ordningVySida();
 
