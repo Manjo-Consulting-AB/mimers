@@ -1,8 +1,8 @@
 <script setup>
-import { nextTick, ref } from 'vue';
-import { useForm, usePage } from '@inertiajs/vue3';
-import ItemTargetPicker from './ItemTargetPicker.vue';
+import { computed, nextTick, ref } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import QuickCreate from './QuickCreate.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -27,7 +27,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * visas `container.tasks.quick.hidden`. Nya ULID:er skickas ut i `created`.
  * Inboxens bekräftelse är serverns flash `inbox-task-captured`.
  *
- * Råa `<button>` i `leading`, som i `Tasks/Create.vue`: GenomgangTest
+ * **Platsvalet är en `<details>`** som *Add cost* på kostnadsfliken och *Add
+ * document* på dokumentfliken (issue 360): en enda knapp vars panel ligger
+ * absolut över innehållet. *Inbox* står överst, därefter containerns items
+ * ur den lata propen `itemTargets`, som hämtas första gången panelen öppnas
+ * och filtreras på `containerUlid` som `ItemTargetPicker.filterTargets()`.
+ * Raderna är råa `<button>` — ett val byter ingen sida.
+ *
+ * Råa `<button>`, `<details>` och `<summary>` i `leading`: GenomgangTest
  * tillåter bara webbläsarens egna element som klickbar yta.
  */
 const props = defineProps({
@@ -49,19 +56,50 @@ const form = useForm({ title: '' });
 /* Platsen: `{ ulid, name }` för ett item, eller null för inboxen. */
 const place = ref(null);
 
-const pickerOpen = ref(false);
-const pickerTrigger = ref(null);
 const quick = ref(null);
+const placeMenu = ref(null);
 const hidden = ref(false);
 
-function openPicker(event) {
-    pickerTrigger.value = event.currentTarget;
-    pickerOpen.value = true;
+/* Sant medan `itemTargets` hämtas första gången panelen öppnas. */
+const loading = ref(false);
+let loaded = false;
+
+/* Containerns items, i den ordning `itemTargets` ger dem. */
+const options = computed(() => (page.props.itemTargets ?? [])
+    .filter((group) => group.container.ulid === props.containerUlid)
+    .flatMap((group) => group.items));
+
+function onToggle(event) {
+    if (! event.target.open || loaded) {
+        return;
+    }
+
+    loaded = true;
+    loading.value = true;
+
+    router.reload({
+        only: ['itemTargets'],
+        onFinish: () => {
+            loading.value = false;
+        },
+    });
 }
 
-function onTargetChosen(item) {
-    place.value = { ulid: item.ulid, name: item.name };
-    pickerOpen.value = false;
+function choose(item) {
+    place.value = item === null ? null : { ulid: item.ulid, name: item.name };
+    placeMenu.value.open = false;
+    quick.value?.focus();
+}
+
+function closeMenu(event) {
+    if (event.key !== 'Escape' || ! placeMenu.value.open) {
+        return;
+    }
+
+    placeMenu.value.open = false;
+    placeMenu.value.querySelector('summary')?.focus();
+    event.preventDefault();
+    event.stopPropagation();
 }
 
 function submit() {
@@ -125,42 +163,57 @@ function submit() {
             @submit="submit"
         >
             <template #leading>
-                <button
-                    type="button"
-                    :aria-pressed="place === null"
-                    class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    :class="place === null
-                        ? 'border-accent bg-accent text-ink-on-accent'
-                        : 'border-border bg-surface text-ink hover:bg-surface-sunken'"
-                    @click="place = null"
-                >
-                    {{ t('todo.create.inbox') }}
-                </button>
+                <details ref="placeMenu" class="relative" @toggle="onToggle" @keydown="closeMenu">
+                    <summary
+                        class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink hover:bg-surface-sunken"
+                        :aria-label="`${t('todo.create.place')}: ${place === null ? t('todo.create.inbox') : place.name}`"
+                    >
+                        <span class="max-w-40 truncate">{{ place === null ? t('todo.create.inbox') : place.name }}</span>
 
-                <button
-                    type="button"
-                    class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    :class="place === null
-                        ? 'border-border bg-surface text-ink hover:bg-surface-sunken'
-                        : 'border-accent bg-accent text-ink-on-accent'"
-                    @click="openPicker"
-                >
-                    {{ place === null ? t('todo.create.change') : place.name }}
-                </button>
+                        <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
+                    </summary>
+
+                    <div class="absolute left-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                        <p class="text-meta text-ink-subtle">{{ t('todo.create.place') }}</p>
+
+                        <ul class="mt-1 flex max-h-80 flex-col overflow-y-auto">
+                            <li>
+                                <button
+                                    type="button"
+                                    :aria-current="place === null ? 'true' : undefined"
+                                    class="flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-2 text-left text-body text-ink hover:bg-surface-sunken"
+                                    :class="{ 'font-semibold': place === null }"
+                                    @click="choose(null)"
+                                >
+                                    {{ t('todo.create.inbox') }}
+                                    <UiIcon v-if="place === null" name="check" :size="16" class="size-4 shrink-0 text-accent" />
+                                </button>
+                            </li>
+
+                            <li v-if="loading" class="px-2 py-2 text-meta text-ink-muted">
+                                {{ t('common.pending.default') }}
+                            </li>
+
+                            <li v-for="option in options" v-else :key="option.ulid">
+                                <button
+                                    type="button"
+                                    :aria-current="place?.ulid === option.ulid ? 'true' : undefined"
+                                    class="flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-2 text-left text-body text-ink hover:bg-surface-sunken"
+                                    :class="{ 'font-semibold': place?.ulid === option.ulid }"
+                                    @click="choose(option)"
+                                >
+                                    <span class="truncate">{{ option.name }}</span>
+                                    <UiIcon v-if="place?.ulid === option.ulid" name="check" :size="16" class="size-4 shrink-0 text-accent" />
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </details>
             </template>
         </QuickCreate>
 
         <p v-if="hidden" role="status" class="mt-1 text-meta text-ink-muted">
             {{ t('container.tasks.quick.hidden') }}
         </p>
-
-        <ItemTargetPicker
-            :open="pickerOpen"
-            :trigger="pickerTrigger"
-            :container="containerUlid"
-            :heading="t('todo.create.place')"
-            @choose="onTargetChosen"
-            @close="pickerOpen = false"
-        />
     </div>
 </template>
