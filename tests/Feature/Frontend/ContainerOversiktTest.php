@@ -18,6 +18,7 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 
@@ -826,6 +827,23 @@ it('visar containerkontots lagringstak i containerdetaljerna', function () {
     $obegransat = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
 
     expect($obegransat['storage'])->toBe(['usedBytes' => 0, 'limitBytes' => null]);
+});
+
+/*
+ * Klart när: etiketten är Type, panelen läser lagringsnycklarna via
+ * formatByteSize() och valutan är borta ur både panelen och katalogen.
+ */
+it('har etiketten Type, lagringsraden och ingen valuta kvar', function () {
+    expect(Lang::get('ui.container.overview.kind', [], 'en'))->toBe('Type')
+        ->and(Lang::has('ui.container.overview.currency', 'en'))->toBeFalse();
+
+    $panel = oversiktUtanKommentarer(File::get(resource_path('js/components/ContainerDetailsPanel.vue')));
+
+    expect($panel)->toContain('container.overview.storage_of')
+        ->toContain('container.overview.storage_unlimited')
+        ->toContain('formatByteSize')
+        ->and(str_contains($panel, 'container.overview.currency'))->toBeFalse()
+        ->and(str_contains($panel, 'details.currency'))->toBeFalse();
 });
 
 // --- counts ----------------------------------------------------------------
