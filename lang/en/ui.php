@@ -2506,6 +2506,9 @@ return [
 
             'add' => 'Add document',
             'add_choose_item' => 'Which item?',
+            // Shown when a finished upload is not among the rows now listed
+            // (the filter or the page hides it).
+            'uploaded_hidden' => 'The document was uploaded, but the current filter or page hides it.',
 
             'empty' => 'The container has no documents.',
             'empty_filtered' => 'No documents match the filter.',
