@@ -48,6 +48,7 @@ it('har ett Semgrep-steg med tre regelsamlingar som inte fäller bygget', functi
         ->toContain('app/ routes/ config/ resources/js/');
 });
 
+// vakt: negativt krav (inget nytt jobb, ingen .semgrepignore) som med flit är grönt på basen
 it('lägger inget nytt jobb i ci.yml och ingen semgrepignore', function () {
     preg_match_all('/^  [a-z_-]+:\s*$/m', substr(ciText(), strpos(ciText(), "\njobs:\n")), $jobb);
 
