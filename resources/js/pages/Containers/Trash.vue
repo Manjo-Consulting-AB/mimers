@@ -96,7 +96,6 @@ function emptyTrash() {
             v-if="canEmpty && entries.length > 0"
             variant="danger"
             :pending="pending"
-            :disabled="pending"
             @click="askEmpty"
         >
             {{ t('trash.empty_action') }}
