@@ -271,13 +271,15 @@ it('låter formuläret stå kvar efter sparning och markerar barnet med samma hi
     $form = itemregKod('components/ItemForm.vue');
 
     // Inget i tabellen stänger formuläret vid `created`; ItemForm tömmer sig själv.
-    expect($tabell)->not->toContain('@created')
+    expect($tabell)->toContain('<ItemForm')
+        ->and($tabell)->not->toContain('@created')
         ->and($form)->toContain('form.reset()')
         ->and($tabell)->toContain("row.node.ulid === highlight ? 'bg-accent-soft'")
         // Barnets förfäder, nodformulärets nod inräknad, fälls ut av highlight.
         ->and($tabell)->toContain('open.value[trailKey(trail.slice(0, length))] = true');
 });
 
+// vakt: kartan ritade aldrig något plus; provet låser att den inte får det.
 it('ritar inga plus i kartläget', function () {
     $vy = itemregKod('pages/Containers/Items/Index.vue');
     $kartgren = (int) strpos($vy, '<section v-else class="mt-6">');
