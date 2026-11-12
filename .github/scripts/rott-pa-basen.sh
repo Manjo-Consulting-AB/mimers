@@ -44,8 +44,17 @@
 # testfall i en röd fil också för sig (`--filter`), och det som går igenom på
 # basen skrivs ut som en VARNING - inte ett fel. Vissa testfall ska vara gröna på
 # basen med flit (en regressionsvakt som "oförändrat utfall dagtid"), och
-# markören ovan är per fil, inte per testfall. Varningen syns i CI-loggen och för
-# granskaren; blir det mest riktiga fynd kan den skärpas till ett fel senare.
+# filmarkören ovan är per fil, inte per testfall. Varningen syns i CI-loggen och
+# för granskaren; blir det mest riktiga fynd kan den skärpas till ett fel senare.
+#
+# Vaktmarkören är per testfall: en kommentar `// vakt: <motivering>` på raden
+# DIREKT ovanför `it('…')` eller `test('…')` säger att testfallet med flit ska
+# vara grönt på basen (en regressionsvakt, ett negativt prov). Motiveringen får
+# inte vara tom - `// vakt:` utan text räknas inte som markör. Ett vaktmarkerat
+# nytt testfall i en röd fil ger en informationsrad i stället för varning, och
+# en fil som är grön på basen fälls inte om VARJE nytt testfall i den är
+# vaktmarkerat. Har filen minst ett nytt testfall utan markör gäller reglerna
+# ovan oförändrade. Till skillnad från filmarkören undantas inga övriga testfall.
 #
 # Läser BASE_SHA ur miljön. Avslutar 0 om alla nya tester är röda på basen (eller
 # undantagna) eller om PR:en inte lägger till några tester, 1 om något
@@ -94,6 +103,44 @@ nya_testnamn() {
     else
         git -C "$ROT" show "HEAD:$fil" | testnamn
     fi
+}
+
+# Vaktmarkerade testfall i en fil på stdin: namnet (med fnutter, som testnamn()
+# skriver det) och motiveringen, åtskilda av en tabb. Markören ska stå på raden
+# direkt ovanför testfallet och ha en icke-tom motivering.
+vaktmarkerade() {
+    awk '
+        {
+            if (match($0, /^[[:space:]]*(it|test)\([[:space:]]*\047[^\047]*\047/)) {
+                rad = substr($0, RSTART, RLENGTH)
+                sub(/^[[:space:]]*(it|test)\([[:space:]]*/, "", rad)
+                if (match(prev, /^[[:space:]]*\/\/ vakt: +[^[:space:]]/)) {
+                    mot = prev
+                    sub(/^[[:space:]]*\/\/ vakt: +/, "", mot)
+                    sub(/[[:space:]]+$/, "", mot)
+                    print rad "\t" mot
+                }
+            }
+            prev = $0
+        }'
+}
+
+# Vaktmarkerade testfall i PR:ens version av filen. Läser via ROT, se
+# nya_testnamn().
+vakter_i() {
+    git -C "$ROT" show "HEAD:$1" | vaktmarkerade
+}
+
+# Sant om varje nytt testfall i filen är vaktmarkerat (och det finns minst ett).
+bara_vakter() {
+    local fil="$1" vakter nya namn
+    vakter="$(vakter_i "$fil" | cut -f1)"
+    nya="$(nya_testnamn "$fil")"
+    [ -n "$nya" ] || return 1
+    while IFS= read -r namn; do
+        [ -n "$namn" ] || continue
+        grep -qxF -- "$namn" <<<"$vakter" || return 1
+    done <<<"$nya"
 }
 
 # Namnet som ett Pest-filter. --filter tolkas som ett reguljärt uttryck och
@@ -193,6 +240,10 @@ for fil in "${TESTER[@]}"; do
     fi
 
     if php artisan test "$fil" > "$ARBETE/utfall.log" 2>&1; then
+        if bara_vakter "$fil"; then
+            echo "::notice file=$fil::filen innehåller bara vakter - alla nya testfall är markerade med '// vakt:' och ska vara gröna på basen."
+            continue
+        fi
         GRONA+=("$fil")
         echo "::error file=$fil::testet går igenom utan PR:ens implementation - det bevisar inget om acceptanskriteriet."
         tail -n 20 "$ARBETE/utfall.log"
@@ -208,15 +259,22 @@ done
 # inte som grönt.
 GRONA_FALL=0
 for fil in "${ROTA[@]}"; do
+    VAKTER="$(vakter_i "$fil")"
     while IFS= read -r namn; do
         [ -n "$namn" ] || continue
+        # Vaktmarkerat testfall: grönt på basen med avsikt, se filhuvudet.
+        VAKT="$(grep -F -- "$namn"$'\t' <<<"$VAKTER" | head -n1 || true)"
+        if [ -n "$VAKT" ]; then
+            echo "::notice file=$fil::vakt: testfallet $namn ska vara grönt på basen - ${VAKT#*$'\t'}"
+            continue
+        fi
         # testnamn() behåller fnuttarna runt namnet; filtret ska ha texten.
         namn="${namn#\'}"
         namn="${namn%\'}"
         if php artisan test "$fil" --filter="$(som_filter "$namn")" > "$ARBETE/fall.log" 2>&1 \
             && ! grep -q "No tests found" "$ARBETE/fall.log"; then
             GRONA_FALL=$((GRONA_FALL + 1))
-            echo "::warning file=$fil::testfallet '$namn' går igenom på basen, utan PR:ens implementation. Filen är röd på grund av ett annat testfall, så det här bevisar inget om sitt kriterium - skärp det, eller skriv i PR:en varför det ska vara grönt på basen."
+            echo "::warning file=$fil::testfallet '$namn' går igenom på basen, utan PR:ens implementation. Filen är röd på grund av ett annat testfall, så det här bevisar inget om sitt kriterium - skärp det, eller markera det med `// vakt: <motivering>` på raden direkt ovanför om det med flit ska vara grönt på basen."
         fi
     done < <(nya_testnamn "$fil")
 done
