@@ -41,6 +41,7 @@ use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
+use App\Http\Controllers\OverviewPanelController;
 use App\Http\Controllers\OwnershipTransferController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
@@ -289,6 +290,19 @@ Route::post('/tips/dismiss', [DismissedTipController::class, 'dismissAll'])
 Route::post('/tips/{key}/dismiss', [DismissedTipController::class, 'store'])
     ->middleware('auth')
     ->name('tips.dismiss');
+
+/*
+ * Personens ordning för översiktens paneler, se
+ * [[ADR-0073 Översiktens ordning]]. Bakom `auth` som tipsen; ingen rutt tar
+ * ett person-id, raden är alltid den inloggades.
+ */
+Route::put('/settings/overview-panels', [OverviewPanelController::class, 'update'])
+    ->middleware('auth')
+    ->name('settings.overview-panels.update');
+
+Route::delete('/settings/overview-panels', [OverviewPanelController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('settings.overview-panels.destroy');
 
 Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
 

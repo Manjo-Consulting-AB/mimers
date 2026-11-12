@@ -139,6 +139,15 @@ function personraderingPersonensRader(User $person, Container $container): int
         'updated_at' => now(),
     ]);
 
+    DB::table('overview_panel')->insert([
+        'user_id' => $person->id,
+        'panel_key' => 'activity',
+        'position' => 0,
+        'width' => 'wide',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     DB::table('calendar_feed')->insert([
         'ulid' => (string) Str::ulid(),
         'container_id' => $container->id,
@@ -221,7 +230,7 @@ function personraderingPersonensRader(User $person, Container $container): int
 
     // Fjorton räknade rader: de tolv ovan plus besöksraden (issue 160) och
     // öppningsraden (issue 177).
-    return 14;
+    return 15;
 }
 
 /**
@@ -233,6 +242,7 @@ function personraderingKvarvarandeRader(User $person): int
         + (int) DB::table('recent_visit')->where('user_id', $person->id)->count()
         + (int) DB::table('attachment_open')->where('user_id', $person->id)->count()
         + (int) DB::table('dismissed_tip')->where('user_id', $person->id)->count()
+        + (int) DB::table('overview_panel')->where('user_id', $person->id)->count()
         + (int) DB::table('calendar_feed')->where('user_id', $person->id)->count()
         + (int) DB::table('notification_preference')->where('user_id', $person->id)->count()
         + (int) DB::table('totp_recovery_code')->where('user_id', $person->id)->count()
