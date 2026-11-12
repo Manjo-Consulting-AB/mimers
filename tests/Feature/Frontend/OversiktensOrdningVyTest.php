@@ -58,7 +58,8 @@ it('har knappen Customize overview som öppnar läget, och Done och Reset to def
 it('ger varje panel Move up och Move down med 44 px och en etikett som namnger panelen', function () {
     $ram = ordningVyRam();
 
-    expect(substr_count($ram, 'min-h-11 min-w-11'))->toBe(2);
+    // Två pilar och, från issue 1116, breddväxelns knappar (en gemensam v-for).
+    expect(substr_count($ram, 'min-h-11 min-w-11'))->toBe(3);
     expect($ram)->toContain("t('container.overview.customize.move_up', { panel: name })")
         ->toContain("t('container.overview.customize.move_down', { panel: name })")
         ->toContain(':aria-label=');

@@ -2069,6 +2069,10 @@ return [
                 'reset' => 'Reset to default',
                 'move_up' => 'Move :panel up',
                 'move_down' => 'Move :panel down',
+                'narrow' => 'Narrow',
+                'wide' => 'Wide',
+                'make_narrow' => 'Make :panel narrow',
+                'make_wide' => 'Make :panel wide',
             ],
         ],
 

@@ -237,6 +237,11 @@ function movePanel(index, direction) {
     });
 }
 
+/* Bredden (issue 1116): ett byte ändrar `width` i den lokala listan. */
+function setWidth(key, width) {
+    draft.value = draft.value.map((panel) => (panel.key === key ? { ...panel, width } : panel));
+}
+
 /* Draget (issue 1115): HTML5-drag på panelens ram, en genväg bredvid pilarna. */
 const dragKey = ref(null);
 const overKey = ref(null);
@@ -344,10 +349,12 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
             :editing="editing"
             :first="index === 0"
             :last="index === shownPanels.length - 1"
+            :width="panel.width"
             class="mt-8"
             :class="panel.width === 'wide' ? 'lg:col-span-2' : ''"
             :drop-target="editing && overKey === panel.key && dragKey !== panel.key"
             @move="movePanel(index, $event)"
+            @width="setWidth(panel.key, $event)"
             @panel-dragstart="dragKey = panel.key"
             @panel-dragover="overKey = panel.key"
             @panel-drop="dropPanel(panel.key, $event)"
