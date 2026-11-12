@@ -3199,6 +3199,10 @@ return [
             // the address (issue 295 · [[ADR-0058 Trädet som tabell]] § 6).
             'expand_all' => 'Expand all',
             'collapse_all' => 'Collapse all',
+            // The plus on a row (issue 1164 · [[ADR-0074 Registrering i vyn]]
+            // § 7): icon-only, so the label says what a press does and which
+            // row it belongs to.
+            'add_child' => 'Add an item under :name',
         ],
 
         // The switch on the container's item tab, see issue 154 and 157 ·

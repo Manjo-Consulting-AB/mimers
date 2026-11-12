@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ItemForm from './ItemForm.vue';
 import ItemIcon from './ItemIcon.vue';
 import ItemTagList from './ItemTagList.vue';
 import UiIcon from './UiIcon.vue';
@@ -95,6 +96,22 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Rötterna rörs inte: de syns alltid, och rotraden har ingen fällknapp att
  * växla.
  *
+ * **Ett plus på varje rad med `can_create`** (issue 1164 · [[ADR-0074
+ * Registrering i vyn]] § 7). Knappen står sist i namncellen och skapar ett
+ * BARN till raden: ett tryck fäller ut noden och ritar en extra rad direkt
+ * under den, med `ItemForm inline` och nodens `parent`. Knappen ligger över
+ * radens länkyta (`z-10`) som fällknappen, så ett tryck öppnar inte itemet.
+ * Från `md:` syns den vid hover eller fokus på raden, under `md:` alltid,
+ * eftersom en pekskärm inte har någon hover.
+ *
+ * **Vyn äger vilket formulär som är öppet** (`openForm`: `null`, `'root'`
+ * eller nodens ULID), eftersom raden ovanför trädet räknas med och bara ett
+ * formulär får vara öppet åt gången. Tabellen ber om ett byte med
+ * `request-form` och rapporterar osparade ändringar med `dirty`; frågan om
+ * att kasta dem ställer vyn. Escape och *Cancel* ber om att få stänga, och
+ * fokus går tillbaka till plusknappen när formuläret stängts. Escape läses
+ * med `@keydown` och en nyckelkontroll, som i `InlineCreate`.
+ *
  * **Smal skärm** (§ 8): under `md:` ritas bara namnet, med kategorin som
  * undertext. Kolumnerna kommer fram från `md:`; tabellen skrollar aldrig i
  * sidled, den fäller i stället undan.
@@ -138,7 +155,24 @@ const props = defineProps({
      * utfällda grenarna står kvar.
      */
     highlight: { type: String, default: null },
+    /*
+     * Formuläret som är öppet, ur vyn (issue 1164): `null`, `'root'` (raden
+     * ovanför trädet) eller en nods ULID. Tabellen ritar bara det sista.
+     */
+    openForm: { type: String, default: null },
+    /* Formulärets underlag ur vyn (issue 1164), samma som raden ovanför trädet. */
+    categories: { type: Array, default: () => [] },
+    tags: { type: Array, default: () => [] },
+    preselected: { type: String, default: null },
+    accounts: { type: Array, default: () => [] },
+    account: { type: String, default: '' },
+    canManageTaxonomy: { type: Boolean, default: false },
+    canCreateRoot: { type: Boolean, default: false },
+    /* Ytan sparningen landar på igen (`page.url`). */
+    returnTo: { type: String, default: null },
 });
+
+const emit = defineEmits(['request-form', 'dirty']);
 
 const { t } = useTranslations();
 const { eventDate } = useRelativeDate();
@@ -204,6 +238,61 @@ watch(() => props.highlight, (ulid) => {
 function toggle(key) {
     open.value[key] = ! isOpen(key);
 }
+
+/*
+ * Plusknapparna (issue 1164), nycklade på ledet, och ledet formuläret öppnades
+ * på: samma item på två ställen ger två plusknappar men ETT formulär, under
+ * raden man tryckte på.
+ */
+const plusButtons = {};
+const formTrail = ref(null);
+
+function openChildForm(row) {
+    open.value[row.key] = true;
+    formTrail.value = row.key;
+    emit('request-form', row.node.ulid);
+}
+
+function closeForm() {
+    emit('request-form', null);
+}
+
+function isFormRow(row) {
+    return props.openForm === row.node.ulid && formTrail.value === row.key;
+}
+
+function onFormKeydown(event) {
+    if (event.key !== 'Escape') {
+        return;
+    }
+
+    event.stopPropagation();
+    closeForm();
+}
+
+/*
+ * Fokus: ett nytt formulär får fokus i sitt första fält, och ett som stängs
+ * lämnar fokus på plusknappen det öppnades från. Byter vyn direkt från ett
+ * formulär till ett annat går fokus till det nya. Två `nextTick` så att
+ * `InlineCreate`s egen fokusflytt till sin knapp (när raden ovanför trädet
+ * stängs av bytet) har skett före.
+ */
+watch(() => props.openForm, async (now, before) => {
+    const closed = formTrail.value;
+
+    await nextTick();
+    await nextTick();
+
+    if (now !== null && now !== 'root') {
+        document.getElementById(`tree-form-${closed}`)?.querySelector('input, select, textarea')?.focus();
+
+        return;
+    }
+
+    if (before !== null && before !== 'root' && now === null) {
+        plusButtons[closed]?.focus();
+    }
+});
 
 /*
  * Trädet utplattat till de rader som syns, i ritad ordning. Rekursionen
@@ -325,11 +414,10 @@ function isMatch(node) {
                 ledet, så samma item på två ställen är två rader — med samma
                 siffror, för de hör till itemet och inte till förekomsten.
             -->
+            <template v-for="row in visibleRows" :key="row.key">
             <tr
-                v-for="row in visibleRows"
-                :key="row.key"
                 class="relative border-b border-border hover:bg-surface-sunken"
-                :class="highlight !== null && row.node.ulid === highlight ? 'bg-accent-soft' : ''"
+                :class="['group', highlight !== null && row.node.ulid === highlight ? 'bg-accent-soft' : '']"
             >
                 <td class="py-1 pr-4 text-body">
                     <div class="flex items-center gap-1" :style="{ paddingLeft: `${row.depth * 20}px` }">
@@ -426,6 +514,25 @@ function isMatch(node) {
                                 {{ cells(row.node).category ?? '' }}
                             </span>
                         </div>
+
+                        <!--
+                            Plusset (issue 1164): skapar ett barn under raden.
+                            Över länkytan med `relative z-10`. Dolt tills
+                            raden hovras eller knappen får fokus från `md:`,
+                            alltid synligt under `md:`.
+                        -->
+                        <button
+                            v-if="row.node.can_create === true"
+                            :ref="(el) => { plusButtons[row.key] = el; }"
+                            type="button"
+                            :aria-expanded="isFormRow(row) ? 'true' : 'false'"
+                            :aria-label="t('item.tree.add_child', { name: row.node.name })"
+                            class="relative z-10 ml-auto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-focus md:opacity-0 md:group-hover:opacity-100"
+                            :class="isFormRow(row) ? 'md:opacity-100' : ''"
+                            @click="openChildForm(row)"
+                        >
+                            <UiIcon name="add" :size="16" />
+                        </button>
                     </div>
                 </td>
 
@@ -456,6 +563,41 @@ function isMatch(node) {
                     </time>
                 </td>
             </tr>
+
+            <!--
+                Formulärraden (issue 1164): en cell över alla kolumner, en
+                nivå djupare än noden, direkt under raden man tryckte på.
+            -->
+            <tr v-if="isFormRow(row)" class="border-b border-border">
+                <td colspan="6" class="py-2 pr-4">
+                    <div
+                        :id="`tree-form-${row.key}`"
+                        :style="{ paddingLeft: `${(row.depth + 1) * 20}px` }"
+                        @keydown="onFormKeydown"
+                    >
+                        <div class="rounded-control border border-border bg-surface p-3">
+                            <ItemForm
+                                inline
+                                :return-to="returnTo"
+                                :container-ulid="containerUlid"
+                                :container-name="containerName"
+                                :categories="categories"
+                                :tags="tags"
+                                :accounts="accounts"
+                                :account="account"
+                                :parent="{ ulid: row.node.ulid, name: row.node.name }"
+                                :preselected="preselected"
+                                :structure="nodes"
+                                :can-create-root="canCreateRoot"
+                                :can-manage-taxonomy="canManageTaxonomy"
+                                @dirty="emit('dirty', $event)"
+                                @cancel="closeForm"
+                            />
+                        </div>
+                    </div>
+                </td>
+            </tr>
+            </template>
         </tbody>
     </table>
 </template>

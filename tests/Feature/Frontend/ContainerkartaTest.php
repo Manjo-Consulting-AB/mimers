@@ -558,10 +558,10 @@ it('bygger nodernas adresser och har tagit bort kolumnkomponenterna', function (
     expect($vy)->toContain('?tab=relations');
 
     // Kartan läser inte adressen. `page.url` finns sedan issue 1163 bara som
-    // `:return-to` på registreringsraden i trädläget.
+    // `:return-to` på registreringsraden och, sedan issue 1164, på trädtabellen.
     expect(str_contains($vy, 'window.location'))->toBeFalse();
 
-    expect(substr_count($vy, 'page.url'))->toBe(1);
+    expect(substr_count($vy, 'page.url'))->toBe(2);
 
     expect(File::exists(resource_path('js/components/ContainerMap.vue')))->toBeFalse()
         ->and(File::exists(resource_path('js/components/ContainerMapNode.vue')))->toBeFalse();
