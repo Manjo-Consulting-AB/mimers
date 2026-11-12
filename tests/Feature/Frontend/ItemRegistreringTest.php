@@ -62,6 +62,7 @@ it('ritar raden bara i trädläget och bara när can.create är sann', function 
     expect(substr($vy, (int) $tradgren, (int) $rad - (int) $tradgren))->toContain('v-if="can.create"');
 });
 
+// vakt: ItemForm hade redan More details; provet låser att den inbäddade raden ärver det.
 it('visar namnet först och resten bakom More details', function () {
     $form = itemregKod('components/ItemForm.vue');
     $en = require lang_path('en/ui.php');
