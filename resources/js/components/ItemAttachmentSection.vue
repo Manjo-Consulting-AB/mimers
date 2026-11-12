@@ -862,7 +862,7 @@ function toInbox(attachment) {
                         PDF:en.
                     -->
                     <a
-                        :href="`/files/${attachment.ulid}`"
+                        :href="`/files/${attachment.ulid}?download=1`"
                         class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.attachment.download') }}
@@ -1005,7 +1005,7 @@ function toInbox(attachment) {
                     <span class="font-medium text-ink">{{ viewer.filename }}</span>
 
                     <a
-                        :href="`/files/${viewer.ulid}`"
+                        :href="`/files/${viewer.ulid}?download=1`"
                         class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.attachment.download') }}

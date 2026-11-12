@@ -1051,3 +1051,10 @@ it('antalen följer inte filtret', function () {
         ->and($med['filterOptions']['kinds'])->toBe(['image' => 1, 'document' => 1, 'other' => 0])
         ->and($med['filterOptions']['total'])->toBe(2);
 });
+
+it('låter Download-länken i dokumentraden bära download=1', function () {
+    $vy = file_get_contents(resource_path('js/pages/Containers/Documents.vue'));
+
+    expect($vy)->toContain('`${fileUrl(row.ulid)}?download=1`');
+    expect(substr_count($vy, '?download=1'))->toBe(1);
+});
