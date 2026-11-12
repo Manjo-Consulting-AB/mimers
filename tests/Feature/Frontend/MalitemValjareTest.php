@@ -483,6 +483,7 @@ it('kan begränsas till en container', function () {
     expect($väljaren)->toContain("only: ['itemTargets']");
 });
 
+// vakt: ska vara grönt på basen — ingen sida skickar `container` i den här issuen, och provet håller det så.
 it('ingen sida skickar container till målväljaren', function () {
     $sidor = collect(File::allFiles(resource_path('js/pages')))
         ->filter(fn ($fil) => str_contains($fil->getContents(), '<ItemTargetPicker'));
