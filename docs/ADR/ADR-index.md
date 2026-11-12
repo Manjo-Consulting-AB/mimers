@@ -79,6 +79,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0071 Miniatyrer med Imagick]] | HEIC, HEIF och TIFF får miniatyrer genom Imagick, skrivna som JPEG; inget PDF och ingen annan delegat | [[Filer och lagring]] |
 | [[ADR-0072 Kartan fyller bredden]] | Kartans kort har tre storlekar efter antalet barn per rad; barnen står på högst två jämna rader med upp till sex per rad; uppställningen väljs ur ramens uppmätta bredd | Frontend |
 | [[ADR-0073 Översiktens ordning]] | Personen väljer ordning och bredd på containeröversiktens paneler, för alla containrar; en tom panel står kvar; egen dragkod och inget paket | [[Konton och åtkomst]], Frontend |
+| [[ADR-0074 Registrering i vyn]] | Ny information registreras i vyn, före listan, med en snabbrad eller ett infällbart formulär som står kvar efter sparning; inboxen är förvald på containerns *To do* | Frontend |
 
 ## Om att ändra ett beslut
 
