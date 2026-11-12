@@ -78,6 +78,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0070 Subprocesser hos inleed]] | `proc_open` får användas där en ADR beslutat det; köarbetaren får en egen process med ADR-0031:s väg som reserv, och `retro-fakta` visar `disable_functions` | Drift, [[Pipeline]] |
 | [[ADR-0071 Miniatyrer med Imagick]] | HEIC, HEIF och TIFF får miniatyrer genom Imagick, skrivna som JPEG; inget PDF och ingen annan delegat | [[Filer och lagring]] |
 | [[ADR-0072 Kartan fyller bredden]] | Kartans kort har tre storlekar efter antalet barn per rad; barnen står på högst två jämna rader med upp till sex per rad; uppställningen väljs ur ramens uppmätta bredd | Frontend |
+| [[ADR-0073 Översiktens ordning]] | Personen väljer ordning och bredd på containeröversiktens paneler, för alla containrar; en tom panel står kvar; egen dragkod och inget paket | [[Konton och åtkomst]], Frontend |
 
 ## Om att ändra ett beslut
 
