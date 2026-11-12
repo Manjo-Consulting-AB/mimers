@@ -25,7 +25,7 @@ GitHub #1162. **Läget:** `ItemController::store()` leder alltid till itemets si
 
 **Klart när:** POST med giltig `return` landar på fliken med `created_item`, och en ogiltig adress landar på itemets sida; `another` går före `return`; en användare med en itemgrant men utan `createItem` får 403 utan `parent` och 302 med en `parent` hon får skapa på; `index()` ger `can_create` per nod och tomma listor åt en läsare.
 
-**Beror på:** 356
+**Beror på:** —
 
 ### 365. Nytt item i raden ovanför trädet
 
@@ -37,7 +37,7 @@ GitHub #1163. **Läget:** knappen *New item* på *Items*-fliken leder till en eg
 
 **Klart när:** `Index.vue` ritar `InlineCreate` före `ItemTreeTable` och länkar inte till `/items/create`; `ItemForm` med `inline` skickar `return` och saknar *Save and add another*; formuläret står kvar efter sparning med namnet tomt och fokus i det; `highlight` ger `bg-accent-soft`; kartläget ritar ingen rad; GenomgangTest och SprakTest är gröna.
 
-**Beror på:** 356, 364
+**Beror på:** 364
 
 ### 366. Plus på varje trädnod skapar ett barn
 
