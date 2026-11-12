@@ -102,10 +102,52 @@ it('platsen är null vid montering och sparas inte i localStorage', function () 
         ->and($kod)->not->toContain('localStorage');
 });
 
-it('ger väljaren containerns ULID', function () {
-    expect(snabbradKod('js/components/ContainerTaskQuickCreate.vue'))
-        ->toContain(':container="containerUlid"')
-        ->toContain(":heading=\"t('todo.create.place')\"");
+it('platsvalet är en details med absolut panel, Inbox först och containerns items ur itemTargets', function () {
+    $kod = snabbradKod('js/components/ContainerTaskQuickCreate.vue');
+
+    expect($kod)->toContain('<details')
+        ->and($kod)->toContain('ref="placeMenu"')
+        ->and($kod)->toContain('absolute left-0 z-10')
+        ->and($kod)->toContain('group.container.ulid === props.containerUlid')
+        ->and($kod)->toContain('placeMenu.value.open = false')
+        ->and($kod)->toContain('quick.value?.focus()')
+        ->and($kod)->not->toContain('ItemTargetPicker')
+        ->and($kod)->not->toContain("t('todo.create.change')");
+
+    // Inbox före itemraderna, och raderna är knappar, inte länkar.
+    expect(strpos($kod, "t('todo.create.inbox')", (int) strpos($kod, '<ul')))
+        ->toBeLessThan(strpos($kod, 'v-for="option in options"'))
+        ->and($kod)->not->toContain('<Link')
+        ->and(substr_count($kod, '<button'))->toBe(2)
+        ->and(substr_count($kod, 'type="button"'))->toBe(2)
+        ->and(substr_count($kod, 'min-h-11'))->toBeGreaterThanOrEqual(3);
+});
+
+it('summary visar Inbox eller itemets namn, och raderna bär aria-current', function () {
+    $kod = snabbradKod('js/components/ContainerTaskQuickCreate.vue');
+
+    expect($kod)->toContain('<summary')
+        ->and($kod)->toContain("place === null ? t('todo.create.inbox') : place.name")
+        ->and($kod)->toContain(":aria-current=\"place === null ? 'true' : undefined\"")
+        ->and($kod)->toContain(":aria-current=\"place?.ulid === option.ulid ? 'true' : undefined\"")
+        ->and($kod)->toContain('name="chevron-down"');
+});
+
+it('Escape stänger panelen och fokus går till summary', function () {
+    $kod = snabbradKod('js/components/ContainerTaskQuickCreate.vue');
+
+    expect($kod)->toContain('@keydown="closeMenu"')
+        ->and($kod)->toContain("event.key !== 'Escape'")
+        ->and($kod)->toContain("querySelector('summary')?.focus()");
+});
+
+it('hämtar itemTargets första gången panelen öppnas och visar pending under tiden', function () {
+    $kod = snabbradKod('js/components/ContainerTaskQuickCreate.vue');
+
+    expect($kod)->toContain('@toggle="onToggle"')
+        ->and($kod)->toContain('event.target.open')
+        ->and($kod)->toContain("router.reload({\n        only: ['itemTargets']")
+        ->and($kod)->toContain("t('common.pending.default')");
 });
 
 it('återställer title och sätter fokus efter en sparning', function () {
