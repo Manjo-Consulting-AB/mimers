@@ -90,6 +90,8 @@ function ikonRoller(): array
         'chevron-left' => 'chevron-left',
         'mail' => 'mail',
         'open' => 'eye',
+        'move-up' => 'arrow-up',
+        'move-down' => 'arrow-down',
     ];
 }
 

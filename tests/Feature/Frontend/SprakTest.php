@@ -669,6 +669,7 @@ it('hämtar containerns översiktssträngar ur ui.php', function () {
         'js/components/ContainerTasksPanel.vue',
         'js/components/ContainerDetailsPanel.vue',
         'js/components/RecentImagesPanel.vue',
+        'js/components/OverviewPanelFrame.vue',
     ] as $fil) {
         preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 

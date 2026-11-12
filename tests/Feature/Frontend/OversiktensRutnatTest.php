@@ -116,7 +116,7 @@ it('ger activity först i panels för en person som sparat den först', function
 it('ritar panelerna i en loop över props.panels utan lg:order', function () {
     $vy = rutnatVy();
 
-    expect($vy)->toContain('v-for="panel in props.panels"')
+    expect($vy)->toContain('v-for="(panel, index) in shownPanels"')
         ->toContain('lg:grid lg:grid-flow-dense lg:grid-cols-3');
     expect($vy)->not->toMatch('/order-\d/', 'en panel bär fortfarande en ordningsklass');
     expect($vy)->not->toMatch('/lg:row-span-\d/', 'omslaget spänner fortfarande rader');
@@ -192,7 +192,7 @@ it('ritar Recent images under Items och bara när bilder finns', function () {
 it('ställer informationsytan sist, efter loopen', function () {
     $vy = rutnatVy();
 
-    $loop = (int) strpos($vy, 'v-for="panel in props.panels"');
+    $loop = (int) strpos($vy, 'v-for="(panel, index) in shownPanels"');
     $info = strpos($vy, '<InfoPanel');
 
     expect($info)->not->toBeFalse()

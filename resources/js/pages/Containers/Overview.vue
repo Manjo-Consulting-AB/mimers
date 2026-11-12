@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, nextTick, ref } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerDetailsPanel from '../../components/ContainerDetailsPanel.vue';
@@ -8,6 +8,8 @@ import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
 import CostDonut from '../../components/CostDonut.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
 import InfoPanel from '../../components/InfoPanel.vue';
+import OverviewPanelFrame from '../../components/OverviewPanelFrame.vue';
+import UiButton from '../../components/UiButton.vue';
 import ItemRow from '../../components/ItemRow.vue';
 import RecentImagesPanel from '../../components/RecentImagesPanel.vue';
 import UiCard from '../../components/UiCard.vue';
@@ -129,6 +131,15 @@ defineOptions({
  * `recentImages.length`. Under `lg:` staplas panelerna i samma ordning.
  * Informationsytan står sist, utanför loopen.
  *
+ * **Redigeringsläget kom med issue 1114 · ADR-0073 § 5.** `Customize
+ * overview` öppnar det; då ritas en lokal kopia av `props.panels` och varje
+ * panel får *Move up* och *Move down* (OverviewPanelFrame). En flytt ändrar
+ * bara kopian. `Done` skickar den med `PUT /settings/overview-panels` och
+ * `Reset to default` skickar `DELETE`; Inertia laddar om `panels`. Lämnas
+ * sidan utan `Done` sparas ingenting. Efter en flytt flyttas fokus till samma
+ * knapp i panelens nya läge — eller till den andra pilen, när den första
+ * blev inaktiv i änden.
+ *
  * Varje panel ritas alltid och visar sitt tomma läge; *Kostnader* har
  * `container.overview.costs_empty`. *Senaste bilder* inuti `items` ritas
  * fortfarande inte utan bilder — det ändrar bara panelens höjd.
@@ -186,11 +197,87 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+/* Panelens rubrik, för raden i redigeringsläget och för pilarnas etikett. */
+const panelNames = computed(() => ({
+    tasks: t('container.overview.tasks'),
+    costs: t('container.overview.costs'),
+    details: t('container.overview.details'),
+    items: t('container.overview.items'),
+    activity: t('container.overview.activity'),
+}));
+
+const editing = ref(false);
+const draft = ref([]);
+const saving = ref(false);
+const shownPanels = computed(() => (editing.value ? draft.value : props.panels));
+
+function startEditing() {
+    draft.value = props.panels.map((panel) => ({ ...panel }));
+    editing.value = true;
+}
+
+function movePanel(index, direction) {
+    const target = direction === 'up' ? index - 1 : index + 1;
+
+    if (target < 0 || target >= draft.value.length) {
+        return;
+    }
+
+    const next = [...draft.value];
+    [next[index], next[target]] = [next[target], next[index]];
+    draft.value = next;
+
+    const key = next[target].key;
+    const atEnd = direction === 'up' ? target === 0 : target === next.length - 1;
+
+    nextTick(() => {
+        const wanted = atEnd ? (direction === 'up' ? 'down' : 'up') : direction;
+
+        document.querySelector(`[data-move="${key}-${wanted}"]`)?.focus();
+    });
+}
+
+function finishEditing() {
+    router.put(
+        '/settings/overview-panels',
+        { panels: draft.value },
+        {
+            onStart: () => { saving.value = true; },
+            onFinish: () => { saving.value = false; },
+            onSuccess: () => { editing.value = false; },
+        },
+    );
+}
+
+function resetEditing() {
+    router.delete('/settings/overview-panels', {
+        onStart: () => { saving.value = true; },
+        onFinish: () => { saving.value = false; },
+        onSuccess: () => { editing.value = false; },
+    });
+}
+
 const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
 </script>
 
 <template>
     <Head :title="container.name" />
+
+    <!-- Knappraden ovanför panelerna (issue 1114). Utanför läget en
+         sekundär knapp; i läget `Done` (primär) och `Reset to default`. -->
+    <div class="mb-2 flex flex-wrap gap-2">
+        <UiButton v-if="!editing" variant="secondary" @click="startEditing">
+            {{ t('container.overview.customize.open') }}
+        </UiButton>
+        <template v-else>
+            <UiButton variant="primary" :pending="saving" @click="finishEditing">
+                {{ t('container.overview.customize.done') }}
+            </UiButton>
+            <UiButton variant="secondary" :pending="saving" @click="resetEditing">
+                {{ t('container.overview.customize.reset') }}
+            </UiButton>
+        </template>
+    </div>
 
     <!--
         Rutnätet (issue 172, omlagt i issue 1113 efter ADR-0073). Behållaren är
@@ -234,11 +321,17 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
         <!-- Panelerna i personens ordning (ADR-0073 § 2). `wide` spänner två
              kolumner över `lg:`, `narrow` ingen. Varje panel ritas alltid och
              äger sitt tomma läge. -->
-        <div
-            v-for="panel in props.panels"
+        <OverviewPanelFrame
+            v-for="(panel, index) in shownPanels"
             :key="panel.key"
+            :panel-key="panel.key"
+            :name="panelNames[panel.key]"
+            :editing="editing"
+            :first="index === 0"
+            :last="index === shownPanels.length - 1"
             class="mt-8"
             :class="panel.width === 'wide' ? 'lg:col-span-2' : ''"
+            @move="movePanel(index, $event)"
         >
             <ContainerTasksPanel v-if="panel.key === 'tasks'" :tasks="props.tasks" />
 
@@ -337,7 +430,7 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
                     />
                 </ul>
             </UiCard>
-        </div>
+        </OverviewPanelFrame>
 
         <!-- Informationsytan står sist, efter loopen. Den äger sin egen
              marginal (se InfoPanel.vue) och ritas aldrig utan tips. -->
