@@ -2339,6 +2339,12 @@ return [
             'done' => 'Done',
             'empty' => 'No tasks in this container.',
             'shortcuts' => 'Shortcuts',
+            'quick' => [
+                'label' => 'New task title',
+                'placeholder' => 'Add a task…',
+                'submit' => 'Add',
+                'hidden' => 'The task was added, but the current tab or filter hides it.',
+            ],
         ],
 
         /*
