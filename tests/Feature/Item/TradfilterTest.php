@@ -350,8 +350,8 @@ it('hämtar träffarna ur ListItems med samma filter', function () {
             fn (AssertableInertia $page) => $page
                 ->where('view', 'tree')
                 ->where('structure', [
-                    ['ulid' => $båt->ulid, 'name' => 'Båten', 'match' => false, 'children' => [
-                        ['ulid' => $motor->ulid, 'name' => 'Motorn', 'match' => true, 'children' => []],
+                    ['ulid' => $båt->ulid, 'name' => 'Båten', 'match' => false, 'can_create' => true, 'children' => [
+                        ['ulid' => $motor->ulid, 'name' => 'Motorn', 'match' => true, 'can_create' => true, 'children' => []],
                     ]],
                 ])
         );

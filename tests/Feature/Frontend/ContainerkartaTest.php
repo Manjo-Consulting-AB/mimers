@@ -192,7 +192,7 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
             // ingen ser ska inte kosta en fråga (samma linje som `structure`).
             ->where('structure', null)
             ->missing('items')
-            ->missing('categories')
+            ->where('categories', [])
             ->missing('covers')
             ->where('map.center.kind', 'container')
             ->where('map.center.ulid', $container->ulid)
