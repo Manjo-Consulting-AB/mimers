@@ -338,7 +338,7 @@ it('TodoRow skickar return back', function () {
  * (§ Beslut 1).
  */
 it('uppgiftens sida skickar inget return', function () {
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    $vy = File::get(resource_path('js/components/ScheduleActions.vue'));
 
     // Bara flyttanropet prövas: pausen och raderingen bär `return` sedan
     // issue 1158, men flytten postar fortfarande utan fältet.

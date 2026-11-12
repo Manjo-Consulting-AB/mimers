@@ -671,7 +671,7 @@ it('raderar ett schema efter bekräftelse och lovar ingen papperskorg', function
     // meningens text ur `lang/` — ingen sträng i JavaScript. Knappen bor på
     // schemats EGEN sida sedan issue 226; itemets flik har inga regelknappar
     // kvar (issue 227).
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    $vy = File::get(resource_path('js/components/ScheduleActions.vue'));
 
     expect($vy)->toContain('window.confirm');
     expect($vy)->toContain("t('item.schedule.destroy_confirm')");
@@ -727,7 +727,7 @@ it('visar listan för en read-mottagare men ingen skrivyta, och nekar skrivandet
     expect(File::get(resource_path('js/components/ScheduleListSection.vue')))
         ->toContain('v-if="can.create"');
 
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    $vy = File::get(resource_path('js/components/ScheduleActions.vue'));
 
     expect($vy)->toContain('v-if="can.update"');
     expect($vy)->toContain('v-if="can.delete"');

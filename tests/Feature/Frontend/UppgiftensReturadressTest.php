@@ -154,16 +154,19 @@ it('faller tillbaka på To do-fliken när raderingens return är extern', functi
 });
 
 it('länkar tillbaka till back och bär returadressen vidare i vyerna', function () {
+    // Menyn bor i ScheduleActions.vue sedan issue 1159; båda sidorna ritar den.
+    $meny = returKod('components/ScheduleActions.vue');
     $visa = returKod('pages/Containers/Items/Schedules/Show.vue');
     $redigera = returKod('pages/Containers/Items/Schedules/Edit.vue');
 
-    expect($visa)->toContain(':href="back"')->toContain("t('item.schedule.back_to_list')");
-    expect($redigera)->toContain(':href="back"')->toContain("t('item.schedule.back_to_list')");
+    expect($visa)->toContain('<ScheduleActions')->toContain(':back="back"')->toContain(':return-to="returnTo"');
+    expect($redigera)->toContain('<ScheduleActions')->toContain(':back="back"')->toContain(':return-to="returnTo"');
+    expect($meny)->toContain(':href="back"')->toContain("t('item.schedule.back_to_list')");
 
     // Edit-länken, pausen och raderingen bär returadressen vidare.
-    expect($visa)->toContain('?return=${encodeURIComponent(props.returnTo)}');
-    expect($visa)->toContain('...(props.returnTo !== null ? { return: props.returnTo } : {})');
-    expect($visa)->toContain('data: props.returnTo !== null ? { return: props.returnTo } : {}');
+    expect($meny)->toContain('?return=${encodeURIComponent(props.returnTo)}');
+    expect($meny)->toContain('...(props.returnTo !== null ? { return: props.returnTo } : {})');
+    expect($meny)->toContain('data: props.returnTo !== null ? { return: props.returnTo } : {}');
 
     // Formuläret skickar return i PATCH:en när propen är satt.
     expect($redigera)->toContain(':return-to="returnTo"');

@@ -1,7 +1,9 @@
 <script setup>
-import { Head, Link } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { Head } from '@inertiajs/vue3';
 import AppLayout from '../../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
+import ScheduleActions from '../../../../components/ScheduleActions.vue';
 import ScheduleForm from '../../../../components/ScheduleForm.vue';
 import { useTranslations } from '../../../../composables/useTranslations.js';
 
@@ -40,9 +42,15 @@ defineProps({
     /* Den prövade returadressen och tillbakaadressen (issue 1158). */
     returnTo: { type: String, default: null },
     back: { type: String, required: true },
+    /* Samma grindar och inbox-flagga som schemats sida (issue 1159). */
+    can: { type: Object, required: true },
+    containerIsInbox: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
+
+/* Formulärets osparade tillstånd, för menyns fråga (issue 1159). */
+const dirty = ref(false);
 </script>
 
 <template>
@@ -52,12 +60,17 @@ const { t } = useTranslations();
 
     <p class="mt-1 text-sm text-slate-600">{{ item.name }}</p>
 
-    <Link
-        :href="back"
-        class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
-    >
-        {{ t('item.schedule.back_to_list') }}
-    </Link>
+    <ScheduleActions
+        context="edit"
+        :container="container"
+        :item="item"
+        :schedule="schedule"
+        :can="can"
+        :container-is-inbox="containerIsInbox"
+        :return-to="returnTo"
+        :back="back"
+        :dirty="dirty"
+    />
 
     <ScheduleForm
         class="mt-8"
@@ -66,5 +79,6 @@ const { t } = useTranslations();
         :schedule="schedule"
         :open-due-at="openDueAt"
         :return-to="returnTo"
+        @dirty="dirty = $event"
     />
 </template>

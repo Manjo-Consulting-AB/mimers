@@ -134,12 +134,7 @@ class ScheduleController extends Controller
             'occurrenceDependencies' => $occurrenceDependencies,
             'hasOpenOccurrence' => $open !== null,
             'counterparts' => $this->counterparts($request, $container, $schedule, $scheduleDependencies, $occurrenceDependencies),
-            // Sant när schemat ligger på ett inbox-item (ADR-0054 § 1).
-            // Flaggan döljer *Back to Inbox* — uppgiften är redan där, och
-            // rutten hade svarat 422 `schedule.already_in_inbox`. Ligger
-            // BREDVID resursen och inte i den: `ContainerResource` är
-            // `/api`:s format och har inte bett om ett vy-fält.
-            'containerIsInbox' => $container->isInbox(),
+            ...$this->menuProps($request, $container, $schedule, $base),
         ]);
     }
 
@@ -227,6 +222,22 @@ class ScheduleController extends Controller
     }
 
     /**
+     * Det uppgiftens meny behöver, delat av schemats sida och redigeringen
+     * (issue 1159): grindarna, och om uppgiften redan ligger i inboxen.
+     * `containerIsInbox` döljer *Back to Inbox* (ADR-0054 § 1) och ligger
+     * BREDVID resursen och inte i den: `ContainerResource` är `/api`:s format.
+     *
+     * @return array{can: array{update: bool, delete: bool}, containerIsInbox: bool}
+     */
+    private function menuProps(Request $request, Container $container, Schedule $schedule, ScheduleOccurrenceController $base): array
+    {
+        return [
+            'can' => $base->can($request, $schedule),
+            'containerIsInbox' => $container->isInbox(),
+        ];
+    }
+
+    /**
      * `returnTo` och `back` för uppgiftens sida och redigeringen (issue 1158):
      * den prövade `?return=`, och tillbakaadressen — den, eller itemets To
      * do-flik. `return` läses ur frågesträngen eller kroppen.
@@ -254,7 +265,7 @@ class ScheduleController extends Controller
      * App\Models\Item::schedules(): ett schema på ett annat item, eller ett
      * item i en annan container, ger 404 (issue 21 § Beslut 1).
      */
-    public function edit(Request $request, Container $container, Item $item, Schedule $schedule): Response
+    public function edit(Request $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrenceController $base): Response
     {
         Gate::authorize('update', $item);
 
@@ -265,6 +276,7 @@ class ScheduleController extends Controller
             'item' => ['ulid' => $item->ulid, 'name' => $item->name],
             'schedule' => (new ScheduleResource($schedule))->resolve($request),
             ...$this->returnProps($request, $container, $item),
+            ...$this->menuProps($request, $container, $schedule, $base),
             /*
              * Den öppna förekomstens förfallodag, eller null när schemat
              * saknar en öppen förekomst (issue 702 § Beslut 3). Formuläret
