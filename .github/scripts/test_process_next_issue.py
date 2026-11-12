@@ -1342,6 +1342,103 @@ def test_vanligt_fel_tas_inte_om():
         raise AssertionError("ett fel som inte är tillfälligt ska resas direkt")
 
 
+# =====================================================================
+# Issue 1104: granskningsspåret postas via granskningsspar.py
+# =====================================================================
+
+def test_granska_och_merga_postar_sitt_spar_via_skriptet():
+    import inspect
+    kalla = inspect.getsource(p.granska_och_merga)
+    assert "granskningsspar.posta_spar(" in kalla
+    assert "Granskningsanalys" not in kalla
+
+
+def test_eskalera_postar_ett_eskalerat_spar_och_overlamnar_anda():
+    anrop, handelser = [], []
+    orig = (p.granskningsspar.posta_spar, p.run_cmd, p.send_pushover, p.cleanup_worktree)
+    p.granskningsspar.posta_spar = lambda *a, **k: anrop.append((a, k))
+    p.run_cmd = lambda *a, **k: handelser.append("run_cmd")
+    p.send_pushover = lambda *a, **k: handelser.append("pushover")
+    p.cleanup_worktree = lambda *a, **k: handelser.append("cleanup")
+    try:
+        try:
+            p.eskalera("5", "9", "/x", "feature/issue-5", "CI blev rött.")
+        except SystemExit as e:
+            assert e.code == 1
+        else:
+            raise AssertionError("eskalera ska avsluta")
+    finally:
+        p.granskningsspar.posta_spar, p.run_cmd, p.send_pushover, p.cleanup_worktree = orig
+    assert anrop[0][0][:2] == ("9", "eskalerad")
+    assert "Tony" in anrop[0][0][3]
+    assert handelser == ["run_cmd", "pushover", "cleanup"]
+
+
+def test_eskalera_overlamnar_aven_om_sparet_inte_gar_att_posta():
+    orig = (p.granskningsspar.posta_spar, p.run_cmd, p.send_pushover, p.cleanup_worktree)
+    def kasta(*a, **k):
+        raise RuntimeError("nätet nere")
+    handelser = []
+    p.granskningsspar.posta_spar = kasta
+    p.run_cmd = lambda *a, **k: None
+    p.send_pushover = lambda *a, **k: handelser.append("pushover")
+    p.cleanup_worktree = lambda *a, **k: None
+    try:
+        try:
+            p.eskalera("5", "9", "/x", "feature/issue-5", "skäl")
+        except SystemExit:
+            pass
+    finally:
+        p.granskningsspar.posta_spar, p.run_cmd, p.send_pushover, p.cleanup_worktree = orig
+    assert handelser == ["pushover"]
+
+
+def test_atgardsvarvets_utlatande_postas_via_skriptet():
+    import inspect
+    kalla = inspect.getsource(p.run_findings_fix_loop)
+    assert 'granskningsspar.posta_spar(pr_number, "godkänd" if approved else "omtag"' in kalla
+    assert "verifiering av åtgärdsvarv" not in kalla
+
+
+def test_arkitektsvaret_postar_eskalerat_spar_fore_svaret_och_talar_spar_fel():
+    orig = (p.granskningsspar.posta_spar, p.run_cmd, p.run_opus_answer,
+            p.kora_om_ci_efter_undantag, p.oppna_fragor)
+    handelser = []
+
+    def spar(*a, **k):
+        handelser.append(("spar", a))
+        raise RuntimeError("nätet nere")
+
+    p.granskningsspar.posta_spar = spar
+    p.run_cmd = lambda *a, **k: types.SimpleNamespace(
+        stdout='{"labels": []}', returncode=0)
+    p.oppna_fragor = lambda body: "en fråga"
+
+    def opus(*a, **k):
+        handelser.append(("opus", None))
+        return "svar", False
+
+    p.run_opus_answer = opus
+    p.kora_om_ci_efter_undantag = lambda *a, **k: None
+    try:
+        res = p.arkitektsvar_pa_oppen_fraga("issue", "9", "body", "/x", "Rubrik")
+    finally:
+        (p.granskningsspar.posta_spar, p.run_cmd, p.run_opus_answer,
+         p.kora_om_ci_efter_undantag, p.oppna_fragor) = orig
+    assert res == ("svar", False)
+    assert [h[0] for h in handelser] == ["spar", "opus"]
+    assert handelser[0][1][:2] == ("9", "eskalerad")
+    assert "arkitekten" in handelser[0][1][3]
+
+
+def test_lasarna_kanner_igen_bade_markoren_och_gamla_rubriken():
+    ny = p.granskningsspar.bygg_kommentar("omtag", "abc", "Sonnet", "fynd")
+    assert p.ar_granskningskommentar(ny)
+    assert p.ar_granskningskommentar("### Sonnet Granskningsanalys\nfynd")
+    assert not p.ar_granskningskommentar("### Mergespärren slog till")
+    assert not p.ar_granskningskommentar(None)
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

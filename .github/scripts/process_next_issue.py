@@ -40,6 +40,7 @@ sys.stderr.reconfigure(line_buffering=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import omfangslint  # noqa: E402  - samma katalog, ingen paketstruktur
 import omfangsruta  # noqa: E402  - samma katalog
+import granskningsspar  # noqa: E402  - samma katalog
 
 
 def is_peak_hour() -> bool:
@@ -1264,9 +1265,9 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
                 min_text=MIN_GRANSKNINGSTEXT_UPPFOLJNING,
             )
 
-        run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                  f"### Sonnet 5 - verifiering av åtgärdsvarv {round_num}\n{sonnet_check}"],
-                 cwd=REPO_ROOT)
+        granskningsspar.posta_spar(pr_number, "godkänd" if approved else "omtag", "Sonnet 5",
+                                   f"Verifiering av åtgärdsvarv {round_num}\n{sonnet_check}",
+                                   repo=GH_REPO)
 
         if approved:
             return True, findings
@@ -2114,6 +2115,13 @@ def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, r
         if not ska_eskalera_till_arkitekt(fragor, labels):
             return None
 
+    try:
+        granskningsspar.posta_spar(pr_number, "eskalerad", "Kön",
+                                   "Eskalerad till arkitekten: obesvarad fråga eller omfångsgrind "
+                                   "som ingen kodändring löser.", repo=GH_REPO)
+    except Exception as e:  # spåret får aldrig stoppa flödet
+        print(f"?? Kunde inte posta eskaleringsspåret på PR #{pr_number}: {e}")
+
     opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
     run_cmd(["gh", "pr", "comment", pr_number, "--body", arkitektkommentar(rubrik, opus_svar)],
             cwd=REPO_ROOT)
@@ -2125,6 +2133,13 @@ def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, r
     return opus_svar, kraver_kodandring
 
 
+def ar_granskningskommentar(body):
+    """Granskningskommentar: spårets markör, eller den äldre rubriken med
+    `Granskningsanalys` på första raden."""
+    body = body or "\n"
+    return granskningsspar.ar_sparkommentar(body) or "Granskningsanalys" in body.splitlines()[0]
+
+
 def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1):
     """Lämna över till Tony: etikett, pushover, städa worktreen, avsluta.
 
@@ -2134,6 +2149,11 @@ def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1
     """
     run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
              cwd=REPO_ROOT)
+    try:
+        granskningsspar.posta_spar(pr_number, "eskalerad", "Kön",
+                                   f"Eskalerad till Tony: {skal}", repo=GH_REPO)
+    except Exception as e:  # spåret får aldrig hindra själva överlämningen
+        print(f"?? Kunde inte posta eskaleringsspåret på PR #{pr_number}: {e}")
     send_pushover(f"🚨 Issue #{issue_num}: {skal} PR #{pr_number} kräver dig.")
     cleanup_worktree(worktree_path, branch_name)
     sys.exit(exit_code)
@@ -3038,8 +3058,8 @@ def granska_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     godkand, granskning, _ = run_review(
         granskare, bygg_granskningsprompt(issue_body, pr_diff, fragor=fragor, pr_number=pr_number), pr_number, worktree_path
     )
-    run_cmd(["gh", "pr", "comment", pr_number, "--body",
-              f"### {modellnamn} Granskningsanalys\n{granskning}"], cwd=REPO_ROOT)
+    granskningsspar.posta_spar(pr_number, "godkänd" if godkand else "omtag", modellnamn,
+                               granskning, repo=GH_REPO)
 
     godkand_direkt = godkand
     if not godkand:
@@ -3178,7 +3198,7 @@ def find_pr_context(pr_number):
 
     # Granskningen kan vara Opus eller Sonnet sedan alla PR:er får en läsare -
     # leta på den gemensamma delen av rubriken, inte på modellnamnet.
-    granskningar = [c["body"] for c in pr["comments"] if "Granskningsanalys" in c["body"].splitlines()[0]]
+    granskningar = [c["body"] for c in pr["comments"] if ar_granskningskommentar(c["body"])]
     if not granskningar:
         raise Exception(f"Hittade ingen granskningskommentar på PR #{pr_number} att återuppta från.")
 
@@ -3208,7 +3228,7 @@ def granska_pr(pr_number):
     # Fail-closed mot dubbelgranskning: finns analysen redan är det --resume-pr
     # som gäller, och att köra vidare här skulle posta en andra förstagranskning
     # i samma tråd och starta om åtgärdsloopen från fynd som redan är åtgärdade.
-    if any("Granskningsanalys" in (c["body"] or "\n").splitlines()[0] for c in pr["comments"]):
+    if any(ar_granskningskommentar(c["body"]) for c in pr["comments"]):
         print(f"PR #{pr_number} har redan en granskningsanalys i tråden - "
               f"använd --resume-pr {pr_number} i stället.")
         sys.exit(1)
