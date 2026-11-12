@@ -73,7 +73,7 @@ En spärrad radering gör ingenting. **En aktiv prenumeration spärrar inte** �
 Kontona avgörs först, i samma transaktion: ett konto där personen är enda medlem raderas med `DeleteAccount` (med samma innehåll, kvoter och prenumeration som i livscykeln), ett konto med andra medlemmar lämnas orört och personens `account_user`-rad tas bort. Därefter, i den ordning de främmande nycklarna kräver:
 
 1. författarkolumnerna mot `user` nollställs — `item`, `attachment`, `schedule_occurrence`, `cost_entry`, `container_access` och `export` (ADR-0045 § Beslut 2); raderna är någon annans innehåll och står kvar utan avsändare,
-2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `recent_visit`, `attachment_open`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
+2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `recent_visit`, `attachment_open`, `dismissed_tip`, `overview_panel`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
 3. väntande inbjudningar och ägarbyten som personen startat dras tillbaka (`status = 'revoked'`), och författarkolumnen nollställs på dem alla — besvarade behåller sin rad,
 4. säkerhetsloggen får en rad `user.deleted`, utan e-postadressen,
 5. `user`-raden raderas **på riktigt**. Ingen mjukradering: en mjukraderad person vore en person som inte är raderad. `email` blir ledig och kan registreras igen som ett nytt konto.
@@ -188,6 +188,21 @@ Ett tips användaren kryssat bort i informationsytan, en rad per tips och person
 Uniknyckeln `(user_id, tip_key)` är det som gör doldmarkeringen till ett par: att kryssa samma tips två gånger ger ingen andra rad. Den är också hela skillnaden mot en flagga för ytan — **tillståndet är per tips**, så ett tips som läggs till senare har ingen rad och visas även för den som dolt allt som fanns förut.
 
 Ingen `deleted_at`: ett dolt tips är inget användarskapat innehåll att återställa, ingen papperskorg listar typen, och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny rad för samma nyckel.
+
+## overview_panel
+
+En panel på containerns översikt, i den ordning och med den bredd personen valt. En rad per panel och person. Se [[ADR-0073 Översiktens ordning]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: raden syns aldrig i API:et, och ingen rutt identifierar en enskild rad. Ordningen sparas och återställs som helhet |
+| user_id | FK → user, RESTRICT | **Ordningen hör till personen och gäller alla containrar hon öppnar** (ADR-0073 § 1). `RESTRICT` och inte `CASCADE`, som `dismissed_tip`: raderna städas av `DeleteUser` |
+| panel_key | VARCHAR(40) | Panelens nyckel, t.ex. `activity`. Vilka nycklar som finns, deras förvalda ordning och bredd står i `App\Support\Frontend\OverviewPanels` — ingen tabell håller panelerna |
+| position | SMALLINT UNSIGNED | Panelens plats, från 0. Läses i stigande ordning |
+| width | VARCHAR(10) | `narrow` eller `wide`, med CHECK-villkor |
+| created_at, updated_at | | |
+
+Uniknyckeln `(user_id, panel_key)`. **Saknar personen rader gäller förvalet.** En nyckel som finns i panellistan men saknar rad står sist med sin förvalda bredd, och en rad vars nyckel tagits bort ur listan hoppas över när ordningen läses (ADR-0073 § 8). En sparning skriver om personens alla rader i en transaktion, och återställningen raderar dem.
 
 ## recent_visit
 
