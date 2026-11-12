@@ -1265,9 +1265,9 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
                 min_text=MIN_GRANSKNINGSTEXT_UPPFOLJNING,
             )
 
-        run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                  f"### Sonnet 5 - verifiering av åtgärdsvarv {round_num}\n{sonnet_check}"],
-                 cwd=REPO_ROOT)
+        granskningsspar.posta_spar(pr_number, "godkänd" if approved else "omtag", "Sonnet 5",
+                                   f"Verifiering av åtgärdsvarv {round_num}\n{sonnet_check}",
+                                   repo=GH_REPO)
 
         if approved:
             return True, findings
@@ -2114,6 +2114,13 @@ def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, r
         labels = [label["name"] for label in pr["labels"]]
         if not ska_eskalera_till_arkitekt(fragor, labels):
             return None
+
+    try:
+        granskningsspar.posta_spar(pr_number, "eskalerad", "Kön",
+                                   "Eskalerad till arkitekten: obesvarad fråga eller omfångsgrind "
+                                   "som ingen kodändring löser.", repo=GH_REPO)
+    except Exception as e:  # spåret får aldrig stoppa flödet
+        print(f"?? Kunde inte posta eskaleringsspåret på PR #{pr_number}: {e}")
 
     opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
     run_cmd(["gh", "pr", "comment", pr_number, "--body", arkitektkommentar(rubrik, opus_svar)],

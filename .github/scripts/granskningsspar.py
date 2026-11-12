@@ -65,7 +65,9 @@ def fel_i_indata(utfall: str, text: str) -> str | None:
 
 
 def bygg_kommentar(utfall: str, sha: str, granskare: str, text: str) -> str:
-    markor = f"{MARKOR_PREFIX}utfall={utfall} sha={sha} granskare={granskare} -->"
+    # Blanksteg bryter key=value-formen; rubriken behåller namnet som det är.
+    markor_granskare = re.sub(r"\s+", "-", granskare.strip())
+    markor = f"{MARKOR_PREFIX}utfall={utfall} sha={sha} granskare={markor_granskare} -->"
     return f"{markor}\n### {granskare} Granskning: {utfall}\n{text.strip()}"
 
 

@@ -78,6 +78,13 @@ def test_eskalerad_med_mottagare_postas_via_main():
     assert len(anrop) == 2
 
 
+def test_blanksteg_i_granskare_byts_mot_bindestreck_i_markoren_men_inte_i_rubriken():
+    kropp = g.bygg_kommentar("godkänd", "abc", "Sonnet 5", "x")
+    rader = kropp.splitlines()
+    assert rader[0] == "<!-- mimers-pipeline: granskning utfall=godkänd sha=abc granskare=Sonnet-5 -->"
+    assert rader[1] == "### Sonnet 5 Granskning: godkänd"
+
+
 def test_ar_sparkommentar_kanner_igen_markoren():
     kropp = g.bygg_kommentar("godkänd", "abc", "Sonnet", "x")
     assert g.ar_sparkommentar(kropp)

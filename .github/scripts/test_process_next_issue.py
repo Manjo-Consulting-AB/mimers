@@ -1393,6 +1393,44 @@ def test_eskalera_overlamnar_aven_om_sparet_inte_gar_att_posta():
     assert handelser == ["pushover"]
 
 
+def test_atgardsvarvets_utlatande_postas_via_skriptet():
+    import inspect
+    kalla = inspect.getsource(p.run_findings_fix_loop)
+    assert 'granskningsspar.posta_spar(pr_number, "godkänd" if approved else "omtag"' in kalla
+    assert "verifiering av åtgärdsvarv" not in kalla
+
+
+def test_arkitektsvaret_postar_eskalerat_spar_fore_svaret_och_talar_spar_fel():
+    orig = (p.granskningsspar.posta_spar, p.run_cmd, p.run_opus_answer,
+            p.kora_om_ci_efter_undantag, p.oppna_fragor)
+    handelser = []
+
+    def spar(*a, **k):
+        handelser.append(("spar", a))
+        raise RuntimeError("nätet nere")
+
+    p.granskningsspar.posta_spar = spar
+    p.run_cmd = lambda *a, **k: types.SimpleNamespace(
+        stdout='{"labels": []}', returncode=0)
+    p.oppna_fragor = lambda body: "en fråga"
+
+    def opus(*a, **k):
+        handelser.append(("opus", None))
+        return "svar", False
+
+    p.run_opus_answer = opus
+    p.kora_om_ci_efter_undantag = lambda *a, **k: None
+    try:
+        res = p.arkitektsvar_pa_oppen_fraga("issue", "9", "body", "/x", "Rubrik")
+    finally:
+        (p.granskningsspar.posta_spar, p.run_cmd, p.run_opus_answer,
+         p.kora_om_ci_efter_undantag, p.oppna_fragor) = orig
+    assert res == ("svar", False)
+    assert [h[0] for h in handelser] == ["spar", "opus"]
+    assert handelser[0][1][:2] == ("9", "eskalerad")
+    assert "arkitekten" in handelser[0][1][3]
+
+
 def test_lasarna_kanner_igen_bade_markoren_och_gamla_rubriken():
     ny = p.granskningsspar.bygg_kommentar("omtag", "abc", "Sonnet", "fynd")
     assert p.ar_granskningskommentar(ny)
