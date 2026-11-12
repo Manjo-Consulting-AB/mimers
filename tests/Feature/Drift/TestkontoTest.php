@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Loan\CreateLoan;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -183,6 +184,13 @@ it('hoppar över frågan i production med --force', function () {
 
 it('lämnar ingenting kvar när ett steg faller', function () {
     $före = testkontoRader();
+    // Relationen är inte laddad på bilagorna kommandot får tillbaka: städningen
+    // ska klara sig på sökvägarna kommandot sparade medan raderna fanns.
+    $riktig = app(StoreAttachment::class);
+    mock(StoreAttachment::class, function ($mock) use ($riktig) {
+        $mock->shouldReceive('handle')->andReturnUsing(fn (...$a) => $riktig->handle(...$a)->unsetRelation('storedFile'));
+        $mock->shouldReceive('handleForContainer')->andReturnUsing(fn (...$a) => $riktig->handleForContainer(...$a)->unsetRelation('storedFile'));
+    });
     mock(CreateLoan::class, fn ($mock) => $mock->shouldReceive('handle')->andThrow(new RuntimeException('bom')));
 
     testkontoKör('ny@example.test')->assertExitCode(1)->run();

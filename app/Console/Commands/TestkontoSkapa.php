@@ -167,8 +167,16 @@ class TestkontoSkapa extends Command
         ],
     ];
 
-    /** @var list<Attachment> */
-    private array $attachments = [];
+    /** Antalet bilagor som skapats under körningen. */
+    private int $attachmentCount = 0;
+
+    /**
+     * Lagringssökvägarna, sparade när bilagan skapas och raden finns. Efter en
+     * rollback är raden borta och relationen går inte att slå upp.
+     *
+     * @var list<string>
+     */
+    private array $storagePaths = [];
 
     private int $containerCount = 0;
 
@@ -205,7 +213,8 @@ class TestkontoSkapa extends Command
             return self::FAILURE;
         }
 
-        $this->attachments = [];
+        $this->attachmentCount = 0;
+        $this->storagePaths = [];
         $this->containerCount = 0;
         $this->itemCount = 0;
 
@@ -236,6 +245,14 @@ class TestkontoSkapa extends Command
         return self::SUCCESS;
     }
 
+    private function track(Attachment $attachment): Attachment
+    {
+        $this->attachmentCount++;
+        $this->storagePaths[] = $attachment->storedFile->storage_path;
+
+        return $attachment;
+    }
+
     /**
      * Efter en rollback ligger raderna borta men bytes som StoreAttachment
      * skrivit står kvar: dess egen städning gäller bara dess egen transaktion,
@@ -244,9 +261,7 @@ class TestkontoSkapa extends Command
      */
     private function removeOrphanedFiles(): void
     {
-        foreach ($this->attachments as $attachment) {
-            $path = $attachment->storedFile->storage_path;
-
+        foreach ($this->storagePaths as $path) {
             if (! StoredFile::query()->where('storage_path', $path)->exists()) {
                 $disk = Storage::disk('files');
                 $disk->delete($path);
@@ -313,12 +328,12 @@ class TestkontoSkapa extends Command
         $this->containerCount++;
 
         if ($spec['cover']) {
-            $this->attachments[] = app(SetContainerCover::class)->handle(
+            $this->track(app(SetContainerCover::class)->handle(
                 $container,
                 $this->pngFile($spec['name']),
                 $user,
                 $account,
-            );
+            ));
         }
 
         /** @var array<string, Category> $categories */
@@ -400,8 +415,8 @@ class TestkontoSkapa extends Command
         $image = app(StoreAttachment::class)->handle($item, $this->pngFile($name), $user, $account);
         $pdf = app(StoreAttachment::class)->handle($item, $this->pdfFile($name), $user, $account);
 
-        $this->attachments[] = $image;
-        $this->attachments[] = $pdf;
+        $this->track($image);
+        $this->track($pdf);
 
         return $image;
     }
@@ -474,7 +489,7 @@ class TestkontoSkapa extends Command
 
         $stege = $items['Stege'];
         $gammalBild = app(StoreAttachment::class)->handle($stege, $this->pngFile('Gammal bild på stegen'), $user, $account);
-        $this->attachments[] = $gammalBild;
+        $this->track($gammalBild);
         app(TrashAttachment::class)->handle($gammalBild, $user);
     }
 
@@ -571,7 +586,7 @@ class TestkontoSkapa extends Command
         $this->line('Plan: '.$plan->code);
         $this->line("Containers: {$this->containerCount}");
         $this->line("Items: {$this->itemCount}");
-        $this->line('Bilagor: '.count($this->attachments));
+        $this->line('Bilagor: '.$this->attachmentCount);
         $this->line("Använda bytes: {$bytes}");
     }
 }
