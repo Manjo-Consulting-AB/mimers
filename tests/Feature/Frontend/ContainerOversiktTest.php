@@ -468,7 +468,10 @@ it('saknar kostnadspanelen när containern inte har några rader', function () {
 
     $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
 
-    expect($vy)->toContain('v-if="props.costs.totals.length"')
+    // Sedan issue 1113 ritas panelen alltid; utan rader visas det tomma läget
+    // i stället för ringen (ADR-0073 § 4).
+    expect($vy)->toContain('v-if="props.costs.totals.length === 0"')
+        ->toContain("t('container.overview.costs_empty')")
         // Ringens bildtext är anroparens, för mängderna är olika: containern
         // visar hela containern och dashboarden en månad.
         ->toContain(':label="t(\'container.overview.costs_total\')"');
@@ -953,9 +956,9 @@ it('monterar panelerna i rutnätet över lg', function () {
     expect($vy)->toContain('class="lg:grid lg:grid-flow-dense lg:grid-cols-3 lg:items-start lg:gap-x-8"');
 
     expect($vy)->toContain('import ContainerTasksPanel from')
-        ->toContain('<ContainerTasksPanel :tasks="props.tasks" />')
+        ->toContain('<ContainerTasksPanel v-if="panel.key === \'tasks\'" :tasks="props.tasks" />')
         ->toContain('import ContainerDetailsPanel from')
-        ->toContain('<ContainerDetailsPanel :details="props.details" />')
+        ->toContain('<ContainerDetailsPanel v-else-if="panel.key === \'details\'" :details="props.details" />')
         ->toContain('import CostDonut from')
         ->toContain('<CostDonut')
         ->toContain('import HistoryRow from')
@@ -984,30 +987,24 @@ it('monterar panelerna i rutnätet över lg', function () {
 });
 
 /*
- * Klart när: Items och Senaste bilder står i en gemensam vänsterkolumn, med
- * Senaste aktiviteter bredvid i den tredje kolumnen (issue 321).
+ * Klart när: Items och Senaste bilder står i samma panel (issue 321, omskrivet
+ * i issue 1113 efter ADR-0073).
  *
- * Källkodsprov som rutnätsprovet: bildpanelen ligger innanför omslaget med
- * itemen i stället för på en egen plats i rutnätet, så bilderna börjar direkt
- * under itemen oavsett hur hög aktivitetspanelen är. Omslaget spänner två
- * rader när bilderna finns, så informationsytan behåller sin plats i tredje
- * kolumnen. Utan bilder spänner omslaget alla tre och aktiviteterna två,
- * precis som före issue 321.
+ * Källkodsprov: bildpanelen ligger innanför `items`-panelen i stället för på
+ * en egen plats i rutnätet, så bilderna står direkt under itemen.
  */
-it('lägger bilderna i samma kolumn som itemen', function () {
+it('lägger bilderna i samma panel som itemen', function () {
     $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
 
-    expect($vy)->toContain("props.recentImages.length ? 'lg:col-span-2 lg:row-span-2' : 'lg:col-span-3'")
-        // Aktiviterna ligger kvar i den tredje kolumnen.
-        ->toContain("props.recentImages.length ? '' : 'lg:col-span-2'");
+    // Inget spann eller ordningsklass beror på bilderna längre (ADR-0073 § 4).
+    expect($vy)->not->toContain('lg:row-span-');
+    expect($vy)->not->toContain('lg:col-span-3');
+    expect($vy)->not->toContain('lg:order-');
 
-    // Bildpanelen är inget eget rutnätsbarn längre.
-    expect($vy)->not->toContain('lg:order-6');
-
-    // Omslaget är ett enda grid-barn: Items-kortet och bildpanelen ligger
-    // innanför samma `lg:order-4`, före aktiviteternas `lg:order-5`.
+    // Items-kortet och bildpanelen ligger innanför samma `items`-panel, före
+    // aktiviteternas panel.
     expect(preg_match(
-        '~<div\s+class="mt-8 lg:order-4"[^>]*>(.*?)<div\s+class="mt-8 lg:order-5"~s',
+        "~panel\\.key === 'items'\">(.*?)panel\\.key === 'activity'~s",
         $vy,
         $träff,
     ))->toBe(1);
