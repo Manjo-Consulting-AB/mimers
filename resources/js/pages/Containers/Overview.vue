@@ -278,6 +278,8 @@ function resetEditing() {
 }
 
 const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
+const costsUrl = computed(() => `/containers/${props.container.ulid}/costs`);
+const costSliceHref = (ulid) => `/containers/${props.container.ulid}/items/${ulid}`;
 </script>
 
 <template>
@@ -381,6 +383,8 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
                     :totals="props.costs.totals"
                     :breakdown="props.costs.breakdown"
                     :label="t('container.overview.costs_total')"
+                    :slice-href="costSliceHref"
+                    :href="costsUrl"
                 />
             </UiCard>
 

@@ -41,6 +41,7 @@ export function formatAmount(amount, currency) {
 
 <script setup>
 import { computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -66,10 +67,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * negativ, och ringen fördelar det som faktiskt kostade något. Brickan
  * bredvid visar månadens total som den är, också när den är negativ.
  *
- * **Donuten är inte klickbar.** Klicket skulle leda till rapportvyn, och den
- * finns inte i webben ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut:
- * *"Visa mer" är grinden*). Ingen länk, ingen träffyta och ingen markör ritas
- * förrän den vyn finns.
+ * **Länkarna är anroparens** ([[ADR-0038 Gränsen för Pro i kostnaderna]]
+ * § Beslut: *"Den fasta summeringen är själv ingången. Donuten är klickbar,
+ * och klicket leder till rapportvyn."*, issue 1119). Komponenten vet inte vad
+ * en nyckel i `breakdown` är — ett item i containern, en container på
+ * dashboarden — så `sliceHref` tar bitens `ulid` och returnerar adressen, och
+ * `href` är ringens mål. Utan dem ritas legenden och ringen som förut, utan
+ * länk, utan träffyta och utan markör. Legenden behåller sin storlek också
+ * som länk: den är en kompakt förklaring till ringen och ingen radlista.
  *
  * **Bildtexten i ringens mitt är anroparens** (issue 172). Den namnger den
  * radmängd siffran kommer ur, och de två anroparna har olika mängder:
@@ -98,6 +103,10 @@ const props = defineProps({
      * ägs av anroparen, för det är den som vet vilken mängd den skickade in.
      */
     label: { type: String, default: null },
+    /* Bitens adress ur dess `ulid`, eller null för en legend utan länkar. */
+    sliceHref: { type: Function, default: null },
+    /* Ringens mål, eller null för en ring som inte är klickbar. */
+    href: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -179,7 +188,14 @@ const donuts = computed(() => props.totals.map((total) => {
                 bildbeskrivning av en ring är inget någon kan formulera ur data.
                 Talet i mitten är däremot text som allt annat.
             -->
-            <div class="relative h-40 w-40 shrink-0">
+            <component
+                :is="props.href ? Link : 'div'"
+                v-bind="props.href ? { href: props.href, 'aria-label': t('container.overview.costs_open') } : {}"
+                :class="[
+                    'relative block h-40 w-40 shrink-0',
+                    props.href && 'rounded-pill outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2',
+                ]"
+            >
                 <svg viewBox="0 0 42 42" class="h-full w-full" aria-hidden="true">
                     <circle
                         v-for="arc in donut.arcs"
@@ -199,16 +215,25 @@ const donuts = computed(() => props.totals.map((total) => {
                     <span class="text-title font-semibold text-ink">{{ donut.total }}</span>
                     <span class="text-meta text-ink-subtle">{{ props.label ?? t('dashboard.costs.month') }}</span>
                 </div>
-            </div>
+            </component>
 
             <ul class="flex flex-col gap-1">
-                <li v-for="arc in donut.arcs" :key="arc.ulid" class="flex items-center gap-2">
-                    <span
-                        class="h-2.5 w-2.5 shrink-0 rounded-pill"
-                        :style="{ backgroundColor: arc.color }"
-                    />
-                    <span class="text-meta text-ink">{{ arc.name }}</span>
-                    <span class="text-meta text-ink-subtle">{{ arc.text }}</span>
+                <li v-for="arc in donut.arcs" :key="arc.ulid">
+                    <component
+                        :is="props.sliceHref ? Link : 'div'"
+                        v-bind="props.sliceHref ? { href: props.sliceHref(arc.ulid) } : {}"
+                        :class="[
+                            'flex items-center gap-2',
+                            props.sliceHref && '-mx-1 rounded px-1 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2',
+                        ]"
+                    >
+                        <span
+                            class="h-2.5 w-2.5 shrink-0 rounded-pill"
+                            :style="{ backgroundColor: arc.color }"
+                        />
+                        <span class="text-meta text-ink">{{ arc.name }}</span>
+                        <span class="text-meta text-ink-subtle">{{ arc.text }}</span>
+                    </component>
                 </li>
             </ul>
         </div>

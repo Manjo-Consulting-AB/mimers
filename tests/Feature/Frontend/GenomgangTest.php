@@ -373,7 +373,19 @@ it('fäller ihop navigeringen på en telefon i inställningslayouten', function 
 it('ger varje knapp och länk i en radlista en träffyta på minst 44 px', function () {
     $granskade = 0;
 
+    // Undantagna filer. Ett nytt undantag kräver ett nytt beslut från Tony och
+    // läggs inte till för att få provet grönt.
+    $undantagna = [
+        // Legenden är en kompakt förklaring till ringen och ingen radlista, och
+        // den behåller sin höjd enligt Tonys beslut 2026-11-12 (#1119).
+        'components/CostDonut.vue',
+    ];
+
     foreach (genomgangKod() as $sokvag => $kod) {
+        if (in_array($sokvag, $undantagna, true)) {
+            continue;
+        }
+
         foreach (genomgangRader($kod) as $rad) {
             preg_match_all('/<(button|Link)\b.*?(?:\/>|<\/button>|<\/Link>)/s', $rad['markup'], $kontroller);
 
