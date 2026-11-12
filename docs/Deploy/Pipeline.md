@@ -19,6 +19,7 @@ gren "issue-11"
    │
    ├─ PR ──────────► ci.yml            lint, analys, tester, processgrindar
    │                 migreringar.yml   bara när en migrering ändras
+   │                 audit.yml         bara när en låsfil ändras, + varje måndag
    │
    └─ merge till main                  (ingenting körs här)
         │
@@ -255,6 +256,10 @@ Extensionlistan i `setup-php` är inte kosmetik. `ext-fileinfo` är ett hårt kr
 
 Testerna kör mot SQLite in-memory, konfigurerat i `phpunit.xml`. Skiljer sig databasen för mycket från produktion får en `services:`-block med `mariadb:10.6` läggas till — men börja enkelt.
 
+**Semgrep** är ett steg i samma jobb sedan issue 1117: `semgrep scan` med `p/php`, `p/javascript` och `p/secrets` mot `app/`, `routes/`, `config/` och `resources/js/`. Steget har `continue-on-error: true` och fäller inte bygget än. Fynden står i körningens logg tills de gåtts igenom och undantagen beslutats. Det hoppas över för en docs-only-PR.
+
+**`ci.yml` granskar inte beroendena**, och det är ett beslut, inte en lucka. Se § `.github/workflows/audit.yml`.
+
 ## `.github/workflows/migreringar.yml`
 
 Kör migreringarna mot en riktig MySQL 8. Testsviten kör SQLite in-memory; produktionen och staging kör MySQL, och den skillnaden har kostat två gånger. Issue 12 (M1) betalade den i en skiftlägeskänslig jämförelse. Issue 23b (M3) betalade den dyrare: två indexnamn som Laravel härleder till 67 respektive 66 tecken går rakt igenom SQLite och faller på MySQLs 64-teckengräns. 660 gröna tester, grön CI, och staging nere efter merge.
@@ -276,6 +281,31 @@ on:
 `composer.lock` är med för att en ny Laravel-version kan ändra hur schemanamn härleds utan att en enda fil under `database/migrations/` rörs.
 
 Att filtret inte kan blockera en merge på en check som aldrig rapporterades beror på att repot saknar branch protection (se § Branch protection): kön läser `gh pr checks`, som bara bedömer de workflows som faktiskt startade. Skulle branch protection någon gång slås på måste den här checken läggas upp som *required* med en tom motsvarighet, annars fastnar varje PR som inte rör en migrering.
+
+## `.github/workflows/audit.yml`
+
+Beroendegranskningen (issue 1046). Kör `composer audit --locked --no-interaction` och `npm audit` mot låsfilerna. Flödet startar på tre sätt:
+
+```yaml
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'composer.lock'
+      - 'package-lock.json'
+      - '.github/workflows/audit.yml'
+```
+
+**Granskningen ligger medvetet utanför `ci.yml`.** En sårbarhet publiceras när den publiceras, inte när någon ändrar koden. Låg granskningen i `ci.yml` skulle varje PR fällas från den dagen en ny CVE dyker upp i ett paket vi inte rört, och kön skulle stå still tills någon lyft versionen. Här fäller granskningen bara en PR som själv ändrar en låsfil, och schemakörningen varje måndag fångar det som publicerats sedan dess. Tony bekräftade beslutet 2026-11-12, när M51 (issue 1117) bad om motsatsen. M51 hade skrivits utan vetskap om flödet.
+
+`tests/Feature/Drift/BeroendegranskningTest.php` vaktar beslutet med provet `lämnar ci.yml fri från beroendegranskning`. Det provet ska inte rivas för att en issue ber om audit i `ci.yml`. Frågan går tillbaka till Tony.
+
+**Dependabot** (`.github/dependabot.yml`, issue 1117) bevakar `composer`, `npm` och `github-actions` varje vecka, med högst två öppna PR:er per ekosystem. Dess PR:er bär ingen `review:approved` och mergas inte av kön.
+
+**`npm audit --omit=dev` granskar inte appens paket.** Vue, Inertia och de andra paketen som byggs in i `public/build/` står bland `devDependencies`, så `--omit=dev` hoppar över dem. Issue 1134 byter flaggan mot `--audit-level=high`.
 
 ## `.github/workflows/staging.yml`
 
