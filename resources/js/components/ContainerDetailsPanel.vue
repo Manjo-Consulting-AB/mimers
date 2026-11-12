@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import UiCard from './UiCard.vue';
 import UiIcon from './UiIcon.vue';
+import { formatByteSize } from './attachmentPresentation.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -10,11 +11,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * docs/Design/container.jpeg (panelen *Containerdetaljer*).
  *
  * **Panelen är en definitionslista och ingenting mer.** Fyra fakta om
- * containern — art, valuta, ägarkonto och skapad — kommer färdiga i `details`
+ * containern — art, ägarkonto, lagring och skapad — kommer färdiga i `details`
  * från App\Http\Controllers\ContainerController::show(). Ingen av dem räknas
- * fram här: valutan är containerns EGNA eller ärvda och avgörs av
- * App\Models\Container::effectiveCurrency(), och ägarkontot är det konto som
- * äger containern ([[ADR-0002 Konto äger container]]).
+ * fram här: ägarkontot är det konto som äger containern
+ * ([[ADR-0002 Konto äger container]]), och lagringen är byten som användaren
+ * debiteras för, räknade på servern. Bytena formateras med `formatByteSize()`,
+ * som StorageBar.vue gör.
  *
  * **Arten skrivs ut ORDAGRANT.** Fältet är fritt ([[ADR-0036 Containerns art]]),
  * så ingen översättningsnyckel byggs ur värdet — `t()` skriver nyckeln själv
@@ -33,14 +35,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  */
 const props = defineProps({
     /*
-     * `{ kind, currency, account, created_at }` — artens sträng eller null,
-     * ISO 4217-koden, ägarkontots namn och en ISO-tidsstämpel.
+     * `{ kind, account, storage, created_at }` — artens sträng eller null,
+     * ägarkontots namn, `{ usedBytes, limitBytes }` (`limitBytes` är null för
+     * ett obegränsat tak) och en ISO-tidsstämpel.
      */
     details: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
 const { eventDate } = useRelativeDate();
+
+const storage = computed(() => {
+    const { usedBytes, limitBytes } = props.details.storage;
+    const used = formatByteSize(usedBytes);
+
+    return limitBytes === null
+        ? t('container.overview.storage_unlimited', { used })
+        : t('container.overview.storage_of', { used, limit: formatByteSize(limitBytes) });
+});
 
 const created = computed(() => eventDate(props.details.created_at));
 </script>
@@ -61,13 +73,13 @@ const created = computed(() => eventDate(props.details.created_at));
             </div>
 
             <div class="flex flex-wrap gap-x-2">
-                <dt class="font-medium text-ink">{{ t('container.overview.currency') }}</dt>
-                <dd class="text-slate-700">{{ props.details.currency }}</dd>
+                <dt class="font-medium text-ink">{{ t('container.overview.account') }}</dt>
+                <dd class="text-slate-700">{{ props.details.account }}</dd>
             </div>
 
             <div class="flex flex-wrap gap-x-2">
-                <dt class="font-medium text-ink">{{ t('container.overview.account') }}</dt>
-                <dd class="text-slate-700">{{ props.details.account }}</dd>
+                <dt class="font-medium text-ink">{{ t('container.overview.storage') }}</dt>
+                <dd class="text-slate-700">{{ storage }}</dd>
             </div>
 
             <div class="flex flex-wrap gap-x-2">

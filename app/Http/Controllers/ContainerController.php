@@ -30,6 +30,7 @@ use App\Support\Tips;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -262,7 +263,8 @@ class ContainerController extends Controller
      *   `IMAGE_LIMIT` rader, ur App\Actions\Attachment\ListRecentImages — den
      *   enda panel vars urval är bilagor och inte items (issue 173). Panelen
      *   ritas bara när listan har något i sig.
-     * - `details` är art, valuta, ägarkontots namn och skapandedatum.
+     * - `details` är art, ägarkontots namn, containerns lagring och
+     *   skapandedatum.
      *
      * **Kontrollern räknar fortfarande ingenting själv.** Uppgiftstalet kommer
      * ur samma anrop som raderna (`count`), itemtalet ur samma lista som
@@ -383,8 +385,8 @@ class ContainerController extends Controller
             // ([[ADR-0036 Containerns art]]).
             'details' => [
                 'kind' => $container->kind,
-                'currency' => $container->effectiveCurrency(),
                 'account' => $container->account->name,
+                'storage' => $this->storageFor($container),
                 'created_at' => $container->created_at->toIso8601String(),
             ],
             // Tipsen användaren inte dolt, i Tips ordning — samma propp och
@@ -771,5 +773,37 @@ class ContainerController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Containerns lagring till detaljpanelen: byten räknas som användaren
+     * debiteras för dem. Ingen dedup (delar två bilagor en `stored_file` räknas
+     * båda) och papperskorgen räknas med, både soft-raderade bilagor och
+     * bilagor på soft-raderade items. Taket är containerkontots
+     * `planLimit('storage_bytes')`, `null` för obegränsat.
+     *
+     * @return array{usedBytes: int, limitBytes: int|null}
+     */
+    private function storageFor(Container $container): array
+    {
+        // Rå tabellfråga, så inga globala SoftDeletes-scope filtrerar bort
+        // papperskorgen. Bilagan hör hit via `container_id` (containerns bild)
+        // eller via ett item, raderat eller ej, som tillhör containern.
+        $used = (int) DB::table('attachment')
+            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+            ->where(function ($query) use ($container) {
+                $query->where('attachment.container_id', $container->id)
+                    ->orWhereIn('attachment.item_id', DB::table('item')
+                        ->select('id')
+                        ->where('container_id', $container->id));
+            })
+            ->sum('stored_file.byte_size');
+
+        $limit = $container->account->planLimit('storage_bytes');
+
+        return [
+            'usedBytes' => $used,
+            'limitBytes' => is_int($limit) ? $limit : null,
+        ];
     }
 }

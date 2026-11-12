@@ -684,7 +684,7 @@ it('hämtar containerns översiktssträngar ur ui.php', function () {
     // Panelernas egna etiketter, och inte bara de ärvda: en nyckel som tappas
     // ur katalogen ska falla här och inte som `container.overview.details` på
     // skärmen.
-    foreach (['tasks', 'costs', 'costs_total', 'activity', 'images', 'details', 'currency', 'account', 'created', 'view_all'] as $nyckel) {
+    foreach (['tasks', 'costs', 'costs_total', 'activity', 'images', 'details', 'storage', 'storage_of', 'storage_unlimited', 'account', 'created', 'view_all'] as $nyckel) {
         expect(Lang::get("ui.container.overview.{$nyckel}", [], 'en'))
             ->not->toBe("ui.container.overview.{$nyckel}", "container.overview.{$nyckel} saknas");
     }
