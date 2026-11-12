@@ -9,6 +9,7 @@ import CostFilterBar from '../../components/CostFilterBar.vue';
 import CostTable from '../../components/CostTable.vue';
 import CostTimeChart from '../../components/CostTimeChart.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -233,20 +234,23 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             den, och en meny som står kvar över en navigering finns inte.
             Listan är de items användaren får skapa på, och ett val leder
             till itemets kostnadsflik — fliken skriver ingenting själv.
+            Panelen ligger absolut, som *Lägg till dokument* på
+            dokumentfliken, och ritas därför inte i flödet: en öppen
+            väljare skjuter inte ner sidan.
         -->
-        <details v-if="items.length > 0">
-            <summary
-                class="inline-flex min-h-11 cursor-pointer items-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent"
-            >
+        <details v-if="items.length > 0" class="relative">
+            <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
+                <UiIcon name="add" :size="20" class="size-5 shrink-0" />
+
                 {{ t('container.costs.add') }}
+
+                <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
             </summary>
 
-            <div class="mt-2 rounded-card border border-border bg-surface p-2">
-                <p class="px-2 py-1 text-meta text-ink-subtle">
-                    {{ t('container.costs.add_choose_item') }}
-                </p>
+            <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                <p class="text-meta text-ink-subtle">{{ t('container.costs.add_choose_item') }}</p>
 
-                <ul class="flex max-h-80 flex-col overflow-y-auto">
+                <ul class="mt-1 flex max-h-80 flex-col overflow-y-auto">
                     <li v-for="item in items" :key="item.ulid">
                         <Link
                             :href="itemUrl(item)"
