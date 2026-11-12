@@ -58,7 +58,8 @@ it('har knappen Customize overview som öppnar läget, och Done och Reset to def
 it('ger varje panel Move up och Move down med 44 px och en etikett som namnger panelen', function () {
     $ram = ordningVyRam();
 
-    expect(substr_count($ram, 'min-h-11 min-w-11'))->toBe(2);
+    // Två pilar och, från issue 1116, breddväxelns knappar (en gemensam v-for).
+    expect(substr_count($ram, 'min-h-11 min-w-11'))->toBe(3);
     expect($ram)->toContain("t('container.overview.customize.move_up', { panel: name })")
         ->toContain("t('container.overview.customize.move_down', { panel: name })")
         ->toContain(':aria-label=');
@@ -257,5 +258,67 @@ it('lägger inget dragpaket i package.json', function () {
 
     foreach (['sortable', 'draggable', 'dnd', 'vuedraggable'] as $namn) {
         expect($paket)->not->toContain($namn);
+    }
+});
+
+/*
+ * Issue 1116 · breddväxeln på översikten, se ADR-0073 § 2 och § 5.
+ *
+ * Klart när: varje panel i läget har växeln Narrow/Wide från lg:, med
+ * aria-pressed, 44 px träffyta och en aria-label som namnger panelen.
+ */
+it('ritar breddväxeln bara i läget och från lg: med aria-pressed, 44 px och en aria-label med panelens namn', function () {
+    $ram = ordningVyRam();
+
+    expect($ram)->toContain('<span class="mr-2 hidden items-center lg:flex">')
+        ->toContain(':aria-pressed="width === option')
+        ->toContain('customize.make_${option}`, { panel: name })')
+        ->toContain("v-for=\"option in ['narrow', 'wide']\"")
+        ->toContain('@click="$emit(\'width\', option)"');
+
+    // Växeln står inuti raden som bara ritas i läget, och knapparna är 44 px.
+    expect(strpos($ram, 'items-center lg:flex">'))->toBeGreaterThan(strpos($ram, 'v-if="editing"'));
+    expect($ram)->toMatch('/v-for="option in[^>]*?class="[^"]*min-h-11 min-w-11/s');
+});
+
+/*
+ * Klart när: ett byte ändrar panelens width i den lokala listan, och panelen
+ * får eller tappar lg:col-span-2.
+ */
+it('låter ett byte ändra width i den lokala listan och panelen få eller tappa lg:col-span-2', function () {
+    $vy = ordningVySida();
+
+    expect($vy)->toContain('@width="setWidth(panel.key, $event)"')
+        ->toContain('function setWidth(key, width)')
+        ->toContain('draft.value = draft.value.map(')
+        ->toContain('{ ...panel, width }')
+        ->toContain(':width="panel.width"')
+        ->toContain("panel.width === 'wide' ? 'lg:col-span-2' : ''");
+});
+
+/*
+ * Klart när: Done skickar bredden med i PUT /settings/overview-panels.
+ */
+// vakt: Done-vägen från issue 1114 ändras inte; provet låser att draft (med width) fortsatt skickas
+it('skickar draft med width i PUT /settings/overview-panels när Done sparar', function () {
+    $vy = ordningVySida();
+
+    expect($vy)->toContain("router.put(\n        '/settings/overview-panels',\n        { panels: draft.value },");
+    expect(substr_count($vy, 'router.'))->toBe(2);
+});
+
+/*
+ * Klart när: de nya nycklarna finns i lang/en/ui.php, och ingen sträng står i
+ * JavaScript.
+ */
+it('har breddväxelns ord i lang/en/ui.php och ingen hårdkodad Narrow/Wide i vyerna', function () {
+    expect(Lang::get('ui.container.overview.customize.narrow', [], 'en'))->toBe('Narrow')
+        ->and(Lang::get('ui.container.overview.customize.wide', [], 'en'))->toBe('Wide')
+        ->and(Lang::get('ui.container.overview.customize.make_narrow', ['panel' => 'Costs'], 'en'))->toBe('Make Costs narrow')
+        ->and(Lang::get('ui.container.overview.customize.make_wide', ['panel' => 'Recent activity'], 'en'))->toBe('Make Recent activity wide');
+
+    foreach ([ordningVyRam(), ordningVySida()] as $kod) {
+        expect($kod)->not->toMatch('/>\s*(Narrow|Wide)\s*</');
+        expect($kod)->not->toMatch('/[\'"](Narrow|Wide)[\'"]/');
     }
 });

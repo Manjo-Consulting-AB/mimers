@@ -19,6 +19,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `panel-drop` (med den släppta nyckeln) och `panel-dragend`. Handtaget är
  * `aria-hidden`: pilarna är vägen för tangentbord och skärmläsare.
  *
+ * Från `lg:` har raden också en växel `Narrow`/`Wide` (issue 1116 · ADR-0073
+ * § 2 och § 5): två knappar med `aria-pressed`, 44 px träffyta och en
+ * `aria-label` som namnger panelen. Under `lg:` ritas den inte, eftersom
+ * bredden saknar verkan där. Ramen säger `width` med den valda bredden.
+ *
  * Ramen flyttar ingenting själv: den säger bara `move` med riktningen, och
  * sidan äger listan. Ingen sträng står här — namnet kommer färdigt som propp
  * och orden ur `t()`.
@@ -30,11 +35,13 @@ const props = defineProps({
     editing: { type: Boolean, default: false },
     first: { type: Boolean, default: false },
     last: { type: Boolean, default: false },
+    /* Panelens bredd, `narrow` eller `wide`. */
+    width: { type: String, default: 'narrow' },
     /* Panelen är målet för ett drag just nu. */
     dropTarget: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['move', 'panel-dragstart', 'panel-dragover', 'panel-drop', 'panel-dragend']);
+const emit = defineEmits(['move', 'width', 'panel-dragstart', 'panel-dragover', 'panel-drop', 'panel-dragend']);
 
 function onDragStart(event) {
     event.dataTransfer?.setData('text/plain', props.panelKey);
@@ -86,6 +93,21 @@ const { t } = useTranslations();
             </span>
 
             <span class="flex items-center">
+                <span class="mr-2 hidden items-center lg:flex">
+                    <button
+                        v-for="option in ['narrow', 'wide']"
+                        :key="option"
+                        type="button"
+                        class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-3 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                        :class="width === option ? 'bg-accent text-on-accent' : 'text-text-muted'"
+                        :data-width="`${panelKey}-${option}`"
+                        :aria-pressed="width === option ? 'true' : 'false'"
+                        :aria-label="t(`container.overview.customize.make_${option}`, { panel: name })"
+                        @click="$emit('width', option)"
+                    >
+                        {{ t(`container.overview.customize.${option}`) }}
+                    </button>
+                </span>
                 <button
                     type="button"
                     class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40"
