@@ -801,3 +801,18 @@ Två saker att ta med sig:
 
 - **`authorized_keys` innehåller numera driftkritiska rader.** `github-actions-staging` och `github-actions-production` är deploykedjans enda väg in. Faller de bort slutar utrullningen fungera — och det märks först vid nästa release, inte när misstaget görs. Sedan [[ADR-0029 Agentens läsåtkomst till servern]] står där även `claude-retro`, som till skillnad från de två andra är låst med `command=` och inte kan rulla ut något. `retro-fakta` skriver ut filens radkommentarer — bara namnen, aldrig nyckelmaterial — så bortfallet går att upptäcka innan nästa release.
 - **Redigera därför aldrig filen genom DirectAdmins SSH Keys-sida.** Den skriver om `authorized_keys` i sin helhet. Vid nyckelbytet ovan överlevde deployraderna, men ordningen i filen ändrades, vilket visar att hela filen skrevs om. Lägg till och ta bort additivt över shell, med en backup före.
+
+## Testkontot
+
+Tony testar på staging och vill köra samma tester i produktion. Det finns ingen import och ingen kloning av ett konto mellan miljöerna, så kommandot `testkonto:skapa` bygger **samma testkonto i båda**: tre containers, minst trettio items med kategorier, taggar, bilagor, lån, kostnader, schema, favorit och papperskorg. Namnen är fasta och datumen räknas från dagens datum. Allt skapas genom appens egna actions. Se issue 1107.
+
+```bash
+ssh -4 -p 2020 s174280@prime5.inleed.net
+cd /home/s174280/mimers-staging/current && php artisan testkonto:skapa test@example.com   # staging
+cd /home/s174280/mimers/current && php artisan testkonto:skapa test@example.com           # production
+```
+
+- Lösenordet frågas två gånger och är aldrig ett argument.
+- I production frågar kommandot `confirm()` först; `--force` hoppar över frågan.
+- Finns adressen redan, i någon skiftlägesform, avslutar kommandot med exit 1 och skriver ingenting. Det raderar aldrig något.
+- Står adressen i `internal_pro_emails` får kontot internt Pro, annars den plan registreringen ger. Kommandot skriver ut vilken.
