@@ -181,9 +181,10 @@ it('en paus från schemats sida landar på schemats sida', function () {
 
 /*
  * Klart när: `en sparning från formuläret landar fortfarande på itemet` —
- * PATCH med title → redirect till itemets sida.
+ * PATCH med title → redirect till itemets sida. (Issue 1158 ändrade målet:
+ * sparningen landar nu på uppgiftens sida.)
  */
-it('en sparning från formuläret landar fortfarande på itemet', function () {
+it('en sparning från formuläret landar på uppgiftens sida', function () {
     [$konto, $anvandare, $container, $item] = schemasidanKontext();
 
     $schema = schemasidanSchema($item);
@@ -196,7 +197,7 @@ it('en sparning från formuläret landar fortfarande på itemet', function () {
         'anchor_date' => '2027-05-05',
         'lead_days' => 7,
     ])
-        ->assertRedirect(schemasidanItemUrl($container, $item))
+        ->assertRedirect(schemasidanSidaUrl($container, $item, $schema))
         ->assertSessionHas('status', 'schedule-updated');
 
     expect($schema->fresh()->title)->toBe('Byt olja och filter');
@@ -208,14 +209,14 @@ it('en sparning från formuläret landar fortfarande på itemet', function () {
  * Klart när: `raderingen landar på itemet` — DELETE → redirect till itemets
  * sida, och schemat är mjukraderat.
  */
-it('raderingen landar på itemet', function () {
+it('raderingen landar på itemets To do-flik', function () {
     [$konto, $anvandare, $container, $item] = schemasidanKontext();
 
     $schema = schemasidanSchema($item);
     schemasidanFörekomst($schema, '2027-05-05');
 
     actingAs($anvandare)->delete(schemasidanSidaUrl($container, $item, $schema))
-        ->assertRedirect(schemasidanItemUrl($container, $item))
+        ->assertRedirect(schemasidanItemUrl($container, $item).'?tab=schedules')
         ->assertSessionHas('status', 'schedule-deleted');
 
     // Mjuk radering: raden ligger kvar med `deleted_at`.

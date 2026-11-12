@@ -15,7 +15,7 @@ import { useTranslations } from '../../../../composables/useTranslations.js';
 defineOptions({
     layout: (props) => [
         [AppLayout, {}],
-        [ContainerLayout, { container: props.container }],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
     ],
 });
 
@@ -71,6 +71,9 @@ const props = defineProps({
      * hade svarat 422 `schedule.already_in_inbox`.
      */
     containerIsInbox: { type: Boolean, default: false },
+    /* Den prövade returadressen och tillbakaadressen (issue 1158). */
+    returnTo: { type: String, default: null },
+    back: { type: String, required: true },
     can: { type: Object, required: true },
 });
 
@@ -158,8 +161,14 @@ const pending = ref(false);
 
 const scheduleActionUrl = scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid);
 
+/* *Edit* bär returadressen vidare (issue 1158). */
+const editHref = `${scheduleActionUrl}/edit${props.returnTo !== null ? `?return=${encodeURIComponent(props.returnTo)}` : ''}`;
+
 function toggle() {
-    router.patch(scheduleActionUrl, { is_active: ! props.schedule.is_active }, {
+    router.patch(scheduleActionUrl, {
+        is_active: ! props.schedule.is_active,
+        ...(props.returnTo !== null ? { return: props.returnTo } : {}),
+    }, {
         preserveScroll: true,
         onStart: () => { pending.value = true; },
         onFinish: () => { pending.value = false; },
@@ -172,6 +181,7 @@ function destroy() {
     }
 
     router.delete(scheduleActionUrl, {
+        data: props.returnTo !== null ? { return: props.returnTo } : {},
         preserveScroll: true,
         onStart: () => { pending.value = true; },
         onFinish: () => { pending.value = false; },
@@ -273,15 +283,15 @@ function toInbox() {
 
     <div class="mt-4 flex flex-wrap gap-4 text-sm">
         <Link
-            :href="`/containers/${container.ulid}/items/${item.ulid}`"
+            :href="back"
             class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
         >
-            {{ t('item.schedule.back') }}
+            {{ t('item.schedule.back_to_list') }}
         </Link>
 
         <Link
             v-if="can.update"
-            :href="`/containers/${container.ulid}/items/${item.ulid}/schedules/${schedule.ulid}/edit`"
+            :href="editHref"
             class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
         >
             {{ t('item.schedule.edit') }}

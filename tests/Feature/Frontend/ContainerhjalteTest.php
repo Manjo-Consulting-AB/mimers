@@ -313,9 +313,15 @@ it('ritar den låga hjälten i itemvyn', function () {
 
     expect($vy)->toContain("[ContainerLayout, { hero: 'compact', container: props.container }]");
 
-    foreach (['Items/Create.vue', 'Items/Edit.vue', 'Items/Schedules/Show.vue'] as $sida) {
+    foreach (['Items/Create.vue', 'Items/Edit.vue'] as $sida) {
         expect(hjalteKod("pages/Containers/{$sida}"))
             ->toContain('[ContainerLayout, { container: props.container }]');
+    }
+
+    // Uppgiftens sida och redigeringen ritar den låga hjälten (issue 1158).
+    foreach (['Items/Schedules/Show.vue', 'Items/Schedules/Edit.vue'] as $sida) {
+        expect(hjalteKod("pages/Containers/{$sida}"))
+            ->toContain("[ContainerLayout, { hero: 'compact', container: props.container }]");
     }
 
     $skal = hjalteKod('layouts/ContainerLayout.vue');

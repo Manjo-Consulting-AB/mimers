@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Link, router, useForm } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiBadge from './UiBadge.vue';
 import UiIcon from './UiIcon.vue';
@@ -267,6 +267,12 @@ const itemUrl = computed(
 const scheduleHref = computed(
     () => scheduleUrl(props.entry.container.ulid, props.entry.item.ulid, props.entry.schedule.ulid),
 );
+
+/* Länken till uppgiftens sida bär ytan användaren står på som `?return=`
+   (issue 1158). `scheduleHref` förblir utan querysträng: förekomst- och
+   flyttadresserna byggs av den. */
+const page = usePage();
+const showHref = computed(() => `${scheduleHref.value}?return=${encodeURIComponent(page.url)}`);
 
 const form = useForm({ account: props.entry.account });
 
@@ -562,7 +568,7 @@ function toggleProgress() {
 
         <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-x-2">
-                <Link :href="scheduleHref" class="inline-flex min-h-11 items-center font-medium text-accent hover:underline">
+                <Link :href="showHref" class="inline-flex min-h-11 items-center font-medium text-accent hover:underline">
                     {{ entry.schedule.title }}
                 </Link>
 
