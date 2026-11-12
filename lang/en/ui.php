@@ -1991,7 +1991,7 @@ return [
         // task from maintenance and will not get one ([[ADR-0033 Produktens
         // omfång]]).
         'overview' => [
-            'kind' => 'Kind',
+            'kind' => 'Type',
             'description' => 'Description',
             'items' => 'Items',
             // M24 · issue 702 § Beslut 2: the tile counts what is DUE, not
@@ -2014,9 +2014,15 @@ return [
              * and items): same word, same meaning, one key
              * ([[ADR-0032 Produktens ord]]).
              *
-             * `currency` and `account` are the labels of the details list.
-             * `kind` above is its third label — the same word the mobile
-             * header already prints, and deliberately not a second key.
+             * `account` and `storage` are labels of the details list.
+             * `kind` above is its first label, now *Type* like the container
+             * settings — the same word the mobile header already prints, and
+             * deliberately not a second key.
+             *
+             * `storage` counts bytes as the user is billed for them: no dedup
+             * (two attachments sharing a stored file count twice) and the
+             * trash counts too (soft-deleted attachments and attachments on
+             * soft-deleted items).
              *
              * There is no empty state for the cost panel: it is not drawn at
              * all when the container has no cost rows, and a heading over an
@@ -2047,7 +2053,9 @@ return [
             // the same surface as the item view's attachment section.
             'images' => 'Recent images',
             'details' => 'Container details',
-            'currency' => 'Currency',
+            'storage' => 'Storage',
+            'storage_of' => ':used of :limit',
+            'storage_unlimited' => ':used of unlimited',
             'account' => 'Account',
             'created' => 'Created',
             'view_all' => 'View all',

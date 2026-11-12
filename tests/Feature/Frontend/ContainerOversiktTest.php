@@ -9,12 +9,16 @@ use App\Models\ContainerAccess;
 use App\Models\CostEntry;
 use App\Models\ImageDerivative;
 use App\Models\Item;
+use App\Models\Plan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
+use App\Models\StoredFile;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 
@@ -714,29 +718,28 @@ it('visar containerdetaljerna', function () {
     [$konto, $agare] = oversiktKonto();
     $container = oversiktParm($konto);
 
-    // Ärver kontots valuta: containerns egen är null.
     $arva = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
 
     expect($arva)->toBe([
         'kind' => $container->kind,
-        'currency' => 'SEK',
         'account' => $konto->name,
+        'storage' => ['usedBytes' => 0, 'limitBytes' => $konto->planLimit('storage_bytes')],
         'created_at' => $container->created_at->toIso8601String(),
-    ]);
+    ])
+        ->and(array_key_exists('currency', $arva))->toBeFalse();
 
-    // Egen valuta och egen art vinner.
-    $container->update(['kind' => 'Segelbåt', 'currency' => 'NOK']);
+    // Egen art vinner.
+    $container->update(['kind' => 'Segelbåt']);
 
     $egen = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
 
-    expect($egen['kind'])->toBe('Segelbåt')
-        ->and($egen['currency'])->toBe('NOK');
+    expect($egen['kind'])->toBe('Segelbåt');
 
     // Etiketterna finns och läses ur `lang/`; vyn formaterar inget datum själv
     // ([[ADR-0042 Designsystemet]] § Konsekvenser, datumregeln i issue 104).
     $panel = oversiktUtanKommentarer(File::get(resource_path('js/components/ContainerDetailsPanel.vue')));
 
-    foreach (['container.overview.details', 'container.overview.currency', 'container.overview.account', 'container.overview.created'] as $nyckel) {
+    foreach (['container.overview.details', 'container.overview.storage', 'container.overview.account', 'container.overview.created'] as $nyckel) {
         expect($panel)->toContain($nyckel);
     }
 
@@ -746,6 +749,101 @@ it('visar containerdetaljerna', function () {
     // Ingen egen datumformatering i panelen — datumregeln äger formen
     // (issue 104).
     expect($panel)->not->toContain('toLocaleDateString');
+});
+
+/**
+ * En bilaga med en bestämd storlek, på ett item eller direkt på containern.
+ */
+function oversiktBilagaMedStorlek(Container $container, ?Item $item, StoredFile $fil): Attachment
+{
+    return Attachment::factory()->create([
+        'item_id' => $item?->id,
+        'container_id' => $item === null ? $container->id : null,
+        'stored_file_id' => $fil->id,
+        'billed_account_id' => $container->account_id,
+    ]);
+}
+
+/*
+ * Klart när: details.storage.usedBytes är summan av byten som debiteras, utan
+ * dedup och med papperskorgen; en annan containers bilagor räknas inte.
+ */
+it('räknar containerns byten som de debiteras', function () {
+    withoutVite();
+
+    [$konto, $agare] = oversiktKonto();
+    $container = oversiktParm($konto);
+    $item = oversiktItem($container, 'Motor');
+
+    $delad = StoredFile::factory()->create(['byte_size' => 1000]);
+
+    // Två aktiva bilagor som delar samma stored_file: båda räknas.
+    oversiktBilagaMedStorlek($container, $item, $delad);
+    oversiktBilagaMedStorlek($container, $item, $delad);
+
+    // En soft-raderad bilaga.
+    oversiktBilagaMedStorlek($container, $item, StoredFile::factory()->create(['byte_size' => 20]))->delete();
+
+    // En bilaga på ett soft-raderat item.
+    $raderat = oversiktItem($container, 'Gammal');
+    oversiktBilagaMedStorlek($container, $raderat, StoredFile::factory()->create(['byte_size' => 300]));
+    $raderat->delete();
+
+    // Containerns bild.
+    oversiktBilagaMedStorlek($container, null, StoredFile::factory()->create(['byte_size' => 4]));
+
+    // En annan container räknas inte.
+    $annan = oversiktParm($konto, 'Annan');
+    oversiktBilagaMedStorlek($annan, oversiktItem($annan, 'Främmande'), StoredFile::factory()->create(['byte_size' => 99999]));
+
+    $details = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
+
+    expect($details['storage']['usedBytes'])->toBe(1000 + 1000 + 20 + 300 + 4);
+});
+
+/*
+ * Klart när: details.storage.limitBytes är containerkontots
+ * planLimit('storage_bytes'), eller null för obegränsat.
+ */
+it('visar containerkontots lagringstak i containerdetaljerna', function () {
+    withoutVite();
+
+    [$konto, $agare] = oversiktKonto();
+    $container = oversiktParm($konto);
+
+    $begransat = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
+
+    expect($begransat['storage']['limitBytes'])->toBe($konto->planLimit('storage_bytes'))
+        ->and($begransat['storage']['limitBytes'])->toBeInt();
+
+    $plan = Plan::factory()->create([
+        'limits' => array_merge(
+            Plan::query()->where('code', 'free')->firstOrFail()->limits,
+            ['storage_bytes' => null],
+        ),
+    ]);
+    Subscription::factory()->for($konto)->for($plan)->create();
+
+    $obegransat = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['details'];
+
+    expect($obegransat['storage'])->toBe(['usedBytes' => 0, 'limitBytes' => null]);
+});
+
+/*
+ * Klart när: etiketten är Type, panelen läser lagringsnycklarna via
+ * formatByteSize() och valutan är borta ur både panelen och katalogen.
+ */
+it('har etiketten Type, lagringsraden och ingen valuta kvar', function () {
+    expect(Lang::get('ui.container.overview.kind', [], 'en'))->toBe('Type')
+        ->and(Lang::has('ui.container.overview.currency', 'en'))->toBeFalse();
+
+    $panel = oversiktUtanKommentarer(File::get(resource_path('js/components/ContainerDetailsPanel.vue')));
+
+    expect($panel)->toContain('container.overview.storage_of')
+        ->toContain('container.overview.storage_unlimited')
+        ->toContain('formatByteSize')
+        ->and(str_contains($panel, 'container.overview.currency'))->toBeFalse()
+        ->and(str_contains($panel, 'details.currency'))->toBeFalse();
 });
 
 // --- counts ----------------------------------------------------------------
