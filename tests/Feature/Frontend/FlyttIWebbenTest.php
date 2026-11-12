@@ -220,10 +220,12 @@ it('flyttar en bilaga från itemets sida', function () {
  * felet ritas under knappen (`moveError`).
  */
 it('schemats sida har move bakom can.delete', function () {
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    // Knapparna bor i ScheduleActions.vue sedan issue 1159; Show.vue ritar komponenten.
+    expect(File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue')))->toContain('<ScheduleActions');
+    $vy = File::get(resource_path('js/components/ScheduleActions.vue'));
 
-    preg_match('/<button[^>]*@click="openPicker\(\$event\)"[^>]*>/s', $vy, $knapp);
-    expect($knapp)->not->toBeEmpty('flyttknappen (Move…) saknas i Show.vue');
+    preg_match('/<button[^>]*@click="ask\(\(\) => openPicker\(\$event\.currentTarget\), \$event\.currentTarget\)"[^>]*>/s', $vy, $knapp);
+    expect($knapp)->not->toBeEmpty('flyttknappen (Move…) saknas i ScheduleActions.vue');
     expect($knapp[0])->toContain('v-if="can.delete"');
 
     expect($vy)->toContain('<ItemTargetPicker')

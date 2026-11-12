@@ -1,10 +1,10 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
-import ItemTargetPicker from '../../../../components/ItemTargetPicker.vue';
 import OpenOccurrence from '../../../../components/OpenOccurrence.vue';
+import ScheduleActions from '../../../../components/ScheduleActions.vue';
 import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
 import { formatDate } from '../../../../components/accessPresentation.js';
 import { formatDateOnly } from '../../../../components/itemPresentation.js';
@@ -142,118 +142,6 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
     ? ''
     : `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/occurrences/${open.value.ulid}/dependencies`));
 
-/*
- * Regelns egna två handlingar (issue 720 § Beslut 2). Pausen och raderingen
- * flyttade hit från resources/js/components/ScheduleListSection.vue, där de
- * står kvar tills issue 227 tar bort dem: schemats sida är regelns yta, och
- * det är hit itemets tab länkar.
- *
- * Båda anropar samma rutt som redigeringen — PATCH med bara `is_active` för
- * pausen, DELETE för raderingen — och servern svarar med en omdirigering
- * tillbaka hit. `pending` är sidans vänteläge: här ritas ETT schema, så en
- * boolean räcker där listan behövde radens ULID. `onFinish` nollställer den
- * även när svaret blev ett fel.
- *
- * Bekräftelsen är webbläsarens egen dialog med serverns mening ur `lang/` —
- * ingen modal och ingen sträng i JavaScript, samma mönster som listan.
- */
-const pending = ref(false);
-
-const scheduleActionUrl = scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid);
-
-/* *Edit* bär returadressen vidare (issue 1158). */
-const editHref = `${scheduleActionUrl}/edit${props.returnTo !== null ? `?return=${encodeURIComponent(props.returnTo)}` : ''}`;
-
-function toggle() {
-    router.patch(scheduleActionUrl, {
-        is_active: ! props.schedule.is_active,
-        ...(props.returnTo !== null ? { return: props.returnTo } : {}),
-    }, {
-        preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
-    });
-}
-
-function destroy() {
-    if (! window.confirm(t('item.schedule.destroy_confirm'))) {
-        return;
-    }
-
-    router.delete(scheduleActionUrl, {
-        data: props.returnTo !== null ? { return: props.returnTo } : {},
-        preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
-    });
-}
-
-/*
- * Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6). Uppgiften
- * flyttas men kopieras aldrig — historiken är svaret på när den gjordes
- * senast, och två uppgifter med samma historik svarar fel (§ 1). Knappen står
- * bakom `can.delete` på itemet, som raderingen intill: en flytt tar bort
- * något från källan.
- *
- * Väljaren (issue 242) lämnar målet; svaret går till schemats sida på det
- * NYA itemet, för uppgiften ligger inte kvar här. Domänfelet — en uppgift med
- * beroenden kan flyttas inom containern men inte till en annan — kommer som
- * ett fältfel på `schedule` och ritas under knappen.
- */
-const pickerOpen = ref(false);
-const pickerTrigger = ref(null);
-const moveError = ref(null);
-
-function openPicker(event) {
-    pickerTrigger.value = event.currentTarget;
-    moveError.value = null;
-    pickerOpen.value = true;
-}
-
-function closePicker() {
-    pickerOpen.value = false;
-}
-
-function chooseTarget(target) {
-    router.post(`${scheduleActionUrl}/move`, { target: target.ulid }, {
-        preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
-        onError: (errors) => { moveError.value = errors.schedule ?? null; },
-        onHttpException: (response) => {
-            moveError.value = response.status === 403 ? t('error.403') : t('error.generic');
-
-            return false;
-        },
-    });
-}
-
-/*
- * *Back to Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 6). En egen
- * handling och inte ett val i väljaren: den går alltid till användarens EGEN
- * inbox, och den skapas om den saknas. Knappen står bakom `can.delete`, som
- * flytten intill — uppgiften lämnar sin plats — och servern prövar samma grind
- * på nytt.
- *
- * Målet står inte i kroppen: kroppen är tom. Domänfelet —
- * `schedule.has_dependencies` för en uppgift med beroenden, eller
- * `schedule.already_in_inbox` — kommer som ett fältfel på `schedule` och ritas
- * i samma ruta som flyttens. Svaret är en redirect till `/inbox`: uppgiften
- * finns inte kvar på den här sidan.
- */
-function toInbox() {
-    router.post(`${scheduleActionUrl}/inbox`, {}, {
-        preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
-        onError: (errors) => { moveError.value = errors.schedule ?? null; },
-        onHttpException: (response) => {
-            moveError.value = response.status === 403 ? t('error.403') : t('error.generic');
-
-            return false;
-        },
-    });
-}
 </script>
 
 <template>
@@ -281,80 +169,16 @@ function toInbox() {
 
     <p v-if="schedule.notes" class="mt-2 whitespace-pre-line text-slate-900">{{ schedule.notes }}</p>
 
-    <div class="mt-4 flex flex-wrap gap-4 text-sm">
-        <Link
-            :href="back"
-            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-        >
-            {{ t('item.schedule.back_to_list') }}
-        </Link>
-
-        <Link
-            v-if="can.update"
-            :href="editHref"
-            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-        >
-            {{ t('item.schedule.edit') }}
-        </Link>
-
-        <button
-            v-if="can.update"
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-            @click="toggle"
-        >
-            {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
-        </button>
-
-        <!-- Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6):
-             bakom `can.delete`, som raderingen intill — en flytt tar bort
-             något från källan. Servern prövar samma grind på nytt. -->
-        <button
-            v-if="can.delete"
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-            @click="openPicker($event)"
-        >
-            {{ t('item.schedule.move') }}
-        </button>
-
-        <!-- *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
-             *Move…* och bakom samma `can.delete` — uppgiften lämnar sin
-             plats. Handlingen går alltid till den EGNA inboxen och är
-             därför aldrig ett val i väljaren. Servern prövar samma grind
-             på nytt. Knappen ritas inte när uppgiften REDAN ligger i
-             inboxen (`containerIsInbox`): rutten hade svarat 422
-             `schedule.already_in_inbox`. -->
-        <button
-            v-if="can.delete && !containerIsInbox"
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-            @click="toInbox"
-        >
-            {{ t('todo.back_to_inbox') }}
-        </button>
-
-        <button
-            v-if="can.delete"
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
-            @click="destroy"
-        >
-            {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
-        </button>
-    </div>
-
-    <!-- Flyttens och *Back to Inbox*:s fel (issue 243 och 244):
-         `schedule.has_dependencies` när målet ligger i en annan container
-         och uppgiften har beroenden, eller en 403:a ur grinden. Det står
-         under knapparna, och sidan står kvar. -->
-    <p v-if="moveError" role="alert" class="mt-2 text-sm text-red-700">
-        {{ moveError }}
-    </p>
+    <ScheduleActions
+        context="show"
+        :container="container"
+        :item="item"
+        :schedule="schedule"
+        :can="can"
+        :container-is-inbox="containerIsInbox"
+        :return-to="returnTo"
+        :back="back"
+    />
 
     <section class="mt-8">
         <!-- Den öppna förekomsten med sin avbockning (Beslut 1). En
@@ -449,18 +273,5 @@ function toInbox() {
         :counterparts="counterparts.occurrence"
         :active="hasOpenOccurrence"
         :can="can"
-    />
-
-    <!-- Målväljaren (issue 242 och 243): målet är ett item, och
-         `excludeItem` är itemet uppgiften står på — att flytta den till
-         sig själv är inget mål. Rubriken är uppgiftens egen mening, för
-         den som väljer ser vad som flyttas. -->
-    <ItemTargetPicker
-        :open="pickerOpen"
-        :trigger="pickerTrigger"
-        :exclude-item="item.ulid"
-        :heading="t('item.schedule.move_heading')"
-        @choose="chooseTarget"
-        @close="closePicker"
     />
 </template>

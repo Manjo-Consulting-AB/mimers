@@ -826,14 +826,14 @@ it('back to inbox nekas för en uppgift som redan ligger där', function () {
 // --- knapparna (Beslut 7) ---------------------------------------------------
 
 /*
- * Klart när: `knapparna ritas bakom can.delete` — `Schedules/Show.vue` och
+ * Klart när: `knapparna ritas bakom can.delete` — `ScheduleActions.vue` (menyn, sedan issue 1159) och
  * `ItemAttachmentSection.vue` innehåller `todo.back_to_inbox` och `/inbox`.
  * Knappen döljs dessutom när källan REDAN är en inbox (`containerIsInbox`,
  * fynd 5 i granskningen): rutten hade svarat 422 `already_in_inbox`.
  */
 it('knapparna ritas bakom can.delete', function () {
     foreach ([
-        'js/pages/Containers/Items/Schedules/Show.vue',
+        'js/components/ScheduleActions.vue',
         'js/components/ItemAttachmentSection.vue',
     ] as $fil) {
         $kod = File::get(resource_path($fil));

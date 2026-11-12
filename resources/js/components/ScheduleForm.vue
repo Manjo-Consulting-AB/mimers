@@ -124,6 +124,8 @@ const props = defineProps({
     showList: { type: Boolean, default: true },
 });
 
+const emit = defineEmits(['dirty']);
+
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
@@ -176,6 +178,9 @@ const fields = {
 };
 
 const form = useForm(fields);
+
+/* Menyn ovanför formuläret frågar innan den kastar osparade ändringar (issue 1159). */
+watch(() => form.isDirty, (dirty) => emit('dirty', dirty), { immediate: true });
 
 watch(() => form.recurrence_type, (type) => {
     if (type !== 'none') {

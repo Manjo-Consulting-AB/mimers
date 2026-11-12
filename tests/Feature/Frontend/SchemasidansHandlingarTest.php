@@ -250,14 +250,16 @@ it('en write-mottagare kan inte radera från schemats sida', function () {
  * den knappen och inte till Edit-länken intill, som bär samma `can.update`.
  */
 it('sidan ritar pausen och raderingen efter can', function () {
-    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+    // Knapparna bor i ScheduleActions.vue sedan issue 1159; märket och meningen
+    // om pausen ligger kvar i Show.vue.
+    $vy = File::get(resource_path('js/components/ScheduleActions.vue'));
 
-    preg_match('/<button\b[^>]*@click="toggle"[^>]*>/s', $vy, $paus);
-    expect($paus)->not->toBeEmpty('pausknappen (Pause/Resume) saknas i Show.vue');
+    preg_match('/<button\b[^>]*@click="ask\(toggle,[^"]*"[^>]*>/s', $vy, $paus);
+    expect($paus)->not->toBeEmpty('pausknappen (Pause/Resume) saknas i ScheduleActions.vue');
     expect($paus[0])->toContain('v-if="can.update"');
 
-    preg_match('/<button\b[^>]*@click="destroy"[^>]*>/s', $vy, $radering);
-    expect($radering)->not->toBeEmpty('raderingsknappen saknas i Show.vue');
+    preg_match('/<button\b[^>]*@click="ask\(destroy,[^"]*"[^>]*>/s', $vy, $radering);
+    expect($radering)->not->toBeEmpty('raderingsknappen saknas i ScheduleActions.vue');
     expect($radering[0])->toContain('v-if="can.delete"');
 
     // Raderingen frågar innan den raderar, med meningens text ur `lang/` —
@@ -267,6 +269,8 @@ it('sidan ritar pausen och raderingen efter can', function () {
 
     // Pausen är synlig och reversibel (Beslut 3): samma märke och mening som
     // listan använder.
-    expect($vy)->toContain("t('item.schedule.paused')")
-        ->and($vy)->toContain("t('item.schedule.paused_note')");
+    $visa = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+
+    expect($visa)->toContain("t('item.schedule.paused')")
+        ->and($visa)->toContain("t('item.schedule.paused_note')");
 });

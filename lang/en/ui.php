@@ -3814,6 +3814,7 @@ return [
 
             'back' => 'Back to the item',
             'back_to_list' => 'Back',
+            'back_to_task' => 'Back to the task',
 
             // The next due date is the date of the OPEN occurrence (decision
             // 1). A schedule without an open occurrence — a paused one, or a

@@ -105,13 +105,25 @@ class ScheduleOccurrenceController extends Controller
             'item' => ['ulid' => $item->ulid, 'name' => $item->name],
             'schedule' => (new ScheduleResource($schedule))->resolve($request),
             'occurrences' => ScheduleOccurrenceResource::collection($occurrences)->resolve($request),
-            'can' => [
-                'update' => Gate::forUser($request->user())->allows('update', $schedule->item),
-                // Raderingen bor på schemats sida (issue 720 § Beslut 1) och
-                // prövar samma grind som ScheduleController::destroy().
-                'delete' => Gate::forUser($request->user())->allows('delete', $schedule->item),
-            ],
+            'can' => $this->can($request, $schedule),
         ]);
+    }
+
+    /**
+     * Grindarna uppgiftens meny läser, på schemats sida och i redigeringen
+     * (issue 1159): `update` styr paus och flytt-grindarna, `delete` styr
+     * radering och flytt.
+     *
+     * @return array{update: bool, delete: bool}
+     */
+    public function can(Request $request, Schedule $schedule): array
+    {
+        return [
+            'update' => Gate::forUser($request->user())->allows('update', $schedule->item),
+            // Raderingen bor på schemats sida (issue 720 § Beslut 1) och
+            // prövar samma grind som ScheduleController::destroy().
+            'delete' => Gate::forUser($request->user())->allows('delete', $schedule->item),
+        ];
     }
 
     /**
