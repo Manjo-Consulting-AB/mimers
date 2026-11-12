@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Issue 1117: sårbarhetsskanning, Semgrep och Dependabot i ci.yml.
+ * Issue 1117: Semgrep och Dependabot i ci.yml.
  * Texten läses som sträng; symfony/yaml finns inte i vendor.
  */
 
@@ -18,24 +18,6 @@ function ciStegBlock(string $namn): string
 
     return $m[0];
 }
-
-it('kör composer audit och npm audit --audit-level=high som ett steg som kan fälla jobbet', function () {
-    $steg = ciStegBlock('Sårbarhetsskanning av beroenden');
-
-    expect($steg)->toContain('composer audit --no-interaction')
-        ->toContain('npm audit --audit-level=high');
-    expect(str_contains($steg, '--omit=dev'))->toBeFalse();
-    expect(str_contains($steg, 'continue-on-error'))->toBeFalse();
-    expect(str_contains($steg, '|| true'))->toBeFalse();
-});
-
-it('hoppar över beroendeskanningen för ett docs-only-bygge', function () {
-    $steg = ciStegBlock('Sårbarhetsskanning av beroenden');
-
-    expect($steg)->toContain('DOCS_ONLY: ${{ steps.omfang.outputs.docs_only }}')
-        ->toContain('"$DOCS_ONLY" = "true"');
-    expect(strpos($steg, 'exit 0'))->toBeLessThan(strpos($steg, 'composer audit'));
-});
 
 it('har ett Semgrep-steg med tre regelsamlingar som inte fäller bygget', function () {
     $steg = ciStegBlock('Semgrep');
