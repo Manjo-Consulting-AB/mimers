@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: knappen tas bort från containerns flik, så provet krymper från tre ytor till två och är grönt även på basen; Containers/Tasks.vue-fallet bevisas i ContainerSnabbradTest.
+
 use App\Actions\Inbox\ResolveInbox;
 use App\Models\Account;
 use App\Models\Container;

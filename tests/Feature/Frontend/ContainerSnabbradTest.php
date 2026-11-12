@@ -141,6 +141,7 @@ it('ger snabbraden fältets ord ur katalogen', function () {
         ->and($kod)->toContain(':error="form.errors.title ?? null"');
 });
 
+// vakt: skrivvägen finns sedan issue 245/63a och ska fortsätta ta emot return; ingen serverändring i issuen.
 it('en POST till /inbox/tasks med return till fliken omdirigerar dit med flashen', function () {
     withoutVite();
 
@@ -157,6 +158,7 @@ it('en POST till /inbox/tasks med return till fliken omdirigerar dit med flashen
     expect(Schedule::query()->where('item_id', $inbox->id)->count())->toBe(1);
 });
 
+// vakt: skrivvägen finns sedan issue 245/63a och ska fortsätta ta emot return; ingen serverändring i issuen.
 it('en POST mot itemets schedules med gtd_list waiting omdirigerar till fliken', function () {
     withoutVite();
 
