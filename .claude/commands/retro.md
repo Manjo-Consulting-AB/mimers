@@ -19,6 +19,7 @@ Deras kontext och resonemang finns inte kvar och går inte att rekonstruera. Skr
 5. **Ändrade filer mot issuens `In scope`-globbar.** Hämta rutan ur GitHub-issuen, jämför med PR:ens filer. Drift ut ur rutan är den enda helt automatiska mätningen av om issue-skrivandet håller.
 6. **PR:er där `Frågor och antaganden` inte var "Inga."**
 7. **`.claude/usage.jsonl`** om den finns — kostnad per gren. Läs som avvikelse inom axelprofilen, aldrig som absolut tal: en `elevated`- och `cross-module`-issue *ska* kosta mer. Jämför mot medianen för issues med **samma** axelprofil.
+8. **Granskningsspåren på PR:erna.** Varje granskning och eskalering lämnar en kommentar vars första rad är `<!-- mimers-pipeline: granskning utfall=<godkänd|omtag|eskalerad> sha=<…> granskare=<…> -->` (se `.github/scripts/granskningsspar.py`). Eskaleringsfrekvens per axelprofil läses ur markörernas `utfall=`, inte ur prosa. En implementations-PR utan markör räknas som **ospårad**, aldrig som godkänd — saknas spåret vet retron inte vad som hände.
 
 ## Läs aldrig kostnaden ensam
 
