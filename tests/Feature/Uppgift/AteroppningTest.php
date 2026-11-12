@@ -472,6 +472,7 @@ it('can.reopen följer regeln på Done-sidan', function () {
  * Klart när: flaggan räknas utan en fråga per rad. Samma sida med en och med
  * tio avbockade rader ställer lika många frågor.
  */
+// vakt: frågeantalet är konstant också på basen, där flaggan inte finns; provet fäller en framtida fråga per rad.
 it('can.reopen räknas utan en fråga per rad', function () {
     withoutVite();
 
