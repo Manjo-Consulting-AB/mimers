@@ -24,6 +24,7 @@ return [
             'upload' => 'Uploading…',
             'export' => 'Preparing the export…',
             'complete' => 'Checking off…',
+            'reopen' => 'Reopening…',
             'transfer' => 'Taking over the container…',
         ],
     ],
@@ -808,6 +809,7 @@ return [
         // the log unreadable.
         'occurrence-completed' => 'The task has been checked off.',
         'occurrence-skipped' => 'The task was skipped and saved as such — not as done.',
+        'occurrence-reopened' => 'The task is open again.',
 
         // Issue 63c decision 7. `removed` says that nothing else disappeared:
         // the row is hard-deleted (issue 23 decision 7) and what is lost is the
@@ -1044,6 +1046,8 @@ return [
             'blocked' => 'This task cannot be checked off yet — these are not done:',
             'blocked_row' => '• :title — due :date',
             'not_open' => 'This occurrence is already closed and cannot be checked off again.',
+            'not_completed' => 'Only a completed task can be reopened.',
+            'next_started' => 'The next occurrence of this task has already been started or closed. Reopen that one first.',
 
             // Issue 63c decision 6: the three error codes of the occurrence
             // dependency, from App\Actions\Schedule\DependOccurrence. All land
@@ -2875,6 +2879,7 @@ return [
                 // flag: the history tells them apart, and the next interval
                 // due date is counted from a different date (issue 110).
                 'skipped' => ':user skipped a task on :item',
+                'reopened' => ':user reopened a task on :item',
                 // The list and the status were changed (M26 · issue 235). The
                 // same sentence as `schedule.updated`: the row is read by a
                 // person, and which of the two changed is what `meta.changed`
@@ -4217,6 +4222,7 @@ return [
 
         'due' => 'Due :date',
         'complete' => 'Check off',
+        'reopen' => 'Mark as not done',
 
         // M26 · issue 236: radens väljare för listan och dess märke. Orden är
         // samma fyra som `gtd_list`-kolumnens värden (ADR-0052 § 1) — ingen

@@ -389,7 +389,9 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // App\Http\Controllers\Api\ScheduleOccurrenceController och
     // App\Actions\Schedule\CloseOccurrence. Två rutter i stället för ett
     // statusfält i kroppen (issue 22b § Beslut 1): en `{"status": "open"}`-
-    // kropp vore en väg att återöppna, och det vill vi inte ha. Båda tar
+    // kropp vore en väg att återöppna. Den vägen är sedan issue 1120 en egen
+    // rutt, `reopen`, med egna regler (App\Actions\Schedule\
+    // ReopenOccurrence) och utan kropp. Båda avsluten tar
     // `{"account", "completion_note"?}` (Beslut 2). `{occurrence}` binds av
     // gruppens scopeBindings() genom App\Models\Schedule::occurrences()
     // precis som `{schedule}` genom Item::schedules() ovan — en förekomst i
@@ -399,6 +401,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // som nya rutter här.
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete']);
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip']);
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/reopen', [ScheduleOccurrenceController::class, 'reopen']);
 
     // M26 · issue 238 · Listan och statusen i API:et — byta en aktiv förekomsts
     // `gtd_list` och/eller `status`, se App\Http\Controllers\Api\

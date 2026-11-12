@@ -1589,3 +1589,24 @@ it('låter kontrollerns egen App::setLocale() vinna över middlewaren', function
 
     get($url)->assertOk()->assertSee($rubrik, false);
 });
+
+/*
+ * Issue 1120 · Återöppningen har sina ord i katalogen: knappens namn och
+ * vänteläget, flashkoden, de två domänfelen och händelseloggens mening. Ingen
+ * av dem får stå i JavaScript — TodoRow slår upp `todo.reopen` och
+ * `common.pending.reopen` med `t()`.
+ */
+it('har återöppningens ord i ui.php', function () {
+    $forvantat = [
+        'todo.reopen' => 'Mark as not done',
+        'common.pending.reopen' => 'Reopening…',
+        'flash.occurrence-reopened' => 'The task is open again.',
+        'error.occurrence.not_completed' => 'Only a completed task can be reopened.',
+        'error.occurrence.next_started' => 'The next occurrence of this task has already been started or closed. Reopen that one first.',
+        'audit.action.schedule_occurrence.reopened' => ':user reopened a task on :item',
+    ];
+
+    foreach ($forvantat as $nyckel => $mening) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->toBe($mening);
+    }
+});

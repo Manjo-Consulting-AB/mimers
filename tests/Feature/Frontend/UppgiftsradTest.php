@@ -123,3 +123,34 @@ it('inga råa palettfärger i raden', function () {
 
     expect($rad)->not->toMatch('/\b(red|slate|blue)-\d{2,3}\b/');
 });
+
+/*
+ * Issue 1120 · Klart när: `can.reopen` styr om bocken är klickbar. Grenen
+ * `isDone` i TodoRow har ett formulär bakom `entry.can.reopen` med
+ * `todo.reopen` som namn och `common.pending.reopen` medan svaret är på väg,
+ * postar till rutten `reopen` med `preserveScroll`, och utan flaggan ritas
+ * bocken som förut, en `span` utan handling. Inga ord står i JavaScript.
+ */
+it('TodoRow ritar bocken som en återöppningsknapp bakom can.reopen', function () {
+    $mall = file_get_contents(resource_path('js/components/TodoRow.vue'));
+
+    preg_match('/<template v-if="isDone">(.*?)<template v-else>/s', $mall, $gren);
+
+    expect($gren)->toHaveCount(2);
+
+    expect($gren[1])
+        ->toContain('<form v-if="entry.can.reopen" @submit.prevent="reopen">')
+        ->toContain("t('todo.reopen')")
+        ->toContain("t('common.pending.reopen')")
+        ->toContain('min-h-11 min-w-11')
+        ->toContain('rounded-full')
+        ->toContain('focus-visible:ring-2')
+        // Utan flaggan: spanen utan handling, som förut.
+        ->toContain('v-else')
+        ->toContain('aria-hidden="true"');
+
+    expect($mall)
+        ->toContain("'reopen',")
+        ->toContain('preserveScroll: true')
+        ->toContain('reopenForm.errors.occurrence');
+});
