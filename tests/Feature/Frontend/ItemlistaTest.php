@@ -482,15 +482,17 @@ it('har statusens text i lang och inte i vyn', function () {
  */
 
 /*
- * Klart när (issue 291 · [[ADR-0058 Trädet som tabell]] § 7): rubriken,
- * *New item* och växeln står på en rad, i den ordningen, i båda lägena.
+ * Klart när (issue 291 · [[ADR-0058 Trädet som tabell]] § 7): rubriken
+ * och växeln står på en rad, i den ordningen, i båda lägena. *New item*
+ * stod där till issue 1163, då länken ersattes av registreringsraden över
+ * trädet (tests/Feature/Frontend/ItemRegistreringTest.php).
  *
  * Raden ritas en gång och utanför lägesgrenarna — det är därför den gäller
  * båda — och provet läser därför markupen. En rad som låg inuti trädgrenen
  * hade gett rätt ordning i trädet och ingen rad alls i kartan, och en kontroll
  * mot de två svaren hade inte kunnat se skillnaden.
  */
-it('ställer rubriken, New item och växeln på en rad i båda lägena', function () {
+it('ställer rubriken och växeln på en rad i båda lägena', function () {
     $vy = itemlistaKod();
 
     $start = strpos($vy, '<div class="mt-6 flex flex-wrap items-center gap-3">');
@@ -504,17 +506,16 @@ it('ställer rubriken, New item och växeln på en rad i båda lägena', functio
     expect($huvud)->toContain('flex flex-wrap items-center');
     expect($huvud)->not->toContain('flex-col');
 
-    // Ordningen är bindande: rubriken först, därefter *New item* och växeln.
+    // Ordningen är bindande: rubriken först, därefter växeln.
     $rubrik = strpos($huvud, '<h1');
-    $nytt = strpos($huvud, 'item.index.create');
     $vaxel = strpos($huvud, '<ItemViewSwitch');
 
     expect($rubrik)->not->toBeFalse()
-        ->and($nytt)->toBeGreaterThan((int) $rubrik)
-        ->and($vaxel)->toBeGreaterThan((int) $nytt);
+        ->and($vaxel)->toBeGreaterThan((int) $rubrik);
 
-    // *New item* ritas bara när hon får skapa (57b § Beslut 2).
-    expect($huvud)->toContain('v-if="can.create"');
+    // Länken *New item* är borta från huvudet (issue 1163).
+    expect($huvud)->not->toContain('item.index.create')
+        ->and($huvud)->not->toContain('/items/create');
 
     // Huvudet står före lägesgrenen, alltså också i kartläget.
     expect($start)->toBeLessThan(strpos($vy, '<section v-if="view === \'tree\'"'));

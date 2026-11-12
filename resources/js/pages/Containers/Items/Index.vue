@@ -1,9 +1,11 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
+import InlineCreate from '../../../components/InlineCreate.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
+import ItemForm from '../../../components/ItemForm.vue';
 import ItemMap from '../../../components/ItemMap.vue';
 import ItemMapHits from '../../../components/ItemMapHits.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
@@ -63,12 +65,19 @@ defineOptions({
  *
  * **Serienumret ritas inte här** (57a § Beslut 8). Det hör till detaljvyn.
  *
- * **`can.create` ritar skapaknappen** (issue 57b § Beslut 2). Flaggan är
- * `ContainerPolicy::createItem()` och sätts mot CONTAINERN, för det är grinden
- * skapandet prövar — en omfångsbegränsad mottagare får `false` och ser ingen
- * knapp: hon skapar barn-items under det hon nått, och den ytan är issue 58.
- * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
- * sidan visade.
+ * **`can.create` ritar registreringsraden** (issue 57b § Beslut 2, och sedan
+ * issue 1163 · [[ADR-0074 Registrering i vyn]] § 1–3 och 7 raden i stället
+ * för knappen). Flaggan är `ContainerPolicy::createItem()` och sätts mot
+ * CONTAINERN, för det är grinden skapandet prövar — en omfångsbegränsad
+ * mottagare får `false` och ser ingen rad: hon skapar barn-items under det hon
+ * nått, och den ytan är issue 58. Flaggan är presentation; ruttens
+ * `Gate::authorize()` gäller oavsett vad sidan visade.
+ *
+ * **Raden är rad noll i trädet** (issue 1163): det infällbara formuläret
+ * (`InlineCreate` med `ItemForm inline`) står mellan filterraden och trädet,
+ * bara i trädläget. Efter en sparning står det kvar, och `createdItem` ur
+ * svaret markerar den nya raden i 2000 ms. Döljer filtret itemet säger
+ * `item.index.created_hidden` det, på samma sätt som *To do* (issue 358).
  *
  * **Statusen räknas för kartans mitt och ritade noder** (issue 212 ·
  * [[ADR-0050 Desktopdesignen]], formen omgjord i issue 296 ·
@@ -201,9 +210,69 @@ const props = defineProps({
      * kommer och går tillsammans.
      */
     create: { type: Object, default: null },
+    /* Kategoriträdet till formuläret (issue 1162); tomt när hon inte får registrera. */
+    categories: { type: Array, default: () => [] },
+    /* Kategorin ur `?category=`, förvald i formuläret. */
+    preselected: { type: String, default: null },
+    /* Itemet som just registrerades: `{ulid, name, parent?}` eller null. */
+    createdItem: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
+const page = usePage();
+
+/*
+ * Raden *New item* (issue 1163). `open` och `dirty` ägs av vyn: skalet
+ * fäller ut och frågar, formuläret rapporterar sina osparade ändringar.
+ * Kontot är containerns ägarkonto när användaren är medlem i det, som i
+ * Create.vue.
+ */
+const createOpen = ref(false);
+const createDirty = ref(false);
+
+const accounts = computed(() => page.props.auth?.accounts ?? []);
+
+const account = computed(() => {
+    const owner = accounts.value.find((candidate) => candidate.ulid === props.container.account);
+
+    return owner?.ulid ?? accounts.value[0]?.ulid ?? '';
+});
+
+/*
+ * Markeringen (issue 1163): `highlight` är den nya radens ULID i 2000 ms.
+ * Finns itemet inte i trädet — filtret döljer det — sätts `hiddenNotice` i
+ * stället och ingen rad markeras. Beskedet stannar tills filtret byts eller
+ * nästa registrering kommer.
+ */
+const highlight = ref(null);
+const hiddenNotice = ref(false);
+let highlightTimer = null;
+
+function inTree(nodes, ulid) {
+    return (nodes ?? []).some((node) => node.ulid === ulid || inTree(node.children, ulid));
+}
+
+watch(() => props.createdItem, (created) => {
+    clearTimeout(highlightTimer);
+    highlight.value = null;
+
+    if (created === null) {
+        return;
+    }
+
+    hiddenNotice.value = ! inTree(props.structure, created.ulid);
+
+    if (hiddenNotice.value) {
+        return;
+    }
+
+    highlight.value = created.ulid;
+    highlightTimer = setTimeout(() => {
+        highlight.value = null;
+    }, 2000);
+});
+
+onBeforeUnmount(() => clearTimeout(highlightTimer));
 
 /*
  * Läses ur `filter` och inte ur de uppräknade etiketterna: frågan är om
@@ -230,6 +299,7 @@ const allOpen = ref(false);
 
 watch(() => props.filter, () => {
     allOpen.value = false;
+    hiddenNotice.value = false;
 });
 
 /*
@@ -302,9 +372,10 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
 
     <!--
         Huvudet är gemensamt för de två lägena (issue 291 · [[ADR-0058 Trädet
-        som tabell]] § 7): rubriken, *New item* och växeln står på en rad, i den
-        ordningen, och raden ritas utanför lägesgrenarna. `mr-auto` trycker
-        knappen och växeln till höger även när `can.create` är falsk.
+        som tabell]] § 7): rubriken och växeln står på en rad, och raden ritas
+        utanför lägesgrenarna. `mr-auto` trycker växeln till höger. Länken
+        *New item* försvann i issue 1163: registreringen bor i raden över
+        trädet.
 
         Växeln (issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 1). Den
         står över båda ytorna och byter mellan dem med en adress: *Träd* är
@@ -314,14 +385,6 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     -->
     <div class="mt-6 flex flex-wrap items-center gap-3">
         <h1 class="mr-auto text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
-
-        <Link
-            v-if="can.create"
-            :href="`/containers/${container.ulid}/items/create`"
-            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
-        >
-            {{ t('item.index.create') }}
-        </Link>
 
         <ItemViewSwitch
             :views="views"
@@ -405,6 +468,37 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
         begränsat omfång (issue 73 § Beslut 6).
     -->
     <section v-if="view === 'tree'" class="mt-6">
+        <!--
+            Registreringsraden (issue 1163 · [[ADR-0074 Registrering i vyn]]
+            § 2): rad noll, före trädet. Bara i trädläget och bara när hon får
+            skapa.
+        -->
+        <div v-if="can.create" class="mb-4">
+            <InlineCreate v-model:open="createOpen" :label="t('item.index.create')" :dirty="createDirty">
+                <ItemForm
+                    inline
+                    :return-to="page.url"
+                    :container-ulid="container.ulid"
+                    :container-name="container.name"
+                    :categories="categories"
+                    :tags="tags"
+                    :accounts="accounts"
+                    :account="account"
+                    :parent="null"
+                    :preselected="preselected"
+                    :structure="structure ?? []"
+                    :can-create-root="can.create"
+                    :can-manage-taxonomy="can.manage_taxonomy ?? false"
+                    @dirty="createDirty = $event"
+                    @cancel="createOpen = false"
+                />
+            </InlineCreate>
+
+            <p v-if="hiddenNotice" role="status" class="mt-1 text-meta text-ink-muted">
+                {{ t('item.index.created_hidden') }}
+            </p>
+        </div>
+
         <p v-if="structure !== null && structure.length === 0 && hasFilter" class="mt-8 text-slate-700">
             {{ t('item.index.filter_empty', { filters: summary }) }}
         </p>
@@ -420,6 +514,7 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
                 :container-icon-color="container.icon_color"
                 :filtered="hasFilter"
                 :expand-all="allOpen"
+                :highlight="highlight"
             />
 
             <p v-if="structure !== null && structure.length === 0" class="mt-8 text-slate-700">
