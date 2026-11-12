@@ -142,15 +142,13 @@ function bilagekoForbrukning(Account $konto): int
  */
 function bilagekoUppladdningsyta(): string
 {
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
-    $start = mb_strpos($vy, '<template v-if="can.create">');
-    $slut = mb_strpos($vy, '</template>', $start === false ? 0 : $start);
+    $start = mb_strpos($vy, '<template>');
 
     expect($start)->not->toBeFalse('uppladdningsytan hittas inte i komponenten');
-    expect($slut)->not->toBeFalse('uppladdningsytan stängs inte');
 
-    return mb_substr($vy, $start, $slut - $start);
+    return mb_substr($vy, $start);
 }
 
 // --- taket: en prop, och serverns kontroll kvar -------------------------
@@ -192,7 +190,7 @@ it('avvisar i vyn en fil över taket med serverns egen mening', function () {
     // Beslut 5: filen skickas aldrig, och meningen är serverns — samma nyckel
     // AttachmentController lägger på fältet `file`, med gränsen och filens
     // storlek i läsbar form. Nyckeln står i `lang/`, aldrig i .vue-filen.
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     expect($vy)->toContain('props.maxUploadBytes');
     expect($vy)->toContain("t('error.quota.max_file_size_exceeded'");
@@ -305,17 +303,21 @@ it('lägger aldrig en rad i listan som servern inte svarat med', function () {
     // servern ska komma ikapp — det är just den raden som hade blivit kvar
     // som ett halvt tillstånd när en uppladdning avbryts.
     $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $ko = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     expect($vy)->toContain('props.attachments.map');
-    expect($vy)->not->toContain('unshift');
-    expect($vy)->not->toContain('rows.value.push');
-    expect($vy)->not->toContain('attachments.value.push');
+
+    foreach ([$vy, $ko] as $kalla) {
+        expect($kalla)->not->toContain('unshift');
+        expect($kalla)->not->toContain('rows.value.push');
+        expect($kalla)->not->toContain('attachments.value.push');
+    }
 });
 
 // --- kön: en fil i taget, framdriften ur onProgress ---------------------
 
 it('postar en fil per anrop och tar framdriften ur onProgress', function () {
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     // Ett anrop per fil (Beslut 1), och ett anrop i taget: nästa fil startas
     // först i föregående anrops återkallelse.
@@ -359,7 +361,10 @@ it('har dropzonen som ett tillägg och filväljaren som den väg som alltid fung
     // (Beslut 3 och 60 § Beslut 3): en `read`-mottagare ser ingen av dem.
     // Att servern nekar ändå prövas i BilagevyTest.
     expect($yta)->toContain('item.attachment.dropzone');
-    expect($yta)->toContain('item.attachment.upload_heading');
+
+    // Rubriken och flaggan bor kvar i sektionen, som ritar kön bakom `can.create`.
+    expect(File::get(resource_path('js/components/ItemAttachmentSection.vue')))
+        ->toContain('item.attachment.upload_heading');
 });
 
 // --- takgränsen: ett väntat svar, inte ett haveri -----------------------
@@ -388,7 +393,7 @@ it('gör takgränsen till ett fältfel i stället för en tom 429', function () 
     // inloggningsförsök" om en uppladdning. Kön byter därför ut den mot sin
     // egen mening ur `lang/`, och en rå 429 (om en sådan någonsin når vyn)
     // får samma mening i stället för Inertias modalfönster.
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     expect($vy)->toContain("t('item.attachment.throttled')");
     expect($vy)->toContain('onHttpException');
@@ -401,7 +406,7 @@ it('lämnar inget halvt tillstånd när uppladdningen avbryts', function () {
     // `onError`. Utan den grenen blir raden stående som "laddar upp" med sin
     // sista procent, och kön står still för alltid — ett halvt tillstånd i
     // vyn, vilket är precis vad kravet förbjuder.
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     expect($vy)->toContain('onNetworkError');
     expect($vy)->toContain("t('item.attachment.interrupted')");
@@ -417,7 +422,7 @@ it('annonserar ett filfel i kön utan att fokus flyttas in i raden', function ()
     // att flytta fokus till — anropet blir en tyst no-op. Raden bär därför
     // `role="alert"` och ett eget id, så att felet läses upp när det ritas i
     // stället för att bara synas för den som ser skärmen.
-    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $vy = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
 
     expect($vy)->toContain('role="alert"');
     expect($vy)->toContain('attachment-error-');
@@ -445,4 +450,54 @@ it('har köns meningar', function () {
         expect(trim($mening))->not->toBe('');
     }
 
+});
+
+// --- M55 · issue 367: kön som egen komponent ----------------------------
+
+it('ritar kön ur sektionen bakom can.create och skickar samma värden', function () {
+    $sektion = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+
+    $start = mb_strpos($sektion, '<template v-if="can.create">');
+    $slut = mb_strpos($sektion, '</template>', $start === false ? 0 : $start);
+
+    expect($start)->not->toBeFalse();
+
+    $yta = mb_substr($sektion, $start, $slut - $start);
+
+    expect($yta)->toContain('<AttachmentUploadQueue')
+        ->toContain(':container-ulid="containerUlid"')
+        ->toContain(':item-ulid="itemUlid"')
+        ->toContain(':max-upload-bytes="maxUploadBytes"')
+        ->toContain(':container-account="containerAccount"')
+        ->toContain(':container-is-inbox="containerIsInbox"');
+
+    // Kön har flyttat: sektionen äger varken kö eller kontoval längre.
+    expect($sektion)->not->toContain('router.post(`${itemUrl()}/attachments`');
+    expect($sektion)->not->toContain('function enqueue');
+});
+
+it('stänger av väljaren och släppytan utan item och ber om ett val', function () {
+    $ko = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
+
+    expect($ko)->toContain('itemUlid: { type: String, default: null }')
+        ->toContain('props.itemUlid === null')
+        ->toContain(':disabled="disabled"')
+        ->toContain("t('item.attachment.choose_item_first')");
+
+    // Släppytan släpper inte in filer när den är avstängd.
+    expect($ko)->toMatch('/function enqueue\(files\) \{\s+if \(disabled\.value\) \{\s+return;/');
+
+    expect(Lang::get('ui.item.attachment.choose_item_first', [], 'en'))->toBe('Choose an item first.');
+});
+
+it('skickar busy, uploaded och finished', function () {
+    $ko = File::get(resource_path('js/components/AttachmentUploadQueue.vue'));
+
+    expect($ko)->toContain("defineEmits(['busy', 'uploaded', 'finished'])")
+        ->toContain("emit('uploaded', entry.name)")
+        ->toContain("emit('busy', value)")
+        ->toContain("emit('finished')");
+
+    // `busy` är sann medan en fil väntar eller laddas upp.
+    expect($ko)->toContain("entry.status === 'waiting' || entry.status === 'uploading'");
 });

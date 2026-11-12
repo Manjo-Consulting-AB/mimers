@@ -3656,6 +3656,7 @@ return [
             'account' => 'The account that pays',
             'file' => 'Files',
             'dropzone' => 'Drop the files here',
+            'choose_item_first' => 'Choose an item first.',
 
             'status' => [
                 'waiting' => 'Waiting',

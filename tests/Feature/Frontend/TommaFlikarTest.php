@@ -84,8 +84,10 @@ it('låter åtgärden nå flikens formulär', function () {
 
         expect($block)->toContain('@click="focusForm"');
         expect($kod)->toContain("document.getElementById('{$falt}')?.focus()");
-        // Fältet finns i samma fil, så fokus har något att landa på.
-        expect($kod)->toContain("id=\"{$falt}\"");
+        // Fältet finns i samma fil, så fokus har något att landa på. Filfältet
+        // bor i köns komponent sedan issue 367.
+        $faltkod = $falt === 'attachment-file' ? tommaFlikarKod('components/AttachmentUploadQueue.vue') : $kod;
+        expect($faltkod)->toContain("id=\"{$falt}\"");
     }
 
     // Uppgifterna har sitt formulär på en egen sida: åtgärden är samma

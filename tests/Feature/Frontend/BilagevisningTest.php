@@ -595,7 +595,8 @@ it('lämnar 60a:s och 60b:s ytor orörda', function () {
     // Fliken bär fortfarande uppladdningsytan och raderingen, oförändrade.
     $vy = bilagevisningVy();
 
-    expect($vy)->toContain('item.attachment.dropzone');
+    // Släppytan bor i köns komponent sedan issue 367.
+    expect(File::get(resource_path('js/components/AttachmentUploadQueue.vue')))->toContain('item.attachment.dropzone');
     expect($vy)->toContain('item.attachment.upload_heading');
     expect($vy)->toContain('item.attachment.destroy_confirm');
 });
