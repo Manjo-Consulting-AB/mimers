@@ -2041,6 +2041,9 @@ return [
             // The empty state of the cost panel (issue 1113 · ADR-0073 § 4):
             // the panel is always drawn and says so instead of hiding.
             'costs_empty' => 'No costs recorded yet.',
+            // Accessible name of the cost ring when it links to the cost page
+            // (issue 1119).
+            'costs_open' => 'Open costs',
             'activity' => 'Recent activity',
             // The image panel (issue 173). *Recent images* and not *Images*:
             // the panel is a glimpse of the newest five, not the container's

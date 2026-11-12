@@ -145,7 +145,11 @@ const { t } = useTranslations();
                 </h2>
 
                 <div class="mt-3">
-                    <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
+                    <CostDonut
+                        :totals="props.costs.totals"
+                        :breakdown="props.costs.breakdown"
+                        :slice-href="(ulid) => `/containers/${ulid}`"
+                    />
                 </div>
             </section>
         </div>

@@ -368,8 +368,8 @@ it('ger en tårtbit per container med kostnader och lämnar de andra utanför', 
 });
 
 /*
- * Klart när: donuten har en tårtbit per container i FALLANDE belopp, och den
- * är inte klickbar.
+ * Klart när: donuten har en tårtbit per container i FALLANDE belopp, och
+ * anroparen bär länkarna.
  *
  * Ordningen är en ritregel och bor därför i komponenten: den är PER VALUTA —
  * en container som är störst i kronor behöver inte vara störst i euro — och
@@ -377,11 +377,13 @@ it('ger en tårtbit per container med kostnader och lämnar de andra utanför', 
  * binder regeln till filen, som länkprovet i DashboardbrickorTest: ett `sort()`
  * som försvinner ur CostDonut.vue faller här och inte först i webbläsaren.
  *
- * Klicket hör till rapportvyn, och den finns inte i webben
- * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut: *"Visa mer" är
- * grinden*). Ingen länk och ingen träffyta ritas förrän den vyn finns.
+ * Länkarna är anroparens (issue 1119 · [[ADR-0038 Gränsen för Pro i
+ * kostnaderna]] § Beslut): komponenten har propparna `sliceHref` och `href`,
+ * båda med `default: null`, och bygger ingen adress själv. Dashboarden skickar
+ * `slice-href` — legendraden leder till containerns översikt — men inte
+ * `:href=`: ringen på dashboarden länkar inte till något.
  */
-it('ritar bitarna i fallande belopp och länkar ingenstans', function () {
+it('ritar bitarna i fallande belopp och låter anroparen bära länkarna', function () {
     withoutVite();
 
     $donut = File::get(resource_path('js/components/CostDonut.vue'));
@@ -396,11 +398,21 @@ it('ritar bitarna i fallande belopp och länkar ingenstans', function () {
         ->toContain('{{ arc.name }}')
         ->toContain('{{ arc.text }}');
 
-    // Ingen väg vidare: ingen länk, ingen träffyta och ingen rutt.
+    // Länkarna är anroparens: två valfria proppar, och ingen egen rutt.
+    expect($donut)->toContain('sliceHref: { type: Function, default: null }')
+        ->toContain('href: { type: String, default: null }');
     expect($donut)->not->toContain('<a ');
-    expect($donut)->not->toContain('href');
     expect($donut)->not->toContain('@click');
     expect($donut)->not->toContain('router');
+
+    // Dashboarden bär legendlänkarna men ingen ringlänk.
+    $dashboard = File::get(resource_path('js/pages/Dashboard.vue'));
+
+    preg_match('/<CostDonut\b.*?\/>/s', $dashboard, $anrop);
+
+    expect($anrop)->not->toBeEmpty();
+    expect($anrop[0])->toContain(':slice-href="(ulid) => `/containers/${ulid}`"');
+    expect($anrop[0])->not->toContain(':href=');
 });
 
 // --- valutorna -------------------------------------------------------------

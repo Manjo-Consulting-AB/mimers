@@ -477,6 +477,55 @@ it('saknar kostnadspanelen när containern inte har några rader', function () {
         ->toContain(':label="t(\'container.overview.costs_total\')"');
 });
 
+/*
+ * Issue 1119 · Klart när: legendraderna leder till sina items och ringen till
+ * containerns Costs-sida. Adresserna byggs av anroparen, för komponenten vet
+ * inte vad en nyckel i `breakdown` är.
+ */
+it('ger kostnadsdonuten länkar till itemen och till kostnadssidan', function () {
+    $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
+
+    preg_match('/<CostDonut\b.*?\/>/s', $vy, $anrop);
+
+    expect($anrop)->not->toBeEmpty();
+    expect($anrop[0])->toContain(':slice-href="costSliceHref"')
+        ->toContain(':href="costsUrl"');
+
+    expect($vy)->toContain('/items/${ulid}')
+        ->toContain('/costs`');
+});
+
+/*
+ * Issue 1119 · Klart när: legendraden markeras som en rad i Items och har en
+ * fokusring, legenden behåller sin storlek, ringlänken har sitt namn ur
+ * katalogen, och utan proppar ritas donuten som förut.
+ */
+it('ritar legendlänken som en itemrad utan att ändra legendens storlek', function () {
+    $donut = File::get(resource_path('js/components/CostDonut.vue'));
+
+    expect(Lang::get('ui.container.overview.costs_open', [], 'en'))->toBe('Open costs');
+
+    // Namnet ur katalogen, ingen sträng i JavaScript.
+    expect($donut)->toContain("'aria-label': t('container.overview.costs_open')");
+    expect($donut)->not->toContain('Open costs');
+
+    // Länken: hovring som i ItemRow, fokusring, luft i sidled utan att flytta texten.
+    expect($donut)->toContain("props.sliceHref && '-mx-1 rounded px-1 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2'")
+        ->toContain('hover:opacity-80')
+        ->toContain('rounded-pill outline-none');
+
+    // Storleken är dagens: text-meta, gap-1 och ingen höjd eller vertikal padding.
+    preg_match('/<ul\b.*?<\/ul>/s', $donut, $lista);
+
+    expect($lista[0])->toContain('<ul class="flex flex-col gap-1">')
+        ->toContain('text-meta');
+    expect($lista[0])->not->toMatch('/\bmin-h-|\bpy-|\bp-\d/');
+
+    // Utan proppar: ingen länk.
+    expect($donut)->toContain(":is=\"props.sliceHref ? Link : 'div'\"")
+        ->toContain(":is=\"props.href ? Link : 'div'\"");
+});
+
 // --- itempanelen -----------------------------------------------------------
 
 /*
