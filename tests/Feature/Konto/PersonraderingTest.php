@@ -228,8 +228,8 @@ function personraderingPersonensRader(User $person, Container $container): int
         'webhook_endpoint_id' => $endpoint->id,
     ]);
 
-    // Fjorton räknade rader: de tolv ovan plus besöksraden (issue 160) och
-    // öppningsraden (issue 177).
+    // Femton räknade rader: de tolv ovan plus besöksraden (issue 160),
+    // öppningsraden (issue 177) och panelraden (issue 1112).
     return 15;
 }
 
