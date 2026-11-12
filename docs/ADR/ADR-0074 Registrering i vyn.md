@@ -27,6 +27,8 @@ Skalen är presentation och vet ingenting om uppgifter, items eller filer. Varje
 - Väljer användaren *Inbox*, eller väljer hon ingenting, skapas uppgiften i den personliga inboxen.
 - Fångsten går före att varje ny uppgift syns i containerns lista. Användaren ska inte tvingas välja ett item för att kunna fånga en uppgift.
 
+*Tillägg 2026-11-12.* Platsvalet är **en** knapp vars lista börjar med *Inbox* och fortsätter med containerns items, i samma form som itemväljaren på *Costs* och *Documents*. Det är inte en förvald knapp bredvid en *Change*-knapp. Skäl: två knappar läses som två konkurrerande val.
+
 **5. En uppgift som hamnar i inboxen bekräftas med en väg dit.** Bekräftelsen säger att uppgiften ligger i inboxen och har en länk till `/inbox`. Användaren ska inte behöva undra varför den nya uppgiften inte syns i listan. Hamnar en uppgift på ett item men döljs av fliken eller filtret säger raden det.
 
 **6. *New task* lämnar containerns flik.** Knappen ersätts av snabbraden. Sidan `/tasks/create` finns kvar för `/tasks`, itemets flik och plusknappen. Hela formuläret, med datum och återkommande, nås därifrån tills det kan fällas ut i vyn.

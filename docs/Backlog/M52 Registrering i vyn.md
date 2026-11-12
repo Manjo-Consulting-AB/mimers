@@ -4,7 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-11-12, efter genomgången av hur ny information registreras på containerns flikar *Items*, *Documents* och *To do*. Bygger [[ADR-0074 Registrering i vyn]]. Milstolpen gäller skalen och *To do*. *Items* och *Documents* får egna milstolpar när den är byggd (ADR-0074 § 7).
 
-**Releasen:** en, när 356–359 är mergade.
+**Releasen:** en, när 356–360 är mergade.
 
 ---
 
@@ -55,3 +55,15 @@ GitHub #1125. **Läget:** flashen `inbox-task-captured` säger att uppgiften lig
 **Klart när:** bekräftelsen för `inbox-task-captured` har en länk till `/inbox`; andra koder ritas som förut.
 
 **Beror på:** —
+
+### 360. En platsknapp på snabbraden
+
+GitHub #1156. **Läget:** snabbraden på containerns *To do*-flik har två knappar, *Inbox* och *Change…*. När ett item är valt ser de ut som två val som tävlar.
+
+**Lösningen:** platsvalet blir en `<details>`-knapp, i samma form som *Add cost* och *Add document*. *Inbox* står överst i listan och containerns items under. Ett val stannar i knappen utan sidbyte.
+
+**Läs:** [[ADR-0074 Registrering i vyn]] § 4
+
+**Klart när:** snabbraden har en platsknapp i stället för två; listan börjar med *Inbox* och fortsätter med containerns items; ett val visas i knappen utan sidbyte.
+
+**Beror på:** 358
