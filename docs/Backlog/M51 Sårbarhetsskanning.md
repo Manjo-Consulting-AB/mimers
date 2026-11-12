@@ -2,7 +2,7 @@
 
 Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet. Läs dem en gång, inte per issue.
 
-Tillagd 2026-11-12, i samtalet om dragpaketet i [[ADR-0073 Översiktens ordning]] § 6. CI i mimers skannar i dag varken beroenden eller vår egen kod: ingen `composer audit`, ingen `npm audit`, ingen Dependabot och ingen Semgrep. Tony beslutade att det ska till, oavsett dragpaketet. Inget av det kräver en ADR. Det är ett tillägg till CI, inte ett ändrat beslut.
+Tillagd 2026-11-12, i samtalet om dragpaketet i [[ADR-0073 Översiktens ordning]] § 6. CI i mimers skannar i dag varken beroenden eller vår egen kod: ingen `composer audit`, ingen `npm audit`, ingen Dependabot och ingen Semgrep. **Det här är ett förslag och inget beslut.** Tony bad om issuen för att ha förslaget nedskrivet, men har inte beslutat att skanningen ska aktiveras. Issuen ska inte få Build förrän det är beslutat.
 
 **Releasen:** ingen egen. Ändringen gäller CI och rullas inte ut.
 
