@@ -12,9 +12,16 @@ function beroendegranskning(): string
 it('kör composer audit och npm audit enligt schema och på begäran', function () {
     expect(beroendegranskning())
         ->toContain('composer audit --locked')
-        ->toContain('npm audit --omit=dev')
+        ->toContain('npm audit --audit-level=high')
         ->toContain('cron:')
         ->toContain('workflow_dispatch');
+
+    expect(str_contains(beroendegranskning(), '--omit=dev'))->toBeFalse();
+});
+
+it('förklarar vid npm-steget varför devDependencies granskas', function () {
+    expect(beroendegranskning())
+        ->toMatch('/# .*devDependencies granskas.*\n(\s*#.*\n)*\s*- name: npm audit/');
 });
 
 it('utlöses av ändringar i låsfilerna', function () {
