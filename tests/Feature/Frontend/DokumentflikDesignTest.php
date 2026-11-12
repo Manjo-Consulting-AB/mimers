@@ -36,15 +36,14 @@ it('ritar rubrikraden med ikon, rubrik och underrad om containern', function () 
         ->toBe('All documents belonging to Min båt');
 });
 
-it('ritar Lägg till dokument som primärknapp med en meny över items', function () {
+it('ritar Lägg till dokument som infällbart formulär och inte som meny i huvudet', function () {
     $vy = File::get(resource_path('js/pages/Containers/Documents.vue'));
 
-    // Primärknappen är en `<details>` med en absolut panel; ett val leder
-    // till itemets bilageflik, där uppladdningen skrivs.
-    expect($vy)->toContain('<details v-if="items.length > 0"')
-        ->toContain('bg-accent')
-        ->toContain('absolute right-0')
-        ->toContain('?tab=attachments');
+    // Issue 1167: menyn med länkar till itemets bilageflik är borta; uppladdningen
+    // sker i InlineCreate på fliken (se DokumentRegistreringTest).
+    expect($vy)->toContain('<InlineCreate');
+    expect($vy)->not->toContain('<details v-if="items.length > 0"');
+    expect($vy)->not->toContain('absolute right-0');
 });
 
 it('ritar procenten bredvid lagringsstapeln', function () {

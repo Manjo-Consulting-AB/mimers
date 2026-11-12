@@ -233,6 +233,9 @@ class ContainerDocumentController extends Controller
             'storage' => $this->storage($user, $container),
             // Itemväljaren bakom *Lägg till dokument* (Beslut 5).
             'items' => $items,
+            // Taket för en enskild fil, samma som bilagefliken får av
+            // ItemController (issue 1167): uppladdningskön avvisar större filer.
+            'maxUploadBytes' => (int) config('files.max_upload_bytes'),
             // Plusknappens mål på den här fliken (M28 · testarnas fynd
             // 2026-10-07): en meny med samma items som rubrikknappen listar,
             // och ett val leder till itemets bilageflik. Servern bygger raderna

@@ -1,10 +1,12 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import AttachmentUploadQueue from '../../components/AttachmentUploadQueue.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
 import DocumentFilterColumn from '../../components/DocumentFilterColumn.vue';
+import InlineCreate from '../../components/InlineCreate.vue';
 import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import ItemViewSwitch from '../../components/ItemViewSwitch.vue';
 import StorageBar from '../../components/StorageBar.vue';
@@ -69,10 +71,22 @@ defineOptions({
  * itemets bilagesektion använder: två grenar för samma sak glider isär, och
  * den ena hade ritat en trasig bild.
  *
- * **Ingen uppladdning sker här** (Beslut 5). *Lägg till dokument* väljer
- * itemet först och leder till itemets bilageflik `?tab=attachments`, där
- * uppladdningen redan finns (issue 60). Är `items` tom ritas ingen knapp: en
- * meny utan rader är en död yta (issue 174 § Beslut 5).
+ * **Uppladdningen sker här** (issue 1167 · [[ADR-0074 Registrering i vyn]]
+ * § 1–3). *Add document* är det infällbara formuläret (`InlineCreate`) som
+ * rad noll mellan filterraden och listan, och bara när `items` inte är tom:
+ * en yta utan item att ladda upp till är en död yta (issue 174 § Beslut 5).
+ * Överst i formuläret står itemväljaren — en `<details>` som platsknappen på
+ * *To do* (issue 360) — och under den AttachmentUploadQueue (issue 1166) med
+ * det valda itemets ULID, `null` tills ett item är valt. Har containern
+ * exakt ett item är det förvalt, och valet står kvar så länge sidan är öppen.
+ * Uppladdningen går till itemets `attachments` och svaret är `back()`, så
+ * färska props landar här. Formuläret står kvar efter uppladdningen.
+ *
+ * **Markeringen:** ULID:erna i `attachments.data` jämförs före och efter varje
+ * `uploaded`. Nya rader får `bg-accent-soft` i 2000 ms. Kom ingen ny rad med —
+ * filtret eller sidnumreringen döljer den — säger `uploaded_hidden` det.
+ * Plusknappen (`create`) leder fortfarande till itemets bilageflik; dess mål
+ * avgörs efter M55 (ADR-0074 § 7).
  *
  * **Rubrikraden bär ikon, rubrik och underrad; lagringsstapeln och knappen
  * står till höger om den** (M24, testarnas fynd 2026-10-03 ·
@@ -155,6 +169,8 @@ const props = defineProps({
      * och en tom lista ger `null`: ingen meny, ingen knapp.
      */
     create: { type: Object, default: null },
+    /* Största tillåtna filstorlek i byte — samma tak som bilagefliken. */
+    maxUploadBytes: { type: Number, required: true },
 });
 
 const { t } = useTranslations();
@@ -162,6 +178,76 @@ const { eventDate } = useRelativeDate();
 const page = usePage();
 
 const base = computed(() => `/containers/${props.container.ulid}/documents`);
+
+/*
+ * Registreringen i vyn (issue 1167). `createOpen` och `uploading` styr det
+ * infällbara formuläret: stängning mitt i en uppladdning frågar först.
+ */
+const createOpen = ref(false);
+const uploading = ref(false);
+
+/* Itemet filerna laddas upp till, eller null. Ett enda item är förvalt. */
+const selectedItem = ref(props.items.length === 1 ? props.items[0] : null);
+const itemMenu = ref(null);
+
+function chooseItem(option) {
+    selectedItem.value = option;
+    itemMenu.value.open = false;
+}
+
+function closeItemMenu(event) {
+    if (event.key !== 'Escape' || ! itemMenu.value.open) {
+        return;
+    }
+
+    itemMenu.value.open = false;
+    itemMenu.value.querySelector('summary')?.focus();
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+/*
+ * Markeringen. `known` är ULID:erna vi senast såg i listan; den följer
+ * sidan när den byter fråga (filter, sida), men inte under en uppladdning —
+ * då är det just `uploaded` som jämför före och efter.
+ */
+const highlight = ref([]);
+const hiddenNotice = ref(false);
+let highlightTimer = null;
+let known = new Set(props.attachments.data.map((row) => row.ulid));
+
+watch(() => props.attachments.data, (rows) => {
+    if (! uploading.value) {
+        known = new Set(rows.map((row) => row.ulid));
+    }
+});
+
+async function onUploaded() {
+    const before = known;
+
+    await nextTick();
+
+    const current = props.attachments.data.map((row) => row.ulid);
+    const added = current.filter((ulid) => ! before.has(ulid));
+
+    known = new Set(current);
+    clearTimeout(highlightTimer);
+
+    if (added.length === 0) {
+        highlight.value = [];
+        hiddenNotice.value = true;
+
+        return;
+    }
+
+    hiddenNotice.value = false;
+    highlight.value = added;
+    highlightTimer = setTimeout(() => {
+        highlight.value = [];
+    }, 2000);
+}
+
+onBeforeUnmount(() => clearTimeout(highlightTimer));
 
 /*
  * Läget ur adressen. Bara `grid` är ett eget läge: listan är förvalet och
@@ -423,39 +509,6 @@ function toInbox(row) {
 
         <div class="flex flex-wrap items-center gap-3">
             <StorageBar v-if="storage" class="w-full md:w-80" :storage="storage" />
-
-            <!--
-                *Lägg till dokument* (Beslut 2). En `<details>` och inget
-                eget öppet-tillstånd i JavaScript — samma grepp som *Lägg
-                till kostnad* på kostnadsfliken — och listan innehåller de
-                items användaren får SKAPA på. Ett val leder till itemets
-                bilageflik, där uppladdningen skrivs. Panelen ligger
-                absolut och ritas därför inte i flödet.
-            -->
-            <details v-if="items.length > 0" class="relative">
-                <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
-                    <UiIcon name="add" :size="20" class="size-5 shrink-0" />
-
-                    {{ t('container.documents.add') }}
-
-                    <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
-                </summary>
-
-                <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
-                    <p class="text-meta text-ink-subtle">{{ t('container.documents.add_choose_item') }}</p>
-
-                    <ul class="mt-1 flex flex-col">
-                        <li v-for="option in items" :key="option.ulid">
-                            <Link
-                                :href="`/containers/${container.ulid}/items/${option.ulid}?tab=attachments`"
-                                class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
-                            >
-                                {{ option.name }}
-                            </Link>
-                        </li>
-                    </ul>
-                </div>
-            </details>
         </div>
     </div>
 
@@ -595,6 +648,62 @@ function toInbox(row) {
             </div>
         </div>
 
+        <!--
+            Rad noll (issue 1167 · ADR-0074 § 1–3): det infällbara formuläret
+            mellan verktygsraden och listan. Itemväljaren överst är en
+            `<details>` med absolut panel; kön under den är avstängd tills ett
+            item är valt. Formuläret står kvar efter uppladdningen.
+        -->
+        <div v-if="items.length > 0" class="mt-6">
+            <InlineCreate v-model:open="createOpen" :label="t('container.documents.add')" :dirty="uploading">
+                <details ref="itemMenu" class="relative" @keydown="closeItemMenu">
+                    <summary
+                        class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink hover:bg-surface-sunken"
+                    >
+                        <span class="max-w-40 truncate">
+                            {{ selectedItem === null ? t('container.documents.add_choose_item') : selectedItem.name }}
+                        </span>
+
+                        <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
+                    </summary>
+
+                    <div class="absolute left-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                        <p class="text-meta text-ink-subtle">{{ t('container.documents.add_choose_item') }}</p>
+
+                        <ul class="mt-1 flex max-h-80 flex-col overflow-y-auto">
+                            <li v-for="option in items" :key="option.ulid">
+                                <button
+                                    type="button"
+                                    :aria-current="selectedItem?.ulid === option.ulid ? 'true' : undefined"
+                                    class="flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-2 text-left text-body text-ink hover:bg-surface-sunken"
+                                    :class="{ 'font-semibold': selectedItem?.ulid === option.ulid }"
+                                    @click="chooseItem(option)"
+                                >
+                                    <span class="truncate">{{ option.name }}</span>
+                                    <UiIcon v-if="selectedItem?.ulid === option.ulid" name="check" :size="16" class="size-4 shrink-0 text-accent" />
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </details>
+
+                <AttachmentUploadQueue
+                    class="mt-3"
+                    :container-ulid="container.ulid"
+                    :item-ulid="selectedItem?.ulid ?? null"
+                    :max-upload-bytes="maxUploadBytes"
+                    :container-account="container.account"
+                    :container-is-inbox="containerIsInbox"
+                    @busy="uploading = $event"
+                    @uploaded="onUploaded"
+                />
+            </InlineCreate>
+
+            <p v-if="hiddenNotice" role="status" class="mt-1 text-meta text-ink-muted">
+                {{ t('container.documents.uploaded_hidden') }}
+            </p>
+        </div>
+
         <!-- Två tomma lägen, och de säger olika saker: ett filter som inte
              matchar något är ett svar om FRÅGAN, en tom container ett svar om
              innehållet. -->
@@ -640,7 +749,12 @@ function toInbox(row) {
                 </thead>
 
                 <tbody>
-                    <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
+                    <tr
+                        v-for="row in attachments.data"
+                        :key="row.ulid"
+                        class="border-b border-border last:border-b-0"
+                        :class="{ 'bg-accent-soft': highlight.includes(row.ulid) }"
+                    >
                         <td class="py-1 pl-4 pr-4">
                             <span class="flex items-center gap-2">
                                 <!-- Miniatyren bara när varianten finns; annars
@@ -764,6 +878,7 @@ function toInbox(row) {
                 v-for="row in attachments.data"
                 :key="row.ulid"
                 class="flex flex-col gap-2 rounded-card border border-border bg-surface p-3"
+                :class="{ 'bg-accent-soft': highlight.includes(row.ulid) }"
             >
                 <img
                     v-if="preview(row).display === 'thumb'"
