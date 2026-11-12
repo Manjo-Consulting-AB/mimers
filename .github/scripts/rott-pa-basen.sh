@@ -274,7 +274,7 @@ for fil in "${ROTA[@]}"; do
         if php artisan test "$fil" --filter="$(som_filter "$namn")" > "$ARBETE/fall.log" 2>&1 \
             && ! grep -q "No tests found" "$ARBETE/fall.log"; then
             GRONA_FALL=$((GRONA_FALL + 1))
-            echo "::warning file=$fil::testfallet '$namn' går igenom på basen, utan PR:ens implementation. Filen är röd på grund av ett annat testfall, så det här bevisar inget om sitt kriterium - skärp det, eller markera det med `// vakt: <motivering>` på raden direkt ovanför om det med flit ska vara grönt på basen."
+            echo "::warning file=$fil::testfallet '$namn' går igenom på basen, utan PR:ens implementation. Filen är röd på grund av ett annat testfall, så det här bevisar inget om sitt kriterium - skärp det, eller markera det med '// vakt: <motivering>' på raden direkt ovanför om det med flit ska vara grönt på basen."
         fi
     done < <(nya_testnamn "$fil")
 done

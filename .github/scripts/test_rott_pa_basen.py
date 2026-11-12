@@ -92,6 +92,8 @@ def test_omarkt_fall_i_rod_fil_ger_fortfarande_varning():
     kod, ut = _kor_skriptet(BAS, _fil(ROT_FALL, OMARKT_GRON))
     assert kod == 0, ut
     assert "::warning" in ut and "GRON omärkt" in ut, ut
+    assert "// vakt: <motivering>" in ut, ut
+    assert "command substitution" not in ut, ut
 
 
 def test_fil_med_bara_vakter_som_ar_gron_ger_exit_0():
