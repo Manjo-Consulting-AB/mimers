@@ -81,6 +81,10 @@ class StoreCostEntryRequest extends FormRequest
             'currency' => ['nullable', 'string', 'alpha', 'size:3'],
             'description' => ['required', 'string', 'max:255'],
             'supplier' => ['nullable', 'string', 'max:255'],
+            // Returadressen (issue 369 · M56). Formen prövas inte här: den
+            // avgörs av TaskCreateController::safeReturn() i kontrollern, och
+            // en adress som inte godkänns faller tyst tillbaka på itemets flik.
+            'return' => ['nullable', 'string'],
         ];
     }
 }

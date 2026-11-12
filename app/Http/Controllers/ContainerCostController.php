@@ -204,6 +204,17 @@ class ContainerCostController extends Controller
             // raderna ur `$items` — samma grindar, en sanning; se
             // App\Support\Frontend\CreateTarget::forContainerTab().
             'create' => $createTarget->forContainerTab($container, 'costs', $items),
+            // Registreringen i vyn (issue 369 · M56): formuläret på fliken får
+            // samma förval som itemets (valutan ur containerns arv) och
+            // leverantörerna som en OPTIONAL prop, samma konstruktion som i
+            // ItemController::show().
+            'costDefaults' => ['currency' => $container->effectiveCurrency()],
+            'costSuppliers' => Inertia::optional(
+                fn (): array => $listCostSuppliers->handle($user, $container)
+            ),
+            // Raden som just skrevs: ULID:en ur flashen `created_cost` som
+            // CostEntryController::store() sätter vid en godkänd `return`.
+            'createdCost' => $this->createdCost($request),
             'canReport' => $canReport,
             'canUpgrade' => Gate::forUser($user)->allows('viewStorage', $container->account),
             // Pro-delen (Beslut 3): grafen, nedbrytningen och jämförelsen, ur
@@ -373,6 +384,17 @@ class ContainerCostController extends Controller
                 ->resolve($request),
             'suppliers' => $suppliers,
         ];
+    }
+
+    /**
+     * ULID:en ur flashen `created_cost`, eller null. Flashen lever en request
+     * och bär `{ulid}`; allt annat än en sträng i den nyckeln är ingen rad.
+     */
+    private function createdCost(Request $request): ?string
+    {
+        $created = $request->session()->get('created_cost');
+
+        return is_array($created) && is_string($created['ulid'] ?? null) ? $created['ulid'] : null;
     }
 
     /**

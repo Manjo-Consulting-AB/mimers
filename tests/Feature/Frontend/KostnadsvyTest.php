@@ -134,7 +134,10 @@ function kostnadsvyKropp(array $overrides = []): array
  */
 function kostnadsvyKomponent(): string
 {
-    $kod = File::get(resource_path('js/components/ItemCostSection.vue'));
+    // Sektionen och formuläret som sektionen ritar (issue 369: formuläret bor i
+    // CostEntryForm.vue). Provens mönster söker i båda.
+    $kod = File::get(resource_path('js/components/ItemCostSection.vue'))
+        .File::get(resource_path('js/components/CostEntryForm.vue'));
     $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
     $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
 
