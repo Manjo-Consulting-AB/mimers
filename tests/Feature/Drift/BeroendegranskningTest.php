@@ -1,7 +1,8 @@
 <?php
 
 /*
- * Issue 1046: beroendegranskningen är ett eget flöde, inte en del av ci.yml.
+ * Issue 1046: det schemalagda beroendegranskningsflödet. Sedan issue 1117 kör
+ * ci.yml dessutom audit på varje PR, se CiSarbarhetsskanningTest.
  */
 
 function beroendegranskning(): string
@@ -34,11 +35,4 @@ it('ger bara läsbehörighet till innehållet', function () {
     ));
     expect($rader)->toBe(['contents: read']);
     expect(beroendegranskning())->not->toMatch('/^[ \t]+permissions:/m');
-});
-
-it('lämnar ci.yml fri från beroendegranskning', function () {
-    $ci = file_get_contents(base_path('.github/workflows/ci.yml'));
-
-    expect(str_contains($ci, 'composer audit'))->toBeFalse();
-    expect(str_contains($ci, 'npm audit'))->toBeFalse();
 });

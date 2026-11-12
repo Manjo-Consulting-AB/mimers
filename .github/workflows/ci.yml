@@ -74,6 +74,32 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
           if [ "$DOCS_ONLY" != "true" ]; then npm ci; fi
 
+      # Sårbarhetsskanning (M51). Steg i jobbet `test` och inget eget jobb:
+      # GitHub debiterar hel minut per jobb, se Pipeline § Minutbudgeten.
+      # `npm audit` utan --omit=dev med flit: Vue, Inertia m.fl. byggs in i
+      # public/build/ och står bland devDependencies. Fäller steget vid en
+      # känd sårbarhet (composer audit) eller nivån high/critical (npm audit).
+      - name: Sårbarhetsskanning av beroenden
+        env:
+          DOCS_ONLY: ${{ steps.omfang.outputs.docs_only }}
+        run: |
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "Bara docs/ ändrad: sårbarhetsskanningen hoppas över."
+            exit 0
+          fi
+          composer audit --no-interaction
+          npm audit --audit-level=high
+
+      # Semgrep läser vår egen kod. Fäller inte bygget än: de befintliga
+      # fynden ska gås igenom först, och undantag beslutas då. Fynden syns i
+      # körningens logg. Verktyg i CI, inget beroende i composer.json/package.json.
+      - name: Semgrep
+        if: steps.omfang.outputs.docs_only != 'true'
+        continue-on-error: true
+        run: |
+          pip install semgrep
+          semgrep scan --config p/php --config p/javascript --config p/secrets app/ routes/ config/ resources/js/
+
       # Bygget körs före testerna: en av dem läser public/build/manifest.json
       # och bevisar därmed att artefakten faktiskt produceras.
       - name: Bygg frontend
