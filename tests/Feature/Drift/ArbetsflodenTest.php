@@ -127,7 +127,7 @@ it('har versionskommentar efter SHA:n på varje uses-rad', function () {
 it('pekar de fyra åtgärderna på de granskade SHA:erna', function () {
     $forvantat = [
         'actions/checkout' => '3d3c42e5aac5ba805825da76410c181273ba90b1',
-        'actions/setup-node' => 'a0853c24544627f65ddf259abe73b1d18a591444',
+        'actions/setup-node' => '949feb2413d6458794dcd2491c4babbbce0c15c1',
         'actions/upload-artifact' => 'ea165f8d65b6e75b540449e92b4886f43607fa02',
         'shivammathur/setup-php' => 'eb7c497e18156a6bbabfef1d3a82760b9eda3962',
     ];
