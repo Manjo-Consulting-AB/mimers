@@ -34,5 +34,8 @@ jobs:
       - name: Composer audit
         run: composer audit --locked --no-interaction
 
+      # devDependencies granskas med flit, så flaggan som utesluter dem används
+      # inte: paketen som byggs in i appen (Vue, Inertia m.fl.) står där.
+      # --audit-level=high fäller bara vid high eller critical.
       - name: npm audit
-        run: npm audit --omit=dev
+        run: npm audit --audit-level=high
