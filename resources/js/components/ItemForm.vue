@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemCoverPicker from './ItemCoverPicker.vue';
@@ -148,7 +148,19 @@ const props = defineProps({
     canCreateRoot: { type: Boolean, default: false },
     /* Får användaren skapa taggar och kategorier? Ur `can.manage_taxonomy`. */
     canManageTaxonomy: { type: Boolean, default: false },
+    /*
+     * Inbäddat läge (issue 1163 · [[ADR-0074 Registrering i vyn]] § 1–3):
+     * formuläret ligger i `InlineCreate` på en lista och står kvar efter en
+     * sparning. Utan flaggan fungerar formuläret som förut.
+     */
+    inline: { type: Boolean, default: false },
+    /* Ytan sparningen ska landa på igen (`page.url`); bara i det inbäddade läget. */
+    returnTo: { type: String, default: null },
 });
+
+const emit = defineEmits(['dirty', 'created', 'cancel']);
+
+const formElement = ref(null);
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -214,7 +226,8 @@ function guardNavigation(event) {
     const visit = event.detail.visit;
 
     if (
-        leaveConfirmed
+        props.inline
+        || leaveConfirmed
         || ! form.isDirty
         || visit.prefetch
         || visit.method !== 'get'
@@ -251,6 +264,13 @@ function warnBeforeUnload(event) {
 }
 
 const removeBeforeListener = router.on('before', guardNavigation);
+
+/* `InlineCreate` frågar via sin `dirty`-prop i stället för `leaveVisit` (issue 1163). */
+watch(
+    () => form.isDirty,
+    (dirty) => emit('dirty', dirty),
+    { immediate: true },
+);
 
 watch(
     () => form.isDirty,
@@ -554,8 +574,38 @@ function uploadImage(file, account, page) {
     });
 }
 
+/*
+ * Sparningen i det inbäddade läget (issue 1163): `return` för servern tillbaka
+ * till listan, och sidan behåller rullning och tillstånd. Formuläret töms men
+ * kategorin och föräldern står kvar som nya startvärden, så att nästa item
+ * hamnar på samma plats. Fokus går till namnet.
+ */
+function submitInline() {
+    form.transform((data) => ({ ...data, return: props.returnTo }))
+        .post(`/containers/${props.containerUlid}/items`, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: async () => {
+                form.defaults({ category: form.category, parent: form.parent });
+                form.reset();
+
+                await nextTick();
+
+                formElement.value?.querySelector('#name')?.focus();
+                emit('created');
+            },
+            onError: focusFirstError,
+        });
+}
+
 function submit() {
     const url = `/containers/${props.containerUlid}/items`;
+
+    if (props.inline && props.item === null) {
+        submitInline();
+
+        return;
+    }
 
     if (props.item === null) {
         uploadImageAfterCreate();
@@ -570,7 +620,7 @@ function submit() {
 </script>
 
 <template>
-    <form class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+    <form ref="formElement" class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
         <!-- Raden efter *Save and add another* (issue 339): vilket item som
              just skapades, med en länk till det. -->
         <p v-if="created && createdUrl" role="status" class="text-body">
@@ -762,7 +812,7 @@ function submit() {
         <!-- Bilden vid skapandet (issue 341): en bild och ingen annan fil. Den
              laddas upp efter att itemet skapats och blir omslaget. -->
         <FormField
-            v-if="item === null"
+            v-if="item === null && ! inline"
             v-slot="{ describedBy }"
             :label="t('item.form.image')"
             id="image"
@@ -996,11 +1046,26 @@ function submit() {
             </UiButton>
 
             <template v-if="item === null">
-                <UiButton variant="secondary" :pending="form.processing" @click="submitAnother">
+                <UiButton
+                    v-if="! inline"
+                    variant="secondary"
+                    :pending="form.processing"
+                    @click="submitAnother"
+                >
                     {{ t('item.create.submit_another') }}
                 </UiButton>
 
+                <button
+                    v-if="inline"
+                    type="button"
+                    class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="emit('cancel')"
+                >
+                    {{ t('item.create.cancel') }}
+                </button>
+
                 <Link
+                    v-else
                     :href="cancelUrl"
                     class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >

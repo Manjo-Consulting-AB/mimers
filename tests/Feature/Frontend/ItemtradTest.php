@@ -345,8 +345,12 @@ it('låter läget överleva en omladdning', function () {
     // jämför ingenting själv, för en andra läsning är en andra regel.
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
-    expect($vy)->not->toContain('usePage')
-        ->and($vy)->not->toContain('page.url');
+    // Sidan läser inte adressen själv. `usePage()` finns sedan issue 1163 för
+    // `:return-to="page.url"` på registreringsraden och för kontolistan, men
+    // inget annat: ingen läsning av `window.location`, ingen egen querysträng.
+    expect($vy)->not->toContain('window.location')
+        ->and(substr_count($vy, 'page.url'))->toBe(1)
+        ->and($vy)->toContain(':return-to="page.url"');
 });
 
 /*
@@ -949,9 +953,11 @@ it('börjar om i utgångsläget vid en ny filtrering utan att röra adressen', f
 
     // Adressen rörs inte av knappen: sidan har ingen egen router och ingen
     // länk byggs för trycket.
+    // (`page.url` finns sedan issue 1163 en gång, som `:return-to` på
+    // registreringsraden — knappen rör den inte.)
     expect($vy)->not->toContain('router.')
-        ->and($vy)->not->toContain('usePage')
-        ->and($vy)->not->toContain('page.url');
+        ->and($vy)->not->toContain('window.location')
+        ->and(substr_count($vy, 'page.url'))->toBe(1);
 });
 
 /*

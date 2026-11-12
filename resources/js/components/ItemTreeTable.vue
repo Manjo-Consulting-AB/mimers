@@ -131,6 +131,13 @@ const props = defineProps({
      * öppnar flaggan varje gren som standard.
      */
     expandAll: { type: Boolean, default: false },
+    /*
+     * ULID:en på itemet som just registrerades i vyn (issue 1163 ·
+     * [[ADR-0074 Registrering i vyn]] § 2): raden får `bg-accent-soft` och
+     * dess förfäder fälls ut. Vyn nollställer proppen efter 2000 ms; de
+     * utfällda grenarna står kvar.
+     */
+    highlight: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -166,6 +173,33 @@ function isOpen(key) {
 watch(() => props.expandAll, () => {
     open.value = {};
 });
+
+/* Ledena ned till varje förekomst av `ulid`, förfäderna först och noden sist. */
+function trailsTo(nodes, ulid, trail, found) {
+    for (const node of nodes) {
+        const nodeTrail = [...trail, node.ulid];
+
+        if (node.ulid === ulid) {
+            found.push(nodeTrail);
+        }
+
+        trailsTo(node.children, ulid, nodeTrail, found);
+    }
+
+    return found;
+}
+
+watch(() => props.highlight, (ulid) => {
+    if (ulid === null) {
+        return;
+    }
+
+    for (const trail of trailsTo(props.nodes, ulid, [], [])) {
+        for (let length = 1; length < trail.length; length += 1) {
+            open.value[trailKey(trail.slice(0, length))] = true;
+        }
+    }
+}, { immediate: true });
 
 function toggle(key) {
     open.value[key] = ! isOpen(key);
@@ -295,6 +329,7 @@ function isMatch(node) {
                 v-for="row in visibleRows"
                 :key="row.key"
                 class="relative border-b border-border hover:bg-surface-sunken"
+                :class="highlight !== null && row.node.ulid === highlight ? 'bg-accent-soft' : ''"
             >
                 <td class="py-1 pr-4 text-body">
                     <div class="flex items-center gap-1" :style="{ paddingLeft: `${row.depth * 20}px` }">

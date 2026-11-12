@@ -2995,6 +2995,7 @@ return [
             'title' => 'Items',
             'heading' => 'Items',
             'create' => 'New item',
+            'created_hidden' => 'The item was added, but the current filter hides it.',
             'empty' => 'The container is empty.',
 
             // The status of a row, see issue 92 and
