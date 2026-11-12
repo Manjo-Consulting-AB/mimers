@@ -75,6 +75,7 @@ it('landar på en godkänd return med status och created_cost', function () {
         ->and($rad->amount)->toBe(120050);
 });
 
+// vakt: dagens svar till ?tab=costs ska bestå när adressen nekas.
 it('faller tillbaka på itemets kostnadsflik för en extern return', function () {
     [, $anvandare, $container, $item] = kostnadReturKontext();
 
@@ -90,6 +91,7 @@ it('faller tillbaka på itemets kostnadsflik för en extern return', function ()
     expect(CostEntry::query()->where('item_id', $item->id)->count())->toBe(1);
 });
 
+// vakt: svaret utan return är oförändrat.
 it('svarar som förut utan return', function () {
     [, $anvandare, $container, $item] = kostnadReturKontext();
 
@@ -99,6 +101,7 @@ it('svarar som förut utan return', function () {
         ->assertSessionHas('status', 'cost-created');
 });
 
+// vakt: grinden är oförändrad; en return öppnar ingen väg förbi den.
 it('nekar en läsare med och utan return och lämnar valideringen oförändrad', function () {
     [, , $container, $item] = kostnadReturKontext();
 
@@ -127,6 +130,7 @@ it('nekar en läsare med och utan return och lämnar valideringen oförändrad',
     expect(CostEntry::query()->count())->toBe(0);
 });
 
+// vakt: valideringen är oförändrad; en return ändrar inte 422-fallet.
 it('ger 422 för ett ogiltigt formulär även med return', function () {
     [, $anvandare, $container, $item] = kostnadReturKontext();
 
