@@ -1360,10 +1360,11 @@ Route::middleware('auth')->group(function () {
      * **`CloseOccurrence` rörs inte.** Den äger transaktionen — spärren mot
      * öppna beroenden, stängningen, beräkningen av nästa `due_at` och
      * avbrottet av oskickade notiser — och webben anropar den genom samma
-     * `CompleteOccurrenceRequest` som `/api` (issue 22b). En rutt som satte en
-     * förekomst tillbaka till `open` finns inte, med flit: PATCH-rutten nedan
-     * (issue 235) tar bara `open` och `in_progress`, och att STÄNGA går genom
-     * `complete` och `skip`.
+     * `CompleteOccurrenceRequest` som `/api` (issue 22b). Att sätta en avbockad
+     * förekomst tillbaka till `open` är en EGEN handling med egna regler
+     * (issue 1120): `reopen`, App\Actions\Schedule\ReopenOccurrence. PATCH-
+     * rutten nedan (issue 235) tar fortfarande bara `open` och `in_progress`
+     * på en aktiv förekomst, och att STÄNGA går genom `complete` och `skip`.
      *
      * **`/schedules/{schedule}` ligger EFTER `/schedules/create` i filen**, av
      * samma skäl som `/items/create` gör det ovan: `create` är ett fast
@@ -1394,6 +1395,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip'])
         ->scopeBindings()
         ->name('containers.items.schedules.occurrences.skip');
+
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/reopen', [ScheduleOccurrenceController::class, 'reopen'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.occurrences.reopen');
 
     /*
      * Listan och statusen på förekomsten (M26 · issue 235 § Beslut 5).

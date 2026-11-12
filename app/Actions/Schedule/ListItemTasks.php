@@ -172,6 +172,7 @@ class ListItemTasks
 
         $accountUlids = $user->accounts->pluck('ulid')->all();
         $covers = $this->listTodo->covers($occurrences);
+        $reopenable = $this->listTodo->reopenable($occurrences);
 
         $rows = [];
 
@@ -181,7 +182,7 @@ class ListItemTasks
             }
 
             $rows[] = [
-                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids, $covers),
+                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids, $covers, $reopenable),
                 'completed_at' => $occurrence->completed_at->toIso8601String(),
             ];
         }

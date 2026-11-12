@@ -948,10 +948,11 @@ class ListTodo
         // Omslagen räknas på de rader som faktiskt visas — sidan är redan
         // klippt, så en avbockad rad utanför den kostar ingen bild.
         $covers = $this->covers($occurrences);
+        $reopenable = $this->reopenable($occurrences);
 
         return $occurrences
             ->map(fn (ScheduleOccurrence $occurrence): array => [
-                ...$this->row($user, $request, $occurrence, $accountUlids, $covers),
+                ...$this->row($user, $request, $occurrence, $accountUlids, $covers, $reopenable),
                 'completed_at' => $occurrence->completed_at->toIso8601String(),
             ])
             ->values()
@@ -1703,6 +1704,48 @@ class ListTodo
     }
 
     /**
+     * Vilka av de avbockade förekomsterna som går att återöppna (issue 1120),
+     * nycklat på förekomstens `id`. Regeln är ReopenOccurrence::blocker():
+     * ingen senare förekomst i schemat, eller exakt en som är `open`.
+     *
+     * **EN fråga per sida, inte per rad.** Förekomsterna med högre `id` i
+     * sidans scheman hämtas samlat (bara `id`, `schedule_id`, `ulid` och
+     * `status`, ingen modell) och grupperas per schema, på samma sätt som
+     * `covers()` hämtar omslagen för hela sidan. Flaggan är presentation;
+     * rutten prövar samma regel på nytt.
+     *
+     * @param  Collection<int, ScheduleOccurrence>  $occurrences
+     * @return array<int, bool>
+     */
+    public function reopenable(Collection $occurrences): array
+    {
+        $completed = $occurrences->where('status', ScheduleOccurrence::STATUS_COMPLETED);
+
+        if ($completed->isEmpty()) {
+            return [];
+        }
+
+        $later = ScheduleOccurrence::query()
+            ->whereIn('schedule_id', $completed->pluck('schedule_id')->unique()->values())
+            ->where('id', '>', $completed->min('id'))
+            ->orderBy('id')
+            ->get(['id', 'schedule_id', 'ulid', 'status'])
+            ->groupBy('schedule_id');
+
+        $result = [];
+
+        foreach ($completed as $occurrence) {
+            $after = ($later->get($occurrence->schedule_id) ?? collect())
+                ->filter(fn (ScheduleOccurrence $other): bool => $other->id > $occurrence->id)
+                ->values();
+
+            $result[$occurrence->id] = ReopenOccurrence::blocker($after) === null;
+        }
+
+        return $result;
+    }
+
+    /**
      * Raderna ur förekomsterna, grupperade och ogrupperade.
      *
      * Grupperingen räknas per rad mot användarens datum (Beslut 3). En sida kan
@@ -1802,6 +1845,7 @@ class ListTodo
      *
      * @param  list<string>  $accountUlids
      * @param  array<int, array{ulid: string, hasThumb: bool}|null>  $covers
+     * @param  array<int, bool>  $reopenable  förekomst-`id` → går att återöppna (`reopenable()`)
      * @return array<string, mixed>
      */
     public function row(
@@ -1810,8 +1854,10 @@ class ListTodo
         ScheduleOccurrence $occurrence,
         array $accountUlids,
         array $covers = [],
+        array $reopenable = [],
     ): array {
         $item = $occurrence->schedule->item;
+        $canUpdate = Gate::forUser($user)->allows('update', $item);
 
         return [
             // Resursen, med allt den bär, och de fyra nycklarna BREDVID
@@ -1821,7 +1867,11 @@ class ListTodo
             ...TodoEntryResource::make($occurrence)->resolve($request),
             'account' => $this->account($item->container->account->ulid, $accountUlids),
             'can' => [
-                'update' => Gate::forUser($user)->allows('update', $item),
+                'update' => $canUpdate,
+                // Återöppningen (issue 1120): `update`, en avbockad rad och
+                // en serie där nästa förekomst är orörd. Alltid false på en
+                // öppen rad.
+                'reopen' => $canUpdate && ($reopenable[$occurrence->id] ?? false),
                 // Flytten (M28 · issue 784, [[ADR-0053 Flytt och kopiering]]
                 // § 2 och § 6): `delete` på radens item — samma grind som
                 // flytten på uppgiftens sida (issue 243). En flytt tar bort

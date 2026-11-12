@@ -1119,6 +1119,9 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/schedules/{schedule}/inbox',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
+        // Issue 1120: återöppningen av en avbockad uppgift. Grinden är itemets
+        // `update`, som för `complete`; ingen `container_access`-rad rörs.
+        'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/reopen',
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies',
         'containers',

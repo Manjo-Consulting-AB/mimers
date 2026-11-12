@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Schedule\ChangeOccurrence;
 use App\Actions\Schedule\CloseOccurrence;
+use App\Actions\Schedule\ReopenOccurrence;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\CompleteOccurrenceRequest;
@@ -15,6 +16,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -149,6 +151,30 @@ class ScheduleOccurrenceController extends Controller
         $changed->setRelation('completedByAccount', null);
 
         return new ScheduleOccurrenceResource($changed);
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence}/reopen — 200 (issue 1120). Öppnar en avbockad
+     * förekomst igen; svaret är `{"data": {"reopened": …, "removed": ulid|null}}`
+     * i samma form som `complete` svarar `closed`/`next`. Grinden är itemets
+     * `update`, och rutten har ingen kropp.
+     */
+    public function reopen(Request $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, ReopenOccurrence $reopenOccurrence): JsonResponse
+    {
+        Gate::authorize('update', $schedule->item);
+
+        $result = $reopenOccurrence->handle($schedule, $occurrence, $request->user());
+
+        $reopened = $result['reopened'];
+        $reopened->setRelation('completedByAccount', null);
+
+        return response()->json([
+            'data' => [
+                'reopened' => new ScheduleOccurrenceResource($reopened),
+                'removed' => $result['removed']?->ulid,
+            ],
+        ]);
     }
 
     /**

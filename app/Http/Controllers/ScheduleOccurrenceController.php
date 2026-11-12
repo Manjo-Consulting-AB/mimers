@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Schedule\ChangeOccurrence;
 use App\Actions\Schedule\CloseOccurrence;
+use App\Actions\Schedule\ReopenOccurrence;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\CompleteOccurrenceRequest;
 use App\Http\Requests\Schedule\UpdateOccurrenceRequest;
@@ -41,10 +42,11 @@ use Inertia\Response;
  * `fixed` från kalendern är Actionens regel (issue 22b § Beslut 4) och
  * prövas på `/api`; webben ärver den genom att göra exakt samma anrop.
  *
- * **Ingen ny FormRequest och ingen återöppning.** `CompleteOccurrenceRequest`
- * delas rakt av — `account` krävs, `completion_note` är valfri. Det finns
- * ingen rutt som sätter en förekomst tillbaka till `open`, med flit
- * (issue 22b § Beslut 1): en `{"status":"open"}`-kropp vore just den vägen.
+ * **Ingen ny FormRequest för avsluten.** `CompleteOccurrenceRequest`
+ * delas rakt av — `account` krävs, `completion_note` är valfri. Återöppningen
+ * är en egen rutt, `reopen()` (issue 1120), utan kropp: en
+ * `{"status":"open"}`-kropp är fortfarande inte vägen dit (issue 22b
+ * § Beslut 1).
  *
  * **Grinden är ITEMETS `update`** (Beslut 1, issue 71 § Beslut 5): att bocka
  * av ändrar en förekomst som redan finns. En `read`-mottagare ser historiken
@@ -159,6 +161,37 @@ class ScheduleOccurrenceController extends Controller
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         return $this->close($request, $schedule, $occurrence, $closeOccurrence, $translator, ScheduleOccurrence::STATUS_SKIPPED);
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence}/reopen — 302 tillbaka (issue 1120).
+     *
+     * Öppnar en avbockad förekomst igen. Grinden är itemets `update`, som för
+     * `complete`; rutten har ingen kropp och ingen FormRequest. Ett domänfel
+     * (`occurrence.not_completed`, `occurrence.next_started`) blir ett
+     * formulärfel på `occurrence`, som i `close()`.
+     */
+    public function reopen(
+        Request $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        ScheduleOccurrence $occurrence,
+        ReopenOccurrence $reopenOccurrence,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('update', $schedule->item);
+
+        try {
+            $reopenOccurrence->handle($schedule, $occurrence, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages([
+                'occurrence' => $this->occurrenceMessage($e, $translator),
+            ]);
+        }
+
+        return back()->with('status', 'occurrence-reopened');
     }
 
     /**
@@ -302,6 +335,13 @@ class ScheduleOccurrenceController extends Controller
      */
     private function occurrenceMessage(ApiException $exception, ApiErrorTranslator $translator): string
     {
+        // `occurrence.next_started` bär `data.next` som en array (issue 1120),
+        // av samma skäl som `blocked_by`: översättaren skickar `data` rakt in
+        // i `trans()` som ersättningar. Meningen har inga platshållare.
+        if ($exception->errorCode() === 'occurrence.next_started') {
+            return (string) trans('ui.error.occurrence.next_started');
+        }
+
         if ($exception->errorCode() !== 'occurrence.blocked') {
             return $translator->message($exception);
         }

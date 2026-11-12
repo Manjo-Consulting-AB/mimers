@@ -307,6 +307,35 @@ function complete() {
 }
 
 /*
+ * Återöppningen (issue 1120): på en avbockad rad är den fyllda bocken en knapp
+ * när servern satt `entry.can.reopen`. Egen form och inte `form`: den skickar
+ * ingen kropp, och avbockningens `account` har inget där att göra. Medan svaret
+ * är på väg ritas den tomma cirkeln, spegelvänt mot `completing` ovan, så att
+ * ändringen syns direkt. Rutten är `reopen` bredvid `complete` och `skip`.
+ */
+const reopenForm = useForm({});
+const reopening = ref(false);
+
+function reopen() {
+    reopening.value = true;
+
+    reopenForm.post(
+        occurrenceActionUrl(
+            props.entry.container.ulid,
+            props.entry.item.ulid,
+            props.entry.schedule.ulid,
+            props.entry.ulid,
+            'reopen',
+        ),
+        {
+            preserveScroll: true,
+            onError: () => { reopening.value = false; },
+            onCancel: () => { reopening.value = false; },
+        },
+    );
+}
+
+/*
  * Listan och statusen (M26 · issue 236 § Beslut 4). Två kontroller bakom
  * samma grind som avbockningen — `entry.can.update` — och bara på en rad som
  * inte är *Done*: en stängd förekomst kan inte ändras (ChangeOccurrence nekar
@@ -413,6 +442,7 @@ function chooseTarget(target) {
  */
 const rowError = computed(
     () => form.errors.occurrence
+        || reopenForm.errors.occurrence
         || listForm.errors.occurrence
         || listForm.errors.gtd_list
         || listForm.errors.status
@@ -463,9 +493,29 @@ function toggleProgress() {
             <UiIcon :name="iconRole" :tile="isDone ? 'neutral' : due.state" />
         </span>
 
-        <!-- Klar (Beslut 5): en fylld bock, ingen knapp och inget formulär. -->
+        <!-- Klar (Beslut 5): en fylld bock. Med `can.reopen` (issue 1120) är
+             den en knapp som öppnar uppgiften igen; utan den en span utan
+             handling. -->
         <template v-if="isDone">
+            <form v-if="entry.can.reopen" @submit.prevent="reopen">
+                <button
+                    type="submit"
+                    :disabled="reopenForm.processing"
+                    :aria-label="reopenForm.processing ? t('common.pending.reopen') : t('todo.reopen')"
+                    class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                    :class="{ 'disabled:opacity-100': reopening }"
+                >
+                    <span v-if="! reopening" class="flex h-5 w-5 items-center justify-center rounded-full bg-success">
+                        <UiIcon name="check" :size="16" class="h-3 w-3 text-ink-on-accent" />
+                    </span>
+
+                    <!-- Den tomma cirkeln, som den öppna raden ritar den. -->
+                    <span v-else aria-hidden="true" class="h-5 w-5 rounded-full border-2" :class="circleClass" />
+                </button>
+            </form>
+
             <span
+                v-else
                 aria-hidden="true"
                 class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
             >

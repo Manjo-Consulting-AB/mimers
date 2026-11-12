@@ -179,6 +179,13 @@ class AuditLog extends Model
     public const ACTION_SCHEDULE_OCCURRENCE_SKIPPED = 'schedule_occurrence.skipped';
 
     /**
+     * En avbockad förekomst öppnades igen (issue 1120). Den förekomst som
+     * raderades när nästa var orörd loggas INTE — den var en följd av
+     * avbockningen. Skrivningen ligger i App\Actions\Schedule\ReopenOccurrence.
+     */
+    public const ACTION_SCHEDULE_OCCURRENCE_REOPENED = 'schedule_occurrence.reopened';
+
+    /**
      * Listan eller statusen på en förekomst byttes (M26 · issue 235). `meta`
      * bär namnen på de fält som ändrades i `changed` — historikraden ritar
      * fältorden ur dem — och `from`/`to` per fält, och ingenting annat: en
