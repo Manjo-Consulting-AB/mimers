@@ -261,8 +261,12 @@ it('sätter ett vänteläge runt varje router-anrop', function () {
         //
         // `str_contains` och inte `toContain` — Pests `toContain` tar fler
         // nålar, inte ett felmeddelande.
+        //   running-flagga     AttachmentUploadQueue.vue (issue 367): kön är
+        //                      sekventiell, `running` sätts före varje anrop
+        //                      och nollställs när kön tar slut eller stannar.
         $vantelage = str_contains($kod, 'onStart:') && str_contains($kod, 'onFinish:')
-            || str_contains($kod, 'await router.') && str_contains($kod, '} finally {') && str_contains($kod, '= false');
+            || str_contains($kod, 'await router.') && str_contains($kod, '} finally {') && str_contains($kod, '= false')
+            || str_contains($kod, 'running.value = true') && str_contains($kod, 'running.value = false');
 
         expect($vantelage)->toBeTrue(
             "{$sokvag} gör ett router-anrop utan vänteläge (onStart/onFinish eller await i try/finally)"
