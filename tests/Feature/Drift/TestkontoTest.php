@@ -148,7 +148,7 @@ it('avvisar en befintlig adress, även med andra versaler, utan att skriva någo
     User::factory()->create(['email' => 'finns@example.test']);
     $före = testkontoRader();
 
-    artisan('testkonto:skapa', ['email' => 'FINNS@Example.test'])->assertExitCode(1)->run();
+    artisan('testkonto:skapa', ['email' => 'FINNS@Example.test'])->expectsOutputToContain('Det finns redan ett konto med adressen FINNS@Example.test.')->assertExitCode(1)->run();
 
     expect(testkontoRader())->toBe($före);
 });
@@ -189,6 +189,7 @@ it('lämnar ingenting kvar när ett steg faller', function () {
 
     expect(testkontoRader())->toBe($före);
     expect(DB::table('usage_counter')->count())->toBe(0);
+    expect(Storage::disk('files')->allFiles())->toBe([]);
 });
 
 it('ger samma antal containers, items och bilagor vid två körningar', function () {

@@ -26,6 +26,7 @@ use App\Models\Favorite;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\Schedule;
+use App\Models\StoredFile;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -33,6 +34,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 use RuntimeException;
@@ -187,6 +189,8 @@ class TestkontoSkapa extends Command
         // Skiftlägesokänsligt: `Mia@Manjo.ME` är samma adress som
         // `mia@manjo.me`, och kommandot skriver aldrig över ett konto.
         if (User::query()->whereRaw('lower(email) = ?', [mb_strtolower($email)])->exists()) {
+            $this->error("Det finns redan ett konto med adressen {$email}.");
+
             return self::FAILURE;
         }
 
@@ -219,6 +223,7 @@ class TestkontoSkapa extends Command
                 return $user;
             });
         } catch (Throwable $e) {
+            $this->removeOrphanedFiles();
             $this->error('Kontot skapades inte: '.$e->getMessage());
 
             return self::FAILURE;
@@ -229,6 +234,31 @@ class TestkontoSkapa extends Command
         $this->summarize($user);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Efter en rollback ligger raderna borta men bytes som StoreAttachment
+     * skrivit står kvar: dess egen städning gäller bara dess egen transaktion,
+     * och inne i vår yttre är den en savepoint. Tar bort de filer som skrevs
+     * under körningen och vars `stored_file`-rad inte längre finns.
+     */
+    private function removeOrphanedFiles(): void
+    {
+        foreach ($this->attachments as $attachment) {
+            $path = $attachment->storedFile->storage_path;
+
+            if (! StoredFile::query()->where('storage_path', $path)->exists()) {
+                $disk = Storage::disk('files');
+                $disk->delete($path);
+
+                // Bildvarianterna ligger bredvid originalet som `<sökväg>_namn`.
+                foreach ($disk->files(dirname($path)) as $file) {
+                    if (str_starts_with($file, $path.'_')) {
+                        $disk->delete($file);
+                    }
+                }
+            }
+        }
     }
 
     /**
