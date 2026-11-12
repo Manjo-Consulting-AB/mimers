@@ -37,6 +37,16 @@ return [
         'cancel' => 'Cancel',
     ],
 
+    // The discard question of the collapsible create form, see issue 356 ·
+    // [[ADR-0074 Registrering i vyn]] § 3 · resources/js/components/InlineCreate.vue.
+    'inline_create' => [
+        'discard' => [
+            'heading' => 'Discard your changes?',
+            'confirm' => 'Discard',
+            'cancel' => 'Keep editing',
+        ],
+    ],
+
     /*
      * Datumregeln, se issue 104 och [[ADR-0042 Designsystemet]] § Konsekvenser.
      *
