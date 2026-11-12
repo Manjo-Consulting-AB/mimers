@@ -92,6 +92,7 @@ function ikonRoller(): array
         'open' => 'eye',
         'move-up' => 'arrow-up',
         'move-down' => 'arrow-down',
+        'drag' => 'grip-vertical',
     ];
 }
 

@@ -12,31 +12,78 @@ import { useTranslations } from '../composables/useTranslations.js';
  * panelen. Den första panelens *Move up* och den sista panelens *Move down* är
  * inaktiva.
  *
+ * Från `lg:` har raden ett draghandtag (issue 1115 · ADR-0073 § 6), och
+ * ramen är `draggable` i läget. Draget är webbläsarens HTML5-drag: ramen bär
+ * panelens nyckel i `dataTransfer`, markerar sig med en ram i `border-accent`
+ * när den är målet (`dropTarget`) och säger `panel-dragstart`, `panel-dragover`,
+ * `panel-drop` (med den släppta nyckeln) och `panel-dragend`. Handtaget är
+ * `aria-hidden`: pilarna är vägen för tangentbord och skärmläsare.
+ *
  * Ramen flyttar ingenting själv: den säger bara `move` med riktningen, och
  * sidan äger listan. Ingen sträng står här — namnet kommer färdigt som propp
  * och orden ur `t()`.
  */
-defineProps({
+const props = defineProps({
     panelKey: { type: String, required: true },
     /* Panelens rubrik, översatt av sidan. */
     name: { type: String, required: true },
     editing: { type: Boolean, default: false },
     first: { type: Boolean, default: false },
     last: { type: Boolean, default: false },
+    /* Panelen är målet för ett drag just nu. */
+    dropTarget: { type: Boolean, default: false },
 });
 
-defineEmits(['move']);
+const emit = defineEmits(['move', 'panel-dragstart', 'panel-dragover', 'panel-drop', 'panel-dragend']);
+
+function onDragStart(event) {
+    event.dataTransfer?.setData('text/plain', props.panelKey);
+
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+    }
+
+    emit('panel-dragstart');
+}
+
+function onDragOver(event) {
+    if (!props.editing) {
+        return;
+    }
+
+    event.preventDefault();
+    emit('panel-dragover');
+}
+
+function onDrop(event) {
+    if (!props.editing) {
+        return;
+    }
+
+    event.preventDefault();
+    emit('panel-drop', event.dataTransfer?.getData('text/plain') ?? '');
+}
 
 const { t } = useTranslations();
 </script>
 
 <template>
-    <div>
+    <div
+        :draggable="editing ? 'true' : undefined"
+        @dragstart="editing && onDragStart($event)"
+        @dragover="onDragOver"
+        @drop="onDrop"
+        @dragend="editing && emit('panel-dragend')"
+    >
         <div
             v-if="editing"
-            class="mb-2 flex items-center justify-between gap-2 rounded-control border border-border bg-surface-sunken px-3"
+            class="mb-2 flex items-center justify-between gap-2 rounded-control border bg-surface-sunken px-3"
+            :class="dropTarget ? 'border-accent' : 'border-border'"
         >
-            <span class="font-medium">{{ name }}</span>
+            <span class="flex items-center gap-2">
+                <span class="hidden lg:flex" aria-hidden="true"><UiIcon name="drag" /></span>
+                <span class="font-medium">{{ name }}</span>
+            </span>
 
             <span class="flex items-center">
                 <button
