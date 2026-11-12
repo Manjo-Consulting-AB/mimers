@@ -2379,12 +2379,11 @@ return [
          * meets instead of the link: she is not a member of the container's
          * account and cannot open that account's plan page at all.
          *
-         * `add` opens the item picker and not a form: a cost belongs to an
-         * item ([[ADR-0016 Kostnadsregistrering]]) and the row is written on
-         * the item's own tab (issue 168). `add_choose_item` is the picker's
-         * own question, and both are new keys rather than
-         * `item.cost.form_heading` — that one names a form this page does
-         * not carry.
+         * `add` is the label of the collapsible form above the table (issue
+         * 1170 · [[ADR-0074 Registrering i vyn]]); a cost belongs to an item
+         * ([[ADR-0016 Kostnadsregistrering]]), so `add_choose_item` is the
+         * item picker's own question inside it. `created_hidden` is the
+         * status line when the period, filter or page hides the new row.
          *
          * The five column words are the table's. `item` is the item's name,
          * printed verbatim: it is the user's own word and is never looked up
@@ -2396,6 +2395,7 @@ return [
 
             'add' => 'Add cost',
             'add_choose_item' => 'Which item?',
+            'created_hidden' => 'The cost was added, but the current period, filter or page hides it.',
 
             'total' => 'Total',
             'this_year' => 'This year (:year)',

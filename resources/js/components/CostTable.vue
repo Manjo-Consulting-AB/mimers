@@ -50,6 +50,8 @@ const props = defineProps({
     rows: { type: Array, required: true },
     /* Containerns ULID — itemets adress kräver båda leden. */
     containerUlid: { type: String, required: true },
+    /* ULID:en på raden som just skrevs; den får `bg-accent-soft` (issue 1170). */
+    highlight: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -88,7 +90,11 @@ const date = (row) => formatDateOnly(row.incurred_on, locale.value);
         </thead>
 
         <tbody>
-            <tr v-for="row in rows" :key="row.ulid" class="border-b border-border">
+            <tr
+                v-for="row in rows"
+                :key="row.ulid"
+                :class="['border-b border-border', highlight !== null && row.ulid === highlight ? 'bg-accent-soft' : '']"
+            >
                 <td class="py-1 pr-4 text-body text-ink-muted">
                     <time :datetime="row.incurred_on">{{ date(row) }}</time>
                 </td>
