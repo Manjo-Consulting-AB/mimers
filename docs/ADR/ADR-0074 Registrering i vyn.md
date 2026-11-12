@@ -33,7 +33,7 @@ Skalen är presentation och vet ingenting om uppgifter, items eller filer. Varje
 
 **6. *New task* lämnar containerns flik.** Knappen ersätts av snabbraden. Sidan `/tasks/create` finns kvar för `/tasks`, itemets flik och plusknappen. Hela formuläret, med datum och återkommande, nås därifrån tills det kan fällas ut i vyn.
 
-**7. Ordningen är *To do*, *Items*, *Documents*.** *To do* först, eftersom vinsten är störst och skrivvägarna redan finns. *Items* därefter, med namnet i raden, övriga fält bakom *More details* och ett plus på varje trädnod för att skapa ett barn. *Documents* sist, eftersom uppladdningen bär mest tillstånd: kö, förlopp, fel per fil och kopplingen till ett item. Kortkommandot `N` och plusknappens mål bestäms när alla tre är byggda.
+**7. Ordningen är *To do*, *Items*, *Documents*, *Costs*.** *To do* först, eftersom vinsten är störst och skrivvägarna redan finns. *Items* därefter, med namnet i raden, övriga fält bakom *More details* och ett plus på varje trädnod för att skapa ett barn. *Documents* därefter, eftersom uppladdningen bär mest tillstånd: kö, förlopp, fel per fil och kopplingen till ett item. *Costs* sist (tillägg 2026-11-12). Kortkommandot `N` och plusknappens mål bestäms när alla fyra är byggda.
 
 ## Motivering
 
@@ -48,9 +48,19 @@ Inboxen som förval håller fast vid ADR-0054:s grundtanke att fånga först och
 - Målväljaren kan begränsas till en container, så att containerns rad bara erbjuder containerns egna items.
 - Bekräftelsen för `inbox-task-captured` får en länk, och den gäller alla ytor som fångar till inboxen.
 - *Items* och *Documents* får egna milstolpar när *To do* är byggd.
+- Kostnadsskrivningen (`POST …/costs`) tar emot `return`, godkänd av `TaskCreateController::safeReturn()`, och svarar med `status=cost-created` och `created_cost`. Utan `return` gäller dagens svar till itemets kostnadsflik (tillägg 2026-11-12).
 
 ## Alternativ
 
 - **Ett item krävs på containerns rad.** Varje ny uppgift hade synts i listan, men fångsten hade krävt ett val först. Avvisat av skälet i § 4.
 - **En modal eller en låda.** Ytterligare ett lager, och avståndet mellan det som registreras och listan består. Avvisat.
 - **En komponent för alla tre datatyperna.** Hade kopplat ihop affärslogiken för uppgifter, items och filer. Avvisat till förmån för två presentationsskal (§ 1).
+
+## Tillägg 2026-11-12: *Costs*
+
+Tonys beslut 2026-11-12. Containerns *Costs*-flik följer samma mönster som *Documents*, med det infällbara formuläret (§ 1).
+
+- **Platsen.** Raden står direkt ovanför kostnadstabellen och efter brickorna och Pro-delen, eftersom den är rad noll i listan den fyller på (§ 2).
+- **Itemväljaren.** Itemet väljs i en enda knapp med en lista, i samma form som platsknappen på *To do* (issue 360) och itemväljaren på *Documents* (issue 368). Har containern ett enda item är det förvalt.
+- **Ordningen.** § 7 omfattar nu fyra flikar: *To do*, *Items*, *Documents*, *Costs*.
+- **Konsekvens.** Kostnadsskrivningen tar emot `return` (se Konsekvenser).
