@@ -4,7 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-11-12. Bygger [[ADR-0074 Registrering i vyn]] § 7 för *Documents*, den sista av de tre milstolparna i ordningen *To do*, *Items*, *Documents*. Skalen kom i [[M52 Registrering i vyn]] och *Items* i [[M54 Registrering i vyn - Items]]. Uppladdningskön bryts ut ur bilagefliken (367), och containerns *Documents*-flik får ett infällbart formulär med itemväljare och kö (368). Issuerna skrevs direkt i GitHub (#1166, #1167) och är sammanfattade här.
 
-**En öppen fråga som återstår efter M55:** ADR-0074 § 7 säger att kortkommandot `N` och plusknappens mål bestäms när alla tre flikarna är byggda. Det är de nu, men frågan är inte avgjord. Plusknappen (`CreateTarget::forContainerTab()`) leder fortfarande till itemets bilageflik på *Documents*, och `/items/create` finns kvar för *Items*. Frågan står också i [[Tankar]] § Öppet.
+**En öppen fråga som återstår efter M55:** ADR-0074 § 7 säger att kortkommandot `N` och plusknappens mål bestäms när alla tre flikarna är byggda. När M55 är byggd är alla tre flikarna klara, men frågan är fortfarande öppen. Plusknappen (`CreateTarget::forContainerTab()`) leder fortfarande till itemets bilageflik på *Documents*, och `/items/create` finns kvar för *Items*. Frågan står också i [[Tankar]] § Öppet.
 
 **Releasen:** en, när 367–368 är mergade.
 
