@@ -622,6 +622,12 @@ return [
         'password' => 'Password',
     ],
 
+    // Issue 359: the link after a flash message, one per code that has an
+    // address in FlashMessage's table.
+    'flash_link' => [
+        'inbox-task-captured' => 'Open Inbox',
+    ],
+
     'flash' => [
         'trash-emptied' => 'The trash has been emptied.',
         'verification-link-sent' => 'A new verification email has been sent.',

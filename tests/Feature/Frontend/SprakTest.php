@@ -1610,3 +1610,10 @@ it('har återöppningens ord i ui.php', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->toBe($mening);
     }
 });
+
+/*
+ * Issue 359 · Länken efter inboxens bekräftelse har sin text i katalogen.
+ */
+it('har länktexten för inboxens bekräftelse i ui.php', function () {
+    expect(Lang::get('ui.flash_link.inbox-task-captured', [], 'en'))->toBe('Open Inbox');
+});
