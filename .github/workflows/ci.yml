@@ -74,6 +74,16 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
           if [ "$DOCS_ONLY" != "true" ]; then npm ci; fi
 
+      # Semgrep läser vår egen kod. Fäller inte bygget än: de befintliga
+      # fynden ska gås igenom först, och undantag beslutas då. Fynden syns i
+      # körningens logg. Verktyg i CI, inget beroende i composer.json/package.json.
+      - name: Semgrep
+        if: steps.omfang.outputs.docs_only != 'true'
+        continue-on-error: true
+        run: |
+          pip install semgrep
+          semgrep scan --config p/php --config p/javascript --config p/secrets app/ routes/ config/ resources/js/
+
       # Bygget körs före testerna: en av dem läser public/build/manifest.json
       # och bevisar därmed att artefakten faktiskt produceras.
       - name: Bygg frontend
