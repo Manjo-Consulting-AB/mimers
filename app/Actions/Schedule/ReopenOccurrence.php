@@ -59,19 +59,12 @@ class ReopenOccurrence
             return null;
         }
 
-        // Orörd = aktiv men inte påbörjad. Uttryckt så och inte som en
-        // jämförelse med `open`: ListaOchStatusTest vaktar att ingen sådan
-        // jämförelse finns utanför modellen och OpenNextOccurrence.
-        if ($later->count() === 1 && self::untouched($later->first())) {
+        // Orörd = `open`: varken påbörjad eller stängd.
+        if ($later->count() === 1 && $later->first()->status === ScheduleOccurrence::STATUS_OPEN) {
             return null;
         }
 
         return $later->first();
-    }
-
-    private static function untouched(ScheduleOccurrence $occurrence): bool
-    {
-        return $occurrence->isActive() && $occurrence->status !== ScheduleOccurrence::STATUS_IN_PROGRESS;
     }
 
     /**
@@ -110,9 +103,7 @@ class ReopenOccurrence
                 $removed->delete();
             }
 
-            // Seriens första aktiva status är `open` (ACTIVE_STATUSES[0]);
-            // se blocker() om varför konstanten för `open` inte skrivs ut här.
-            $locked->status = ScheduleOccurrence::ACTIVE_STATUSES[0];
+            $locked->status = ScheduleOccurrence::STATUS_OPEN;
             $locked->completed_at = null;
             $locked->completed_by_user_id = null;
             $locked->completed_by_account_id = null;

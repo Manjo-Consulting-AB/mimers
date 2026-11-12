@@ -380,6 +380,8 @@ it('har ingen jämförelse med open kvar utanför modellen', function () {
         // Registreringens läge (inställningen), inte förekomstens status.
         'Actions/Auth/AdmitRegistration.php',
         'Actions/Schedule/OpenNextOccurrence.php',
+        // Återöppningen sätter tillbaka open (issue 1120).
+        'Actions/Schedule/ReopenOccurrence.php',
         'Models/ScheduleOccurrence.php',
     ]);
 
