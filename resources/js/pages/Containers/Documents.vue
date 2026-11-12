@@ -687,7 +687,7 @@ function toInbox(row) {
                         <td class="py-1 pr-4">
                             <div class="flex flex-wrap items-center gap-3">
                                 <a
-                                    :href="fileUrl(row.ulid)"
+                                    :href="`${fileUrl(row.ulid)}?download=1`"
                                     class="inline-flex min-h-11 items-center text-accent hover:underline"
                                 >
                                     {{ t('container.documents.download') }}

@@ -127,7 +127,7 @@ class AttachmentDownloadController extends Controller
         $this->recordOpen($request, $attachment, $variant, $recordAttachmentOpen);
 
         if ($filorigin !== null) {
-            $svar = redirect()->to(self::signedDeliveryUrl($attachment, $variant));
+            $svar = redirect()->to(self::signedDeliveryUrl($attachment, $variant, $request->boolean('download')));
         } else {
             // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
             // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
@@ -283,7 +283,7 @@ class AttachmentDownloadController extends Controller
      * hamnar i en logg eller ett `Referer`-huvud ska vara död när någon
      * hittar den.
      */
-    private static function signedDeliveryUrl(Attachment $attachment, mixed $variant): string
+    private static function signedDeliveryUrl(Attachment $attachment, mixed $variant, bool $download = false): string
     {
         // Varianten valideras före präglingen: ett okänt värde eller en
         // variant som saknas ger 404 redan här. Annars hade en signerad länk
@@ -296,6 +296,13 @@ class AttachmentDownloadController extends Controller
 
         if (is_string($variant)) {
             $parameters['variant'] = $variant;
+        }
+
+        // Nedladdningsuppsåtet signeras in i URL:en: parametern ingår i
+        // signaturen och kan varken läggas till eller tas bort efteråt. Det
+        // kan bara skärpa leveransen till attachment, aldrig vidga den.
+        if ($download) {
+            $parameters['download'] = 1;
         }
 
         return URL::temporarySignedRoute(

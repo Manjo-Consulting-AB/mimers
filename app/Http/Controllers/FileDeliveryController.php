@@ -38,9 +38,12 @@ class FileDeliveryController extends Controller
     {
         $attachment->load('storedFile');
 
+        // `download=1` är signerat av appdomänen (ingår i signaturen) och kan
+        // bara stänga av inline, aldrig slå på det.
+        //
         // `inline: true` — det är här en egen origin finns att rendera i. Vad
         // som får använda den avgörs av tillåt-listan på serverns lagrade
         // MIME-typ, aldrig av URL:en (Beslut 5).
-        return AttachmentDelivery::make($attachment, $request->query('variant'), inline: true);
+        return AttachmentDelivery::make($attachment, $request->query('variant'), inline: ! $request->boolean('download'));
     }
 }

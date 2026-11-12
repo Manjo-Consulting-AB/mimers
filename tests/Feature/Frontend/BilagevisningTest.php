@@ -528,6 +528,14 @@ it('har en nedladdningslänk på varje bilagerad, också de som ritas inline', f
     expect($nedladdning[0])->not->toContain('v-if');
 });
 
+it('låter varje Download-länk bära download=1 men rör inte visande länkar', function () {
+    $vy = bilagevisningVy();
+
+    expect($vy)->toContain('/files/${attachment.ulid}?download=1');
+    expect($vy)->toContain('/files/${viewer.ulid}?download=1');
+    expect(substr_count($vy, '?download=1'))->toBe(2);
+});
+
 it('reparerar aldrig en trasig bild i komponenten', function () {
     // Uppslaget på servern är det som gör en <img> ärlig (Beslut 1). En
     // `onerror` i vyn hade varit en andra sanning om vilka derivat som finns.
