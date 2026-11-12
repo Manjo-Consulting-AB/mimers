@@ -2060,6 +2060,16 @@ return [
             'account' => 'Account',
             'created' => 'Created',
             'view_all' => 'View all',
+
+            // The edit mode of the overview (issue 1114 · ADR-0073 § 5). The
+            // panel's name in `:panel` is the panel's own heading above.
+            'customize' => [
+                'open' => 'Customize overview',
+                'done' => 'Done',
+                'reset' => 'Reset to default',
+                'move_up' => 'Move :panel up',
+                'move_down' => 'Move :panel down',
+            ],
         ],
 
         'index' => [

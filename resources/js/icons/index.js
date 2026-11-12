@@ -276,4 +276,14 @@ export const icons = {
         ['path', { d: 'M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0' }],
         ['circle', { cx: '12', cy: '12', r: '3' }],
     ],
+    // arrow-up · lucide-static 1.59.0
+    'move-up': [
+        ['path', { d: 'm5 12 7-7 7 7' }],
+        ['path', { d: 'M12 19V5' }],
+    ],
+    // arrow-down · lucide-static 1.59.0
+    'move-down': [
+        ['path', { d: 'M12 5v14' }],
+        ['path', { d: 'm19 12-7 7-7-7' }],
+    ],
 };
