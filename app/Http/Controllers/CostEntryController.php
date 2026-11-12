@@ -14,6 +14,7 @@ use App\Models\Item;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -76,7 +77,7 @@ class CostEntryController extends Controller
         Gate::authorize('create', $item);
 
         try {
-            $createCostEntry->handle($container, $item, $request->validated(), $request->user());
+            $cost = $createCostEntry->handle($container, $item, Arr::except($request->validated(), 'return'), $request->user());
         } catch (ApiException $e) {
             // Felet gäller beloppet, och det är fältet användaren skrev i.
             // Meningen kommer ur `lang/` och koden når aldrig en webbläsare
@@ -84,6 +85,17 @@ class CostEntryController extends Controller
             throw ValidationException::withMessages([
                 'amount' => $translator->message($e),
             ]);
+        }
+
+        // Registreringen i vyn (issue 369 · M56): en godkänd `return` är ytan
+        // hon kom från, och svaret landar där med den nya radens ULID. En
+        // ogiltig eller extern adress faller tillbaka på itemets kostnadsflik.
+        $return = TaskCreateController::safeReturn($request->validated('return'));
+
+        if ($return !== null) {
+            return redirect($return)
+                ->with('status', 'cost-created')
+                ->with('created_cost', ['ulid' => $cost->ulid]);
         }
 
         return redirect()

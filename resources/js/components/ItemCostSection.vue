@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
+import CostEntryForm from './CostEntryForm.vue';
 import FormField from './FormField.vue';
 import UiButton from './UiButton.vue';
 import UiEmptyState from './UiEmptyState.vue';
@@ -127,55 +128,16 @@ onMounted(loadSuppliers);
  * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
  * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
  */
+const costForm = ref(null);
+
 function focusForm() {
-    document.getElementById('cost-incurred-on')?.focus();
+    costForm.value?.focusForm();
 }
-
-/*
- * Kostnadskrokens datum ur adressen (Beslut 4). Formen prövas med ett
- * mönster: `?incurred_on=` är en querysträng någon kan skriva vad som helst
- * i, och ett fält som öppnas på "imorgon" eller på en array är värre än ett
- * tomt fält.
- */
-function hookedDate() {
-    const varde = new URLSearchParams(page.url.split('?')[1] ?? '').get('incurred_on');
-
-    return varde !== null && /^\d{4}-\d{2}-\d{2}$/.test(varde) ? varde : '';
-}
-
-const form = useForm({
-    incurred_on: hookedDate(),
-    amount: '',
-    currency: props.costDefaults.currency,
-    description: '',
-    supplier: '',
-});
 
 function url(cost) {
     const bas = `/containers/${props.containerUlid}/items/${props.itemUlid}/costs`;
 
     return cost === undefined ? bas : `${bas}/${cost.ulid}`;
-}
-
-function submit() {
-    form.post(url(), {
-        // Sidan är lång, och ett hopp till toppen efter en skriven rad tappar
-        // läsarens plats.
-        preserveScroll: true,
-        // Datumet och valutan står kvar: de är förval man sällan byter mellan
-        // två rader, och att nollställa dem hade gjort varje ny rad till en
-        // ny fråga om samma sak.
-        onSuccess: () => {
-            form.reset('amount', 'description', 'supplier');
-            loadSuppliers();
-        },
-        // Också ett avvisat formulär svarar med en besökning, så proppen
-        // töms även här — se loadSuppliers().
-        onError: () => {
-            focusFirstError();
-            loadSuppliers();
-        },
-    });
 }
 
 /*
@@ -359,93 +321,12 @@ function destroy(cost) {
         <template v-if="can.create">
             <h3 class="text-title font-semibold text-ink">{{ t('item.cost.form_heading') }}</h3>
 
-            <form class="flex flex-col gap-4" @submit.prevent="submit">
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_incurred_on')"
-                    id="cost-incurred-on"
-                    :error="form.errors.incurred_on"
-                >
-                    <UiInput
-                        id="cost-incurred-on"
-                        v-model="form.incurred_on"
-                        :described-by="describedBy"
-                        type="date"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_amount')"
-                    id="cost-amount"
-                    :error="form.errors.amount"
-                >
-                    <UiInput
-                        id="cost-amount"
-                        v-model="form.amount"
-                        :described-by="describedBy"
-                        inputmode="decimal"
-                    />
-                </FormField>
-
-                <!--
-                    Valutan är förifylld ur containerns arv
-                    ([[ADR-0037 Valutans arv]]) och går att skriva över: arvet
-                    är ett förslag, aldrig ett tvång. Fältet är synligt och
-                    inte dolt — ett värde som ändå står i datan ska stå framme
-                    för den som skriver raden.
-                -->
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_currency')"
-                    id="cost-currency"
-                    :error="form.errors.currency"
-                >
-                    <UiInput
-                        id="cost-currency"
-                        v-model="form.currency"
-                        :described-by="describedBy"
-                        maxlength="3"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_description')"
-                    id="cost-description"
-                    :error="form.errors.description"
-                >
-                    <UiInput
-                        id="cost-description"
-                        v-model="form.description"
-                        :described-by="describedBy"
-                    />
-                </FormField>
-
-                <!--
-                    Leverantören är fritext med autocomplete ur containerns
-                    egna värden ([[ADR-0016 Kostnadsregistrering]]): en
-                    datalist och inte en väljare, för en ny leverantör ska gå
-                    att skriva utan att först finnas.
-                -->
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_supplier')"
-                    id="cost-supplier"
-                    :error="form.errors.supplier"
-                >
-                    <UiInput
-                        id="cost-supplier"
-                        v-model="form.supplier"
-                        :described-by="describedBy"
-                        list="cost-suppliers"
-                    />
-                </FormField>
-
-                <UiButton type="submit" class="self-start" :pending="form.processing">
-                    {{ form.processing ? t('common.pending.default') : t('item.cost.form_submit') }}
-                </UiButton>
-            </form>
+            <CostEntryForm
+                ref="costForm"
+                :container-ulid="containerUlid"
+                :item-ulid="itemUlid"
+                :cost-defaults="costDefaults"
+            />
         </template>
 
         <!--
@@ -606,7 +487,7 @@ function destroy(cost) {
             datalist som bara fanns i det ena formuläret hade gett den som
             ändrar en rad tysta förslag.
         -->
-        <datalist id="cost-suppliers">
+        <datalist v-if="!can.create" id="cost-suppliers">
             <option v-for="row in suppliers" :key="row.supplier" :value="row.supplier" />
         </datalist>
     </section>

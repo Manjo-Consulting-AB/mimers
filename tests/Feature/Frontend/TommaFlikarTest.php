@@ -83,10 +83,16 @@ it('låter åtgärden nå flikens formulär', function () {
         $block = tommaFlikarBlock($kod, $start);
 
         expect($block)->toContain('@click="focusForm"');
-        expect($kod)->toContain("document.getElementById('{$falt}')?.focus()");
+        // Kostnadsformuläret bor i en egen komponent sedan issue 369.
+        $fokuskod = $falt === 'cost-incurred-on' ? tommaFlikarKod('components/CostEntryForm.vue') : $kod;
+        expect($fokuskod)->toContain("document.getElementById('{$falt}')?.focus()");
         // Fältet finns i samma fil, så fokus har något att landa på. Filfältet
         // bor i köns komponent sedan issue 367.
-        $faltkod = $falt === 'attachment-file' ? tommaFlikarKod('components/AttachmentUploadQueue.vue') : $kod;
+        $faltkod = match ($falt) {
+            'attachment-file' => tommaFlikarKod('components/AttachmentUploadQueue.vue'),
+            'cost-incurred-on' => $fokuskod,
+            default => $kod,
+        };
         expect($faltkod)->toContain("id=\"{$falt}\"");
     }
 
