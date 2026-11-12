@@ -454,3 +454,46 @@ it('har nycklarna', function () {
         ->toContain('item.target.loading')
         ->toContain('item.target.choose');
 });
+
+/*
+ * Klart när: propen `container` med default `null`, filtret på
+ * `group.container.ulid`, och oförändrat beteende utan den.
+ *
+ * Källkodsprov av samma skäl som ovan: filtreringen sker i klienten.
+ */
+it('kan begränsas till en container', function () {
+    $väljaren = malitemKod('components/ItemTargetPicker.vue');
+
+    expect($väljaren)->toMatch('/container:\s*\{\s*type:\s*String,\s*default:\s*null\s*\}/');
+
+    // Gruppfiltret bor i filterTargets och jämför mot propen.
+    preg_match('/function filterTargets\(.*?\n\}\n/s', $väljaren, $funktion);
+
+    expect($funktion)->not->toBeEmpty();
+    expect($funktion[0])->toContain('props.container !== null')
+        ->toContain('group.container.ulid !== props.container')
+        ->toContain('continue;');
+
+    // Uteslutningen och sökningen gäller som förut inom gruppen.
+    expect($funktion[0])->toContain('item.ulid !== props.excludeItem')
+        ->toContain("needle === ''")
+        ->toContain('group.container.name.toLowerCase().includes(needle)');
+
+    // Servern ändras inte: samma partiella hämtning.
+    expect($väljaren)->toContain("only: ['itemTargets']");
+});
+
+it('ingen sida skickar container till målväljaren', function () {
+    $sidor = collect(File::allFiles(resource_path('js/pages')))
+        ->filter(fn ($fil) => str_contains($fil->getContents(), '<ItemTargetPicker'));
+
+    expect($sidor)->not->toBeEmpty();
+
+    foreach ($sidor as $sida) {
+        preg_match_all('/<ItemTargetPicker\b[^>]*>/s', $sida->getContents(), $taggar);
+
+        foreach ($taggar[0] as $tagg) {
+            expect($tagg)->not->toMatch('/(?<![\w-]):?container\b/', $sida->getRelativePathname());
+        }
+    }
+});

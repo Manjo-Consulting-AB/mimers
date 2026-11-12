@@ -36,6 +36,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `trigger`, Esc som stänger genom `close`, en träffyta på 44 px och tokens i
  * stället för råa färger.
  *
+ * **Väljaren kan begränsas till en container** (`container`, ULID:n, se
+ * [[ADR-0074 Registrering i vyn]] § Konsekvenser): containerns snabbrad
+ * erbjuder bara containerns egna items. Är propen satt behåller
+ * `filterTargets()` bara gruppen vars `group.container.ulid` är lika med den;
+ * uteslutningen och sökningen gäller som förut inom gruppen. Är den `null`
+ * är beteendet som förut, alla containrar. Filtreringen sker i klienten —
+ * `itemTargets` hämtas som förut och servern ändras inte.
+ *
  * Rubriken kommer färdig i `heading` (anroparen väljer ord — *Move to*,
  * *Place*), och de fyra orden ur katalogen ligger i `lang/en/ui.php` under
  * `item.target`. Stängknappen lånar `item.form.parent_cancel`: de två
@@ -48,6 +56,8 @@ const props = defineProps({
     trigger: { type: Object, default: null },
     /* ULID:n för itemet som inte får väljas — källan. */
     excludeItem: { type: String, default: null },
+    /* ULID:n för containern som begränsar listan, eller null för alla. */
+    container: { type: String, default: null },
     /* Rubriken, färdigformulerad av anroparen. */
     heading: { type: String, default: '' },
 });
@@ -85,6 +95,10 @@ function filterTargets(groups, needle) {
     const kept = [];
 
     for (const group of groups) {
+        if (props.container !== null && group.container.ulid !== props.container) {
+            continue;
+        }
+
         const items = group.items.filter((item) => item.ulid !== props.excludeItem
             && (needle === ''
                 || item.name.toLowerCase().includes(needle)
