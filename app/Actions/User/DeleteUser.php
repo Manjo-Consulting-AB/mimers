@@ -432,6 +432,7 @@ class DeleteUser
         DB::table('attachment_open')->where('user_id', $userId)->delete();
 
         DB::table('dismissed_tip')->where('user_id', $userId)->delete();
+        DB::table('overview_panel')->where('user_id', $userId)->delete();
         DB::table('email_change')->where('user_id', $userId)->delete();
         DB::table('password_change')->where('user_id', $userId)->delete();
 
