@@ -172,6 +172,7 @@ it('ger fliken maxUploadBytes ur config', function () {
         ->and(array_column($svar->inertiaProps()['items'], 'ulid'))->toBe([$item->ulid]);
 });
 
+// vakt: den befintliga POST-rutten svarar redan back(); provet låser att den fortsätter göra det.
 it('låter en uppladdning med Documents som Referer landa på Documents', function () {
     withoutVite();
     Storage::fake('files');
