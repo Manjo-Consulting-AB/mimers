@@ -59,6 +59,7 @@ use Illuminate\Support\Carbon;
 use PragmaRX\Google2FA\Google2FA;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\withToken;
 
 // --- Testinfrastruktur --------------------------------------------------
 
@@ -83,12 +84,29 @@ use function Pest\Laravel\actingAs;
  * bara testerna som delar en process. Se
  * tests/Feature/Testinfrastruktur/IdentitetsbyteTest.php, som prövar både
  * hjälparen och felet utan den.
+ *
+ * Gäller anropet en bearer-token i stället för `actingAs()`, använd
+ * medToken().
  */
 function somAnvandare(User $user): TestCase
 {
     auth()->forgetGuards();
 
     return actingAs($user);
+}
+
+/**
+ * Glömmer guardernas cache och returnerar `withToken($token)`, så att den
+ * kan kedjas: `medToken($b)->getJson('/api/containers')`.
+ *
+ * Används i stället för `withToken()` när ett test anropar API:et med olika
+ * användares tokens i följd. Bakgrunden står i somAnvandare().
+ */
+function medToken(string $token): TestCase
+{
+    auth()->forgetGuards();
+
+    return withToken($token);
 }
 
 // --- tests/Feature/Container ------------------------------------------

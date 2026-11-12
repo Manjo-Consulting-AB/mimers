@@ -4,6 +4,7 @@ use App\Models\Container;
 use App\Models\User;
 
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\withToken;
 
 /*
  * Issue 476 · Identitetsbytet i tester. Se somAnvandare() i
@@ -68,4 +69,32 @@ it('utan hjälparen svarar det andra anropet som den första användaren', funct
     $b_svar->assertOk();
     expect($b_svar->json('data.0.ulid'))->toBe($aContainer->ulid);
     expect($b_svar->json('data.0.ulid'))->not->toBe($bContainer->ulid);
+});
+
+it('medToken() ger två token-anrop i följd var sitt svar, och withToken() utan den gör det inte', function () {
+    [$a, , $aContainer] = identitetsbyteKontext('A:s container');
+    [$b, , $bContainer] = identitetsbyteKontext('B:s container');
+    $aToken = $a->createToken('api')->plainTextToken;
+    $bToken = $b->createToken('api')->plainTextToken;
+
+    // Med hjälparen: det andra svaret gäller den andra användaren.
+    $a_svar = medToken($aToken)->getJson('/api/containers');
+    $a_svar->assertOk();
+    expect($a_svar->json('data.0.ulid'))->toBe($aContainer->ulid);
+
+    $b_svar = medToken($bToken)->getJson('/api/containers');
+    $b_svar->assertOk();
+    expect($b_svar->json('data.0.ulid'))->toBe($bContainer->ulid);
+    expect($b_svar->json('data.0.ulid'))->not->toBe($aContainer->ulid);
+
+    // Utan hjälparen: guarden ligger kvar med A, och B:s token läses aldrig.
+    // Beviset att medToken() behövs.
+    auth()->forgetGuards();
+    $forsta = withToken($aToken)->getJson('/api/containers');
+    expect($forsta->json('data.0.ulid'))->toBe($aContainer->ulid);
+
+    $andra = withToken($bToken)->getJson('/api/containers');
+    $andra->assertOk();
+    expect($andra->json('data.0.ulid'))->toBe($aContainer->ulid);
+    expect($andra->json('data.0.ulid'))->not->toBe($bContainer->ulid);
 });
