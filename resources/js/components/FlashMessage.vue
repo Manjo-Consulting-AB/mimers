@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -29,9 +29,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  */
 const { t } = useTranslations();
 
+/*
+ * Issue 359 · ADR-0074 § 5. En flashkod kan bära en väg vidare: tabellen är
+ * per kod och inte per yta, så på `/inbox` leder länken till samma sida. En
+ * kod utan post ritas som förut, utan länk.
+ */
+const FLASH_LINKS = {
+    'inbox-task-captured': '/inbox',
+};
+
 const code = computed(() => usePage().props.flash.status);
 
 const text = computed(() => (code.value ? t(`flash.${code.value}`) : null));
+
+const linkHref = computed(() => FLASH_LINKS[code.value] ?? null);
 </script>
 
 <template>
@@ -41,5 +52,13 @@ const text = computed(() => (code.value ? t(`flash.${code.value}`) : null));
         class="border-b border-border bg-accent-soft px-4 py-3 text-center text-body text-ink"
     >
         {{ text }}
+
+        <Link
+            v-if="linkHref"
+            :href="linkHref"
+            class="ml-2 inline-flex min-h-11 items-center text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus"
+        >
+            {{ t(`flash_link.${code}`) }}
+        </Link>
     </div>
 </template>
