@@ -100,6 +100,7 @@ it('bär förälderns ULID i created_item när itemet skapas under en förälder
     $svar->assertSessionHas('created_item', ['ulid' => $nytt->ulid, 'name' => 'Motorn', 'parent' => $forelder->ulid]);
 });
 
+// vakt: dagens svar ska bestå när return är ogiltig; grönt på basen med flit.
 it('landar på itemets sida när return är extern eller ogiltig', function (string $return) {
     [$konto, $anvandare, $container] = registreringKontext();
 
@@ -116,6 +117,7 @@ it('landar på itemets sida när return är extern eller ogiltig', function (str
     $svar->assertSessionMissing('created_item');
 })->with(['//evil.example', 'https://evil.example', '/\\evil.example', 'items']);
 
+// vakt: another gick redan före; return får inte ändra det.
 it('låter another gå före return', function () {
     [$konto, $anvandare, $container] = registreringKontext();
 
@@ -233,6 +235,7 @@ it('ger tomma listor och false åt en läsare', function () {
     );
 });
 
+// vakt: frågeantalet ska vara konstant, och var det redan på basen (inget can_create där).
 it('räknar can_create utan en fråga per nod', function () {
     withoutVite();
 
