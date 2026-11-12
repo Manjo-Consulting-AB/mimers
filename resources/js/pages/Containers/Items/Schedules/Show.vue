@@ -8,7 +8,8 @@ import ScheduleActions from '../../../../components/ScheduleActions.vue';
 import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
 import { formatDate } from '../../../../components/accessPresentation.js';
 import { formatDateOnly } from '../../../../components/itemPresentation.js';
-import { occurrenceStatusLabel, scheduleUrl } from '../../../../components/occurrencePresentation.js';
+import { occurrenceStatusLabel } from '../../../../components/occurrencePresentation.js';
+import { occurrenceRows, scheduleRows } from '../../../../components/scheduleDependencyRows.js';
 import { recurrenceLabel } from '../../../../components/schedulePresentation.js';
 import { useTranslations } from '../../../../composables/useTranslations.js';
 
@@ -63,8 +64,6 @@ const props = defineProps({
     /* Den öppna förekomstens beroenden — undantaget (63c § Beslut 2). */
     occurrenceDependencies: { type: Array, required: true },
     hasOpenOccurrence: { type: Boolean, required: true },
-    /* Motparterna användaren får ändra, en lista per nivå (63c § Beslut 3). */
-    counterparts: { type: Object, required: true },
     /*
      * Sant när schemat ligger på ett inbox-item (M27 · issue 244, ADR-0054
      * § 1). *Back to Inbox* ritas då inte: uppgiften är redan där, och rutten
@@ -104,43 +103,10 @@ const badgeClass = (occurrence) => (occurrence.status === 'completed'
 
 const date = (value) => formatDateOnly(value, locale.value);
 
-/*
- * Beroenderadena, normaliserade till samma form för båda nivåerna (Beslut 1
- * och 4). Servern svarar med `/api`:s två resurser — de skiljer sig åt på
- * exakt två punkter: en förekomstmotpart har ett förfallodatum och ett
- * `satisfied`, och dess `depends_on.ulid` pekar på en FÖREKOMST och inte på
- * ett schema. Här blir båda samma rad, och sektionen behöver inte veta vilken
- * nivå den ritar.
- *
- * `schedule_ulid` är därför det enda fältet vyn får utöver resursen: länken
- * vidare ska gå till motpartens SCHEMA (Beslut 5), och på schemanivån är
- * `depends_on.ulid` redan det.
- */
-const scheduleRows = computed(() => props.scheduleDependencies.map((row) => ({
-    ulid: row.depends_on.ulid,
-    title: row.depends_on.title,
-    item: row.depends_on.item,
-    schedule_ulid: row.depends_on.ulid,
-    due: null,
-    satisfied: null,
-})));
+/* Beroenderadena i den läsbara listan (issue 1160): normaliseringen delas med Edit.vue. */
+const scheduleDependencyRows = computed(() => scheduleRows(props.scheduleDependencies));
 
-const occurrenceRows = computed(() => props.occurrenceDependencies.map((row) => ({
-    ulid: row.depends_on.ulid,
-    title: row.depends_on.title,
-    item: row.depends_on.item,
-    schedule_ulid: row.schedule_ulid,
-    due: row.depends_on.due_at,
-    satisfied: row.satisfied,
-})));
-
-const scheduleDependencyUrl = computed(
-    () => `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/dependencies`,
-);
-
-const occurrenceDependencyUrl = computed(() => (open.value === null
-    ? ''
-    : `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/occurrences/${open.value.ulid}/dependencies`));
+const occurrenceDependencyRows = computed(() => occurrenceRows(props.occurrenceDependencies));
 
 </script>
 
@@ -244,34 +210,34 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
     </section>
 
     <!--
-        Beroendena, i två sektioner och aldrig en (63c § Beslut 2).
-        Schemanivån är REGELN som ärvs av varje ny förekomst; förekomstnivån
-        är UNDANTAGET som bara gäller den här gången. Rubrikerna bär
-        skillnaden — en gemensam lista med en typkolumn hade krävt att
-        användaren först förstod modellen ([[ADR-0005 Schema och
-        förekomst]] § Motivering).
+        Beroendena som en läsbar lista (issue 1160): de redigeras på
+        redigeringssidan, så sektionerna ritas utan formulär och utan
+        borttagning (`update: false`). En sektion utan rader ritas inte alls —
+        står det inget i någon av dem syns ingen beroenderubrik.
 
-        Båda listorna kom med sidan (63c § Beslut 1): ingen av dem har en
-        egen rutt, och ingen av dem hämtas av vyn.
+        Schemanivån är REGELN som ärvs av varje ny förekomst; förekomstnivån
+        är UNDANTAGET som bara gäller den här gången (63c § Beslut 2).
     -->
     <ScheduleDependencySection
+        v-if="scheduleDependencyRows.length > 0"
         level="schedule"
         :container-ulid="container.ulid"
         :item-ulid="item.ulid"
-        :rows="scheduleRows"
-        :url="scheduleDependencyUrl"
-        :counterparts="counterparts.schedule"
-        :can="can"
+        :rows="scheduleDependencyRows"
+        url=""
+        :counterparts="[]"
+        :can="{ update: false }"
     />
 
     <ScheduleDependencySection
+        v-if="occurrenceDependencyRows.length > 0"
         level="occurrence"
         :container-ulid="container.ulid"
         :item-ulid="item.ulid"
-        :rows="occurrenceRows"
-        :url="occurrenceDependencyUrl"
-        :counterparts="counterparts.occurrence"
+        :rows="occurrenceDependencyRows"
+        url=""
+        :counterparts="[]"
         :active="hasOpenOccurrence"
-        :can="can"
+        :can="{ update: false }"
     />
 </template>
