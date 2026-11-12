@@ -1,14 +1,17 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import CostCategoryBreakdown from '../../components/CostCategoryBreakdown.vue';
 import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
 import CostFilterBar from '../../components/CostFilterBar.vue';
+import CostEntryForm from '../../components/CostEntryForm.vue';
 import CostTable from '../../components/CostTable.vue';
 import CostTimeChart from '../../components/CostTimeChart.vue';
+import InlineCreate from '../../components/InlineCreate.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -164,14 +167,117 @@ const props = defineProps({
      * inte har något fält att fylla.
      */
     filterOptions: { type: Object, default: null },
+    /* Formulärets förval: `{currency}` ur containerns arv ([[ADR-0037 Valutans arv]]). */
+    costDefaults: { type: Object, required: true },
+    /* ULID:en på raden som just skrevs (serverns flash `created_cost`), eller null. */
+    createdCost: { type: String, default: null },
 });
+
+const page = usePage();
 
 const { t } = useTranslations();
 
 const base = computed(() => `/containers/${props.container.ulid}/costs`);
 
-/* Itemets kostnadsflik (issue 168) — samma adress som tabellen länkar till. */
-const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid}?tab=costs`;
+/*
+ * Registreringsraden (issue 1170 · [[ADR-0074 Registrering i vyn]] § 1–3 och
+ * tillägget om *Costs*). `open` och `dirty` ägs av vyn: skalet fäller ut och
+ * frågar vid Escape, formuläret rapporterar sina osparade ändringar.
+ *
+ * **Itemet** väljs i en `<details>` som platsknappen på *To do*. Har
+ * containern exakt ett item är det förvalt. Valet är vyns och står kvar efter
+ * en sparning, och ett val byter ingen sida.
+ *
+ * **Markeringen:** `createdCost` är den nya radens ULID. Finns den i `rows`
+ * markeras den i 2000 ms, annars säger `hiddenNotice` att perioden, filtret
+ * eller sidan döljer den. Vyn räknar ingenting själv.
+ */
+const createOpen = ref(false);
+const createDirty = ref(false);
+const formKey = ref(0);
+const confirmingCancel = ref(false);
+
+const chosen = ref(null);
+const itemMenu = ref(null);
+const selected = computed(() => chosen.value ?? (props.items.length === 1 ? props.items[0] : null));
+
+function chooseItem(item) {
+    chosen.value = item;
+    itemMenu.value.open = false;
+    itemMenu.value.querySelector('summary')?.focus();
+}
+
+function closeItemMenu(event) {
+    if (event.key !== 'Escape' || ! itemMenu.value.open) {
+        return;
+    }
+
+    itemMenu.value.open = false;
+    itemMenu.value.querySelector('summary')?.focus();
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+/* Stängs raden kastas det osparade: formuläret byggs om med sina förval. */
+function setOpen(open) {
+    if (! open) {
+        formKey.value += 1;
+        createDirty.value = false;
+    }
+
+    createOpen.value = open;
+}
+
+function cancel() {
+    if (createDirty.value) {
+        confirmingCancel.value = true;
+
+        return;
+    }
+
+    setOpen(false);
+}
+
+function discard() {
+    confirmingCancel.value = false;
+    setOpen(false);
+}
+
+/* Fokus går till beloppet: datum, valuta och item står kvar. */
+async function onCreated() {
+    await nextTick();
+    document.getElementById('cost-amount')?.focus();
+}
+
+const highlight = ref(null);
+const hiddenNotice = ref(false);
+let highlightTimer = null;
+
+watch(() => props.createdCost, (ulid) => {
+    clearTimeout(highlightTimer);
+    highlight.value = null;
+    hiddenNotice.value = false;
+
+    if (ulid === null) {
+        return;
+    }
+
+    if (! props.rows.data.some((row) => row.ulid === ulid)) {
+        hiddenNotice.value = true;
+
+        return;
+    }
+
+    highlight.value = ulid;
+    highlightTimer = setTimeout(() => {
+        highlight.value = null;
+    }, 2000);
+});
+
+onBeforeUnmount(() => clearTimeout(highlightTimer));
+
+/* Dialogen är vyns; fokus stannar där formuläret lever, så den lånar ingen knapp. */
+const dialogTrigger = { focus() {} };
 
 /*
  * Plansidan väljer konto i sidan och följer med som `?account=` (issue 66a),
@@ -225,43 +331,8 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
 <template>
     <Head :title="t('container.costs.title')" />
 
-    <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
         <h1 class="text-2xl font-semibold">{{ t('container.costs.heading') }}</h1>
-
-        <!--
-            *Lägg till kostnad* (Beslut 1). En `<details>` och inget eget
-            tillstånd: webbläsaren äger uppfällningen, tangentbordet når
-            den, och en meny som står kvar över en navigering finns inte.
-            Listan är de items användaren får skapa på, och ett val leder
-            till itemets kostnadsflik — fliken skriver ingenting själv.
-            Panelen ligger absolut, som *Lägg till dokument* på
-            dokumentfliken, och ritas därför inte i flödet: en öppen
-            väljare skjuter inte ner sidan.
-        -->
-        <details v-if="items.length > 0" class="relative">
-            <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
-                <UiIcon name="add" :size="20" class="size-5 shrink-0" />
-
-                {{ t('container.costs.add') }}
-
-                <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
-            </summary>
-
-            <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
-                <p class="text-meta text-ink-subtle">{{ t('container.costs.add_choose_item') }}</p>
-
-                <ul class="mt-1 flex max-h-80 flex-col overflow-y-auto">
-                    <li v-for="item in items" :key="item.ulid">
-                        <Link
-                            :href="itemUrl(item)"
-                            class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
-                        >
-                            {{ item.name }}
-                        </Link>
-                    </li>
-                </ul>
-            </div>
-        </details>
     </div>
 
     <!--
@@ -387,11 +458,71 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
     <div class="mt-8">
         <h2 class="text-title font-semibold text-ink">{{ t('container.costs.heading') }}</h2>
 
+        <!--
+            Registreringsraden (ADR-0074 § 2): rad noll i listan den fyller
+            på, efter brickorna, donuten och Pro-delen. Ritas bara när
+            användaren har ett item att skriva på.
+        -->
+        <div v-if="items.length > 0" class="mt-4">
+            <InlineCreate :open="createOpen" :label="t('container.costs.add')" :dirty="createDirty" @update:open="setOpen">
+                <details ref="itemMenu" class="relative mb-4" @keydown="closeItemMenu">
+                    <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink hover:bg-surface-sunken">
+                        <span class="max-w-40 truncate">
+                            {{ selected === null ? t('container.costs.add_choose_item') : selected.name }}
+                        </span>
+
+                        <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
+                    </summary>
+
+                    <div class="absolute left-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                        <p class="text-meta text-ink-subtle">{{ t('container.costs.add_choose_item') }}</p>
+
+                        <ul class="mt-1 flex max-h-80 flex-col overflow-y-auto">
+                            <li v-for="item in items" :key="item.ulid">
+                                <button
+                                    type="button"
+                                    :aria-current="selected?.ulid === item.ulid ? 'true' : undefined"
+                                    class="flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-2 text-left text-body text-ink hover:bg-surface-sunken"
+                                    :class="{ 'font-semibold': selected?.ulid === item.ulid }"
+                                    @click="chooseItem(item)"
+                                >
+                                    <span class="truncate">{{ item.name }}</span>
+                                    <UiIcon v-if="selected?.ulid === item.ulid" name="check" :size="16" class="size-4 shrink-0 text-accent" />
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </details>
+
+                <CostEntryForm
+                    :key="formKey"
+                    :container-ulid="container.ulid"
+                    :item-ulid="selected?.ulid ?? null"
+                    :cost-defaults="costDefaults"
+                    :return-to="page.url"
+                    @dirty="createDirty = $event"
+                    @created="onCreated"
+                />
+
+                <button
+                    type="button"
+                    class="mt-3 inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus"
+                    @click="cancel"
+                >
+                    {{ t('confirm.cancel') }}
+                </button>
+            </InlineCreate>
+
+            <p v-if="hiddenNotice" role="status" class="mt-1 text-meta text-ink-muted">
+                {{ t('container.costs.created_hidden') }}
+            </p>
+        </div>
+
         <p v-if="! hasRows" class="mt-2 text-body text-ink-muted">
             {{ emptyText }}
         </p>
 
-        <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" />
+        <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" :highlight="highlight" />
 
         <!--
             Sidnumreringen. Länkarna ritas bara när det finns en sida att
@@ -424,4 +555,14 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             </Link>
         </nav>
     </div>
+
+    <UiConfirmDialog
+        :open="confirmingCancel"
+        :heading="t('inline_create.discard.heading')"
+        :cancel-label="t('inline_create.discard.cancel')"
+        :confirm-label="t('inline_create.discard.confirm')"
+        :trigger="dialogTrigger"
+        @confirm="discard"
+        @cancel="confirmingCancel = false"
+    />
 </template>

@@ -545,7 +545,7 @@ it('en främling nekas fliken', function () {
  * `POST /containers/{container}/items/{item}/costs` prövar (issue 71
  * § Beslut 1). En `read`-mottagare ser containerns kostnader men får ingen
  * itemväljare, och en `write`-mottagare får den. Fliken skriver ingenting
- * själv: listan är en uppsättning adresser till itemets kostnadsflik.
+ * själv: listan är itemväljaren i det infällbara formuläret (issue 1170).
  */
 it('itemväljaren listar bara de items användaren får skapa på', function () {
     withoutVite();
