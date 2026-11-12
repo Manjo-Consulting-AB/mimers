@@ -591,17 +591,6 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
         </template>
     </section>
 
-    <!-- Frågan före ett byte av öppet formulär (issue 1164). -->
-    <UiConfirmDialog
-        :open="pendingForm !== undefined"
-        :heading="t('inline_create.discard.heading')"
-        :cancel-label="t('inline_create.discard.cancel')"
-        :confirm-label="t('inline_create.discard.confirm')"
-        :trigger="dialogTrigger"
-        @confirm="switchForm(pendingForm)"
-        @cancel="pendingForm = undefined"
-    />
-
     <!--
         Kartläget (issue 296, 297 och 299 · [[ADR-0059 Kartan med en mitt]]
         § 1 och 10). Mitten är containern utan `focus` och itemet med `focus`,
@@ -640,4 +629,15 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             </div>
         </div>
     </section>
+
+    <!-- Frågan före ett byte av öppet formulär (issue 1164). -->
+    <UiConfirmDialog
+        :open="pendingForm !== undefined"
+        :heading="t('inline_create.discard.heading')"
+        :cancel-label="t('inline_create.discard.cancel')"
+        :confirm-label="t('inline_create.discard.confirm')"
+        :trigger="dialogTrigger"
+        @confirm="switchForm(pendingForm)"
+        @cancel="pendingForm = undefined"
+    />
 </template>
