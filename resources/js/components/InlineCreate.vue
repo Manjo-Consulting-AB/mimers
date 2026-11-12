@@ -135,7 +135,7 @@ const dialogTrigger = {
         <UiConfirmDialog
             :open="confirming"
             :heading="t('inline_create.discard.heading')"
-            body=""
+            :cancel-label="t('inline_create.discard.cancel')"
             :confirm-label="t('inline_create.discard.confirm')"
             :trigger="dialogTrigger"
             @confirm="discard"

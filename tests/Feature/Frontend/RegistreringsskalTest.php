@@ -109,6 +109,8 @@ it('stänger InlineCreate direkt med Escape när dirty är falskt och frågar an
         ->and($kod)->toContain('<UiConfirmDialog')
         ->and($kod)->toContain("t('inline_create.discard.heading')")
         ->and($kod)->toContain("t('inline_create.discard.confirm')")
+        ->and($kod)->toContain(':cancel-label="t(\'inline_create.discard.cancel\')"')
+        ->and($kod)->not->toContain('body=""')
         ->and($kod)->toContain('@confirm="discard"')
         ->and($kod)->toContain('@cancel="confirming = false"')
         ->and($kod)->not->toMatch('/@keydown\.(tab|esc)/');

@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import UiButton from './UiButton.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -9,8 +9,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Appens egen fråga i stället för `window.confirm`.** Rubrik, brödtext och
  * bekräftelsens etikett är props, färdigöversatta av anroparen: dialogen bär
- * ingen egen mening om vad som frågas, bara formen. Det enda den själv säger
- * är *Cancel*, och det kommer ur `lang/en/ui.php` som allt annat. Komponenten
+ * ingen egen mening om vad som frågas, bara formen. Ger anroparen ingen egen
+ * `cancelLabel` säger dialogen *Cancel*, och det kommer ur `lang/en/ui.php`
+ * som allt annat. Komponenten
  * är generell så att containerns och bilagornas radering kan gå över senare;
  * de flyttas inte i den issue som byggde den.
  *
@@ -42,8 +43,10 @@ const props = defineProps({
     open: { type: Boolean, default: false },
     /* Frågans rubrik, färdigöversatt av anroparen. */
     heading: { type: String, required: true },
-    /* Frågans brödtext, färdigöversatt av anroparen. */
-    body: { type: String, required: true },
+    /* Frågans brödtext, färdigöversatt av anroparen. Tom ritar inget stycke. */
+    body: { type: String, default: '' },
+    /* Avbrottets etikett, färdigöversatt av anroparen. Saknas den: *Cancel*. */
+    cancelLabel: { type: String, default: null },
     /* Bekräftelsens etikett, färdigöversatt av anroparen. */
     confirmLabel: { type: String, required: true },
     /* `danger` eller `neutral`. */
@@ -63,6 +66,9 @@ const emit = defineEmits(['confirm', 'cancel']);
 const { t } = useTranslations();
 
 const dialogElement = ref(null);
+
+/* Avbrottets etikett: knappen och ytan utanför panelen heter samma sak. */
+const cancelText = computed(() => props.cancelLabel ?? t('confirm.cancel'));
 
 /* Elementet som hade fokus när dialogen öppnades, om `trigger` saknas. */
 let opener = null;
@@ -137,14 +143,14 @@ function onClosed() {
                 type="button"
                 tabindex="-1"
                 class="absolute inset-0 cursor-default"
-                :aria-label="t('confirm.cancel')"
+                :aria-label="cancelText"
                 @click="cancel"
             ></button>
 
             <div class="relative flex w-full max-w-sm flex-col gap-3 rounded-card border border-border bg-surface p-4">
                 <h2 class="text-title font-semibold text-ink">{{ heading }}</h2>
 
-                <p class="text-body text-ink-muted">{{ body }}</p>
+                <p v-if="body" class="text-body text-ink-muted">{{ body }}</p>
 
                 <div class="mt-2 flex flex-wrap justify-end gap-2">
                     <UiButton
@@ -153,7 +159,7 @@ function onClosed() {
                         :disabled="pending"
                         @click="cancel"
                     >
-                        {{ t('confirm.cancel') }}
+                        {{ cancelText }}
                     </UiButton>
 
                     <UiButton

@@ -161,3 +161,30 @@ it('har ersatt item.destroy.confirm och bär dialogens egna strängar i lang', f
         expect(File::get($fil->getPathname()))->not->toContain("'item.destroy.confirm'");
     }
 });
+
+it('tar en egen etikett för avbrottet och ritar inget tomt stycke', function () {
+    $kod = bekraftelseKod('components/UiConfirmDialog.vue');
+
+    // Propen, med `null` som default.
+    expect($kod)->toMatch('/\bcancelLabel:\s*\{\s*type:\s*String,\s*default:\s*null\s*\}/');
+    expect($kod)->toContain("props.cancelLabel ?? t('confirm.cancel')");
+
+    // Knappen och ytan utanför panelen heter samma sak, och ingen av dem
+    // har den hårdkodade nyckeln kvar.
+    preg_match('/<button\b[^>]*absolute inset-0[^>]*>/s', $kod, $bakgrund);
+    expect($bakgrund[0] ?? '')->toContain(':aria-label="cancelText"');
+    expect($kod)->toContain('{{ cancelText }}');
+    expect($kod)->not->toContain("{{ t('confirm.cancel') }}");
+
+    // `body` är valfri, och ett tomt värde ritar inget `<p>`.
+    expect($kod)->toMatch('/\bbody:\s*\{\s*type:\s*String,\s*default:\s*\'\'\s*\}/');
+    expect($kod)->toMatch('/<p\b[^>]*v-if="body"/');
+});
+
+it('ger bara InlineCreate en egen avbrottsetikett', function () {
+    expect(bekraftelseKod('components/InlineCreate.vue'))->toContain(':cancel-label=');
+
+    foreach (['components/ItemForm.vue', 'pages/Containers/Items/Show.vue'] as $fil) {
+        expect(bekraftelseKod($fil))->not->toContain('cancel-label');
+    }
+});
