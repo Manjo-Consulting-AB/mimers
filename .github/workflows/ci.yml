@@ -185,6 +185,7 @@ jobs:
           python3 .github/scripts/test_omfangslint.py
           python3 .github/scripts/test_rott_pa_basen.py
           python3 .github/scripts/test_granskningsspar.py
+          python3 .claude/hooks/test_huvudtradet.py
 
       # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
       # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
