@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
+import ContainerTaskQuickCreate from './ContainerTaskQuickCreate.vue';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import UiCard from './UiCard.vue';
@@ -25,10 +26,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * avbockningen är `TodoRow`s snabbavbockning (Beslut 5). Ingen `OpenOccurrence`
  * och ingen egen skrivväg här.
  *
- * **Rubrikkortet bär rubriken, underraden och knappen** (M28 · issue 785
+ * **Rubrikkortet bär rubriken och underraden** (M28 · issue 785
  * § Beslut 1, docs/Design/tasks-item.png). Kortet är `UiCard`s rubrikrad och
  * åtgärdsplats: ikonrutan med bocken och rubriken *Tasks* till vänster,
- * *New task* uppe till höger, och `item.schedule.subtitle` i kortets innehåll.
+ * och `item.schedule.subtitle` i kortets innehåll.
  * Mockupens sökfält och filter byggs inte (Beslut 3): uppgifterna har varken
  * tilldelning eller taggar, och fliken har inget filter i dag.
  *
@@ -49,8 +50,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rubrik utan rader hade sagt att gruppen finns men är tom, och en lista utan
  * innehåll är samma svar utan brus.
  *
- * **`can` är presentation** (Beslut 4). Bara `can.create` läses här — knappen
- * *New task* — och rutten prövar `create` på nytt. Pausen, redigeringen och
+ * **`can` är presentation** (Beslut 4). Bara `can.create` läses här — snabbraden
+ * — och rutten prövar `create` på nytt. Pausen, redigeringen och
  * raderingen ritas på schemats sida, bakom sina egna flaggor.
  *
  * Ordningen i *Done* kommer färdig från servern, och raden är `TodoRow` som de
@@ -78,7 +79,7 @@ const props = defineProps({
     completed: { type: Array, required: true },
     /* Reglagets läge, ur `?children`. Förvalet är PÅ. */
     includeChildren: { type: Boolean, required: true },
-    /* `{ create }` — *New task*-länken. Rutten prövar samma grind. */
+    /* `{ create }` — snabbraden. Rutten prövar samma grind. */
     can: { type: Object, required: true },
 });
 
@@ -135,24 +136,11 @@ function apply() {
 }
 
 /*
- * *New task* (M27 · issue 246 § Beslut 2). Fliken är en av de tre ytorna som
- * bär knappen, och den här är den enda som förväljer ett item: knappen bär
- * sektionens item i adressen, så formuläret öppnas med platsen redan satt.
- *
- * Adressen bär `return` med den här sidan (Beslut 3), så svaret landar på
- * itemet man stod på — `page.url` är adressen med sin querysträng, och fliken
- * och reglaget man står i följer därför med tillbaka.
- *
- * **Det är en `<Link>` och inte en `<UiButton>`.** Knappen navigerar, och
- * GenomgangTest tillåter bara `<Link>` bland komponenttaggarna: en `@click` på
- * en komponent är en klickyta provet inte kan se är tabbbar. Klasserna är
- * `UiButton`s `primary`, så formen är densamma som i designsystemet.
+ * Snabbraden (M58 · issue 1210, ADR-0074 tillägg 2026-11-13). *New task*-
+ * knappen och länken till `/tasks/create` är borta: uppgiften skapas i vyn,
+ * utan återkommande, och den som vill ha ett schema öppnar uppgiften efteråt.
  */
 const page = usePage();
-
-const createUrl = computed(
-    () => `/tasks/create?item=${props.itemUlid}&return=${encodeURIComponent(page.url)}`,
-);
 
 /*
  * Itemets namn till växelns hjälptext. Det läses ur `page.props.item` i
@@ -161,13 +149,35 @@ const createUrl = computed(
  * namnet är sidans — den som ritar fliken har det redan.
  */
 const itemName = computed(() => page.props.item?.name ?? '');
+
+/*
+ * Snabbradens item, och ULID:erna i sektionens grupper. Snabbraden jämför dem
+ * före och efter ett svar och skickar de nya i `created`, som markeras med
+ * `bg-accent-soft` i 2000 ms, som i Containers/Tasks.vue. *Done* räknas inte.
+ */
+const quickItem = computed(() => ({ ulid: props.itemUlid, name: itemName.value }));
+
+const entryUlids = computed(() => Object.values(props.groups).flat().map((entry) => entry.ulid));
+
+const highlighted = ref(new Set());
+
+let highlightTimer = null;
+
+function onCreated(ulids) {
+    highlighted.value = new Set(ulids);
+
+    clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+        highlighted.value = new Set();
+    }, 2000);
+}
 </script>
 
 <template>
     <section class="mt-10">
         <!--
             Rubrikkortet (Beslut 1). Ikonrutan med bocken och rubriken till
-            vänster, *New task* uppe till höger, och underraden i kortets
+            vänster och underraden i kortets
             innehåll. Sökfältet och filtren i mockupen byggs inte (Beslut 3).
         -->
         <UiCard>
@@ -182,21 +192,6 @@ const itemName = computed(() => page.props.item?.name ?? '');
 
                     {{ t('item.schedule.heading') }}
                 </span>
-            </template>
-
-            <!-- *New task* (M27 · issue 246 § Beslut 2): den gamla textlänken
-                 är en knapp, och den förväljer sektionens item. Grinden är
-                 `can.create` — rutten prövar samma pinne på nytt. -->
-            <template #action>
-                <Link
-                    v-if="can.create"
-                    :href="createUrl"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
-
-                    {{ t('todo.new') }}
-                </Link>
             </template>
 
             <p class="text-body text-ink-muted">{{ t('item.schedule.subtitle') }}</p>
@@ -236,6 +231,17 @@ const itemName = computed(() => page.props.item?.name ?? '');
             {{ t('item.schedule.children_help', { item: itemName }) }}
         </p>
 
+        <!-- Snabbraden: rad noll, före det tomma läget och grupperna
+             (ADR-0074 § 2). Utan platsknapp, platsen är itemet. -->
+        <ContainerTaskQuickCreate
+            v-if="can.create"
+            class="mt-4"
+            :container-ulid="containerUlid"
+            :item="quickItem"
+            :entry-ulids="entryUlids"
+            @created="onCreated"
+        />
+
         <!--
             Det tomma läget (Beslut 4): först när allt är tomt — de fyra öppna
             grupperna OCH *Done* — annars hade en lista med bara avbockade
@@ -243,15 +249,6 @@ const itemName = computed(() => page.props.item?.name ?? '');
         -->
         <UiEmptyState v-if="!hasAnyTask" class="mt-4">
             {{ t('item.schedule.empty') }}
-
-            <template v-if="can.create" #action>
-                <Link
-                    :href="createUrl"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    {{ t('item.show.add_task') }}
-                </Link>
-            </template>
         </UiEmptyState>
 
         <!--
@@ -274,6 +271,7 @@ const itemName = computed(() => page.props.item?.name ?? '');
                         :key="entry.ulid"
                         :entry="entry"
                         :show-container="false"
+                        :class="{ 'bg-accent-soft': highlighted.has(entry.ulid) }"
                     />
                 </TaskGroup>
             </template>

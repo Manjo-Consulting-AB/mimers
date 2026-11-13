@@ -71,10 +71,12 @@ it('visar åtgärden bara med rättigheten som formuläret redan kräver', funct
         expect($block)->toContain("t('{$ord}')");
     }
 
+    // Uppgiftsfliken har ingen åtgärd i det tomma läget (issue 1210): snabbraden
+    // står över det och är åtgärden.
     $block = tommaFlikarBlock(tommaFlikarKod('components/ScheduleListSection.vue'), '<UiEmptyState v-if="!hasAnyTask"');
 
-    expect($block)->toContain('<template v-if="can.create" #action>');
-    expect($block)->toContain("t('item.show.add_task')");
+    expect($block)->not->toContain('#action');
+    expect($block)->not->toContain('/tasks/create');
 });
 
 it('låter åtgärden nå flikens formulär', function () {
@@ -103,12 +105,12 @@ it('låter åtgärden nå flikens formulär', function () {
         expect($faltkod)->toContain("id=\"{$falt}\"");
     }
 
-    // Uppgifterna har sitt formulär på en egen sida: åtgärden är samma
-    // länk som *New task* i rubrikkortet.
+    // Uppgifterna har snabbraden i vyn (issue 1210) och ingen länk till en
+    // annan sida.
     $kod = tommaFlikarKod('components/ScheduleListSection.vue');
-    $block = tommaFlikarBlock($kod, '<UiEmptyState v-if="!hasAnyTask"');
 
-    expect($block)->toContain(':href="createUrl"');
+    expect($kod)->toContain('<ContainerTaskQuickCreate');
+    expect($kod)->not->toContain('createUrl');
 });
 
 it('låter History säga en mening utan åtgärd', function () {

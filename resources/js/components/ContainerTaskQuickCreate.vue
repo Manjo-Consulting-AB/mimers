@@ -34,6 +34,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * och filtreras på `containerUlid` som `ItemTargetPicker.filterTargets()`.
  * Raderna är råa `<button>` — ett val byter ingen sida.
  *
+ * **Itemets flik (M58 · issue 1210, ADR-0074 tillägg 2026-11-13).** Med propen
+ * `item` är platsen alltid det itemet: ingen platsknapp ritas, och raden
+ * postar till itemets `schedules` med samma data som när ett item väljs.
+ * Utan `item` är beteendet det ovan.
+ *
  * Råa `<button>`, `<details>` och `<summary>` i `leading`: GenomgangTest
  * tillåter bara webbläsarens egna element som klickbar yta.
  */
@@ -43,6 +48,8 @@ const props = defineProps({
     list: { type: String, default: null },
     /* ULID:erna i flikens öppna grupper just nu. */
     entryUlids: { type: Array, default: () => [] },
+    /* `{ ulid, name }` på itemets flik, annars null. Satt: ingen platsknapp. */
+    item: { type: Object, default: null },
 });
 
 const emit = defineEmits(['created']);
@@ -103,7 +110,7 @@ function closeMenu(event) {
 }
 
 function submit() {
-    const item = place.value;
+    const item = props.item ?? place.value;
     const before = new Set(props.entryUlids);
 
     hidden.value = false;
@@ -162,7 +169,7 @@ function submit() {
             :error="form.errors.title ?? null"
             @submit="submit"
         >
-            <template #leading>
+            <template v-if="item === null" #leading>
                 <details ref="placeMenu" class="relative" @toggle="onToggle" @keydown="closeMenu">
                     <summary
                         class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink hover:bg-surface-sunken"

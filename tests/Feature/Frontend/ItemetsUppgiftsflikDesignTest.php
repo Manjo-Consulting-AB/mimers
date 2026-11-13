@@ -66,24 +66,18 @@ it('fliken har rubrikkortet med underraden', function () {
 });
 
 /*
- * Klart när: knappen *New task* står i rubrikkortet.
+ * Klart när: knappen *New task* är borta ur rubrikkortet (issue 1210, ADR-0074
+ * tillägg 2026-11-13). Uppgiften skapas i snabbraden.
  */
-it('knappen new task står i rubrikkortet', function () {
+it('rubrikkortet har ingen new task-knapp', function () {
     $sektionen = itemuppgiftsflikKod('components/ScheduleListSection.vue');
 
-    // Knappen flyttar in i kortets åtgärdsplats, uppe till höger — den leder
-    // dit den ledde förut, med itemet förvalt.
-    expect($sektionen)->toContain('<template #action>')
-        ->toContain("t('todo.new')")
-        ->toContain('/tasks/create')
-        ->toContain('?item=');
+    expect($sektionen)->not->toContain('<template #action>');
+    expect($sektionen)->not->toContain("t('todo.new')");
+    expect($sektionen)->not->toContain('/tasks/create');
 
-    expect(strpos($sektionen, "t('todo.new')"))
-        ->toBeGreaterThan(strpos($sektionen, '<template #action>'))
-        ->toBeLessThan(strpos($sektionen, '</UiCard>'));
-
-    // Grinden är `can.create` — rutten prövar samma pinne på nytt.
-    expect($sektionen)->toContain('v-if="can.create"');
+    expect($sektionen)->toContain('<ContainerTaskQuickCreate')
+        ->toContain('v-if="can.create"');
 });
 
 /*
