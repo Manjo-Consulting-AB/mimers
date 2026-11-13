@@ -362,9 +362,12 @@ it('har dropzonen som ett tillägg och filväljaren som den väg som alltid fung
     // Att servern nekar ändå prövas i BilagevyTest.
     expect($yta)->toContain('item.attachment.dropzone');
 
-    // Rubriken och flaggan bor kvar i sektionen, som ritar kön bakom `can.create`.
-    expect(File::get(resource_path('js/components/ItemAttachmentSection.vue')))
-        ->toContain('item.attachment.upload_heading');
+    // Sektionen ritar kön inuti det infällbara formuläret, bakom `can.create`
+    // (issue 1209), och har ingen egen rubrik längre.
+    $sektionskod = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+
+    expect($sektionskod)->toContain('<InlineCreate');
+    expect($sektionskod)->not->toContain('item.attachment.upload_heading');
 });
 
 // --- takgränsen: ett väntat svar, inte ett haveri -----------------------
@@ -457,8 +460,8 @@ it('har köns meningar', function () {
 it('ritar kön ur sektionen bakom can.create och skickar samma värden', function () {
     $sektion = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
 
-    $start = mb_strpos($sektion, '<template v-if="can.create">');
-    $slut = mb_strpos($sektion, '</template>', $start === false ? 0 : $start);
+    $start = mb_strpos($sektion, '<InlineCreate');
+    $slut = mb_strpos($sektion, '</InlineCreate>', $start === false ? 0 : $start);
 
     expect($start)->not->toBeFalse();
 
