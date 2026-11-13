@@ -64,3 +64,14 @@ Tonys beslut 2026-11-12. Containerns *Costs*-flik följer samma mönster som *Do
 - **Itemväljaren.** Itemet väljs i en enda knapp med en lista, i samma form som platsknappen på *To do* (issue 360) och itemväljaren på *Documents* (issue 368). Har containern ett enda item är det förvalt.
 - **Ordningen.** § 7 omfattar nu fyra flikar: *To do*, *Items*, *Documents*, *Costs*.
 - **Konsekvens.** Kostnadsskrivningen tar emot `return` (se Konsekvenser).
+
+## Tillägg 2026-11-13: itemets flikar
+
+Tonys beslut 2026-11-13. Itemets flikar *Documents*, *To do* och *Costs* lade inte till saker på samma sätt som containerns flikar gör efter M52–M56, och itemets plusmeny och snabbknappar öppnade en ny vy för uppgifter.
+
+- **Principen.** Registreringen sker i vyn användaren står i. Ingen länk på en flik öppnar en ny vy. Plusknappen får vara en genväg som byter flik, men den landar där registreringen sker.
+- **Itemets flikar.** *Documents* och *Costs* får det infällbara formuläret (§ 1) utan itemväljare, eftersom itemet är givet. *To do* får snabbraden utan platsknapp.
+- **Scheman.** Snabbraden skapar en uppgift utan återkommande. Den som vill lägga in ett schema öppnar uppgiften och ändrar den där, tills vidare. Det inskränker § 6: `/tasks/create` nås inte längre från itemets flik eller itemets plusmeny, bara från `/tasks` och containerns plusknapp.
+- **Plusmenyn och snabbknapparna.** Raderna för bilaga, uppgift och kostnad leder till fliken med `create=1`, som fäller ut formuläret eller fokuserar snabbraden.
+- **Undantaget.** *Nytt barnitem* från strukturpanelen på itemets sida leder fortfarande till sidan `/items/create`, men sidan ritar containerns låga hjälte (`hero: 'compact'`), så att layouten är densamma som på itemets sida. Detsamma gäller itemets redigeringssida.
+- **Konsekvens.** Issue 374–378 i [[M58 Registrering i vyn - itemets flikar]].
