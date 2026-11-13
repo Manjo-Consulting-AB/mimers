@@ -429,15 +429,20 @@ def lasfynd(kropp: str, rot: str = REPO_ROOT) -> list[str]:
     return fynd
 
 
+PROV_PER_FIL = 10
+
+
 def foljande_prov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
     """Befintliga prov under tests/ som namnger en fil i `In scope`.
 
     Samma villkor som grinden (`prov_foljer_rutan` i omfangsruta.py), inte ett
     nytt: sessionen får veta i förväg vad som annars faller först i fulla
     sviten. Ett prov som redan matchar en glob i rutan räknas inte. En rad per
-    prov, sorterad på sökväg.
+    prov, sorterad på sökväg - utom för en fil som namnges av fler än
+    PROV_PER_FIL prov (`lang/en/ui.php`): den får en enda rad med antalet, så
+    att den inte dränker provet som spelar roll för en annan fil.
     """
-    rader: list[tuple[str, str]] = []
+    traffar: list[tuple[str, str]] = []
     for katalog, _, namn in os.walk(os.path.join(rot, o.PROVKATALOG)):
         for n in namn:
             if not n.endswith(".php"):
@@ -448,7 +453,17 @@ def foljande_prov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
             with open(os.path.join(katalog, n), encoding="utf-8", errors="replace") as f:
                 traff = o.prov_foljer_rutan(fil, innanfor, f.read())
             if traff:
-                rader.append((fil, f"- `{fil}` namnger `{traff}`"))
+                traffar.append((fil, traff))
+    per_fil: dict[str, int] = {}
+    for _, traff in traffar:
+        per_fil[traff] = per_fil.get(traff, 0) + 1
+    rader: list[tuple[str, str]] = []
+    for fil, traff in traffar:
+        if per_fil[traff] <= PROV_PER_FIL:
+            rader.append((fil, f"- `{fil}` namnger `{traff}`"))
+    for traff, antal in per_fil.items():
+        if antal > PROV_PER_FIL:
+            rader.append((traff, f"- `{traff}` namnges av {antal} prov"))
     return [rad for _, rad in sorted(rader)]
 
 
@@ -527,12 +542,12 @@ def main() -> int:
     else:
         parser.error("--issue eller --fil krävs")
 
-    mekaniska, fraga, _, lage = analysera(kropp)
+    mekaniska, fraga, innanfor, lage = analysera(kropp)
     if args.fraga:
         print(fraga or "(inga Klart när-punkter att fråga om)")
         return 0
 
-    text = rapport(mekaniska, [], lage)
+    text = rapport(mekaniska, [], lage, lasfynd(kropp), foljande_prov(innanfor))
     print(text or "Rutan täcker varje rutt issuen nämner. Den bedömande halvan körs av kön.")
     return 0
 
