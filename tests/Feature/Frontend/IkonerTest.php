@@ -75,6 +75,7 @@ function ikonRoller(): array
         'trash' => 'trash-2',
         'share' => 'users',
         'export' => 'download',
+        'download' => 'download',
         'upload' => 'upload',
         'close' => 'x',
         'check' => 'check',

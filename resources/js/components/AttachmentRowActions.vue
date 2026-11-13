@@ -74,6 +74,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick));
             :href="`/files/${attachment.ulid}?download=1`"
             :class="BUTTON_CLASSES"
         >
+            <UiIcon name="download" :size="20" class="size-5 shrink-0" />
             {{ t('item.attachment.download') }}
         </a>
 
