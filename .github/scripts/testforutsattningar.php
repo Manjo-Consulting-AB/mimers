@@ -50,6 +50,68 @@ if (! is_file("$rot/.env")) {
 
 if (! is_file("$rot/public/build/manifest.json")) {
     $saknas[] = 'public/build/manifest.json saknas (frontend inte byggd)';
+} else {
+    // Ett manifest som finns men är äldre än källorna är samma fel som ett
+    // som saknas: TypsnittTest föll på en kopierad public/build utan
+    // InterVariable.woff2 (M50-M52). is_file och filemtime följer länkar, så
+    // en symlänkad public/build kontrolleras likadant.
+    $manifest_tid = filemtime("$rot/public/build/manifest.json");
+    $nyaste = 0;
+    foreach (['resources/js', 'resources/css'] as $katalog) {
+        if (! is_dir("$rot/$katalog")) {
+            continue;
+        }
+        $iter = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator("$rot/$katalog", FilesystemIterator::SKIP_DOTS | FilesystemIterator::FOLLOW_SYMLINKS)
+        );
+        foreach ($iter as $fil) {
+            if ($fil->isFile()) {
+                $nyaste = max($nyaste, $fil->getMTime());
+            }
+        }
+    }
+    if ($nyaste > $manifest_tid) {
+        $saknas[] = 'public/build är äldre än resources/ — kör npm run build';
+    }
+}
+
+// node_modules mot package-lock.json. npm skriver node_modules/.package-lock.json
+// vid varje installation; dess packages-nycklar ska vara de som låsfilen
+// listar (utom rotposten). Valfria paket som inte passar plattformen saknas
+// legitimt i node_modules och får också finnas där utan att vara fel.
+// En länkad node_modules följs av file_get_contents.
+$las_paket = static function (string $fil): ?array {
+    if (! is_file($fil)) {
+        return null;
+    }
+    $json = json_decode((string) file_get_contents($fil), true);
+    if (! is_array($json) || ! is_array($json['packages'] ?? null)) {
+        return null;
+    }
+    unset($json['packages']['']);
+
+    return $json['packages'];
+};
+
+$last = $las_paket("$rot/package-lock.json");
+if ($last !== null) {
+    $installerat = $las_paket("$rot/node_modules/.package-lock.json");
+    $fel = $installerat === null;
+    if (! $fel) {
+        foreach ($last as $nyckel => $paket) {
+            if (empty($paket['optional']) && ! array_key_exists($nyckel, $installerat)) {
+                $fel = true;
+            }
+        }
+        foreach ($installerat as $nyckel => $paket) {
+            if (empty($paket['optional']) && ! array_key_exists($nyckel, $last)) {
+                $fel = true;
+            }
+        }
+    }
+    if ($fel) {
+        $saknas[] = 'node_modules matchar inte package-lock.json — kör npm ci';
+    }
 }
 
 // Skalskript som piped:as till `bash -s` över ssh och aldrig körs på plats.
@@ -103,5 +165,6 @@ foreach ($saknas as $rad) {
     fwrite(STDERR, "  - $rad\n");
 }
 fwrite(STDERR, "\nKör `composer setup` först. En fräsch worktree behöver det en gång.\n");
+fwrite(STDERR, "Gäller raden node_modules eller public/build räcker kommandot på raden.\n");
 
 exit(1);
