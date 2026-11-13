@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
@@ -313,13 +314,12 @@ it('ritar den låga hjälten i itemvyn', function () {
 
     expect($vy)->toContain("[ContainerLayout, { hero: 'compact', container: props.container }]");
 
-    foreach (['Items/Create.vue', 'Items/Edit.vue'] as $sida) {
-        expect(hjalteKod("pages/Containers/{$sida}"))
-            ->toContain('[ContainerLayout, { container: props.container }]');
-    }
-
-    // Uppgiftens sida och redigeringen ritar den låga hjälten (issue 1158).
-    foreach (['Items/Schedules/Show.vue', 'Items/Schedules/Edit.vue'] as $sida) {
+    // Uppgiftens sida och redigeringen ritar den låga hjälten (issue 1158), och
+    // sidorna för nytt och redigerat item gör det sedan issue 1214.
+    foreach ([
+        'Items/Create.vue', 'Items/Edit.vue',
+        'Items/Schedules/Show.vue', 'Items/Schedules/Edit.vue',
+    ] as $sida) {
         expect(hjalteKod("pages/Containers/{$sida}"))
             ->toContain("[ContainerLayout, { hero: 'compact', container: props.container }]");
     }
@@ -333,6 +333,32 @@ it('ritar den låga hjälten i itemvyn', function () {
         '#<p v-else class="hidden[^"]*md:block">\{\{ heading \}\}</p>#s',
         'namnraden ritas inte när hjälten saknas',
     );
+});
+
+/*
+ * Klart när (issue 1214): sidorna för nytt och redigerat item får hjälten och
+ * talen genom servern — `containerCounts` sätts för varje rutt med en
+ * `{container}`-parameter.
+ */
+// vakt: servern rörs inte i issue 1214; provet låser att talen redan når sidorna.
+it('ger containerCounts till sidorna för nytt och redigerat item', function () {
+    withoutVite();
+
+    [, $ägare, $container] = hjalteKontext();
+
+    $item = Item::factory()->for($container, 'container')->create();
+
+    foreach ([
+        "/containers/{$container->ulid}/items/create?parent={$item->ulid}",
+        "/containers/{$container->ulid}/items/{$item->ulid}/edit",
+    ] as $adress) {
+        actingAs($ägare)->get($adress)
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('containerCounts.items', 1)
+                ->where('containerCounts.todos', 0)
+            );
+    }
 });
 
 /*
