@@ -65,6 +65,7 @@ function stadaForutsattningar(string $rot): void
     exec('rm -rf '.escapeshellarg($rot));
 }
 
+// vakt: färskt bygge ska vara grönt före och efter; fångar falska positiver.
 it('avslutar med 0 på ett färskt bygge och en färsk npm ci', function () {
     $rot = forutsattningsMiljo();
 
@@ -177,6 +178,7 @@ it('följer en symlänkad public/build', function () {
         ->and($utdata)->toContain('kör npm run build');
 });
 
+// vakt: de gamla villkoren ska gälla som förut, alltså gröna på basen.
 it('behåller de befintliga villkoren för .env, APP_KEY och manifestet', function () {
     $rot = forutsattningsMiljo();
     unlink($rot.'/.env');
@@ -199,6 +201,7 @@ it('behåller de befintliga villkoren för .env, APP_KEY och manifestet', functi
         ->and($u3)->toContain('manifest.json saknas');
 });
 
+// vakt: exec-bitskontrollen är gammal och ska bestå.
 it('behåller exec-bitskontrollen för skalskript i indexet', function () {
     $rot = forutsattningsMiljo();
     file_put_contents($rot.'/kor.sh', "#!/bin/sh\n");
