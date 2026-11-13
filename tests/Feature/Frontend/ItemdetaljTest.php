@@ -312,11 +312,11 @@ it('bär plusknappens meny med radadresser på ett item', function () {
             ->where('create.rows', [
                 ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"],
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
-                ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
-                ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+                ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
+                ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
                 // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
                 // *Kostnad*, som leder till itemets kostnadsflik (issue 168).
-                ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
+                ['key' => 'cost', 'href' => "{$bas}?tab=costs&create=1"],
             ]),
     );
 });

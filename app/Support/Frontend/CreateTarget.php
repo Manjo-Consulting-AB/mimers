@@ -227,12 +227,12 @@ final class CreateTarget
         }
 
         if ($gate->allows('create', $item)) {
-            $rows[] = ['key' => 'attachment', 'href' => $this->tabHref($base, $path, 'attachments')];
+            // Raderna för bilaga, uppgift och kostnad landar på fliken med
+            // formuläret öppet (`create=1`) och öppnar ingen ny vy (issue 1212 ·
+            // [[ADR-0074 Registrering i vyn]], tillägget om itemets flikar).
+            $rows[] = ['key' => 'attachment', 'href' => $this->tabHref($base, $path, 'attachments').'&create=1'];
 
-            $rows[] = [
-                'key' => 'schedule',
-                'href' => route('containers.items.schedules.create', [$container, $item], absolute: false),
-            ];
+            $rows[] = ['key' => 'schedule', 'href' => $this->tabHref($base, $path, 'schedules').'&create=1'];
 
             // *Kostnad* (issue 168 · [[ADR-0048 Mobilen och plusknappen]] § 2).
             // Raden leder till kostnadsfliken, precis som *Relation* och *Bild
@@ -240,7 +240,7 @@ final class CreateTarget
             // aktuella förekomsten vidare, så ett flikbyte stannar på samma
             // väg. Grinden är itemets `create`, samma pinne som
             // App\Http\Controllers\CostEntryController::store() prövar.
-            $rows[] = ['key' => 'cost', 'href' => $this->tabHref($base, $path, 'costs')];
+            $rows[] = ['key' => 'cost', 'href' => $this->tabHref($base, $path, 'costs').'&create=1'];
         }
 
         if ($rows === []) {

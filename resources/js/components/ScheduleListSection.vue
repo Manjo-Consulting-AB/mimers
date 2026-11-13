@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import ContainerTaskQuickCreate from './ContainerTaskQuickCreate.vue';
 import TaskGroup from './TaskGroup.vue';
@@ -80,10 +80,42 @@ const props = defineProps({
     /* Reglagets läge, ur `?children`. Förvalet är PÅ. */
     includeChildren: { type: Boolean, required: true },
     /* `{ create }` — snabbraden. Rutten prövar samma grind. */
+    /*
+     * Sant när adressen bär `create=1` (issue 1212 · [[ADR-0074 Registrering i
+     * vyn]], tillägget om itemets flikar): plusmenyns och snabbknappens rad
+     * landar här med fokus i snabbraden.
+     */
+    startOpen: { type: Boolean, default: false },
     can: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
+
+/*
+ * Snabbraden och dess fokus: `startOpen` ger raden fokus, vid montering och
+ * när värdet slår om på samma item (issue 1212).
+ */
+const quick = ref(null);
+
+async function focusQuick() {
+    await nextTick();
+    quick.value?.focus();
+}
+
+onMounted(() => {
+    if (props.startOpen && props.can.create) {
+        focusQuick();
+    }
+});
+
+watch(
+    () => props.startOpen,
+    (start) => {
+        if (start && props.can.create) {
+            focusQuick();
+        }
+    },
+);
 
 /* Växelns läge, speglat ur proppen — se docblocken ovan. */
 const onlyChildren = ref(props.includeChildren);
@@ -235,6 +267,7 @@ function onCreated(ulids) {
              (ADR-0074 § 2). Utan platsknapp, platsen är itemet. -->
         <ContainerTaskQuickCreate
             v-if="can.create"
+            ref="quick"
             class="mt-4"
             :container-ulid="containerUlid"
             :item="quickItem"

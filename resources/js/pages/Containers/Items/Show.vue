@@ -670,6 +670,16 @@ const activeTab = computed(() => {
 });
 
 /*
+ * `create=1` i adressen (issue 1212 · [[ADR-0074 Registrering i vyn]],
+ * tillägget om itemets flikar): plusmenyns och snabbknapparnas rader för
+ * bilaga, uppgift och kostnad landar på fliken med formuläret öppet. Värdet
+ * bevakas av sektionerna, så ett val på samma item gäller utan ny montering.
+ */
+const startOpen = computed(
+    () => new URLSearchParams(page.url.split('?')[1] ?? '').get('create') === '1',
+);
+
+/*
  * Den AKTUELLA förekomsten — den väg servern märkte. Vyn sorterar aldrig om
  * listan och väljer aldrig själv: markeringen kommer ur querysträngen, och
  * den som inte pekar på en väg som finns får den första i ordningen märkt utan
@@ -1257,6 +1267,7 @@ function toggleFavorite() {
 
             <ItemAttachmentSection
                 v-if="activeTab === 'attachments'"
+                :start-open="startOpen"
                 :container-ulid="container.ulid"
                 :item-ulid="item.ulid"
                 :attachments="attachments"
@@ -1278,6 +1289,7 @@ function toggleFavorite() {
             -->
             <ScheduleListSection
                 v-if="activeTab === 'schedules'"
+                :start-open="startOpen"
                 :container-ulid="container.ulid"
                 :item-ulid="item.ulid"
                 :groups="itemTasks.groups"
@@ -1323,6 +1335,7 @@ function toggleFavorite() {
             -->
             <ItemCostSection
                 v-if="activeTab === 'costs'"
+                :start-open="startOpen"
                 :container-ulid="container.ulid"
                 :item-ulid="item.ulid"
                 :costs="costs"
