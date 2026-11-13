@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import AttachmentViewer from '../../components/AttachmentViewer.vue';
 import AttachmentUploadQueue from '../../components/AttachmentUploadQueue.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
 import DocumentFilterColumn from '../../components/DocumentFilterColumn.vue';
@@ -370,6 +371,31 @@ const preview = (row) => attachmentPreview(row, props.variants, props.inlineEnab
 
 const size = (row) => formatByteSize(row.byte_size);
 
+/*
+ * Visaren (M57 · issue 372). En enda AttachmentViewer för hela sidan; raden
+ * som visas ligger i `viewer` och visaren sätter den själv genom `open()`.
+ * Namnet är en öppnare bara när filen går att visa — samma regel som på
+ * itemets bilageflik — och ren text annars. Att öppna visaren loggas av
+ * `/files/{ulid}` när bilden hämtas, så vyn skriver ingenting.
+ */
+const viewer = ref(null);
+const viewerElement = ref(null);
+
+const viewable = (preview) => preview.image !== null || preview.frame !== null;
+
+const viewerPreview = ref(null);
+
+function openViewer(row, rowPreview, event) {
+    viewerPreview.value = rowPreview;
+    viewerElement.value?.open(row, event.currentTarget);
+}
+
+/*
+ * *Recently opened* bär ingen MIME-typ, bara `hasThumb`: en bild med
+ * miniatyr går att visa (originalet som källa), en PDF syns inte där.
+ */
+const recentPreview = (open) => attachmentPreview(open, { [open.ulid]: open.hasThumb ? ['thumb'] : [] }, props.inlineEnabled);
+
 /* Datumet genom datumregeln och aldrig genom en egen `Intl`-formatering. */
 const opened = (row) => eventDate(row.created_at).text;
 const openedAt = (open) => eventDate(open.opened_at).text;
@@ -553,7 +579,41 @@ function toInbox(row) {
 
             <ul class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                 <li v-for="open in recentOpens" :key="open.ulid">
+                    <!--
+                        Bild med miniatyr: miniatyren och namnet är en knapp som
+                        öppnar visaren (M57 · issue 372). Annars är kortet den
+                        länk till itemets bilageflik det alltid varit.
+                    -->
+                    <button
+                        v-if="viewable(recentPreview(open))"
+                        type="button"
+                        class="flex min-h-11 w-full flex-col gap-2 text-left"
+                        @click="openViewer(open, recentPreview(open), $event)"
+                    >
+                        <img
+                            v-if="open.hasThumb && inlineEnabled"
+                            :src="`/files/${open.ulid}?variant=thumb`"
+                            :alt="open.filename"
+                            class="h-24 w-full rounded object-cover"
+                        >
+
+                        <span
+                            v-else
+                            role="img"
+                            :aria-label="t('item.attachment.file_icon')"
+                            class="flex h-24 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                        >
+                            <UiIcon name="document" :size="24" class="size-8" />
+                        </span>
+
+                        <span class="truncate font-medium text-ink hover:underline">{{ open.filename }}</span>
+                        <time :datetime="open.opened_at" class="text-meta text-ink-subtle">
+                            {{ t('container.documents.opened', { date: openedAt(open) }) }}
+                        </time>
+                    </button>
+
                     <Link
+                        v-else
                         :href="`/containers/${container.ulid}/items/${open.item.ulid}?tab=attachments`"
                         class="flex min-h-11 flex-col gap-2"
                     >
@@ -756,7 +816,39 @@ function toInbox(row) {
                         :class="{ 'bg-accent-soft': highlight.includes(row.ulid) }"
                     >
                         <td class="py-1 pl-4 pr-4">
-                            <span class="flex items-center gap-2">
+                            <!--
+                                Namnet och miniatyren öppnar visaren när filen
+                                går att visa och är ren text annars (M57 ·
+                                issue 372).
+                            -->
+                            <button
+                                v-if="viewable(preview(row))"
+                                type="button"
+                                class="flex min-h-11 items-center gap-2 text-left font-medium text-ink hover:underline"
+                                @click="openViewer(row, preview(row), $event)"
+                            >
+                                <!-- Miniatyren bara när varianten finns; annars
+                                     en liten filikon, aldrig en trasig bild. -->
+                                <img
+                                    v-if="preview(row).display === 'thumb'"
+                                    :src="preview(row).thumbnail"
+                                    :alt="row.filename"
+                                    class="h-8 w-8 shrink-0 rounded object-cover"
+                                >
+
+                                <span
+                                    v-else
+                                    role="img"
+                                    :aria-label="t('item.attachment.file_icon')"
+                                    class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                                >
+                                    <UiIcon name="document" :size="16" class="size-4" />
+                                </span>
+
+                                <span>{{ row.filename }}</span>
+                            </button>
+
+                            <span v-else class="flex items-center gap-2">
                                 <!-- Miniatyren bara när varianten finns; annars
                                      en liten filikon, aldrig en trasig bild. -->
                                 <img
@@ -933,6 +1025,12 @@ function toInbox(row) {
 
         </div>
     </div>
+
+    <AttachmentViewer
+        ref="viewerElement"
+        v-model:attachment="viewer"
+        :preview="viewer ? viewerPreview : null"
+    />
 
     <!--
         Målväljaren (issue 242 och 243). EN för hela listan: raden som
