@@ -6,6 +6,7 @@ import AttachmentViewer from './AttachmentViewer.vue';
 import AttachmentUploadQueue from './AttachmentUploadQueue.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
+import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiIcon from './UiIcon.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
@@ -209,9 +210,9 @@ function openViewer(attachment, event) {
 }
 
 /*
- * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
- * `lang/` — ingen modal komponent och ingen sträng i JavaScript, samma mönster
- * som detaljvyns radering och upp-knytningen i ItemLinkSection.
+ * Raderingen. Raden frågar först med `UiConfirmDialog` (issue 1200), samma
+ * form som *Delete* på containerns Documents: `destroying` är bilagan som
+ * frågas om, `destroyTrigger` är *More* som fokus går tillbaka till.
  *
  * `router.delete` och inte en <Link method="delete">: bekräftelsen måste kunna
  * AVBRYTA navigeringen.
@@ -223,16 +224,48 @@ function openViewer(attachment, event) {
  * och delar därför inte vänteläge.
  */
 const pending = ref(null);
+const destroying = ref(null);
+const destroyTrigger = ref(null);
 
-function destroy(attachment) {
-    if (! window.confirm(t('item.attachment.destroy_confirm'))) {
-        return;
+/* Radens fel: kvotfelet eller 403, ritat på den rad det gäller. */
+const actionError = ref(null);
+
+function askDestroy(attachment, event) {
+    destroying.value = attachment;
+    destroyTrigger.value = event.currentTarget;
+}
+
+/* Dialogen går inte att stänga medan raderingen pågår. */
+function cancelDestroy() {
+    if (pending.value === null) {
+        destroying.value = null;
     }
+}
+
+function destroy() {
+    const attachment = destroying.value;
 
     router.delete(`${itemUrl()}/attachments/${attachment.ulid}`, {
         preserveScroll: true,
-        onStart: () => { pending.value = attachment.ulid; },
-        onFinish: () => { pending.value = null; },
+        onStart: () => {
+            pending.value = attachment.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => {
+            pending.value = null;
+            destroying.value = null;
+        },
+        onError: (errors) => {
+            actionError.value = { ulid: attachment.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: attachment.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
     });
 }
 
@@ -248,9 +281,6 @@ const pickerOpen = ref(false);
 const pickerTrigger = ref(null);
 const pickerHeading = ref('');
 const picked = ref(null);
-
-/* Radens fel: kvotfelet eller 403, ritat på den rad som flyttades. */
-const actionError = ref(null);
 
 function openPicker(attachment, action, event) {
     picked.value = { attachment, action };
@@ -493,7 +523,7 @@ function toInbox(attachment) {
                         @move="openPicker(attachment, 'move', $event)"
                         @copy="openPicker(attachment, 'copy', $event)"
                         @inbox="toInbox(attachment)"
-                        @destroy="destroy(attachment)"
+                        @destroy="askDestroy(attachment, $event)"
                     />
                 </div>
 
@@ -534,5 +564,15 @@ function toInbox(attachment) {
             @close="closePicker"
         />
 
+        <UiConfirmDialog
+            :open="destroying !== null"
+            :heading="t('item.attachment.destroy_confirm')"
+            :confirm-label="t('item.attachment.delete')"
+            :trigger="destroyTrigger"
+            :pending="pending !== null && destroying !== null"
+            tone="danger"
+            @confirm="destroy"
+            @cancel="cancelDestroy"
+        />
     </section>
 </template>
