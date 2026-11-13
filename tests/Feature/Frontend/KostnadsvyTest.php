@@ -478,7 +478,7 @@ it('hämtar leverantörerna på nytt efter varje skrivning', function () {
     expect($vy)->toContain('onMounted(loadSuppliers)');
 
     // Skapa: fälten nollställs och frågan ställs om.
-    expect($vy)->toMatch("/form\.reset\([^)]*\);\s+loadSuppliers\(\);/");
+    expect($vy)->toMatch("/form\.reset\([^)]*\);\s+(?:form\.defaults\(\);\s+)?loadSuppliers\(\);/");
 
     // Ändra: redigeringen stängs och frågan ställs om.
     expect($vy)->toMatch('/editing\.value = null;\s+loadSuppliers\(\);/');

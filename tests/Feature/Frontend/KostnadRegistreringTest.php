@@ -132,3 +132,18 @@ it('stänger med Escape eller Cancel och frågar först när formuläret har osp
         ->and($vy)->toContain('<UiConfirmDialog')
         ->and($vy)->toContain('@confirm="discard"');
 });
+
+it('flyttar formulärets förval efter en sparning så att dirty blir falsk och slår till igen vid en ändring', function () {
+    $form = kostregKod('components/CostEntryForm.vue');
+
+    // defaults() utan argument, direkt efter reset: datum och valuta som står
+    // kvar blir nytt förval, så isDirty faller och watch skickar dirty = false.
+    expect($form)->toMatch("/form\.reset\('amount', 'description', 'supplier'\);\s*form\.defaults\(\);/")
+        ->and($form)->toContain("watch(() => form.isDirty, (dirty) => emit('dirty', dirty)")
+        ->and($form)->not->toContain("form.reset('date'")
+        ->and($form)->not->toContain("form.reset('currency'");
+
+    // Vyn läser bara händelsen; stängningen frågar när createDirty är sann.
+    $vy = kostregKod('pages/Containers/Costs.vue');
+    expect($vy)->toContain('@dirty="createDirty = $event"');
+});
