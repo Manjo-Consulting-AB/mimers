@@ -28,7 +28,7 @@ Startlistan är rollerna som containerns översikt, flikraden, hjälten och sido
 |---|---|
 | Navigering | `dashboard`, `container`, `inbox`, `tasks`, `documents`, `history`, `search`, `settings`, `notifications`, `favorite` |
 | Innehåll | `overview`, `item`, `task`, `schedule`, `cost`, `document`, `image`, `link`, `loan`, `tag`, `category`, `map`, `tip` |
-| Handling | `add`, `edit`, `more`, `trash`, `share`, `export`, `upload`, `close`, `check` |
+| Handling | `add`, `edit`, `more`, `trash`, `share`, `export`, `download`, `upload`, `close`, `check` |
 | Riktning | `chevron-right`, `chevron-down`, `arrow-right` |
 | Tillstånd | `warning`, `overdue` |
 

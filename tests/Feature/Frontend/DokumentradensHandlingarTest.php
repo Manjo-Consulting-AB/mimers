@@ -52,6 +52,14 @@ it('ger Download och More samma klasser', function () {
     expect($kod)->toContain('<UiIcon name="chevron-down"');
 });
 
+it('ritar Download med ikonen download i samma storlek som Mores chevron', function () {
+    $kod = dokradensKomponent();
+
+    expect($kod)->toContain('<UiIcon name="download" :size="20" class="size-5 shrink-0" />');
+    expect($kod)->toContain('<UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />');
+    expect(strpos($kod, '<UiIcon name="download"'))->toBeLessThan(strpos($kod, "t('item.attachment.download')"));
+});
+
 it('ritar menyn som en högerställd absolut panel i en details', function () {
     $kod = dokradensKomponent();
 
