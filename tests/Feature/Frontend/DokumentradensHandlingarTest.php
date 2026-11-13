@@ -118,7 +118,7 @@ it('ritar komponenten på Documents och på bilagefliken med sina skrivvägar', 
     expect($flik)->toContain('<AttachmentRowActions');
     expect($sidan)->toContain('@inbox="toInbox(row)"');
     expect($flik)->toContain('@inbox="toInbox(attachment)"');
-    expect($flik)->toContain('@destroy="destroy(attachment)"');
+    expect($flik)->toContain('@destroy="askDestroy(attachment, $event)"');
     expect($sidan)->toContain("t('container.documents.actions')");
     expect(Lang::get('ui.container.documents.actions', [], 'en'))->toBe('Actions');
     expect(Lang::get('ui.item.attachment.more', [], 'en'))->toBe('More');
@@ -184,4 +184,34 @@ it('låter Download och More stå sist i bilageradens flex-rad', function () {
 
     // Efter komponenten kommer bara radens avslutande </div> - inga syskon.
     expect(substr($efter, 0, (int) strpos($efter, '</div>')))->toMatch('/^\s*$/');
+});
+
+it('frågar med UiConfirmDialog innan Delete raderar på bilagefliken', function () {
+    $flik = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    $sidan = File::get(resource_path('js/pages/Containers/Documents.vue'));
+
+    expect($flik)->not->toContain('window.confirm');
+    expect($flik)->not->toContain('confirm(');
+    expect($flik)->toContain("import UiConfirmDialog from './UiConfirmDialog.vue'");
+
+    // Samma rubrik, knapptext och ton som på Documents.
+    foreach ([":heading=\"t('item.attachment.destroy_confirm')\"", ":confirm-label=\"t('item.attachment.delete')\"", 'tone="danger"', '@confirm="destroy"', '@cancel="cancelDestroy"', ':trigger="destroyTrigger"'] as $rad) {
+        expect($flik)->toContain($rad);
+        expect($sidan)->toContain($rad);
+    }
+
+    // Bekräftelsen raderar på samma rutt som förut; bara dialogens bekräftelse når destroy().
+    expect($flik)->toMatch('/function destroy\(\) \{.*?router\.delete\(`\$\{itemUrl\(\)\}\/attachments\/\$\{attachment\.ulid\}`/s');
+    expect($flik)->not->toContain('@destroy="destroy(');
+
+    // Avbrott raderar inget, och fokus går tillbaka till More via triggern.
+    expect($flik)->toMatch('/function askDestroy\(attachment, event\) \{\s*destroying\.value = attachment;\s*destroyTrigger\.value = event\.currentTarget;/s');
+
+    // Stängningen är spärrad medan raderingen pågår.
+    expect($flik)->toMatch('/function cancelDestroy\(\) \{\s*if \(pending\.value === null\) \{\s*destroying\.value = null;/s');
+    expect($flik)->toContain(':pending="pending !== null && destroying !== null"');
+    expect($flik)->toMatch('/onFinish: \(\) => \{\s*pending\.value = null;\s*destroying\.value = null;/s');
+
+    // 403 och valideringsfel ritas på raden.
+    expect($flik)->toMatch('/function destroy\(\) \{.*?onError: \(errors\) => \{\s*actionError\.value = \{ ulid: attachment\.ulid, message: errors\.attachment \};.*?onHttpException: \(response\) => \{.*?response\.status === 403 \? t\(\'error\.403\'\)/s');
 });
