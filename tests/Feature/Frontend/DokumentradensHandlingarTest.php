@@ -133,6 +133,7 @@ it('frågar med UiConfirmDialog innan Delete raderar på Documents', function ()
     expect($sidan)->toMatch('/function destroy\(\).*?actionError\.value = \{ ulid: row\.ulid/s');
 });
 
+// vakt: servern är oförändrad av issuen (rutten svarar redan back()); provet låser kontraktet som Delete på Documents bygger på.
 it('landar DELETE med Referer på dokumentfliken där', function () {
     withoutVite();
 
