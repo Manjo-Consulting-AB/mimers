@@ -83,13 +83,20 @@ it('låter åtgärden nå flikens formulär', function () {
         $block = tommaFlikarBlock($kod, $start);
 
         expect($block)->toContain('@click="focusForm"');
+        if ($falt === 'attachment-file') {
+            // Dokumentfliken fäller ut det infällbara formuläret (issue 1209);
+            // InlineCreate sätter fokus i det. Filfältet bor i köns komponent.
+            expect($kod)->toContain('createOpen.value = true');
+            expect(tommaFlikarKod('components/AttachmentUploadQueue.vue'))->toContain("id=\"{$falt}\"");
+
+            continue;
+        }
+
         // Kostnadsformuläret bor i en egen komponent sedan issue 369.
         $fokuskod = $falt === 'cost-incurred-on' ? tommaFlikarKod('components/CostEntryForm.vue') : $kod;
         expect($fokuskod)->toContain("document.getElementById('{$falt}')?.focus()");
-        // Fältet finns i samma fil, så fokus har något att landa på. Filfältet
-        // bor i köns komponent sedan issue 367.
+        // Fältet finns i samma fil, så fokus har något att landa på.
         $faltkod = match ($falt) {
-            'attachment-file' => tommaFlikarKod('components/AttachmentUploadQueue.vue'),
             'cost-incurred-on' => $fokuskod,
             default => $kod,
         };

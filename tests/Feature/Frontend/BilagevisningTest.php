@@ -462,7 +462,7 @@ it('ritar uppladdningen före listan', function () {
     // några bilagor fick användaren skrolla förbi allt för att ladda upp
     // nästa fil. Innehållet i ytan är oförändrat — bara var det står
     // (Beslut 1).
-    $uppladdning = strpos($vy, '<template v-if="can.create">');
+    $uppladdning = strpos($vy, '<InlineCreate');
     $lista = strpos($vy, 'v-for="attachment in');
 
     expect($uppladdning)->not->toBeFalse();
@@ -652,7 +652,8 @@ it('lämnar 60a:s och 60b:s ytor orörda', function () {
 
     // Släppytan bor i köns komponent sedan issue 367.
     expect(File::get(resource_path('js/components/AttachmentUploadQueue.vue')))->toContain('item.attachment.dropzone');
-    expect($vy)->toContain('item.attachment.upload_heading');
+    expect($vy)->toContain('container.documents.add');
+    expect($vy)->not->toContain('item.attachment.upload_heading');
     expect($vy)->toContain('item.attachment.destroy_confirm');
 });
 

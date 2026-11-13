@@ -1,9 +1,10 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AttachmentRowActions from './AttachmentRowActions.vue';
 import AttachmentViewer from './AttachmentViewer.vue';
 import AttachmentUploadQueue from './AttachmentUploadQueue.vue';
+import InlineCreate from './InlineCreate.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
 import UiConfirmDialog from './UiConfirmDialog.vue';
@@ -179,13 +180,49 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
- * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
- * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
- * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ * Registreringen i vyn (issue 1209 · [[ADR-0074 Registrering i vyn]] § 1–3):
+ * samma infällbara formulär som på containerns dokumentflik. `uploading` är
+ * köns `busy` och gör att Escape frågar före stängning. Tomt lägets åtgärd
+ * fäller ut formuläret; InlineCreate sätter fokus i det när det öppnas.
  */
+const createOpen = ref(false);
+const uploading = ref(false);
+
 function focusForm() {
-    document.getElementById('attachment-file')?.focus();
+    createOpen.value = true;
 }
+
+/*
+ * Markeringen: ULID:erna före och efter `uploaded`. `known` följer listan
+ * utom under en uppladdning, då det är `onUploaded` som jämför.
+ */
+const highlight = ref([]);
+let highlightTimer = null;
+let known = new Set(props.attachments.map((attachment) => attachment.ulid));
+
+watch(() => props.attachments, (attachments) => {
+    if (! uploading.value) {
+        known = new Set(attachments.map((attachment) => attachment.ulid));
+    }
+});
+
+async function onUploaded() {
+    const before = known;
+
+    await nextTick();
+
+    const current = props.attachments.map((attachment) => attachment.ulid);
+
+    known = new Set(current);
+    clearTimeout(highlightTimer);
+    highlight.value = current.filter((ulid) => ! before.has(ulid));
+    highlightTimer = setTimeout(() => {
+        highlight.value = [];
+    }, 2000);
+}
+
+onBeforeUnmount(() => clearTimeout(highlightTimer));
+
 /*
  * Raderna: storleken formaterad och `kind` översatt till ett ord. Storleken
  * speglar serverns Number::fileSize() och är därför en-formaterad oavsett
@@ -410,17 +447,23 @@ function toInbox(attachment) {
             allt för att ladda upp nästa fil. Innehållet är oförändrat — bara
             var det står.
         -->
-        <template v-if="can.create">
-            <h3 class="mt-8 text-base font-semibold">{{ t('item.attachment.upload_heading') }}</h3>
-
+        <InlineCreate
+            v-if="can.create"
+            v-model:open="createOpen"
+            class="mt-4"
+            :label="t('container.documents.add')"
+            :dirty="uploading"
+        >
             <AttachmentUploadQueue
                 :container-ulid="containerUlid"
                 :item-ulid="itemUlid"
                 :max-upload-bytes="maxUploadBytes"
                 :container-account="containerAccount"
                 :container-is-inbox="containerIsInbox"
+                @busy="uploading = $event"
+                @uploaded="onUploaded"
             />
-        </template>
+        </InlineCreate>
 
         <!-- En tom container och ett item utan bilagor säger samma sak: det finns
              ingen rad att visa, och vyn hittar inte på en. -->
@@ -437,6 +480,7 @@ function toInbox(attachment) {
                 v-for="attachment in rows"
                 :key="attachment.ulid"
                 class="flex flex-col gap-3 rounded border border-border bg-surface px-4 py-2"
+                :class="{ 'bg-accent-soft': highlight.includes(attachment.ulid) }"
             >
                 <div class="flex flex-wrap items-center gap-3">
                     <!--

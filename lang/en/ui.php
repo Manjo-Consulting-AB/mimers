@@ -3657,7 +3657,6 @@ return [
             'file_icon' => 'The file is shown as an icon',
             'pdf_fallback' => 'Cannot display the PDF? Download it instead.',
 
-            'upload_heading' => 'Upload files',
             'billing_note' => 'Storage is charged to the account below, not to the container owner.',
             'account' => 'The account that pays',
             'file' => 'Files',
