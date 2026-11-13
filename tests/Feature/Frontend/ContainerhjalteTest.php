@@ -340,6 +340,7 @@ it('ritar den låga hjälten i itemvyn', function () {
  * talen genom servern — `containerCounts` sätts för varje rutt med en
  * `{container}`-parameter.
  */
+// vakt: servern rörs inte i issue 1214; provet låser att talen redan når sidorna.
 it('ger containerCounts till sidorna för nytt och redigerat item', function () {
     withoutVite();
 
