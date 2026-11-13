@@ -465,6 +465,20 @@ function toInbox(attachment) {
                     <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
 
                     <!--
+                        *Use as cover* (issue 342): på varje bild utom den som
+                        redan är omslaget, och bara med `can.update`.
+                    -->
+                    <button
+                        v-if="can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid"
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="useAsCover(attachment)"
+                    >
+                        {{ t('item.attachment.use_as_cover') }}
+                    </button>
+
+                    <!--
                         Nedladdningen går alltid genom appen (issue 19a):
                         rutten kontrollerar `view` på itemet före leveransen.
                         Den står på VARJE rad, också de som ritas inline — att
@@ -481,20 +495,6 @@ function toInbox(attachment) {
                         @inbox="toInbox(attachment)"
                         @destroy="destroy(attachment)"
                     />
-
-                    <!--
-                        *Use as cover* (issue 342): på varje bild utom den som
-                        redan är omslaget, och bara med `can.update`.
-                    -->
-                    <button
-                        v-if="can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid"
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                        @click="useAsCover(attachment)"
-                    >
-                        {{ t('item.attachment.use_as_cover') }}
-                    </button>
                 </div>
 
                 <!--

@@ -164,3 +164,16 @@ it('landar DELETE med Referer på dokumentfliken där', function () {
 
     expect($bilaga->fresh()->deleted_at)->not->toBeNull();
 });
+
+it('låter Download och More stå sist i bilageradens flex-rad', function () {
+    $flik = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+
+    $start = strpos($flik, '<AttachmentRowActions');
+    expect($start)->not->toBeFalse();
+
+    $slut = strpos($flik, '/>', (int) $start);
+    $efter = substr($flik, (int) $slut + 2);
+
+    // Efter komponenten kommer bara radens avslutande </div> - inga syskon.
+    expect(substr($efter, 0, (int) strpos($efter, '</div>')))->toMatch('/^\s*$/');
+});
