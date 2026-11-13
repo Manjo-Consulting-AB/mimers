@@ -393,10 +393,10 @@ function openViewer(row, rowPreview, event) {
 }
 
 /*
- * *Recently opened* bär ingen MIME-typ, bara `hasThumb`: en bild med
- * miniatyr går att visa (originalet som källa), en PDF syns inte där.
+ * *Recently opened* bär `mime_type` och `variants` som listraderna: en bild
+ * öppnar visaren med `medium`, en PDF med PDF-ramen.
  */
-const recentPreview = (open) => attachmentPreview(open, { [open.ulid]: open.hasThumb ? ['thumb'] : [] }, props.inlineEnabled);
+const recentPreview = (open) => attachmentPreview(open, { [open.ulid]: open.variants }, props.inlineEnabled);
 
 /* Datumet genom datumregeln och aldrig genom en egen `Intl`-formatering. */
 const opened = (row) => eventDate(row.created_at).text;

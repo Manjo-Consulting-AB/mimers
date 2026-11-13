@@ -420,6 +420,11 @@ class ContainerDocumentController extends Controller
                 'ulid' => (string) $open->attachment->ulid,
                 'filename' => (string) $open->attachment->filename,
                 'hasThumb' => $open->attachment->storedFile->derivatives->contains('variant', 'thumb'),
+                // Samma två läsningar som listraderna ger attachmentPreview():
+                // MIME-typen för PDF:en och derivatnamnen för bildens källa.
+                // Båda ur relationer ListRecentOpens redan eager-laddar.
+                'mime_type' => $open->attachment->storedFile->mime_type,
+                'variants' => $this->variants(new Collection([$open->attachment]))[$open->attachment->ulid],
                 'opened_at' => $open->opened_at->toIso8601String(),
                 'item' => [
                     'ulid' => (string) $open->attachment->item->ulid,
