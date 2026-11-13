@@ -607,10 +607,28 @@ it('ger en read-mottagare miniatyrerna och visningen men ingen skrivyta', functi
 // --- strängarna (Beslut 7) -----------------------------------------------
 
 it('har visningens nycklar och läser dem ur lang/', function () {
-    // `preview` och `pdf_viewer_heading` kom med M24 (Beslut 3 och 4).
-    foreach (['viewer_heading', 'pdf_viewer_heading', 'viewer_close', 'preview', 'file_icon', 'pdf_fallback'] as $nyckel) {
+    // `pdf_viewer_heading` kom med M24 (Beslut 4).
+    foreach (['viewer_heading', 'pdf_viewer_heading', 'viewer_close', 'file_icon', 'pdf_fallback'] as $nyckel) {
         expect(trim((string) Lang::get("ui.item.attachment.{$nyckel}", [], 'en')))
             ->not->toBe('', "ui.item.attachment.{$nyckel} saknas");
+    }
+});
+
+it('har tagit bort nyckeln item.attachment.preview och ingen läser den', function () {
+    expect(Lang::has('ui.item.attachment.preview', 'en'))->toBeFalse();
+
+    $kommentar = file_get_contents(base_path('lang/en/ui.php'));
+    expect($kommentar)->not->toContain("'preview' => 'Preview'");
+
+    foreach (['app', 'resources'] as $katalog) {
+        $traffar = [];
+        $iter = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(base_path($katalog), FilesystemIterator::SKIP_DOTS));
+        foreach ($iter as $fil) {
+            if ($fil->isFile() && str_contains((string) file_get_contents($fil->getPathname()), 'item.attachment.preview')) {
+                $traffar[] = $fil->getPathname();
+            }
+        }
+        expect($traffar)->toBe([]);
     }
 });
 

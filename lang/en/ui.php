@@ -3647,13 +3647,13 @@ return [
             // own, so the sentence is there the whole time and points at the
             // download link every row has anyway (decision 5).
             //
-            // M24 (test findings 2026-10-02): `preview` is the row button that
-            // opens the viewer, and `pdf_viewer_heading` is the heading when
-            // the viewer shows a PDF instead of an image.
+            // M24 (test findings 2026-10-02): `pdf_viewer_heading` is the
+            // heading when the viewer shows a PDF instead of an image. The
+            // file name opens the viewer since issue 372, so there is no
+            // separate row button for it.
             'viewer_heading' => 'Image viewer',
             'pdf_viewer_heading' => 'PDF viewer',
             'viewer_close' => 'Close',
-            'preview' => 'Preview',
             'file_icon' => 'The file is shown as an icon',
             'pdf_fallback' => 'Cannot display the PDF? Download it instead.',
 
