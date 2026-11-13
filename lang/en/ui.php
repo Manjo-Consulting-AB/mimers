@@ -3712,7 +3712,6 @@ return [
             'destroy' => 'Remove the row',
             'destroy_confirm' => 'The row is removed. Continue?',
 
-            'form_heading' => 'Register a cost',
             'form_incurred_on' => 'Date',
             'form_amount' => 'Amount',
             'form_currency' => 'Currency',

@@ -94,15 +94,18 @@ it('låter åtgärden nå flikens formulär', function () {
             continue;
         }
 
-        // Kostnadsformuläret bor i en egen komponent sedan issue 369.
-        $fokuskod = $falt === 'cost-incurred-on' ? tommaFlikarKod('components/CostEntryForm.vue') : $kod;
-        expect($fokuskod)->toContain("document.getElementById('{$falt}')?.focus()");
+        if ($falt === 'cost-incurred-on') {
+            // Kostnadsfliken fäller ut det infällbara formuläret (issue 1211);
+            // InlineCreate sätter fokus i det. Fältet bor i CostEntryForm.
+            expect($kod)->toContain('createOpen.value = true');
+            expect(tommaFlikarKod('components/CostEntryForm.vue'))->toContain("id=\"{$falt}\"");
+
+            continue;
+        }
+
+        expect($kod)->toContain("document.getElementById('{$falt}')?.focus()");
         // Fältet finns i samma fil, så fokus har något att landa på.
-        $faltkod = match ($falt) {
-            'cost-incurred-on' => $fokuskod,
-            default => $kod,
-        };
-        expect($faltkod)->toContain("id=\"{$falt}\"");
+        expect($kod)->toContain("id=\"{$falt}\"");
     }
 
     // Uppgifterna har snabbraden i vyn (issue 1210) och ingen länk till en

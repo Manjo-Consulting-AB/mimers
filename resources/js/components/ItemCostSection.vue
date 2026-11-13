@@ -1,9 +1,11 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import CostEntryForm from './CostEntryForm.vue';
 import FormField from './FormField.vue';
+import InlineCreate from './InlineCreate.vue';
 import UiButton from './UiButton.vue';
+import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import { formatAmount } from './CostDonut.vue';
@@ -124,15 +126,81 @@ function loadSuppliers() {
 onMounted(loadSuppliers);
 
 /*
- * Tomt lägets åtgärd ([[ADR-0068 Itemets sida och skapandet]] § 7): flikens
- * formulär står redan på sidan, så åtgärden flyttar fokus till dess första
- * fält. Inget formulär, ingen rättighet och ingen ändpunkt ändras.
+ * Registreringen i vyn (issue 1211 · [[ADR-0074 Registrering i vyn]] § 1–3 och
+ * tillägget om *Costs*): samma infällbara formulär som på containerns
+ * kostnadsflik (Containers/Costs.vue), utan itemväljare. `createOpen` och
+ * `createDirty` ägs av vyn; skalet fäller ut och frågar vid Escape, formuläret
+ * rapporterar sina osparade ändringar. Tomt lägets åtgärd fäller ut formuläret
+ * och InlineCreate sätter fokus i det.
  */
-const costForm = ref(null);
+const createOpen = ref(false);
+const createDirty = ref(false);
+const formKey = ref(0);
+const confirmingCancel = ref(false);
 
 function focusForm() {
-    costForm.value?.focusForm();
+    createOpen.value = true;
 }
+
+/* Stängs raden kastas det osparade: formuläret byggs om med sina förval. */
+function setOpen(open) {
+    if (! open) {
+        formKey.value += 1;
+        createDirty.value = false;
+    }
+
+    createOpen.value = open;
+}
+
+function cancelCreate() {
+    if (createDirty.value) {
+        confirmingCancel.value = true;
+
+        return;
+    }
+
+    setOpen(false);
+}
+
+function discard() {
+    confirmingCancel.value = false;
+    setOpen(false);
+}
+
+/* Dialogen är vyns; fokus stannar där formuläret lever, så den lånar ingen knapp. */
+const dialogTrigger = { focus() {} };
+
+/*
+ * Markeringen: ULID:erna i `costs` före och efter `created`. `known` följer
+ * listan, och den nya raden är den som inte fanns i den förra mängden.
+ */
+const highlight = ref([]);
+let highlightTimer = null;
+let known = new Set(props.costs.map((cost) => cost.ulid));
+
+async function onCreated() {
+    const before = known;
+
+    await nextTick();
+
+    const current = props.costs.map((cost) => cost.ulid);
+
+    known = new Set(current);
+    clearTimeout(highlightTimer);
+    highlight.value = current.filter((ulid) => ! before.has(ulid));
+    highlightTimer = setTimeout(() => {
+        highlight.value = [];
+    }, 2000);
+
+    // Fokus går till beloppet: datum och valuta står kvar.
+    document.getElementById('cost-amount')?.focus();
+}
+
+watch(() => props.costs, (costs) => {
+    known = new Set(costs.map((cost) => cost.ulid));
+});
+
+onBeforeUnmount(() => clearTimeout(highlightTimer));
 
 function url(cost) {
     const bas = `/containers/${props.containerUlid}/items/${props.itemUlid}/costs`;
@@ -318,16 +386,26 @@ function destroy(cost) {
             itemets `create`, samma pinne som App\Http\Controllers\
             CostEntryController::store() prövar.
         -->
-        <template v-if="can.create">
-            <h3 class="text-title font-semibold text-ink">{{ t('item.cost.form_heading') }}</h3>
+        <div v-if="can.create">
+            <InlineCreate :open="createOpen" :label="t('item.show.add_cost')" :dirty="createDirty" @update:open="setOpen">
+                <CostEntryForm
+                    :key="formKey"
+                    :container-ulid="containerUlid"
+                    :item-ulid="itemUlid"
+                    :cost-defaults="costDefaults"
+                    @dirty="createDirty = $event"
+                    @created="onCreated"
+                />
 
-            <CostEntryForm
-                ref="costForm"
-                :container-ulid="containerUlid"
-                :item-ulid="itemUlid"
-                :cost-defaults="costDefaults"
-            />
-        </template>
+                <button
+                    type="button"
+                    class="mt-3 inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus"
+                    @click="cancelCreate"
+                >
+                    {{ t('confirm.cancel') }}
+                </button>
+            </InlineCreate>
+        </div>
 
         <!--
             Listan. Serverns ordning, aldrig vyns: `incurred_on` fallande med
@@ -346,6 +424,7 @@ function destroy(cost) {
                 v-for="cost in costs"
                 :key="cost.ulid"
                 class="flex flex-col gap-3 rounded-card border border-border bg-surface px-4 py-3"
+                :class="{ 'bg-accent-soft': highlight.includes(cost.ulid) }"
             >
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span class="text-title text-ink">{{ cost.description }}</span>
@@ -490,5 +569,15 @@ function destroy(cost) {
         <datalist v-if="!can.create" id="cost-suppliers">
             <option v-for="row in suppliers" :key="row.supplier" :value="row.supplier" />
         </datalist>
+
+        <UiConfirmDialog
+            :open="confirmingCancel"
+            :heading="t('inline_create.discard.heading')"
+            :cancel-label="t('inline_create.discard.cancel')"
+            :confirm-label="t('inline_create.discard.confirm')"
+            :trigger="dialogTrigger"
+            @confirm="discard"
+            @cancel="confirmingCancel = false"
+        />
     </section>
 </template>
