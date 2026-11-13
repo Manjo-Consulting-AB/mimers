@@ -310,6 +310,19 @@ def test_out_of_scope_gar_fore_ett_foljande_prov():
     assert utfall == "brott"
 
 
+def test_namn_for_fil_ger_sokvagen_under_resources_js():
+    namn = o.namn_for_fil("resources/js/components/FlashMessage.vue")
+    assert "components/FlashMessage.vue" in namn, namn
+    assert "js/components/FlashMessage.vue" in namn, namn
+
+
+def test_grinden_foljer_prov_som_skriver_sokvagen_under_resources_js():
+    traff = o.prov_foljer_rutan("tests/Feature/Frontend/DesignsystemTest.php",
+                                ["resources/js/components/FlashMessage.vue"],
+                                "bär inga råa färgklasser i components/FlashMessage.vue")
+    assert traff == "resources/js/components/FlashMessage.vue", traff
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

@@ -356,6 +356,53 @@ def test_rapporten_bar_prov_utan_rutfynd():
     assert "Rutan verkar sakna" not in text and "Utanför rutan:" not in text
 
 
+def test_fil_med_fler_an_tio_prov_ger_en_rad_med_antalet():
+    filer = {f"tests/Feature/S{i:02d}Test.php": "lang/en/ui.php" for i in range(11)}
+    filer["tests/Feature/DesignTest.php"] = "components/FlashMessage.vue"
+    with _prov_rot(filer) as rot:
+        rader = l.foljande_prov(["lang/en/ui.php", "resources/js/components/FlashMessage.vue"], rot)
+    assert rader == [
+        "- `lang/en/ui.php` namnges av 11 prov",
+        "- `tests/Feature/DesignTest.php` namnger `resources/js/components/FlashMessage.vue`",
+    ], rader
+
+
+def test_tio_prov_listas_ett_och_ett():
+    filer = {f"tests/Feature/S{i:02d}Test.php": "lang/en/ui.php" for i in range(10)}
+    with _prov_rot(filer) as rot:
+        assert len(l.foljande_prov(["lang/en/ui.php"], rot)) == 10
+
+
+def test_foljande_prov_pekar_ut_designsystemtest_for_flashmessage():
+    rader = l.foljande_prov(["resources/js/components/FlashMessage.vue"], ROT)
+    assert any("tests/Feature/Frontend/DesignsystemTest.php" in rad for rad in rader), rader
+
+
+def _kor_cli(kropp):
+    import subprocess
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
+        f.write(kropp)
+    try:
+        return subprocess.run(
+            [sys.executable, os.path.join(ROT, ".github/scripts/omfangslint.py"), "--fil", f.name],
+            capture_output=True, text=True, check=True, cwd=ROT,
+        ).stdout
+    finally:
+        os.unlink(f.name)
+
+
+def test_cli_namnger_provet_som_haller_ci_yml_utanfor_ci():
+    kropp = "### In scope\n\n```\n.github/workflows/ci.yml\n```\n"
+    ut = _kor_cli(kropp)
+    assert "tests/Feature/Drift/BeroendegranskningTest.php" in ut, ut
+
+
+def test_cli_skriver_lasluckorna():
+    ut = _kor_cli(_las("docs/ADR/ADR-9999 Finns inte.md § Beslut"))
+    assert "ADR-9999" in ut and "Läslistan" in ut, ut
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

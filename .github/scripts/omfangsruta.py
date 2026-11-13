@@ -505,6 +505,8 @@ def namn_for_fil(fil: str) -> list[str]:
     namn = [fil]
     if fil.startswith("resources/"):
         namn.append(fil.removeprefix("resources/"))
+    if fil.startswith("resources/js/"):
+        namn.append(fil.removeprefix("resources/js/"))  # components/FlashMessage.vue
     if fil.startswith("app/") and fil.endswith(".php"):
         namn.append("App\\" + fil.removeprefix("app/").removesuffix(".php").replace("/", "\\"))
     return namn
