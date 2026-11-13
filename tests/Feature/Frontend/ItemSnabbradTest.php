@@ -98,6 +98,7 @@ it('raden töms och behåller fokus, och nya rader markeras i 2000 ms', function
  * Klart när: containerns snabbrad beter sig som förut, med platsknapp och
  * Inbox som förval.
  */
+// vakt: containerns beteende ska vara oförändrat, alltså grönt även på basen.
 it('containerns snabbrad har kvar platsknappen och inboxen som förval', function () {
     $kod = itemSnabbradKod('components/ContainerTaskQuickCreate.vue');
 
