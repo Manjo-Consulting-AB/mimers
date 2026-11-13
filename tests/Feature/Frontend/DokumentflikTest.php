@@ -609,6 +609,95 @@ it('Senast öppnade bär hasThumb ur bilagans derivat', function () {
 });
 
 /*
+ * Klart när: varje rad i Senast öppnade bär mime_type och variants, hasThumb
+ * står kvar, och att bygga raderna kostar inga nya frågor (issue 1197).
+ *
+ * Frågeräkningen jämför en sida med en öppning mot en med fyra: kostar raderna
+ * en fråga var växer antalet, och ett konstant antal är beviset för att
+ * `variants` och `mime_type` kommer ur det som ListRecentOpens redan laddat.
+ */
+it('Senast öppnade bär mime_type och variants utan nya frågor', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    $bild = dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image');
+    foreach (['thumb', 'medium'] as $variant) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $bild->stored_file_id,
+            'variant' => $variant,
+        ]);
+    }
+    $pdf = dokumentflikBilaga($motor, $ägare, 'manual.pdf');
+
+    $öppna = function (Attachment $bilaga, int $minuter) use ($ägare): void {
+        DB::table('attachment_open')->insert([
+            'user_id' => $ägare->id,
+            'attachment_id' => $bilaga->id,
+            'opened_at' => now()->subMinutes($minuter),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    };
+
+    $frågor = function () use ($ägare, $container): array {
+        $antal = 0;
+        DB::listen(function () use (&$antal): void {
+            $antal++;
+        });
+        $svar = actingAs($ägare)->get(dokumentflikUrl($container))->assertOk();
+
+        return [$antal, dokumentflikProps($svar)['recentOpens']];
+    };
+
+    $öppna($bild, 1);
+    $frågor(); // värmer cachar, så att mätningen jämför lika
+    [$antalEn] = $frågor();
+
+    $öppna($pdf, 2);
+    $andra = dokumentflikItem($container, 'Pumpen');
+    $öppna(dokumentflikBilaga($andra, $ägare, 'a.pdf'), 3);
+    $öppna(dokumentflikBilaga($andra, $ägare, 'b.pdf'), 4);
+    [$antalFyra, $rader] = $frågor();
+
+    expect($antalFyra)->toBe($antalEn);
+
+    $rader = collect($rader);
+    $bildRad = $rader->firstWhere('ulid', $bild->ulid);
+    $pdfRad = $rader->firstWhere('ulid', $pdf->ulid);
+
+    expect($bildRad['mime_type'])->toBe('image/jpeg')
+        ->and($bildRad['variants'])->toBe(['medium', 'thumb'])
+        ->and($bildRad['hasThumb'])->toBeTrue()
+        ->and($pdfRad['mime_type'])->toBe('application/pdf')
+        ->and($pdfRad['variants'])->toBe([])
+        ->and($pdfRad['hasThumb'])->toBeFalse();
+});
+
+/*
+ * Klart när: PDF och medium öppnar visaren, och en fil som inte går att visa
+ * behåller länken. Klientens val görs i attachmentPreview(); här fästs att
+ * kortet matar den med radens egna mime_type och variants (issue 1197).
+ */
+it('låter Recently opened mata attachmentPreview med radens variants', function () {
+    $vy = file_get_contents(resource_path('js/pages/Containers/Documents.vue'));
+
+    expect($vy)->toContain('attachmentPreview(open, { [open.ulid]: open.variants }, props.inlineEnabled)');
+    expect($vy)->not->toContain('open.hasThumb ?');
+
+    $logik = file_get_contents(resource_path('js/components/attachmentPresentation.js'));
+
+    // PDF-ramen kräver MIME-typen; medium väljs som källa när den finns.
+    expect($logik)->toContain("attachment.mime_type === 'application/pdf'");
+    expect($logik)->toContain("available.includes('medium') ? 'medium' : null");
+
+    // Ritar inte visaren tar länken till bilagefliken över.
+    expect($vy)->toMatch('/<Link\s+v-else\s+:href="`\/containers\/\$\{container\.ulid\}\/items\/\$\{open\.item\.ulid\}\?tab=attachments`"/s');
+});
+
+/*
  * Klart när: lagringsstapeln visar containerns konto för dess medlem
  * (Beslut 4).
  *
