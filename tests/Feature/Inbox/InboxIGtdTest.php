@@ -834,7 +834,6 @@ it('back to inbox nekas för en uppgift som redan ligger där', function () {
 it('knapparna ritas bakom can.delete', function () {
     foreach ([
         'js/components/ScheduleActions.vue',
-        'js/components/ItemAttachmentSection.vue',
     ] as $fil) {
         $kod = File::get(resource_path($fil));
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
@@ -847,6 +846,16 @@ it('knapparna ritas bakom can.delete', function () {
             // ... och ritas inte för en källa som redan är en inbox.
             ->toMatch('/v-if="can\.delete && !containerIsInbox"/');
     }
+
+    // Bilageraden: knappen bor sedan issue 373 i radens meny, som itemets
+    // bilageflik ritar med `can` och `containerIsInbox`.
+    $meny = (string) preg_replace('#<!--.*?-->#s', '', File::get(resource_path('js/components/AttachmentRowActions.vue')));
+
+    expect($meny)->toContain('todo.back_to_inbox')
+        ->toMatch('/v-if="canDelete && ! containerIsInbox"[\s\S]{0,400}todo\.back_to_inbox/');
+    expect(File::get(resource_path('js/components/ItemAttachmentSection.vue')))
+        ->toContain('@inbox="toInbox(attachment)"')
+        ->toContain('/inbox');
 });
 
 // --- /api:et bär koden orörd ------------------------------------------------

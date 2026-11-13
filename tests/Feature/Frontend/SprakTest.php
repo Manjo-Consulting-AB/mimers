@@ -806,6 +806,7 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
 
     $filer = [
         'js/pages/Containers/Documents.vue',
+        'js/components/AttachmentRowActions.vue',
         'js/components/DocumentFilterBar.vue',
         'js/components/DocumentFilterColumn.vue',
         'js/components/StorageBar.vue',
@@ -841,6 +842,9 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
         'container.documents.date',
         'container.documents.size',
         'container.documents.download',
+        'container.documents.actions',
+        'item.attachment.more',
+        'item.attachment.delete',
         'container.documents.view_label',
         'container.documents.view_list',
         'container.documents.view_grid',

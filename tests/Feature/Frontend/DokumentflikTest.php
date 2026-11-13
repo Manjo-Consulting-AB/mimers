@@ -1053,10 +1053,14 @@ it('antalen följer inte filtret', function () {
 });
 
 it('låter Download-länken i dokumentraden bära download=1', function () {
+    // Issue 373: länken bor i AttachmentRowActions.vue, och sidan ritar den.
+    $rad = file_get_contents(resource_path('js/components/AttachmentRowActions.vue'));
     $vy = file_get_contents(resource_path('js/pages/Containers/Documents.vue'));
 
-    expect($vy)->toContain('`${fileUrl(row.ulid)}?download=1`');
-    expect(substr_count($vy, '?download=1'))->toBe(1);
+    expect($rad)->toContain('`/files/${attachment.ulid}?download=1`');
+    expect(substr_count($rad, '?download=1'))->toBe(1);
+    expect($vy)->toContain('<AttachmentRowActions');
+    expect($vy)->not->toContain('?download=1');
 });
 
 // --- M57 · issue 372: filnamnet öppnar filen i en lightbox ---------------

@@ -2524,6 +2524,7 @@ return [
             'uploader' => 'Uploaded by',
             'size' => 'Size',
             'download' => 'Download',
+            'actions' => 'Actions',
 
             'view_label' => 'View',
             'view_list' => 'List',
@@ -3614,6 +3615,8 @@ return [
             ],
 
             'download' => 'Download',
+            'more' => 'More',
+            'delete' => 'Delete',
             'destroy' => 'Remove',
             'destroy_confirm' => 'The attachment moves to the trash and can be restored within 30 days. Continue?',
 

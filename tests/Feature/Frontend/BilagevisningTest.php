@@ -545,7 +545,10 @@ it('visar PDF:en i samma dialog som bilden', function () {
 });
 
 it('har en nedladdningslänk på varje bilagerad, också de som ritas inline', function () {
-    $vy = bilagevisningVy();
+    // Issue 373: länken bor i AttachmentRowActions.vue, som raden ritar.
+    expect(bilagevisningVy())->toContain('<AttachmentRowActions');
+
+    $vy = File::get(resource_path('js/components/AttachmentRowActions.vue'));
 
     preg_match_all('/<a\b[^>]*>/s', $vy, $träffar);
 
@@ -562,9 +565,9 @@ it('har en nedladdningslänk på varje bilagerad, också de som ritas inline', f
 });
 
 it('låter varje Download-länk bära download=1 men rör inte visande länkar', function () {
-    $vy = bilagevisningVy();
+    $vy = File::get(resource_path('js/components/AttachmentRowActions.vue'));
 
-    expect(bilagevisningVy())->toContain('/files/${attachment.ulid}?download=1');
+    expect($vy)->toContain('/files/${attachment.ulid}?download=1');
     expect(bilagevisningVisare())->toContain('/files/${attachment.ulid}?download=1');
     expect(substr_count($vy, '?download=1'))->toBe(1);
     expect(substr_count(bilagevisningVisare(), '?download=1'))->toBe(1);

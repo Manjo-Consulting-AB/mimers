@@ -125,32 +125,32 @@ function flyttwebbenItemUrl(Container $container, Item $item): string
  * den knappen och inte till raden intill.
  */
 it('bilagans rad har move bakom can.delete och copy', function () {
-    $komponent = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+    // Issue 373: knapparna bor i radens meny. Komponenten skickar händelserna,
+    // sidorna kopplar dem till väljaren.
+    $meny = File::get(resource_path('js/components/AttachmentRowActions.vue'));
 
-    preg_match('/<button[^>]*openPicker\(attachment, \'move\'[^>]*>/s', $komponent, $flytt);
-    expect($flytt)->not->toBeEmpty('flyttknappen (Move…) saknas i ItemAttachmentSection.vue');
-    expect($flytt[0])->toContain('v-if="can.delete"');
+    preg_match('/<button[^>]*choose\(\'move\'\)[^>]*>/s', $meny, $flytt);
+    expect($flytt)->not->toBeEmpty('flyttknappen (Move…) saknas i AttachmentRowActions.vue');
+    expect($flytt[0])->toContain('v-if="canDelete"');
 
-    preg_match('/<button[^>]*openPicker\(attachment, \'copy\'[^>]*>/s', $komponent, $kopia);
-    expect($kopia)->not->toBeEmpty('kopieknappen (Copy…) saknas i ItemAttachmentSection.vue');
+    preg_match('/<button[^>]*choose\(\'copy\'\)[^>]*>/s', $meny, $kopia);
+    expect($kopia)->not->toBeEmpty('kopieknappen (Copy…) saknas i AttachmentRowActions.vue');
     // Kopian står på varje rad och har därför ingen egen grind (§ 2).
     expect($kopia[0])->not->toContain('v-if');
 
-    expect($komponent)->toContain('<ItemTargetPicker')
+    $komponent = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+
+    expect($komponent)->toContain("@move=\"openPicker(attachment, 'move', \$event)\"")
+        ->and($komponent)->toContain("@copy=\"openPicker(attachment, 'copy', \$event)\"")
+        ->and($komponent)->toContain('<ItemTargetPicker')
         ->and($komponent)->toContain('/move')
         ->and($komponent)->toContain('/copy');
 
     $sidan = File::get(resource_path('js/pages/Containers/Documents.vue'));
 
-    preg_match('/<button[^>]*openPicker\(row, \'move\'[^>]*>/s', $sidan, $flytt);
-    expect($flytt)->not->toBeEmpty('flyttknappen (Move…) saknas i Documents.vue');
-    expect($flytt[0])->toContain('v-if="row.can.delete"');
-
-    preg_match('/<button[^>]*openPicker\(row, \'copy\'[^>]*>/s', $sidan, $kopia);
-    expect($kopia)->not->toBeEmpty('kopieknappen (Copy…) saknas i Documents.vue');
-    expect($kopia[0])->not->toContain('v-if');
-
-    expect($sidan)->toContain('<ItemTargetPicker')
+    expect($sidan)->toContain("@move=\"openPicker(row, 'move', \$event)\"")
+        ->and($sidan)->toContain("@copy=\"openPicker(row, 'copy', \$event)\"")
+        ->and($sidan)->toContain('<ItemTargetPicker')
         ->and($sidan)->toContain('/move')
         ->and($sidan)->toContain('/copy');
 });
