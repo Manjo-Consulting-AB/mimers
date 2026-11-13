@@ -1,6 +1,7 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import AttachmentViewer from './AttachmentViewer.vue';
 import AttachmentUploadQueue from './AttachmentUploadQueue.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
@@ -93,7 +94,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rörs inte av M24 (Beslut 5): `display`, `image` och `frame` betyder samma
  * sak som förut, och det är bara mallen som väljer var de ritas.
  *
- * **Visaren är webbläsarens `<dialog>`** (Beslut 3 och 4): Esc stänger, fokus
+ * **Visaren är webbläsarens dialog, i AttachmentViewer.vue** (Beslut 3 och 4; M57): Esc stänger, fokus
  * går tillbaka till den som öppnade, och `alt` är filnamnet — ur datan och inte
  * ur `lang/`. Ingen karusell, ingen zoom, inget paket: det här är "se bilden".
  * Källan är `medium`, och originalet när den varianten saknas. Samma dialog
@@ -196,43 +197,14 @@ const rows = computed(() => props.attachments.map((attachment) => ({
 })));
 
 /*
- * Bildvisaren (Beslut 3). Ett enda `<dialog>` för hela sektionen och inte ett
- * per rad: raden är en länk, dialogen är en yta, och tio dolda dialoger hade
- * varit tio element som ingen ser.
- *
- * `viewer` är bilagan som visas, `viewerTrigger` miniatyren som öppnade den.
- * Fokus tillbaka till den är vad `<dialog>` gör av sig själv — men bara när
- * elementet den återlämnar till fortfarande finns, och det vet bara den här
- * filen. Därför sätts fokus uttryckligen i stället för att litas på.
+ * Bildvisaren (Beslut 3) bor i AttachmentViewer.vue (M57 · issue 372). Här
+ * finns bara raden som visas och ett anrop till visarens `open()`.
  */
 const viewer = ref(null);
-const viewerTrigger = ref(null);
 const viewerElement = ref(null);
 
-async function openViewer(attachment, event) {
-    viewer.value = attachment;
-    viewerTrigger.value = event.currentTarget;
-
-    // Innehållet är `v-if="viewer"` och finns alltså inte i DOM:en förrän Vue
-    // har patchat. `autofocus` läses av `showModal()`, inte av webbläsaren
-    // senare, så utan väntan landar första fokus på nedladdningslänken.
-    await nextTick();
-
-    viewerElement.value?.showModal();
-}
-
-/*
- * Stänger visaren. Anropas av stängknappen; Esc går samma väg genom dialogens
- * `close`-händelse, som webbläsaren fyrt av även då.
- */
-function closeViewer() {
-    viewerElement.value?.close();
-}
-
-function onViewerClosed() {
-    viewer.value = null;
-    viewerTrigger.value?.focus();
-    viewerTrigger.value = null;
+function openViewer(attachment, event) {
+    viewerElement.value?.open(attachment, event.currentTarget);
 }
 
 /*
@@ -473,25 +445,23 @@ function toInbox(attachment) {
                         <UiIcon name="document" :size="24" class="h-8 w-8" />
                     </span>
 
-                    <span class="font-medium text-ink">{{ attachment.filename }}</span>
-                    <span class="text-sm text-ink-muted">{{ attachment.kindLabel }}</span>
-                    <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
-
                     <!--
-                        Förhandsvisningen (M24, Beslut 3): raden bär en knapp
-                        när bilagan har något att visa — `image` för en bild,
-                        `frame` för en PDF. Utan ett filorigin är båda `null`
-                        och knappen ritas inte, samma regel som i dag.
-                        Klicket går samma väg som miniatyren: `openViewer`.
+                        Namnet öppnar visaren när filen går att visa — `image`
+                        för en bild, `frame` för en PDF — och är ren text
+                        annars (M57 · issue 372). Utan ett filorigin är båda
+                        `null`.
                     -->
                     <button
                         v-if="attachment.preview.image !== null || attachment.preview.frame !== null"
                         type="button"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        class="min-h-11 text-left font-medium text-ink hover:underline"
                         @click="openViewer(attachment, $event)"
                     >
-                        {{ t('item.attachment.preview') }}
+                        {{ attachment.filename }}
                     </button>
+                    <span v-else class="font-medium text-ink">{{ attachment.filename }}</span>
+                    <span class="text-sm text-ink-muted">{{ attachment.kindLabel }}</span>
+                    <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
 
                     <!--
                         Nedladdningen går alltid genom appen (issue 19a):
@@ -595,79 +565,11 @@ function toInbox(attachment) {
             </li>
         </ul>
 
-        <!--
-            Visaren (Beslut 3 och 4). Webbläsarens egen `<dialog>`: Esc stänger,
-            fokus lämnas tillbaka till den som öppnade. En bild ritas som förut
-            — källan är `medium` och originalet när den varianten saknas, så
-            `image` är alltid en giltig URL. En PDF ritas i SAMMA dialog, i en
-            ram mot filoriginet: webbläsarens egen läsare är den enda som
-            behövs, och ramen skapas först när dialogen öppnas — ingen
-            förfrågan mot filoriginet förrän användaren ber om den.
-        -->
-        <dialog
+        <AttachmentViewer
             ref="viewerElement"
-            class="m-auto max-h-[90vh] max-w-full overflow-auto rounded border border-border bg-surface p-4 backdrop:bg-shell/50"
-            :class="viewer && viewer.preview.frame ? 'w-[min(64rem,95vw)]' : ''"
-            @close="onViewerClosed"
-        >
-            <div
-                v-if="viewer"
-                class="flex flex-col gap-3"
-                :class="viewer.preview.frame ? 'w-full' : 'max-w-3xl'"
-            >
-                <h3 class="text-lg font-semibold">
-                    {{ viewer.preview.frame ? t('item.attachment.pdf_viewer_heading') : t('item.attachment.viewer_heading') }}
-                </h3>
-
-                <!--
-                    Ramen bär ingen isolering: det är 61a:s CSP som stänger av
-                    skriptet i dokumentet, och en sådan hade slagit av
-                    webbläsarens egen läsare med. `title` är filnamnet ur
-                    datan.
-                -->
-                <iframe
-                    v-if="viewer.preview.frame"
-                    :src="viewer.preview.frame"
-                    :title="viewer.filename"
-                    class="h-[75vh] w-full rounded border border-border"
-                ></iframe>
-
-                <img
-                    v-else
-                    :src="viewer.preview.image"
-                    :alt="viewer.filename"
-                    class="max-h-[70vh] max-w-full object-contain"
-                >
-
-                <p v-if="viewer.preview.frame" class="text-sm text-ink-muted">{{ t('item.attachment.pdf_fallback') }}</p>
-
-                <div class="flex flex-wrap items-center gap-3">
-                    <span class="font-medium text-ink">{{ viewer.filename }}</span>
-
-                    <a
-                        :href="`/files/${viewer.ulid}?download=1`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.attachment.download') }}
-                    </a>
-
-                    <!--
-                        Stängningen är returvägen ut och det minst ingripande
-                        elementet i ytan. Utan `autofocus` landar första fokus
-                        på nedladdningslänken, och första Enter startar en
-                        nedladdning användaren inte bad om.
-                    -->
-                    <button
-                        type="button"
-                        autofocus
-                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-ink-muted hover:underline"
-                        @click="closeViewer"
-                    >
-                        {{ t('item.attachment.viewer_close') }}
-                    </button>
-                </div>
-            </div>
-        </dialog>
+            v-model:attachment="viewer"
+            :preview="viewer ? viewer.preview : null"
+        />
 
         <!--
             Målväljaren (issue 242 och 243). Ett mål per anrop: raden som

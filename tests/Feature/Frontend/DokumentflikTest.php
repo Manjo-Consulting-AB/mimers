@@ -1058,3 +1058,79 @@ it('låter Download-länken i dokumentraden bära download=1', function () {
     expect($vy)->toContain('`${fileUrl(row.ulid)}?download=1`');
     expect(substr_count($vy, '?download=1'))->toBe(1);
 });
+
+// --- M57 · issue 372: filnamnet öppnar filen i en lightbox ---------------
+
+it('ritar AttachmentViewer en gång och låter namnet öppna den', function () {
+    $vy = file_get_contents(resource_path('js/pages/Containers/Documents.vue'));
+
+    expect($vy)->toContain("import AttachmentViewer from '../../components/AttachmentViewer.vue'");
+    expect(substr_count($vy, '<AttachmentViewer'))->toBe(1);
+    expect($vy)->toContain('v-model:attachment="viewer"');
+    expect($vy)->not->toContain('<dialog');
+
+    // Kolumnen *File*: en rå knapp när raden går att visa, ren text annars.
+    expect($vy)->toMatch('/<button\s+v-if="viewable\(preview\(row\)\)"\s+type="button"\s+class="[^"]*min-h-11[^"]*text-left[^"]*font-medium[^"]*text-ink[^"]*hover:underline[^"]*"\s+@click="openViewer\(row, preview\(row\), \$event\)"/s');
+    expect($vy)->toMatch('/<span v-else class="flex items-center gap-2">/');
+
+    // Regeln är samma som på bilagefliken.
+    expect($vy)->toContain('preview.image !== null || preview.frame !== null');
+});
+
+it('låter listan Recently opened öppna visaren för en bild med miniatyr och länka annars', function () {
+    $vy = file_get_contents(resource_path('js/pages/Containers/Documents.vue'));
+
+    expect($vy)->toMatch('/<button\s+v-if="viewable\(recentPreview\(open\)\)"\s+type="button"[^>]*@click="openViewer\(open, recentPreview\(open\), \$event\)"/s');
+    expect($vy)->toMatch('/<Link\s+v-else\s+:href="`\/containers\/\$\{container\.ulid\}\/items\/\$\{open\.item\.ulid\}\?tab=attachments`"/s');
+});
+
+// vakt: propparna som klientens synlighetsregel läser är oförändrade av issuen och ska vara gröna på basen.
+it('ger bilder och PDF underlag för en visbar förhandsvisning och andra filer inte', function () {
+    withoutVite();
+
+    config(['files.url' => 'https://files.test']);
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    $bild = dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image');
+    ImageDerivative::factory()->create([
+        'stored_file_id' => $bild->stored_file_id,
+        'variant' => 'thumb',
+    ]);
+    $pdf = dokumentflikBilaga($motor, $ägare, 'manual.pdf');
+    $text = dokumentflikBilaga($motor, $ägare, 'anteckning.txt', 'other');
+    $text->storedFile->update(['mime_type' => 'text/plain']);
+
+    $proppar = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl($container))->assertOk());
+
+    // Underlaget för `attachmentPreview()` på klienten: flaggan, derivaten
+    // och MIME-typen. Bild med miniatyr och PDF ger `image`/`frame`; en
+    // textfil ger ingetdera, och namnet blir text.
+    expect($proppar['inlineEnabled'])->toBeTrue()
+        ->and($proppar['variants'][$bild->ulid])->toContain('thumb')
+        ->and($proppar['variants'][$text->ulid])->toBe([]);
+
+    $mime = collect($proppar['attachments']['data'])->pluck('mime_type', 'ulid');
+
+    expect($mime[$pdf->ulid])->toBe('application/pdf')
+        ->and($mime[$text->ulid])->toBe('text/plain');
+});
+
+// vakt: propparna som klientens synlighetsregel läser är oförändrade av issuen och ska vara gröna på basen.
+it('ger ingen visbar förhandsvisning utan filorigin', function () {
+    withoutVite();
+
+    config(['files.url' => null]);
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    dokumentflikBilaga(dokumentflikItem($container, 'Motorn'), $ägare, 'manual.pdf');
+
+    $proppar = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl($container))->assertOk());
+
+    // `attachmentPreview()` ger `image` och `frame` som null när flaggan är
+    // falsk, så namnet ritas som text.
+    expect($proppar['inlineEnabled'])->toBeFalse();
+});

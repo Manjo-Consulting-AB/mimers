@@ -742,7 +742,7 @@ it('låter webbläsaren äga fokusfällan i varje overlay', function () {
 });
 
 it('stänger bildvisaren med Esc och lämnar fokus tillbaka till miniatyren', function () {
-    $kod = genomgangKod()['components/ItemAttachmentSection.vue'] ?? null;
+    $kod = genomgangKod()['components/AttachmentViewer.vue'] ?? null;
 
     expect($kod)->not->toBeNull()
         ->toContain('<dialog')

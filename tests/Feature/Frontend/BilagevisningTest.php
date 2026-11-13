@@ -204,6 +204,15 @@ function bilagevisningVy(): string
     return File::get(resource_path('js/components/ItemAttachmentSection.vue'));
 }
 
+/*
+ * Visaren bor i en egen komponent sedan M57 · issue 372 och delas av
+ * bilagefliken och containerns Documents-flik.
+ */
+function bilagevisningVisare(): string
+{
+    return File::get(resource_path('js/components/AttachmentViewer.vue'));
+}
+
 // --- variants: uppslaget, inte en gissning (Beslut 1) ---------------------
 
 it('speglar precis de derivat som finns i databasen', function () {
@@ -408,7 +417,7 @@ it('ritar ingen miniatyr för en bilaga vars ULID saknas i uppslaget', function 
 // --- mallen: uppladdningen först, visaren och nedladdningslänken ---------
 
 it('öppnar bilden i en dialog som stängs med Esc och lämnar fokus tillbaka', function () {
-    $vy = bilagevisningVy();
+    $vy = bilagevisningVisare();
 
     // Webbläsarens egen <dialog> (Beslut 3): Esc stänger utan en rad kod för
     // tangentbordet, och `showModal` gör den modal.
@@ -422,8 +431,28 @@ it('öppnar bilden i en dialog som stängs med Esc och lämnar fokus tillbaka', 
 
     // Källan är `medium` med originalet som fallback, och `alt` är filnamnet
     // ur datan — ingen sträng ur lang/ (Beslut 7).
-    expect($vy)->toContain(':src="viewer.preview.image"');
-    expect($vy)->toContain(':alt="viewer.filename"');
+    expect($vy)->toContain(':src="preview.image"');
+    expect($vy)->toContain(':alt="attachment.filename"');
+
+    // Bilagefliken ritar komponenten och har ingen egen <dialog> kvar.
+    $sektion = bilagevisningVy();
+
+    expect($sektion)->toContain("import AttachmentViewer from './AttachmentViewer.vue'");
+    expect($sektion)->toContain('<AttachmentViewer');
+    expect($sektion)->not->toContain('<dialog');
+    expect($sektion)->not->toContain('showModal');
+});
+
+it('ger visaren raden och förhandsvisningen som props och öppnas genom open()', function () {
+    $vy = bilagevisningVisare();
+
+    expect($vy)->toContain('attachment: { type: Object, default: null }');
+    expect($vy)->toContain('preview: { type: Object, default: null }');
+    expect($vy)->toContain('defineExpose({ open })');
+    expect($vy)->toContain('async function open(attachment, trigger)');
+
+    // Raden sätts, Vue patchar, och först därefter öppnas dialogen.
+    expect(strpos($vy, 'await nextTick()'))->toBeLessThan(strpos($vy, 'viewerElement.value?.showModal()'));
 });
 
 it('ritar uppladdningen före listan', function () {
@@ -443,6 +472,7 @@ it('ritar uppladdningen före listan', function () {
 
 it('ritar ingen PDF-ram i raden utan filikonen', function () {
     $vy = bilagevisningVy();
+    $visare = bilagevisningVisare();
 
     // Raden ritar filikonen för både `file` och `frame` (Beslut 2): samma
     // <span role="img"> som en bilaga utan derivat ritar i dag.
@@ -453,40 +483,43 @@ it('ritar ingen PDF-ram i raden utan filikonen', function () {
     // överblicka.
     expect($vy)->not->toContain(':src="attachment.preview.frame"');
 
-    // Den ENDA ramen i filen är visarens, och den står efter <dialog>.
-    $dialog = strrpos($vy, '<dialog');
-    $iframe = strpos($vy, '<iframe');
+    // Den ENDA ramen är visarens, och den står efter <dialog>. Sektionen
+    // bygger ingen alls.
+    $dialog = strrpos($visare, '<dialog');
+    $iframe = strpos($visare, '<iframe');
 
     expect($dialog)->not->toBeFalse();
     expect($iframe)->not->toBeFalse();
-    expect(substr_count($vy, '<iframe'))->toBe(1);
+    expect(substr_count($visare, '<iframe'))->toBe(1);
     expect($iframe)->toBeGreaterThan($dialog);
+    expect($vy)->not->toContain('<iframe');
 
     // Ingen JavaScript-läsare och inget paket (Beslut 4): ramen pekar på
     // samma väg som nedladdningen, och webbservern sätter typen.
-    expect($vy)->not->toContain('pdfjs');
-    expect($vy)->not->toContain('srcdoc');
+    expect($visare)->not->toContain('pdfjs');
+    expect($visare)->not->toContain('srcdoc');
 });
 
-it('ger varje rad som kan visas en förhandsvisningsknapp', function () {
+it('gör filnamnet till öppnare när filen går att visa och ren text annars', function () {
     $vy = bilagevisningVy();
 
-    // Knappen ritas bara när bilagan har något att visa: `image` för en bild,
-    // `frame` för en PDF (Beslut 3). Utan ett filorigin är båda null och
-    // knappen ritas inte — samma regel som gör att miniatyren uteblir.
-    expect($vy)->toContain('attachment.preview.image !== null');
-    expect($vy)->toContain('attachment.preview.frame !== null');
-    expect($vy)->toContain("t('item.attachment.preview')");
+    // Namnet är en rå knapp bara när bilagan har något att visa: `image` för
+    // en bild, `frame` för en PDF. Utan ett filorigin är båda null och
+    // namnet är text — samma regel som gör att miniatyren uteblir.
+    expect($vy)->toMatch('/<button\s+v-if="attachment\.preview\.image !== null \|\| attachment\.preview\.frame !== null"\s+type="button"[^>]*@click="openViewer\(attachment, \$event\)"\s*>\s*\{\{ attachment\.filename \}\}/s');
+    expect($vy)->toMatch('/<span v-else class="font-medium text-ink">\{\{ attachment\.filename \}\}<\/span>/');
 
-    // Knappen går samma väg in i visaren som miniatyren: exakt två anrop, och
-    // miniatyrens klick finns kvar.
+    // Knappen *Preview* är borta: namnet och miniatyren gör samma sak.
+    expect($vy)->not->toContain("t('item.attachment.preview')");
+
+    // Namnet och miniatyren går samma väg in i visaren: exakt två anrop.
     preg_match_all('/@click="openViewer\(attachment, \$event\)"/', $vy, $träffar);
 
     expect($träffar[0])->toHaveCount(2);
 });
 
 it('visar PDF:en i samma dialog som bilden', function () {
-    $vy = bilagevisningVy();
+    $vy = bilagevisningVisare();
 
     $dialog = strrpos($vy, '<dialog');
 
@@ -495,8 +528,8 @@ it('visar PDF:en i samma dialog som bilden', function () {
     // Ramen, filnamnet, rubriken och fallback-meningen bor alla i visaren
     // (Beslut 4) — efter <dialog> och inte i raden.
     foreach ([
-        ':src="viewer.preview.frame"',
-        ':title="viewer.filename"',
+        ':src="preview.frame"',
+        ':title="attachment.filename"',
         'item.attachment.pdf_viewer_heading',
         'item.attachment.pdf_fallback',
     ] as $markor) {
@@ -531,9 +564,10 @@ it('har en nedladdningslänk på varje bilagerad, också de som ritas inline', f
 it('låter varje Download-länk bära download=1 men rör inte visande länkar', function () {
     $vy = bilagevisningVy();
 
-    expect($vy)->toContain('/files/${attachment.ulid}?download=1');
-    expect($vy)->toContain('/files/${viewer.ulid}?download=1');
-    expect(substr_count($vy, '?download=1'))->toBe(2);
+    expect(bilagevisningVy())->toContain('/files/${attachment.ulid}?download=1');
+    expect(bilagevisningVisare())->toContain('/files/${attachment.ulid}?download=1');
+    expect(substr_count($vy, '?download=1'))->toBe(1);
+    expect(substr_count(bilagevisningVisare(), '?download=1'))->toBe(1);
 });
 
 it('reparerar aldrig en trasig bild i komponenten', function () {
