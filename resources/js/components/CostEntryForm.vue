@@ -86,9 +86,11 @@ function submit() {
             preserveScroll: true,
             // Datumet och valutan står kvar: de är förval man sällan byter mellan
             // två rader, och att nollställa dem hade gjort varje ny rad till en
-            // ny fråga om samma sak.
+            // ny fråga om samma sak. Förvalet flyttas till det som står kvar
+            // (form.defaults()), så nästa rad mäts mot det och isDirty blir falsk.
             onSuccess: () => {
                 form.reset('amount', 'description', 'supplier');
+                form.defaults();
                 loadSuppliers();
                 emit('created');
             },
