@@ -155,6 +155,9 @@ function submit() {
         },
     });
 }
+
+/* Fokus i snabbraden, för vyn som landar här med `create=1` (issue 1212). */
+defineExpose({ focus: () => quick.value?.focus() });
 </script>
 
 <template>

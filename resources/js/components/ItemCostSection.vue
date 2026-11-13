@@ -91,6 +91,12 @@ const props = defineProps({
      * skriver raden.
      */
     costDefaults: { type: Object, required: true },
+    /*
+     * Sant när adressen bär `create=1` (issue 1212 · [[ADR-0074 Registrering i
+     * vyn]], tillägget om itemets flikar): plusmenyns och snabbknappens rad
+     * landar här med formuläret utfällt.
+     */
+    startOpen: { type: Boolean, default: false },
     can: { type: Object, required: true },
 });
 
@@ -141,6 +147,21 @@ const confirmingCancel = ref(false);
 function focusForm() {
     createOpen.value = true;
 }
+
+/*
+ * `startOpen` fäller ut formuläret, och InlineCreate flyttar fokus när
+ * `open` slår om. Bevakas, så att ett val i plusmenyn på samma item öppnar det
+ * även när sektionen inte monteras om.
+ */
+watch(
+    () => props.startOpen,
+    (start) => {
+        if (start && props.can.create) {
+            createOpen.value = true;
+        }
+    },
+    { immediate: true },
+);
 
 /* Stängs raden kastas det osparade: formuläret byggs om med sina förval. */
 function setOpen(open) {

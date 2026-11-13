@@ -150,13 +150,13 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
             ->where('create.rows', [
                 ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$item->ulid}"],
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
-                ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
-                ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+                ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
+                ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
                 // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
                 // *Kostnad*, som leder till itemets kostnadsflik. Raden
                 // byggdes inte förrän ytan fanns (issue 168) — en menyrad till
                 // en webbyta som inte finns är en död länk.
-                ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
+                ['key' => 'cost', 'href' => "{$bas}?tab=costs&create=1"],
             ]),
     );
 });
@@ -185,7 +185,7 @@ it('har raden Kostnad som leder till fliken', function () {
     actingAs($anvandare)->get($bas)->assertInertia(
         fn (AssertableInertia $page) => $page->where('create.rows.4', [
             'key' => 'cost',
-            'href' => "{$bas}?tab=costs",
+            'href' => "{$bas}?tab=costs&create=1",
         ]),
     );
 
@@ -213,7 +213,7 @@ it('bär den aktuella förekomsten på menyraderna som pekar på en flik', funct
 
     actingAs($anvandare)->get("{$bas}?path={$item->ulid}")->assertInertia(
         fn (AssertableInertia $page) => $page->where('create.rows.1.href', "{$bas}?path={$item->ulid}&tab=relations")
-            ->where('create.rows.2.href', "{$bas}?path={$item->ulid}&tab=attachments"),
+            ->where('create.rows.2.href', "{$bas}?path={$item->ulid}&tab=attachments&create=1"),
     );
 });
 
