@@ -419,7 +419,11 @@ it('visar listan för en read-mottagare men ingen skrivyta, och nekar posten', f
     $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
 
     expect($vy)->toContain('v-if="can.create"');
-    expect($vy)->toContain('v-if="can.delete"');
+    // Issue 373: raderingen bor i radens meny (AttachmentRowActions.vue), som
+    // får `can` med sig och döljer *Delete* utan `can.delete`.
+    expect($vy)->toContain(':attachment="{ ...attachment, can }"');
+    expect(File::get(resource_path('js/components/AttachmentRowActions.vue')))
+        ->toContain('v-if="canDelete"');
 });
 
 it('ger 403 på DELETE för en write-mottagare', function () {

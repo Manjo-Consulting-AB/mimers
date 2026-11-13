@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import AttachmentRowActions from '../../components/AttachmentRowActions.vue';
 import AttachmentViewer from '../../components/AttachmentViewer.vue';
 import AttachmentUploadQueue from '../../components/AttachmentUploadQueue.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
@@ -12,6 +13,7 @@ import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import ItemViewSwitch from '../../components/ItemViewSwitch.vue';
 import StorageBar from '../../components/StorageBar.vue';
 import UiBadge from '../../components/UiBadge.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import UiInput from '../../components/UiInput.vue';
@@ -510,6 +512,52 @@ function toInbox(row) {
         },
     });
 }
+
+/*
+ * *Delete* (issue 373). Raden frågar först med `UiConfirmDialog` och raderar
+ * sedan på samma rutt som bilageflikens `destroy()`; svaret är `back()`, så
+ * sidan landar på fliken med färska props. Felet ritas på raden, som flyttens.
+ */
+const destroying = ref(null);
+const destroyTrigger = ref(null);
+
+function askDestroy(row, event) {
+    destroying.value = row;
+    destroyTrigger.value = event.currentTarget;
+}
+
+function cancelDestroy() {
+    if (actionPending.value === null) {
+        destroying.value = null;
+    }
+}
+
+function destroy() {
+    const row = destroying.value;
+
+    router.delete(`/containers/${props.container.ulid}/items/${row.item.ulid}/attachments/${row.ulid}`, {
+        preserveScroll: true,
+        onStart: () => {
+            actionPending.value = row.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => {
+            actionPending.value = null;
+            destroying.value = null;
+        },
+        onError: (errors) => {
+            actionError.value = { ulid: row.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: row.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -803,7 +851,7 @@ function toInbox(row) {
                             {{ t('container.documents.size') }}
                         </th>
                         <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                            <span class="sr-only">{{ t('container.documents.download') }}</span>
+                            <span class="sr-only">{{ t('container.documents.actions') }}</span>
                         </th>
                     </tr>
                 </thead>
@@ -891,55 +939,19 @@ function toInbox(row) {
                         <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
 
                         <td class="py-1 pr-4">
-                            <div class="flex flex-wrap items-center gap-3">
-                                <a
-                                    :href="`${fileUrl(row.ulid)}?download=1`"
-                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
-                                >
-                                    {{ t('container.documents.download') }}
-                                </a>
-
-                                <!-- *Move…* bakom radens `can.delete`,
-                                     *Copy…* på varje rad (issue 243 ·
-                                     [[ADR-0053 Flytt och kopiering]] § 2).
-                                     Servern prövar samma grindar. -->
-                                <button
-                                    v-if="row.can.delete"
-                                    type="button"
-                                    :disabled="actionPending === row.ulid"
-                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                    @click="openPicker(row, 'move', $event)"
-                                >
-                                    {{ t('item.attachment.move') }}
-                                </button>
-
-                                <!-- *Back to Inbox* (M27 · issue 244,
-                                     ADR-0054 § 6): bakom samma
-                                     `row.can.delete` som flytten intill.
-                                     Handlingen går alltid till den EGNA
-                                     inboxen, och servern prövar samma
-                                     grind på nytt. Raden ritas inte när
-                                     containern REDAN är en inbox —
-                                     bilagan är redan där. -->
-                                <button
-                                    v-if="row.can.delete && !containerIsInbox"
-                                    type="button"
-                                    :disabled="actionPending === row.ulid"
-                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                    @click="toInbox(row)"
-                                >
-                                    {{ t('todo.back_to_inbox') }}
-                                </button>
-
-                                <button
-                                    type="button"
-                                    :disabled="actionPending === row.ulid"
-                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                    @click="openPicker(row, 'copy', $event)"
-                                >
-                                    {{ t('item.attachment.copy') }}
-                                </button>
-                            </div>
+                            <!-- *Download* och *More* (issue 373). Menyn bär
+                                 *Move…* och *Back to Inbox* bakom `can.delete`,
+                                 *Copy…* på varje rad och *Delete* bakom
+                                 `can.delete`; servern prövar samma grindar. -->
+                            <AttachmentRowActions
+                                :attachment="row"
+                                :container-is-inbox="containerIsInbox"
+                                :pending="actionPending === row.ulid"
+                                @move="openPicker(row, 'move', $event)"
+                                @copy="openPicker(row, 'copy', $event)"
+                                @inbox="toInbox(row)"
+                                @destroy="askDestroy(row, $event)"
+                            />
 
                             <!-- Radens fel: kvotfelet eller 403:an, ritat
                                  under raden det gäller. -->
@@ -1045,5 +1057,16 @@ function toInbox(row) {
         :heading="pickerHeading"
         @choose="chooseTarget"
         @close="closePicker"
+    />
+
+    <UiConfirmDialog
+        :open="destroying !== null"
+        :heading="t('item.attachment.destroy_confirm')"
+        :confirm-label="t('item.attachment.delete')"
+        :trigger="destroyTrigger"
+        :pending="actionPending !== null && destroying !== null"
+        tone="danger"
+        @confirm="destroy"
+        @cancel="cancelDestroy"
     />
 </template>

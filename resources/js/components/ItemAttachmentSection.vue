@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import AttachmentRowActions from './AttachmentRowActions.vue';
 import AttachmentViewer from './AttachmentViewer.vue';
 import AttachmentUploadQueue from './AttachmentUploadQueue.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
@@ -471,58 +472,15 @@ function toInbox(attachment) {
                         samtidigt vägen vidare när webbläsaren inte kan visa
                         PDF:en.
                     -->
-                    <a
-                        :href="`/files/${attachment.ulid}?download=1`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.attachment.download') }}
-                    </a>
-
-                    <!--
-                        *Move…* och *Copy…* (issue 243 · [[ADR-0053 Flytt och
-                        kopiering]] § 2). Flytten står bakom `can.delete` — den
-                        tar bort något från källan — och kopian på varje rad,
-                        för en kopia rör inte originalet. Båda öppnar väljaren
-                        med itemet som `excludeItem`, och servern prövar samma
-                        två grindar på nytt.
-                    -->
-                    <button
-                        v-if="can.delete"
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                        @click="openPicker(attachment, 'move', $event)"
-                    >
-                        {{ t('item.attachment.move') }}
-                    </button>
-
-                    <!--
-                        *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
-                        *Move…* och bakom samma `can.delete` — bilagan lämnar
-                        sin plats. Handlingen går alltid till den EGNA inboxen
-                        och är därför aldrig ett val i väljaren. Servern prövar
-                        samma grind på nytt, och ett kvotfel ritas på raden.
-                        Raden ritas inte när itemet REDAN är en inbox — bilagan
-                        är redan där.
-                    -->
-                    <button
-                        v-if="can.delete && !containerIsInbox"
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                        @click="toInbox(attachment)"
-                    >
-                        {{ t('todo.back_to_inbox') }}
-                    </button>
-
-                    <button
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                        @click="openPicker(attachment, 'copy', $event)"
-                    >
-                        {{ t('item.attachment.copy') }}
-                    </button>
+                    <AttachmentRowActions
+                        :attachment="{ ...attachment, can }"
+                        :container-is-inbox="containerIsInbox"
+                        :pending="pending === attachment.ulid"
+                        @move="openPicker(attachment, 'move', $event)"
+                        @copy="openPicker(attachment, 'copy', $event)"
+                        @inbox="toInbox(attachment)"
+                        @destroy="destroy(attachment)"
+                    />
 
                     <!--
                         *Use as cover* (issue 342): på varje bild utom den som
@@ -536,16 +494,6 @@ function toInbox(attachment) {
                         @click="useAsCover(attachment)"
                     >
                         {{ t('item.attachment.use_as_cover') }}
-                    </button>
-
-                    <button
-                        v-if="can.delete"
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
-                        @click="destroy(attachment)"
-                    >
-                        {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
                     </button>
                 </div>
 
