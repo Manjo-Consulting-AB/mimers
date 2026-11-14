@@ -1,6 +1,6 @@
 # ADR-0045 Radering av konto och person
 
-**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · Uppföljning 2026-09-28 om länken som bär sig själv · [[ADR-index]]
+**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · Uppföljning 2026-09-28 om länken som bär sig själv · Uppföljning 2026-11-14 om att delade containrar inte spärrar (§ 3 och Konsekvenser justerade 2026-11-14) · [[ADR-index]]
 
 Tonys beslut 2026-09-26, vid planeringen av [[M22 Redo för testare]].
 
@@ -51,7 +51,7 @@ Gränssnittet och API:et visar en nollställd författare som frånvarande. Det 
 
 - **Ett konto där personen är enda medlem** raderas med `DeleteAccount`, med samma spärrar som i livscykeln.
 - **Ett konto med andra medlemmar** lämnas: personens `account_user`-rad tas bort. **Är personen kontots enda `owner` spärras raderingen** tills en annan medlem har rollen.
-- **En delad container med aktiva medlemmar**, i ett konto som annars skulle raderas, spärrar på samma sätt som i livscykeln (29b § Beslut 4). Vägen ut är ägarbytet.
+- ~~**En delad container med aktiva medlemmar** spärrar.~~ Ersatt 2026-11-14: containern raderas med kontot och medlemmarna får besked. Se § Uppföljning 2026-11-14.
 - **En rättslig spärr** ([[ADR-0043 Tre loggar]]) som täcker något av personens konton spärrar hela raderingen.
 
 En spärrad radering gör ingenting. Personen ser vad som spärrar, och varför.
@@ -72,7 +72,7 @@ Beslut 3 följer mönstret från lösenordsbytet: den som sitter i en kapad sess
 
 ## Konsekvenser
 
-- `DeletesDormantAccounts` tappar spärren för främmande bilagor (29b § Beslut 5). Spärren för delade containers finns kvar.
+- `DeletesDormantAccounts` tappar spärren för främmande bilagor (29b § Beslut 5). ~~Spärren för delade containers finns kvar.~~ Ersatt 2026-11-14: ett inaktivt konto raderas oavsett medlemmar, se § Uppföljning 2026-11-14.
 - Varje vy och resurs som visar en författare måste klara `NULL`.
 - Integritetspolicyn ska säga att en radering är omedelbar i appen men lever kvar i backuperna under deras retention ([[ADR-0015 Backup]]), och att loggraderna lever sin frist ut.
 - Villkoren ska säga att en prenumeration avslutas utan återbetalning när personen raderar sig själv och kontot därmed raderas.
@@ -129,3 +129,36 @@ Okänt token, utgånget, redan använt, eller en person som inte längre finns: 
 - Mejlet är oförändrat. Det pekar fortfarande på samma adress.
 - Listan och spärrarna skrivs en gång: `resources/js/components/UserDeletionSummary.vue`, som både säkerhetssidan och bekräftelsesidan använder.
 - Beslut 3 ovan står kvar i övrigt. Det är bara kravet på samma inloggade användare som faller.
+
+## Uppföljning 2026-11-14 — delade containrar spärrar inte
+
+Tonys beslut 2026-11-14. Delade containrar spärrar inte längre en radering, varken när personen raderar sig själv eller när systemet raderar ett inaktivt konto. Medlemmarna förlorar åtkomsten och får ett besked. Det ändrar § 3 och § Konsekvenser ovan.
+
+### 1. Personens egen radering
+
+En container med aktiva medlemmar spärrar inte längre. Det ersätter punkten *"En delad container med aktiva medlemmar … spärrar"* i § 3. Personen får en upplysning i stället: kontot har containrar med aktiva medlemmar, Mimers rekommenderar att ägarskapet lämnas över först, och om hon fortsätter raderas containrarna och medlemmarna förlorar åtkomsten **och det de själva lagt till där**.
+
+Hon måste kryssa i en ruta för att gå vidare, både när hon begär raderingen på säkerhetssidan och på bekräftelsesidan som länken i mejlet öppnar. Bekräftelsesidan visar listan som den ser ut då, eftersom nya medlemmar kan ha tillkommit sedan begäran.
+
+### 2. Livscykeln
+
+Ett inaktivt konto raderas efter 18 månader **oavsett medlemmar**. Det ersätter *"Spärren för delade containers finns kvar"* under § Konsekvenser. Skälet är GDPR: används kontot inte av ägaren får vi inte behålla det hur länge som helst. Tidtabellen står i [[Planer och kvoter]] § Kontolivscykel.
+
+### 3. Beskedet till medlemmarna
+
+Varje person med en giltig åtkomst, på container- eller itemnivå, till en container som raderas med kontot får notisen `container.deleted` ([[Notiser]] § notification). Den nämner bara containrar hon själv kunde se.
+
+Notisen skapas i outboxen i samma transaktion som raderingen och levereras efteråt, så att leveransen aldrig kan stoppa raderingen. Kanalen är e-post. En notislista i appen är ett separat förslag (#1238). Obesvarade inbjudningar dras tillbaka utan besked, eftersom mottagaren kanske saknar konto.
+
+### 4. Spärrarna som står kvar
+
+*Rättslig spärr* står kvar. *Ensam ägare* står kvar oförändrad, men kan inte utlösas i dag: ett konto har bara en medlem, eftersom det inte finns någon inbjudan på kontonivå (bara `CreatesUserWithPersonalAccount` lägger en person i ett konto).
+
+### 5. Rubrikerna
+
+En upplysning är ingen spärr. Säkerhetssidan ritar dem i två olika rutor, och *The deletion is stopped* används inte längre som rubrik för något som personen inte har påbörjat.
+
+### Konsekvenser
+
+- Koden ändras i #1235 (notisen), #1236 (personraderingen) och #1237 (livscykeln).
+- Beslut 3 ovan står kvar i övrigt: ensam ägare och rättslig spärr spärrar som förut, och en aktiv prenumeration spärrar fortfarande inte.

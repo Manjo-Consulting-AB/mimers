@@ -115,7 +115,7 @@ Varningar går ut vid steg 1, samt en månad och en vecka innan steg 4.
 
 Tre villkor som **måste** kontrolleras innan något raderas:
 
-**Radering går via containern, inte via kontot.** Har containern aktiva medlemmar ska ägarskapet erbjudas dem först — annars försvinner en pärm som någon annan använder dagligen.
+**Delade containrar spärrar inte.** Ett inaktivt konto raderas efter 18 månader med sina containrar, oavsett medlemmar. Skälet är GDPR: används kontot inte av ägaren får vi inte behålla det hur länge som helst. Medlemmarna förlorar åtkomsten och får notisen `container.deleted`. Se [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14.
 
 **Aktiv prenumeration undantar alltid.** Hur sällan någon än loggar in.
 

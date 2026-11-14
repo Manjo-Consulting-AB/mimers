@@ -50,7 +50,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0042 Designsystemet]] | Tokens med roller före komponenter före sidor, designbilderna i `docs/Design/` | Allt |
 | [[ADR-0043 Tre loggar]] | Händelselogg, säkerhetslogg och anonym mätning med var sin livslängd, plus en rättslig spärr enligt DSA | [[Konton och åtkomst]], [[Registerförteckning]] |
 | [[ADR-0044 Användarens dag]] | En dag som användaren ser eller som sparas åt henne räknas i hennes tidszon; nästa förfall i den avbockandes; frontenden får dagen från servern | [[Scheman och uppgifter]], [[Konton och åtkomst]] |
-| [[ADR-0045 Radering av konto och person]] | Främmande bilagor följer containern, författarkolumnerna nollställs, en person raderar sig själv via mejlbekräftelse | [[Konton och åtkomst]], [[Planer och kvoter]], [[Registerförteckning]] |
+| [[ADR-0045 Radering av konto och person]] | Främmande bilagor följer containern, författarkolumnerna nollställs, en person raderar sig själv via mejlbekräftelse, delade containrar spärrar inte (2026-11-14) | [[Konton och åtkomst]], [[Planer och kvoter]], [[Registerförteckning]] |
 | [[ADR-0046 Containerns karta]] | Kartan är strukturträdet ritat som noder, en öppen gren per nivå, med underträdets status på varje nod | [[Items och organisation]] |
 | [[ADR-0047 Containerns bild]] | En bilaga kan tillhöra en container; containerns bild är en pekare som itemets | [[Filer och lagring]], [[Konton och åtkomst]] |
 | [[ADR-0048 Mobilen och plusknappen]] | Eget skal under `md:`, plusknappen skapar det vyn visar, sibling förblir struket | Frontend |
