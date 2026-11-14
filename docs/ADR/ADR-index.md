@@ -82,6 +82,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0074 Registrering i vyn]] | Ny information registreras i vyn, före listan, med en snabbrad eller ett infällbart formulär som står kvar efter sparning; inboxen är förvald på containerns *Tasks* | Frontend |
 | [[ADR-0075 Tasks som listans namn]] | Listan heter Tasks i varje text användaren ser, aldrig To do; identifierarna står kvar | Frontend |
 | [[ADR-0076 Profilbilden]] | Profilbilden är en bilaga som tillhör en person, med fokuspunkt och zoom som icke-destruktiv beskärning; den ses av den som delar ett konto eller en container med personen | [[Filer och lagring]], [[Konton och åtkomst]], Frontend |
+| [[ADR-0077 Notislistan i appen]] | Notiserna får kanalen `in_app` med en klocka, en panel och en sida, läst-läge per rad, förval per typ och gallring efter 90 dagar; tysta timmar gäller inte kanalen | [[Notiser]], Frontend |
 
 ## Om att ändra ett beslut
 

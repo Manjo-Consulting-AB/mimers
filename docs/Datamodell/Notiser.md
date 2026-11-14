@@ -8,7 +8,7 @@ Beslut bakom detta: [[ADR-0010 Notisarkitektur]].
 
 En notis **skapas som en rad**, levereras sedan av kön. Aldrig skickad synkront i ett request. Kanalerna är utbytbara adaptrar; att lägga till en ny ska inte röra något annat.
 
-I MVP finns tre utgångar: **e-post**, **ICS-kalenderfeed** och **webhooks**.
+Det finns fyra utgångar: **e-post**, **ICS-kalenderfeed**, **webhooks** och **`in_app`**, en lista i appen ([[ADR-0077 Notislistan i appen]]). `in_app` skrivs direkt med status `sent` när notisen skapas och går inte genom kön.
 
 ## Vem får en uppgiftsnotis
 
@@ -51,13 +51,14 @@ En rad per notis **och kanal**. Det är här idempotensen bor.
 |---|---|---|
 | id | | |
 | notification_id | FK | |
-| channel | VARCHAR(20) | Bara `email`. Webhookleveranser bor i `webhook_delivery`. |
+| channel | VARCHAR(20) | `email` eller `in_app`. Webhookleveranser bor i `webhook_delivery`. |
 | digest | BOOLEAN | Förval false. Sant för en rad som ingår i veckosammanfattningen i stället för ett direkt mejl. |
 | status | VARCHAR(20) | `pending` \| `sent` \| `failed` \| `suppressed` |
 | attempts | SMALLINT UNSIGNED | |
 | last_error | TEXT NULL | |
 | sent_at | TIMESTAMP NULL | |
 | claimed_at | TIMESTAMP NULL | Se [[#claimed_at]]. |
+| read_at | TIMESTAMP NULL | Bara för `in_app`: när personen såg raden. `NULL` = oläst. |
 
 UNIQUE `(notification_id, channel)`. Index: `(status, channel)` och `(digest, status, channel)`.
 
@@ -82,6 +83,10 @@ UNIQUE `(user_id, type, channel)`. Saknad rad = förvalt värde i kod.
 ## Tysta timmar och tidszon
 
 `available_at` sätts när notisen skapas, utifrån mottagarens `quiet_hours_start`, `quiet_hours_end` och `timezone` (se [[Konton och åtkomst]]). Kön plockar aldrig rader vars `available_at` ligger i framtiden.
+
+**Undantag: `in_app`.** Tysta timmar gäller inte kanalen. En rad i listan stör ingen, så den skrivs direkt och listan läser `notification.created_at`.
+
+**Gallring.** En `in_app`-notis visas i 90 dagar från att den skapades, läst eller inte. Det nattliga jobbet tar bort äldre `in_app`-rader; notisraden står kvar om den har andra leveranser. Det som ska sparas längre står i händelseloggen ([[ADR-0043 Tre loggar]]).
 
 Seglare befinner sig ofta inte i sin hemtidszon. Tidszonen hör därför på användaren, inte härleds från något annat.
 
