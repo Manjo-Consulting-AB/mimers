@@ -16,6 +16,13 @@ use function Pest\Laravel\withoutVite;
  * samma sorts prov som ItemflikTest och ItemoversiktTest gör på samma filer.
  * Fokus och utfällning i en riktig webbläsare står i PR-kroppen.
  *
+ * Varför menyvalet öppnar formuläret (issue 377/PR #1219, följd i issue 377:s
+ * spår): raden är en `<Link>` utan `preserve-state`, alltså ett vanligt
+ * GET-besök, och `@inertiajs/vue3` ger då sidkomponenten en ny nyckel — sidan
+ * och sektionerna monteras om, och det är `immediate`/`onMounted` som öppnar.
+ * Provet om adaptern nedan låser det sista ledet; kommentarerna i sektionerna
+ * säger samma sak.
+ *
  * Hjälparna har prefixet `itemPlusmeny` — Pest lägger alla testfiler i samma
  * namnrymd. Kontexthjälparna `plusknappKontext()` och `plusknappItem()` bor i
  * PlusknappTest.
@@ -72,7 +79,7 @@ it('skickar create=1 vidare som start-open till de tre sektionerna', function ()
     }
 });
 
-it('låter bilage- och kostnadssektionen fälla ut InlineCreate när startOpen sätts, även utan ny montering', function (string $fil) {
+it('låter bilage- och kostnadssektionen fälla ut InlineCreate när startOpen sätts', function (string $fil) {
     $kod = itemPlusmenyKod("components/{$fil}");
 
     expect($kod)->toContain('startOpen: { type: Boolean, default: false }')
@@ -106,4 +113,56 @@ it('lämnar flikarna stängda utan create=1', function () {
     // Utan create=1 är formuläret stängt från start.
     expect(itemPlusmenyKod('components/ItemAttachmentSection.vue'))->toContain('const createOpen = ref(false)')
         ->and(itemPlusmenyKod('components/ItemCostSection.vue'))->toContain('const createOpen = ref(false)');
+});
+
+/*
+ * Det som gör att ett val i menyn faktiskt öppnar formuläret: raden är en
+ * Inertia-`<Link>` utan `preserve-state`. Ett sådant besök bevarar inte
+ * tillståndet, så adaptern ger sidan en ny nyckel (provet nedan) och
+ * sektionernas montering sköter öppningen. Får raden `preserve-state` blir
+ * sidan kvar i stället, och då är det bevakningen som öppnar — kommentarerna
+ * i sektionerna och `Show.vue` måste i så fall skrivas om.
+ */
+it('låter menyraderna vara Link utan preserve-state', function (string $fil) {
+    $kod = itemPlusmenyKod("components/{$fil}");
+
+    expect($kod)->toContain('<Link')
+        ->and($kod)->toContain(':href=')
+        ->and($kod)->not->toContain('preserve-state')
+        ->and($kod)->not->toContain('preserveState');
+})->with(['CreateMenu.vue', 'ItemQuickActions.vue']);
+
+/*
+ * Öppningen hör till monteringen: `immediate` i bilage- och kostnadssektionen
+ * och `onMounted` i uppgiftssektionen. Uppgiftssektionens bevakning saknar
+ * `immediate` med flit — den gäller det besök som BEVARAR tillståndet och får
+ * inte ersätta monteringsvägen.
+ */
+it('öppnar formuläret vid monteringen och låter bevakningen gälla ett besök som bevarar tillståndet', function () {
+    foreach (['ItemAttachmentSection.vue', 'ItemCostSection.vue'] as $fil) {
+        expect(itemPlusmenyKod("components/{$fil}"))
+            ->toMatch('/watch\(\s*\(\) => props\.startOpen,.*?immediate: true/s');
+    }
+
+    expect(itemPlusmenyKod('components/ScheduleListSection.vue'))
+        ->toMatch('/onMounted\(\(\) => \{\s*if \(props\.startOpen && props\.can\.create\) \{\s*focusQuick\(\);/s');
+});
+
+/*
+ * Antagandet som kommentarerna vilar på, läst ur adaptern själv: nyckeln byts
+ * när `preserveState` är falskt, alltså monteras sidan om vid ett vanligt
+ * GET-besök. Filen kommer med `npm ci` i CI (samma förutsättning som
+ * TypsnittTest ställer på `public/build`), och dist-filen är paketerad men
+ * läsbar. Skulle en Inertia-uppgradering ändra raden ska det här provet följa
+ * med i uppgraderingen — det är det som gör antagandet till ett löfte.
+ */
+it('byter sidkomponentens nyckel när preserveState är falskt', function () {
+    $dist = base_path('node_modules/@inertiajs/vue3/dist/index.js');
+
+    expect(file_exists($dist))->toBeTrue(
+        'node_modules/@inertiajs/vue3 finns inte — kör "npm ci" innan testsviten.',
+    );
+
+    expect(File::get($dist))
+        ->toMatch('/key\.value = options\.preserveState \? key\.value : Date\.now\(\);/');
 });

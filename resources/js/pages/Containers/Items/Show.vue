@@ -672,8 +672,15 @@ const activeTab = computed(() => {
 /*
  * `create=1` i adressen (issue 1212 · [[ADR-0074 Registrering i vyn]],
  * tillägget om itemets flikar): plusmenyns och snabbknapparnas rader för
- * bilaga, uppgift och kostnad landar på fliken med formuläret öppet. Värdet
- * bevakas av sektionerna, så ett val på samma item gäller utan ny montering.
+ * bilaga, uppgift och kostnad landar på fliken med formuläret öppet.
+ *
+ * Ett val i menyn är en `<Link>` utan `preserve-state`, alltså ett vanligt
+ * GET-besök: `@inertiajs/vue3` ger sidkomponenten en ny nyckel
+ * (`key.value = options.preserveState ? key.value : Date.now()`) och monterar
+ * om den här sidan och sektionerna. Det är sektionernas `immediate`
+ * (respektive `onMounted`) som öppnar formuläret. Värdet bevakas ändå, för ett
+ * besök som BEVARAR tillståndet: då monteras inget om, och sektionerna öppnar
+ * på att värdet slår om.
  */
 const startOpen = computed(
     () => new URLSearchParams(page.url.split('?')[1] ?? '').get('create') === '1',

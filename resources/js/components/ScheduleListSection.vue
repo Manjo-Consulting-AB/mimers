@@ -92,8 +92,12 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
- * Snabbraden och dess fokus: `startOpen` ger raden fokus, vid montering och
- * när värdet slår om på samma item (issue 1212).
+ * Snabbraden och dess fokus: `startOpen` ger raden fokus (issue 1212). Ett val
+ * i plusmenyn är en `<Link>` utan `preserve-state`, alltså ett vanligt
+ * GET-besök: `@inertiajs/vue3` ger sidkomponenten en ny nyckel och monterar om
+ * `Show.vue` och den här sektionen, och det är `onMounted` som ger fokus.
+ * Bevakningen står kvar för ett besök som BEVARAR tillståndet — då monteras
+ * inget om, och värdet slår om i stället.
  */
 const quick = ref(null);
 
