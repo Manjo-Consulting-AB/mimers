@@ -200,8 +200,12 @@ function focusForm() {
 
 /*
  * `startOpen` fäller ut formuläret, och InlineCreate flyttar fokus när
- * `open` slår om. Bevakas, så att ett val i plusmenyn på samma item öppnar det
- * även när sektionen inte monteras om. Utan `can.create` ritas inget formulär.
+ * `open` slår om. Ett val i plusmenyn är en `<Link>` utan `preserve-state`,
+ * alltså ett vanligt GET-besök: `@inertiajs/vue3` ger sidkomponenten en ny
+ * nyckel och monterar om `Show.vue` och den här sektionen, och det är
+ * `immediate` som öppnar formuläret. Bevakningen står kvar för ett besök som
+ * BEVARAR tillståndet — då monteras inget om, och värdet slår om i stället.
+ * Utan `can.create` ritas inget formulär.
  */
 watch(
     () => props.startOpen,
