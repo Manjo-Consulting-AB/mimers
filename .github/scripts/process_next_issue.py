@@ -2780,6 +2780,25 @@ def kor_omfangslint(issue_num, issue_body, worktree_path):
     return f"\n\n=== OMFÅNGSLINTEN, körd innan du fick uppgiften ===\n{text}{OMFANGSLINT_INSTRUKTION}"
 
 
+def ar_tomt_forsok(status, head_efter, bas):
+    """True bara när ett FAS 1-försök inte lämnade något att testa.
+
+    Ett rent arbetsträd räcker inte: agenten kör med bypassPermissions och kan
+    committa själv (PR #163, issue #172/PR #187). Men HEAD ska jämföras med
+    basen, inte med HEAD vid försökets början. DeepSeek committar ibland redan
+    i försök 1 och faller sedan på miljön (issue #1222). I försök 2 och 3 står
+    HEAD kvar på den commiten och det finns inget kvar att ändra - men
+    försöket är inte tomt, och testerna måste köras. Jämfördes HEAD med
+    försökets start räknades de som tomma, testerna kördes aldrig och kön
+    eskalerade till Sonnet, som nollställde till basen och gjorde om arbetet.
+    Samma sorts kontroll hade redan gett fel två gånger (PR #163,
+    issue #172/PR #187).
+
+    Ren funktion av (status, HEAD, bas) - prövas utan processanrop.
+    """
+    return not status and head_efter == bas
+
+
 def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class, branch_name, worktree_path):
     # -----------------------------------------------------------------
     # STEG 2: DEEPSEEK V4 FLASH (MAX 3 FÖRSÖK)
@@ -2813,6 +2832,12 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
 
     omfangsnotis = kor_omfangslint(issue_num, issue_body, worktree_path)
 
+    # Basen för FAS 1:s tomma-försök-kontroll. Räknas ut en gång, före
+    # försöksloopen: en agent som rebasear eller hämtar origin/main ska inte
+    # flytta vad som räknas som bas. Samma bas som Sonnet-eskaleringen
+    # nollställer till.
+    bas = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
+
     print("[FAS 1] Kodgenerering med DeepSeek V4 Flash (Max 3 försök)...")
     for attempt in range(1, 4):
         print(f" -> DeepSeek Försök {attempt}/3...")
@@ -2825,7 +2850,6 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"Analysera felet och korrigera projektkoden."
             )
 
-        head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         agent_summary = call_deepseek(prompt, cwd=worktree_path)
         print(f"  Agentens sammanfattning (försök {attempt}):\n{agent_summary}")
 
@@ -2843,14 +2867,17 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         # exakt som run_findings_fix_loop() redan vet om (PR #163). Hände på
         # issue #172/PR #187 - DeepSeek löste och committade issuet på ett
         # tidigt försök, `git status` var därför rent, och loopen läste det
-        # som "inga filer ändrades" utan att någonsin köra testerna. HEAD
-        # måste alltså också ha stått still för att det ska räknas som ett
-        # no-op-försök.
+        # som "inga filer ändrades" utan att någonsin köra testerna.
+        #
+        # HEAD jämförs därför med basen, inte med HEAD vid försökets början:
+        # committade DeepSeek redan i försök 1 och föll på miljön står HEAD
+        # kvar på den commiten i försök 2 och 3, utan något kvar att ändra.
+        # Jämförelsen mot försökets start räknade dem som tomma, körde aldrig
+        # testerna och eskalerade till en Sonnet som nollställde till basen
+        # och gjorde om arbetet (issue #1222).
+        status = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
         head_efter = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
-        no_diff = (
-            not run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
-            and head_efter == head_fore
-        )
+        no_diff = ar_tomt_forsok(status, head_efter, bas)
         if no_diff:
             print(f"  ✗ Försök {attempt}: inga filer ändrades.")
             last_error_output = "Inga filer ändrades alls - lösningen uteblev."

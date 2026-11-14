@@ -1091,6 +1091,48 @@ def test_sonnet_fasen_borjar_fran_basen():
     assert '"reset", "--hard", bas' in kropp
 
 
+# =====================================================================
+# Issue 1274: ett tomt FAS 1-försök räknas mot basen, inte mot försökets start
+# =====================================================================
+
+def test_rent_trad_pa_basen_raknas_som_tomt_forsok():
+    """Klart när #1: varken trädet eller HEAD rörde sig från basen."""
+    assert p.ar_tomt_forsok("", "abc123", "abc123") is True
+
+
+def test_rent_trad_pa_tidigare_forsoks_commit_raknas_inte_som_tomt():
+    """Klart när #2: DeepSeek committade i försök 1 och föll på miljön. HEAD
+    står kvar på den commiten i försök 2 - försöket är inte tomt, testerna ska
+    köras (issue #1222)."""
+    assert p.ar_tomt_forsok("", "abc123", "def456") is False
+
+
+def test_smutsigt_trad_raknas_inte_som_tomt_forsok():
+    """Klart när #3: ocommittade ändringar är alltid något att testa."""
+    assert p.ar_tomt_forsok(" M app/a.php", "abc123", "abc123") is False
+    assert p.ar_tomt_forsok(" M app/a.php", "abc123", "def456") is False
+
+
+def test_fas_1_raknar_basen_en_gang_fore_forsoksloopen():
+    """Klart när #2: basen ska inte flyttas av en agent som rebasear eller
+    hämtar origin/main mitt i loopen - den räknas ut en gång före den."""
+    kropp = _funktionskropp("_process_in_worktree")
+    fore_loopen, efter_loopen = kropp.split("for attempt in range(1, 4):", 1)
+    forsoksloop = efter_loopen.split("STEG 3:", 1)[0]
+    assert '["git", "merge-base", "HEAD", "origin/main"]' in fore_loopen
+    assert "ar_tomt_forsok(status, head_efter, bas)" in forsoksloop
+    assert "head_fore" not in forsoksloop
+
+
+def test_atgardsloopen_och_omfangslinten_jamfor_fortfarande_mot_head_fore():
+    """Klart när #4: åtgärdsvarvet bygger på en befintlig PR och linten ska
+    inte röra något alls - där är jämförelsen mot varvets start rätt."""
+    atgard = _funktionskropp("run_findings_fix_loop")
+    assert "if not status and head_efter == head_fore:" in atgard
+    lint = _funktionskropp("kor_omfangslint")
+    assert "head_efter != head_fore" in lint
+
+
 def test_tillfalliga_commiten_backas_aven_vid_fel():
     kropp = _funktionskropp("run_local_tests")
     finally_del = kropp.split("finally:")[1]
