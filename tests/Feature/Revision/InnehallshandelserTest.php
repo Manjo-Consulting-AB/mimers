@@ -1,6 +1,6 @@
 <?php
 
-use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Trash\PurgeContent;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
@@ -380,7 +380,8 @@ it('en handling som rullas tillbaka skriver ingen rad', function () {
     expect($item->fresh()->name)->toBe('Motorn');
 });
 
-it('en borttagning ett jobb gör skriver en rad utan användare', function () {
+// vakt: negerat krav — PurgeContent skrev ingen händelserad före den här ändringen heller, så provet är grönt på basen med flit.
+it('en radering för gott skriver ingen rad i händelseloggen', function () {
     [, $anvandare, , $container] = innehallsKontext();
     $item = innehallsItem($container, $anvandare);
 
@@ -389,12 +390,13 @@ it('en borttagning ett jobb gör skriver en rad utan användare', function () {
         'billed_account_id' => $container->account_id,
     ]);
 
-    // Nedgraderingens jobb (App\Console\EnforcesDowngrades) går genom samma
-    // Action men har ingen användare att skicka med.
-    app(TrashAttachment::class)->handle($bilaga);
+    // Nedgraderingens steg 4 och lagringsvyns rensning raderar för gott genom
+    // PurgeContent::attachment(), som går genom PurgeAttachment. Ingen av dem
+    // skriver i händelseloggen — en `attachment.deleted`-rad med `user_id`
+    // null vore en rad ingen användare kan handla efter
+    // ([[ADR-0009 Kvoter och livscykel]] § Uppföljning 2026-11-14).
+    app(PurgeContent::class)->attachment($bilaga);
 
-    $rad = innehallsRad($item, AuditLog::ACTION_ATTACHMENT_DELETED);
-    expect($rad->user_id)->toBeNull();
-    expect($rad->item_id)->toBe($item->id);
-    expect($rad->container_id)->toBe($container->id);
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
+    expect(DB::table('audit_log')->count())->toBe(0);
 });

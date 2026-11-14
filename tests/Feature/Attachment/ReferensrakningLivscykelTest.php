@@ -344,7 +344,7 @@ it('R5 · kontoraderingen lämnar räknaren rätt för bytes som ett annat konto
     livscykelprovInvarianten();
 });
 
-it('R6 · nedgraderingens radering går genom papperskorgen och räknaren minskar först vid gallringen', function () {
+it('R6 · nedgraderingens radering går förbi papperskorgen och räknaren minskar direkt', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     livscykelprovSättPlangräns('free', 'storage_bytes', 100);
 
@@ -370,22 +370,27 @@ it('R6 · nedgraderingens radering går genom papperskorgen och räknaren minska
     // räknaren ställs för hand till bytenas summa.
     UsageCounter::factory()->create(['account_id' => $konto->id, 'storage_bytes' => 800, 'container_count' => 0]);
 
-    (new EnforcesDowngrades(app(TrashAttachment::class), app(PurgeContent::class)))->handle();
+    (new EnforcesDowngrades(app(PurgeContent::class)))->handle();
 
-    // Steg 4 går genom TrashAttachment — samma väg som varje annan radering i
-    // systemet. Bilagan hamnar i papperskorgen, och DÄR rörs räknaren inte:
-    // den kan återställas, så bytena får inte försvinna.
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
-    expect($storedFile->refresh()->reference_count)->toBe(1);
-    expect($storedFile->purge_after)->toBeNull();
-
-    // Räknaren minskar först när bilagan lämnar papperskorgen, 30 dagar
-    // senare — samma steg som för varje annan gallring.
-    (new PurgeAttachment)->handle($bilaga);
+    // Steg 4 raderar för gott ([[ADR-0009 Kvoter och livscykel]]
+    // § Uppföljning 2026-11-14): raden finns inte ens för papperskorgen,
+    // räknaren faller direkt, och markeringen sätts när referensen når noll.
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
+    expect(livscykelprovFörbrukning($konto->id))->toBe(0);
 
     $storedFile->refresh();
     expect($storedFile->reference_count)->toBe(0);
     expect($storedFile->purge_after)->not->toBeNull();
+
+    livscykelprovInvarianten();
+
+    // Markeringen passerar: bytena raderas fysiskt av samma jobb som för varje
+    // annan gallring (17b). Ingen mellanliggande tömning av papperskorgen
+    // behövs, och ingenting låg kvar där och räknades.
+    Carbon::setTestNow($storedFile->purge_after->copy()->addDay());
+    (new PurgesExpiredStoredFiles)->handle();
+
+    expect(StoredFile::query()->whereKey($storedFile->id)->exists())->toBeFalse();
 
     livscykelprovInvarianten();
 });
