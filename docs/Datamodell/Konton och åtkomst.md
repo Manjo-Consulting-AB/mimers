@@ -43,7 +43,13 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | notifications_read_at | TIMESTAMP NULL | Klockans oläst, se [[M19 Dashboarden]] § 127. Antalet olästa är raderna i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att klockan aldrig öppnats och att alla räknas. En tidsstämpel här och ingen `read_at` per notisrad: `notification` är outboxen, och klockan är ingen kanal ([[ADR-0010 Notisarkitektur]] § Beslut). Sätts av `POST /notifications/read` |
 | notifications_cleared_at | TIMESTAMP NULL | Klockans rensning, se issue 647. Panellistan filtreras på rader i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att ingenting rensats och att allt visas. En tidsstämpel och ingen DELETE — `notification` är outboxen och raderna står kvar ([[ADR-0010 Notisarkitektur]] § Beslut) — och siffran styrs alltjämt av `notifications_read_at`. Sätts av `POST /notifications/clear`, som sätter båda |
 | show_upcoming_tasks | BOOLEAN NOT NULL DEFAULT TRUE | Växeln på todo-listan, se [[M21 Uppgifterna i vardagen]] § 134. `TRUE` visar alla synliga uppgifter — dagens beteende — och `FALSE` bara det som är aktuellt nu: försenat och i dag. Valet följer personen och inte webbläsaren, och läses av `App\Actions\Schedule\ListTodo`; `ScheduleOccurrence::scopeDueTodayOrEarlier()` är villkoret. Sätts av `PUT /settings/tasks` |
+| avatar_attachment_id | FK → attachment NULL, `RESTRICT` | Profilbilden, en av personens **egna** bilagor (en rad i `attachment` vars `user_id` är den här personen). Att den är egen upprätthålls i `SetUserAvatar`, som för `container.cover_attachment_id`. Se [[ADR-0076 Profilbilden]] |
+| avatar_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten |
+| avatar_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten |
+| avatar_zoom | SMALLINT UNSIGNED NULL | Zoomen runt fokuspunkten, i procent (100–300). `NULL` = 100 |
 | created_at, updated_at | | |
+
+`avatar_focus_x`/`avatar_focus_y` sätts alltid TILLSAMMANS (ett CHECK-villkor för paret, i samma form som `container_cover_focus_pair`; en halv punkt finns inte). Beskärningen är icke-destruktiv: originalet lagras orört och utsnittet ritas med CSS, så ändringen skapar ingen ny fil och påverkar inte kvoten. Alla tre kolumnerna nollställs när bilden byts eller tas bort, och `DeleteUser` rensar bilden. Se [[ADR-0076 Profilbilden]].
 
 ### account_user
 
