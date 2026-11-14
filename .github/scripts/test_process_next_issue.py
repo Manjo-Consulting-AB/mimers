@@ -54,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import types
 from datetime import datetime, timezone
 
@@ -1437,6 +1438,121 @@ def test_lasarna_kanner_igen_bade_markoren_och_gamla_rubriken():
     assert p.ar_granskningskommentar("### Sonnet Granskningsanalys\nfynd")
     assert not p.ar_granskningskommentar("### Mergespärren slog till")
     assert not p.ar_granskningskommentar(None)
+
+
+# =====================================================================
+# Issue 1273: kön håller frontendbygget färskt innan sviten körs
+# =====================================================================
+
+def _skriv_sokvag(rot, *delar, tid=None):
+    """Skapar en fil under rot och ger den en bestämd mtime."""
+    sokvag = os.path.join(rot, *delar)
+    os.makedirs(os.path.dirname(sokvag), exist_ok=True)
+    open(sokvag, "w").close()
+    if tid is not None:
+        os.utime(sokvag, (tid, tid))
+    return sokvag
+
+
+def test_bygget_ar_inaktuellt_nar_en_kalla_ar_nyare_an_manifestet():
+    """Klart när #1: .vue-filen som redigerades efter bygget ska ge omslag."""
+    with tempfile.TemporaryDirectory() as rot:
+        manifest = _skriv_sokvag(rot, "public", "build", "manifest.json", tid=1000)
+        kalla = _skriv_sokvag(rot, "resources", "js", "App.vue", tid=2000)
+        assert p.bygget_ar_inaktuellt(rot) is True
+
+        # Samma träd med ett manifest som är nyare än källan: färskt.
+        os.utime(kalla, (500, 500))
+        assert os.path.getmtime(manifest) == 1000
+        assert p.bygget_ar_inaktuellt(rot) is False
+
+
+def test_bygget_ar_inaktuellt_laser_aven_css():
+    with tempfile.TemporaryDirectory() as rot:
+        _skriv_sokvag(rot, "public", "build", "manifest.json", tid=1000)
+        _skriv_sokvag(rot, "resources", "js", "App.vue", tid=500)
+        _skriv_sokvag(rot, "resources", "css", "app.css", tid=2000)
+        assert p.bygget_ar_inaktuellt(rot) is True
+
+
+def test_saknat_manifest_raknas_som_inaktuellt():
+    """Klart när #2: UtrullningsartefaktTest läser manifestet, så frånvaro är
+    samma fel som ett gammalt bygge."""
+    with tempfile.TemporaryDirectory() as rot:
+        _skriv_sokvag(rot, "resources", "js", "App.vue", tid=1000)
+        assert p.bygget_ar_inaktuellt(rot) is True
+
+
+def test_byggkallorna_ar_synkade_med_testforutsattningar():
+    """Samma kataloger och samma manifest som PHP-skriptet - annars säger kön
+    "färskt" om precis den katalog som fäller sviten."""
+    php = _kalla("testforutsattningar.php")
+    assert "foreach (['resources/js', 'resources/css'] as $katalog)" in php
+    assert "public/build/manifest.json" in php
+    assert p.BYGGKALLOR == ("resources/js", "resources/css")
+
+
+def test_bygget_ar_inaktuellt_utan_kallkataloger_ar_farskt():
+    """En worktree utan resources/ har ingenting som kan vara nyare."""
+    with tempfile.TemporaryDirectory() as rot:
+        _skriv_sokvag(rot, "public", "build", "manifest.json", tid=1000)
+        assert p.bygget_ar_inaktuellt(rot) is False
+
+
+def _kor_local_tests_med_stubb(rot, byggkod=0):
+    """Kör run_local_tests() mot en inspelande run_cmd-stubb.
+
+    Returnerar ((passed, utskrift, steg), anrop) där anrop är argv-listorna i
+    ordning. Stubben svarar som ett felfritt träd: git-kommandona ger tom
+    stdout, så run_local_tests() når fram till sitt tidiga "inget nytt"-svar.
+    """
+    anrop = []
+    ursprung = p.run_cmd
+
+    class _Svar:
+        def __init__(self, kod=0, ut="", fel=""):
+            self.returncode, self.stdout, self.stderr = kod, ut, fel
+
+    def stubb(args, **kw):
+        anrop.append(list(args))
+        if args[:3] == ["npm", "run", "build"]:
+            return _Svar(byggkod, "", "vite: bygget föll" if byggkod else "")
+        return _Svar()
+
+    p.run_cmd = stubb
+    try:
+        return p.run_local_tests(cwd=rot), anrop
+    finally:
+        p.run_cmd = ursprung
+
+
+def test_run_local_tests_bygger_fore_sviten_nar_bygget_ar_inaktuellt():
+    """Klart när #3: bygget sker före composer test - och bara då."""
+    with tempfile.TemporaryDirectory() as rot:
+        (passed, _, _), anrop = _kor_local_tests_med_stubb(rot)  # manifest saknas
+        kommandon = [a[:3] for a in anrop]
+        assert passed is True
+        assert ["npm", "run", "build"] in kommandon
+        assert kommandon.index(["npm", "run", "build"]) < kommandon.index(["composer", "test"])
+
+        # Färskt manifest: inget bygge.
+        _skriv_sokvag(rot, "public", "build", "manifest.json", tid=1000)
+        _skriv_sokvag(rot, "resources", "js", "App.vue", tid=500)
+        (passed, _, _), anrop = _kor_local_tests_med_stubb(rot)
+        assert passed is True
+        assert ["npm", "run", "build"] not in [a[:3] for a in anrop]
+        assert ["composer", "test"] in [a[:2] for a in anrop]
+
+
+def test_misslyckat_bygge_ger_rott_byggled_och_hoppar_over_sviten():
+    """Klart när #4: agenten ska få veta att bygget föll, inte att ett prov föll."""
+    with tempfile.TemporaryDirectory() as rot:
+        (passed, utskrift, steg), anrop = _kor_local_tests_med_stubb(rot, byggkod=1)
+        assert passed is False
+        assert steg == p.STEG_BYGGE
+        assert "Frontendbygget (npm run build) misslyckades" in utskrift
+        assert "vite: bygget föll" in utskrift
+        assert ["composer", "test"] not in [a[:2] for a in anrop]
 
 
 if __name__ == "__main__":
