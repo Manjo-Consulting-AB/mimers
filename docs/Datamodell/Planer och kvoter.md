@@ -100,7 +100,7 @@ Förloppet:
 1. Betalningen förfaller eller prenumerationen sägs upp. Kontot sätts till `read_only`.
 2. Användaren får en lista över sina bilagor sorterad på storlek och väljer själv vad som ska bort. Hon vet vilka fyrtio semesterbilder som kan gå och vilken besiktningsrapport som inte kan det. Utrymme frigörs först när bilagan raderas för gott i lagringsvyn — en slängd bilaga räknas i kvoten tills den gallras.
 3. Frist på **tre månader** att betala eller exportera.
-4. Sker inget: det som redan är slängt raderas först för gott (äldst slängd först), därefter slängs levande bilagor automatiskt, **nyast först**, tills de levande ligger under gränsen. De nyslängda ligger kvar i papperskorgen i 30 dagar och räknas under tiden. Items står kvar.
+4. Sker inget: det som redan är slängt raderas först för gott (äldst slängd först), därefter raderas levande bilagor för gott, **nyast först**, tills kontot ligger under gränsen. Inget går till papperskorgen. Items står kvar.
 5. Kontot återgår till `active` på gratisnivån.
 
 Varningar går ut vid steg 1, samt en månad och en vecka innan steg 4.
