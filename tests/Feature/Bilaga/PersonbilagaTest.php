@@ -1,14 +1,17 @@
 <?php
 
+use App\Actions\Account\DeleteAccount;
 use App\Actions\Attachment\CopyAttachment;
 use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Trash\ListAllTrash;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Export;
 use App\Models\ImageDerivative;
 use App\Models\Item;
+use App\Models\SecurityLog;
 use App\Models\StoredFile;
 use App\Models\User;
 use App\Support\Export\ContainerExportBuilder;
@@ -19,6 +22,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\withoutVite;
@@ -195,11 +199,11 @@ function personbilagaStatus(callable $anrop): int
  *
  * `user_id` är nullbar med ON DELETE RESTRICT och indexet `(user_id,
  * deleted_at)` — samma form som de två andra ägarkolumnerna.
- * `avatar_attachment_id` är nullbar med ON DELETE SET NULL, som
- * `container.cover_attachment_id` (se migrationens docblock om varför
- * issuens ord "RESTRICT" viker för containerns form).
+ * `avatar_attachment_id` är nullbar med ON DELETE RESTRICT, som issuen
+ * föreskriver; PurgeAttachment nollställer pekaren innan bilagan raderas
+ * hårt, så nyckeln fäller ingen gallring.
  */
-it('har user_id med RESTRICT, avatar_attachment_id med SET NULL och rätt index', function () {
+it('har user_id och avatar_attachment_id med RESTRICT och rätt index', function () {
     $userId = collect(Schema::getColumns('attachment'))->firstWhere('name', 'user_id');
 
     expect($userId)->not->toBeNull();
@@ -225,7 +229,7 @@ it('har user_id med RESTRICT, avatar_attachment_id med SET NULL och rätt index'
 
     expect($pekareNyckel)->not->toBeNull();
     expect($pekareNyckel['foreign_table'])->toBe('attachment');
-    expect($pekareNyckel['on_delete'])->toBe('set null');
+    expect($pekareNyckel['on_delete'])->toBe('restrict');
 });
 
 it('låter accessSubject svara med personen och owningContainer svara null', function () {
@@ -336,6 +340,43 @@ it('levererar profilbilden till den som har en grant i en gemensam container', f
     somAnvandare($mottagare);
 
     get("/files/{$bilaga->ulid}")->assertOk();
+
+    // Ingen säkerhetslogg: en personbilaga har ingen container vars
+    // ägarkonto nedladdningen kan mätas mot (ADR-0076 § 4). Mottagaren är
+    // inte medlem i organisationen, så för en itembilaga hade raden skrivits.
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_ATTACHMENT_DOWNLOADED)->count())->toBe(0);
+});
+
+it('levererar profilbilden till den som har en itemgrant i en gemensam container', function () {
+    [$person, , $bilaga] = personbilagaKontext();
+
+    // Samma konstruktion som container-granten, men åtkomsten gäller ett
+    // item: ADR-0076 § 4 räknar båda nivåerna som att nå containern.
+    $organisation = Account::factory()->organisation()->create();
+    $organisation->users()->attach($person, ['role' => 'member']);
+
+    $container = Container::factory()->for($organisation, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $mottagare = User::factory()->create();
+
+    // item_id sätts direkt; kolumnen är medvetet utanför #[Fillable], samma
+    // form som fabrikens docblock beskriver.
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => $item->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $mottagare->id,
+        'level' => 'read',
+        'kind' => 'member',
+        'granted_by_user_id' => User::factory()->create()->id,
+    ]);
+
+    somAnvandare($mottagare);
+
+    get("/files/{$bilaga->ulid}")->assertOk();
+
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_ATTACHMENT_DOWNLOADED)->count())->toBe(0);
 });
 
 it('nekar profilbilden med 403 till en främling', function () {
@@ -394,6 +435,29 @@ it('visar inte personbilagan i lagringsvyn', function () {
     expect($svar->json('data'))->not->toContain($bilaga->ulid);
 });
 
+it('vägrar rensa en personbilaga i lagringsvyn, på webben och i api', function () {
+    [$person, $konto, $bilaga] = personbilagaKontext();
+
+    somAnvandare($person)->delete("/settings/storage/{$konto->ulid}", [
+        'attachments' => [$bilaga->ulid],
+    ])->assertRedirect(route('settings.storage', ['account' => $konto->ulid]));
+
+    // Vägran är tyst: ingenting raderas och sammanfattningen säger noll.
+    expect(session('storage_removed')['removed'])->toBe(0);
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeTrue();
+
+    $token = $person->createToken('api');
+    $headers = ['Authorization' => "Bearer {$token->plainTextToken}"];
+
+    deleteJson("/api/accounts/{$konto->ulid}/storage", [
+        'attachments' => [$bilaga->ulid],
+    ], $headers)
+        ->assertOk()
+        ->assertJsonPath('data.removed', 0);
+
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeTrue();
+});
+
 it('tar inte med personbilagan i containerexporten', function () {
     [$konto, $person] = kontoMedMedlem();
     $container = Container::factory()->for($konto, 'account')->create();
@@ -441,4 +505,29 @@ it('vägrar flytta och kopiera en personbilaga med 422', function () {
     // Ingenting skrevs: bilagan är kvar på personen och ingen kopia finns.
     expect($bilaga->refresh()->user_id)->toBe($person->id);
     expect(Attachment::withTrashed()->count())->toBe(1);
+});
+
+// --- Livscykeln -----------------------------------------------------------
+
+/*
+ * Klart när: kontoraderingen flyttar inte personbilagan till en container.
+ *
+ * Regeln är att den rensas i stället — `attachment.billed_account_id` är ON
+ * DELETE RESTRICT och kan inte peka på ett konto som raderas, och ADR-0076
+ * § 3 säger att en person utan personkonto inte kan ha en profilbild. Provet
+ * bevisar hela kedjan: raden borta, räknaren minskad, pekaren nollställd av
+ * PurgeAttachment (RESTRICT-nyckeln) och kontot självt borta utan att
+ * raderingen föll på en främmande nyckel.
+ */
+it('rensar personbilagan när kontot raderas, utan att falla på nyckeln', function () {
+    [$person, $konto, $bilaga] = personbilagaKontext();
+
+    $stored = $bilaga->storedFile;
+
+    app(DeleteAccount::class)->handle($konto);
+
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
+    expect($stored->refresh()->reference_count)->toBe(0);
+    expect($person->refresh()->avatar_attachment_id)->toBeNull();
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
 });

@@ -21,8 +21,10 @@ use Illuminate\Support\Facades\DB;
  *
  * Stegen i en transaktion (Beslut 2): först läses radens tillstånd (innan
  * forceDelete gör det oåtkomligt), sedan raderas bilagans öppningsrader
- * (issue 177 — `attachment_open.attachment_id` är ON DELETE RESTRICT), sedan
- * forceDelete på attachment-raden,
+ * (issue 177 — `attachment_open.attachment_id` är ON DELETE RESTRICT) och
+ * personens pekare till bilden nollställs (issue 379 —
+ * `user.avatar_attachment_id` är ON DELETE RESTRICT), sedan forceDelete på
+ * attachment-raden,
  * sedan minskas stored_file.reference_count som SQL — aldrig som
  * läs-ändra-skriv i PHP, och aldrig under noll (Beslut 3) — sedan lämnar
  * bytena kontots förbrukningsräkning om bilagan var levande (issue 26a §
@@ -83,6 +85,20 @@ class PurgeAttachment
             // når sina bilagor genom den här actionen och behöver därför
             // inte känna tabellen.
             DB::table('attachment_open')->where('attachment_id', $attachment->getKey())->delete();
+
+            // Personens pekare till sin profilbild (issue 379 ·
+            // [[ADR-0076 Profilbilden]] § 1). `user.avatar_attachment_id` är
+            // ON DELETE RESTRICT, till skillnad från containerns pekare, som
+            // databasen nollställer själv: en bilaga utan container har
+            // ingen annan väg ut än den här actionen, så pekaren kan
+            // nollställas här i stället — med samma motivering som
+            // öppningsraderna ovan: före forceDelete, för att RESTRICT-nyckeln
+            // annars fäller raderingen. En
+            // profilbild som byts ut (issue 380) och en persons bilagor vid
+            // person- och kontoradering går alla genom den här raden.
+            DB::table('user')
+                ->where('avatar_attachment_id', $attachment->getKey())
+                ->update(['avatar_attachment_id' => null]);
 
             // Steg 2 och Beslut 7 — idempotent per anrop, inte per rad:
             // forceDelete() på en rad som inte finns är en no-op i Eloquent

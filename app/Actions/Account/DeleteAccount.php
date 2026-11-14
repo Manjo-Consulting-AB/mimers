@@ -352,7 +352,8 @@ class DeleteAccount
      * **Därför rensas den**, genom samma PurgeAttachment som
      * PurgeContent::attachment() delegerar till: bytena lämnar räknaren,
      * `stored_file.reference_count` minskar, och `user.avatar_attachment_id`
-     * nollställs av sin ON DELETE SET NULL.
+     * nollställs av PurgeAttachment innan raden försvinner (RESTRICT-nyckeln,
+     * issue 379).
      * Det följer ADR-0076 § 3 — en person utan personkonto har ingen kvot att
      * belasta och kan inte ha en profilbild — och ADR § 5: bilden hör till
      * personen och följer aldrig med en container. Personen själv raderas inte

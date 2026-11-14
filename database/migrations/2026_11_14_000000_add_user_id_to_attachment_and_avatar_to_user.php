@@ -25,17 +25,15 @@ use Illuminate\Support\Facades\Schema;
  * `(item_id IS NULL) + (container_id IS NULL) + (user_id IS NULL) = 2` är
  * sant exakt när en av de tre är satt: två satta ger 1, ingen satt ger 3.
  *
- * `user.avatar_attachment_id` är personens pekare till sin bild, i samma form
- * som `container.cover_attachment_id` (2026_09_27_020000): nullbar FK mot
- * `attachment`, och **ON DELETE SET NULL, till skillnad från husets
- * RESTRICT**. Issuen skriver RESTRICT i samma andetag som den säger "i samma
- * form som container.cover_attachment_id", men de två kan inte båda gälla —
- * och containerns form är den som fungerar. Skälet är detsamma som där: en
- * pekare är en PREFERENS, och en preferens får aldrig hindra en gallring.
- * App\Actions\Attachment\PurgeAttachment raderar bilagan HÅRT, och en
- * RESTRICT här hade fällt varje väg som rensar en profilbild — i drift, i en
- * nattlig körning, i stället för i en testsvit. Pekaren nollställs alltså när
- * bilagan försvinner.
+ * `user.avatar_attachment_id` är personens pekare till sin bild: nullbar FK
+ * mot `attachment`, med **ON DELETE RESTRICT** som `attachment.user_id` och
+ * husets övriga nycklar. Att RESTRICT annars hade fällt varje väg som rensar
+ * en profilbild — App\Actions\Attachment\PurgeAttachment raderar bilagan HÅRT
+ * — löses i den actionen: den nollställer pekaren innan raden försvinner,
+ * precis som den redan raderar `attachment_open`-raderna före forceDelete.
+ * Containerns pekare (`container.cover_attachment_id`) använder SET NULL av
+ * samma skäl, men där finns ingen action som alltid går förbi; för personen
+ * är PurgeAttachment den enda vägen ut, och då kan databasen få vara strikt.
  *
  * ATT ETT CHECK-VILLKOR INTE KAN UTTRYCKA "EGEN" är medvetet: att
  * `avatar_attachment_id` pekar på en bilaga vars `user_id` är personens egen
@@ -86,7 +84,7 @@ return new class extends Migration
                 ->nullable()
                 ->after('notifications_cleared_at')
                 ->constrained('attachment')
-                ->onDelete('set null');
+                ->onDelete('restrict');
         });
 
         if (Schema::getConnection()->getDriverName() === 'mysql') {
