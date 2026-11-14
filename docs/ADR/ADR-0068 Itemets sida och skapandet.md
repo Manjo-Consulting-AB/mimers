@@ -1,6 +1,6 @@
 # ADR-0068 Itemets sida och skapandet
 
-**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · Ordtabellens rad *Uppgifter och underhåll* ersatt av [[ADR-0075 Tasks som listans namn]] · [[ADR-index]]
+**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · Ordtabellens rad *Uppgifter och underhåll* ersatt av [[ADR-0075 Tasks som listans namn]] · Uppföljning 2026-11-14: strukturen på flikarna (*Include child items* på *Documents*, *Costs* och *Loans*) · [[ADR-index]]
 
 Underlaget är en UX-granskning av itemvyerna 2026-10-23 och två arkitekters genomgång av den. Förlagan är `docs/Design/struktur - item.jpeg`, samma bild som [[ADR-0041 Itemets vy]] byggde på.
 
@@ -123,3 +123,15 @@ Utkastet hade tre öppna frågor. Tony följde rekommendationen i alla tre:
 **Inline-redigering av alla fält på översikten.** Valdes bort: en samlad redigering med *Save* och *Cancel* är tydligare för en grupp fält som hör ihop, och den gör det uppenbart hur ändringar sparas.
 
 **En ny JSON-ändpunkt för att skapa taggar.** Valdes bort: Inertias `preserveState` mot de befintliga ändpunkterna ger samma resultat utan en ny yta att skydda.
+
+## Uppföljning 2026-11-14 — strukturen på itemets flikar
+
+Tonys beslut 2026-11-14. Användaren ska kunna se hela strukturen under ett item, inte bara dess egna rader. Det gäller § 4:s flikar *Documents*, *Costs* och *Loans*.
+
+1. **Växeln *Include child items* står på fyra flikar.** Växeln från *Tasks* (M24 · issue 227) finns också på *Documents*, *Costs* och *Loans*. **En växel per flik** (Tonys val 2026-11-14): användaren väljer för varje flik för sig. `?children=0` gäller bara den aktiva fliken, och flikradens länkar bär aldrig parametern, så att stänga av på *Documents* inte påverkar *Costs*. Förvalet är på, som på *Tasks*. Valet sparas inte mellan besöken, precis som på *Tasks* i dag.
+2. **Ättlingarna är `ResolveItemDescendants`, och behörigheten prövas per rad,** som i `ListItemTasks` (#696 Beslut 3). En rad på ett item som läsaren inte når ritas inte.
+3. **En rad från en ättling visar sitt items namn** och länkar dit. Handlingarna på raden, som *Move*, *Delete*, *Edit* och *Return*, går mot radens eget item och prövas mot det. Det som skapar något nytt (uppladdning, snabbrad, ny kostnad, nytt lån) gäller alltid itemet man står på.
+4. **Summorna på *Costs* räknar det som visas,** alltså inklusive ättlingarna när växeln är på.
+5. **Itemets egna egenskaper gäller bara itemet:** omslaget (*Use as cover*), itemets status och om det är utlånat.
+
+Kodissuerna är #1247 (*Documents*, bygger även växeln som komponent och `ResolveVisibleDescendants`), #1248 (*Costs*) och #1249 (*Loans*).
