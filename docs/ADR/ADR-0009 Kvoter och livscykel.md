@@ -1,6 +1,6 @@
 # ADR-0009 Kvoter och livscykel
 
-**Status:** Antagen 2026-08-03 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Steg 4 justerat 2026-11-14 · [[ADR-index]]
 
 ## Kontext
 
@@ -62,3 +62,13 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 **Varför:** bilagan räknades bort i samma ögonblick som den slängdes, men bytena låg kvar på disken i upp till 60 dagar. Den som laddade upp, slängde och laddade upp igen kunde fylla disken utan att kvoten slog i.
 
 **Steg 2 och steg 4 följer av det.** I steg 2 frigör användaren utrymme genom att radera för gott i lagringsvyn; att bara släng räcker inte. Steg 4 tömmer först det som redan är slängt (äldst slängd först) och slänger sedan levande bilagor, nyast först, tills de levande ligger på eller under gränsen. De nyslängda bilagorna ligger i papperskorgen i 30 dagar och räknas under tiden, så kontot kan vara `active` på gratisnivån och ändå ligga över kvoten; uppladdningar är spärrade tills papperskorgen tömts. Ett konto under rättslig spärr rörs inte av steg 4. Se [[Planer och kvoter]] § Nedgradering och [[Filer och lagring]] § Kvot kontra faktisk lagring.
+
+**Steg 4 är justerat i § Uppföljning 2026-11-14 — steg 4 raderar för gott nedan:** bilagorna raderas för gott i stället för att slängas, så meningen om 30 dagar i papperskorgen och om ett konto över kvoten gäller inte längre.
+
+## Uppföljning 2026-11-14 — steg 4 raderar för gott
+
+**Beslutet:** bilagor som nedgraderingen tar bort automatiskt i steg 4 **raderas för gott** och går inte till papperskorgen. Steg 4 tömmer först det som redan ligger i papperskorgen, äldst slängd först, och raderar sedan levande bilagor för gott, nyast först, tills kontots förbrukning ligger på eller under gränsen. Det är samma väg som lagringsvyn använder (`PurgeContent::attachment()`).
+
+**Det ersätter** meningen i § Uppföljning 2026-11-11 om att de nyslängda bilagorna ligger i papperskorgen i 30 dagar, och att kontot därför kan vara `active` men ändå ligga över kvoten. Efter steg 4 ligger kontot inom kvoten.
+
+**Varför:** kontot är fruset, och användaren har haft tre månader och flera varningar på sig att välja själv. En papperskorg som räknas i kvoten frigör inget och kräver en extra tömning. Samma skäl gällde redan när lagringsvyn fick radera för gott: användaren ska inte behöva gå in en gång till och tömma papperskorgen. Regeln missades för den automatiska rensningen. Ett konto under rättslig spärr rörs fortfarande inte av steg 4. Se [[Planer och kvoter]] § Nedgradering.
