@@ -17,6 +17,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | locale | VARCHAR(10) | `sv_SE`, `en_GB`. Sätts från dag ett, se [[ADR-0013 Språk och i18n]] |
 | timezone | VARCHAR(64) | IANA, t.ex. `Europe/Stockholm` |
 | unit_system | VARCHAR(10) | `metric` \| `imperial` |
+| currency | CHAR(3) | Kontots valuta, förval `SEK`; den globala summan uttrycks i den ([[ADR-0037 Valutans arv]]). En aktiv ISO 4217-kod, se [[ADR-0078 Valutor ur ISO 4217]]. |
 | status | VARCHAR(20) | `active` \| `read_only` \| `closed` |
 | read_only_reason | VARCHAR(40) NULL | `payment_failed`, `over_quota`, `inactivity` |
 | registration_ip | VARCHAR(45) NULL | IP:n registreringen kom från, IPv6 ryms i textform. Sätts vid registrering, nollas av `prune-registration-ips` — se [[Registerförteckning]] |
@@ -243,6 +244,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | inbox_user_id | FK → user NULL UNIQUE | Personens inbox. Det ENDA som gör containern till en inbox, se [[ADR-0054 Inboxen]]. |
 | name | VARCHAR(255) | |
 | kind | VARCHAR(40) | `boat`, `caravan`, `house`, `car`, `other`. Endast för presentation och mallval — systemet beter sig inte olika. |
+| currency | CHAR(3) NULL | Containerns egen valuta; `NULL` ärver kontots ([[ADR-0037 Valutans arv]]). En aktiv ISO 4217-kod. Containerns urval av tillåtna valutor ligger i `container_allowed_currency`, se [[Items och organisation]] och [[ADR-0078 Valutor ur ISO 4217]]. |
 | template_source_id | FK → container NULL | Om utstämplad från mall, se [[ADR-0002 Konto äger container]] |
 | cover_attachment_id | FK → attachment NULL | Containerns bild, se [[ADR-0047 Containerns bild]] och [[Filer och lagring]] § attachment |
 | cover_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
