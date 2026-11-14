@@ -39,7 +39,7 @@ it('ger varje nyckel i ordtabellen sitt nya värde', function () {
         'item.form.purchased_at' => 'Purchase date',
         'item.attachment.heading' => 'Documents',
         'create.rows.attachment' => 'Document',
-        'item.schedule.heading' => 'To do',
+        'item.schedule.heading' => 'Tasks',
     ];
 
     foreach ($forvantat as $nyckel => $varde) {
@@ -74,8 +74,8 @@ it('har inga av de utgångna orden under item.* eller create.rows', function () 
     expect($traffar)->toBe([]);
 });
 
-it('kallar itemets uppgiftsflik To do', function () {
-    expect(trans('ui.item.schedule.heading', [], 'en'))->toBe('To do');
+it('kallar itemets uppgiftsflik Tasks', function () {
+    expect(trans('ui.item.schedule.heading', [], 'en'))->toBe('Tasks');
 });
 
 it('har kvar nycklarna i ordtabellen och plusmenyns övriga rader', function () {

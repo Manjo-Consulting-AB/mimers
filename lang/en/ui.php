@@ -89,7 +89,7 @@ return [
         // dashboard because the two pages were one until then, and the label
         // is the page's own word (`todo.heading`) rather than the route's —
         // the user should meet the same words in the menu and on the page.
-        'tasks' => 'To do',
+        'tasks' => 'Tasks',
         // The way into the inbox, see M27 · issue 245 and [[ADR-0054 Inboxen]]
         // § 7: the row sits next to the to-do view, and the label is the page's
         // own word (`inbox.page.heading`) rather than the route's. The row
@@ -1949,11 +1949,11 @@ return [
             // `history` in containerSections.js — the place ADR-0050 § 4
             // gives it (*Overview, Items, Documents, Tasks, Costs, History*).
             // It is
-            // *To do* (renamed from *Tasks* 2026-10-17, matching the main menu) and not the mockup's *Maintenance* beside it: the two
+            // *Tasks* (restored 2026-11-14, matching the main menu) and not the mockup's *Maintenance* beside it: the two
             // are ONE surface and the difference is a filter on
             // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
             // § Bildernas avvikelser).
-            'tasks' => 'To do',
+            'tasks' => 'Tasks',
             // Issue 175 · [[ADR-0050 Desktopdesignen]] § 9: the container's
             // costs tab. The row sits after `tasks` and before `history` in
             // containerSections.js — the next step of the same enumeration
@@ -2339,8 +2339,8 @@ return [
          * the key is already there.
          */
         'tasks' => [
-            'title' => 'To do',
-            'heading' => 'To do',
+            'title' => 'Tasks',
+            'heading' => 'Tasks',
             'filter_maintenance' => 'Recurring tasks only',
             'done' => 'Done',
             'empty' => 'No tasks in this container.',
@@ -3806,7 +3806,7 @@ return [
         // resources/js/components/schedulePresentation.js picks by the number,
         // the same rule as the days in 62a.
         'schedule' => [
-            'heading' => 'To do',
+            'heading' => 'Tasks',
             'empty' => 'The item has no tasks.',
             'add' => 'New task',
 
@@ -4150,7 +4150,7 @@ return [
         // by its own word rather than describing the screen.
         'schedules' => [
             'title' => 'A task reminds you before something is due',
-            'body' => 'Set one on an item — inspect the boiler, change the filter, renew the insurance — and it turns up under To do in time for you to act on it.',
+            'body' => 'Set one on an item — inspect the boiler, change the filter, renew the insurance — and it turns up under Tasks in time for you to act on it.',
         ],
     ],
 
@@ -4251,8 +4251,8 @@ return [
     // task panel draws the same two sentences, so they live here and not under
     // `dashboard.*`.
     'todo' => [
-        'title' => 'To do',
-        'heading' => 'To do',
+        'title' => 'Tasks',
+        'heading' => 'Tasks',
 
         'due' => 'Due :date',
         'complete' => 'Check off',
