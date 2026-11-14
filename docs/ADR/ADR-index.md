@@ -84,6 +84,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0076 Profilbilden]] | Profilbilden är en bilaga som tillhör en person, med fokuspunkt och zoom som icke-destruktiv beskärning; den ses av den som delar ett konto eller en container med personen | [[Filer och lagring]], [[Konton och åtkomst]], Frontend |
 | [[ADR-0077 Notislistan i appen]] | Notiserna får kanalen `in_app` med en klocka, en panel och en sida, läst-läge per rad, förval per typ och gallring efter 90 dagar; tysta timmar gäller inte kanalen | [[Notiser]], Frontend |
 | [[ADR-0078 Valutor ur ISO 4217]] | Bara aktiva ISO 4217-koder på rad, konto och container; sökruta på kod och namn; befintliga ogiltiga koder rapporteras, inte rättas; ägaren kan begränsa containerns valutor (tomt urval = alla), servern svarar 422 `currency.not_allowed` | [[Items och organisation]], Frontend |
+| [[ADR-0079 Övervakning]] | Sentry i EU-regionen för fel i PHP och webbläsaren utan personuppgifter (användaren en pseudonym), tillgänglighetskoll och hjärtslag från schemalagda jobb utifrån, prestanda i en egen logg på inleed med veckosammanställning, anonym mätning av sidor och funktioner i appen | Drift, [[Registerförteckning]] |
 
 ## Om att ändra ett beslut
 

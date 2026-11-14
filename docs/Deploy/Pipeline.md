@@ -163,8 +163,13 @@ Lägg upp två *Environments* i repots inställningar: `staging` och `production
 | `MAILGUN_SECRET` | Mailguns sändnings-API-nyckel, olika per miljö | ⇑ |
 | `MAILGUN_ENDPOINT` | `api.eu.mailgun.net` vid EU-region | ⇑ |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | nyckeln HMAC-signaturen verifieras med | ⇑ |
+| `SENTRY_LARAVEL_DSN` | DSN för Sentry-projektet `mimers-php`, olika per miljö. Tom eller saknad betyder att Sentry är avstängt | ⇑ |
+| `SENTRY_JS_DSN` | DSN för Sentry-projektet `mimers-js` (webbläsaren). En DSN för webbläsaren är offentlig | ⇑ |
+| `SENTRY_ENVIRONMENT` | `staging` eller `production` | ⇑ |
+| `OPS_EMAIL` | driftadressen som får veckosammanställningen av prestandaloggen | ⇑ |
+| `SENTRY_AUTH_TOKEN` | Sentry-token med `org:ci`, för uppladdning av källkartor i bygget. Finns bara i `staging` och används bara i workflowen | transporteras **inte** till servern |
 
-De sju nedersta transporteras till serverns `shared/.env` av utrullningen, se [[ADR-0030 Miljövariabler ur GitHubs secrets]]. **Listan som avgör vilka som transporteras står i `env:`-blocket i `staging.yml` och `production.yml`** — en secret som läggs upp här men inte där når aldrig appen, tyst. Det var precis den luckan som gjorde att M5 låg utrullad i produktion utan att kunna skicka ett mejl; `retro-fakta` är motmedlet, den visar vad som faktiskt hamnade i filen.
+De sju `MAIL*`-raderna och de fyra första övervakningsraderna (`SENTRY_LARAVEL_DSN`, `SENTRY_JS_DSN`, `SENTRY_ENVIRONMENT` och `OPS_EMAIL`) transporteras till serverns `shared/.env` av utrullningen, `SENTRY_AUTH_TOKEN` gör det inte, se [[ADR-0030 Miljövariabler ur GitHubs secrets]]. **Listan som avgör vilka som transporteras står i `env:`-blocket i `staging.yml` och `production.yml`** — en secret som läggs upp här men inte där når aldrig appen, tyst. Det var precis den luckan som gjorde att M5 låg utrullad i produktion utan att kunna skicka ett mejl; `retro-fakta` är motmedlet, den visar vad som faktiskt hamnade i filen.
 
 `production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör — se begränsningen nedan.
 
@@ -770,6 +775,27 @@ Kravet är ovillkorligt i kön, till skillnad från i workflowen. Den fick undan
 ### Om det spricker igen
 
 Nästa steg är en **självhostad runner** — självhostade minuter är gratis, och repot är privat, så risken med otillförlitliga fork-PR:er finns inte. Den kan inte bo på VPS:en som kör agentkön: 2 kärnor, 2 GB RAM och ~2,7 GB ledigt disk räcker inte för `test` plus en MySQL-tjänst vid sidan av kön. Det skulle behöva en egen gäst på Proxmox-värden.
+
+## Övervakning
+
+Beslutet står i [[ADR-0079 Övervakning]]; kodarbetet i [[M61 Övervakning]]. Hemligheterna står i tabellen under § Miljöer och secrets i GitHub. Utan `SENTRY_LARAVEL_DSN` är Sentry avstängt, och en saknad hemlighet fäller aldrig utrullningen.
+
+### Uppsatt i Sentry (2026-11-14)
+
+Tony har gjort det här för hand:
+
+- **Organisationen `mimers` ligger i EU-regionen** (`de.sentry.io`). Regionen väljs vid kontoskapandet och går inte att byta senare.
+- **Två projekt:** `mimers-php` (Laravel) och `mimers-js` (Vue). De har var sin DSN, som ligger i `SENTRY_LARAVEL_DSN` respektive `SENTRY_JS_DSN`.
+- **DPA:n är godkänd.** Sentry är personuppgiftsbiträde, se [[Registerförteckning]].
+- **Tillgänglighetskoll** mot `https://mimers.app/up` (var 60:e sekund, environment `production`) och `https://staging.mimers.app/up` (var 300:e sekund, environment `staging`). Båda ligger i `mimers-php`, och larmet går efter tre missar i rad. Kollarna är inställda i Sentry, inte i koden.
+- **GitHub-miljöerna** `staging` och `production` har `SENTRY_LARAVEL_DSN`, `SENTRY_JS_DSN` och `SENTRY_ENVIRONMENT`. `staging` har dessutom `SENTRY_AUTH_TOKEN` (`org:ci`) för källkartorna.
+- **Larmen** går som e-post till kontots adress, som vidarebefordras hos inleed. Gratisnivån tillåter bara en användare i organisationen, så det finns ingen att fördela larmen på.
+
+Att göra om något av det måste göras om: kollarna och larmreglerna ligger bara i Sentry och finns inte i repot.
+
+### Prestandaloggen
+
+Förfrågningar över 1000 ms och databasfrågor över 200 ms skrivs till loggkanalen `performance` (`daily`, JSON, en rad per händelse). På servern ligger den i `shared/storage/logs/` (en fil per dag, `performance-ÅÅÅÅ-MM-DD.log`, via symlänken `storage/` i releasen) och sparas i **30 dagar**, sedan tar Laravel bort de äldre filerna. Loggen bär ruttnamn, tid och antal frågor, men ingen användare, IP eller URL med parametrar. Veckosammanställningen mejlas måndagar 06:00 till `OPS_EMAIL`.
 
 ## Branch protection
 
