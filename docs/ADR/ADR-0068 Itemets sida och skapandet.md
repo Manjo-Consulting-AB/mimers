@@ -1,6 +1,6 @@
 # ADR-0068 Itemets sida och skapandet
 
-**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · [[ADR-index]]
+**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · Ordtabellens rad *Uppgifter och underhåll* ersatt av [[ADR-0075 Tasks som listans namn]] · [[ADR-index]]
 
 Underlaget är en UX-granskning av itemvyerna 2026-10-23 och två arkitekters genomgång av den. Förlagan är `docs/Design/struktur - item.jpeg`, samma bild som [[ADR-0041 Itemets vy]] byggde på.
 
@@ -30,6 +30,8 @@ Förlagan har tre paneler, sju flikar (Översikt, Detaljer, Relationer, Dokument
 | Vad användaren *vet* om itemet, Markdown | **Anteckningar** | **Notes** | `notes` |
 | Datum då itemet köptes | **Inköpsdatum** | **Purchase date** | `purchased_at` |
 | Uppgifter och underhåll | **Att göra** | **To do** | `schedule` |
+
+*Raden gäller Uppgifter / Tasks sedan 2026-11-14, enligt [[ADR-0075 Tasks som listans namn]].*
 
 *Where it is*, *Location*, *Attachments*, *Image or document* och *Purchased* utgår. Nycklarna i `lang/en/ui.php` står still och byter bara värde, som ADR-0032 föreskriver.
 

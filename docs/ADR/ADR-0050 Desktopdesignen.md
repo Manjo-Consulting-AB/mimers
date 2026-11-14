@@ -1,6 +1,6 @@
 # ADR-0050 Desktopdesignen
 
-**Status:** Antagen 2026-09-30 · § 1, 2 och 4 justerade 2026-10-17 · § 16 ersatt i frågan om GTD-listorna av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
+**Status:** Antagen 2026-09-30 · § 1, 2 och 4 justerade 2026-10-17 · § 4 ersatt av [[ADR-0075 Tasks som listans namn]] · § 16 ersatt i frågan om GTD-listorna av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
 
 Tonys beslut 2026-09-29 och 30, vid gapanalysen efter [[M23 Mobilen och kartan]] och genomgången av designerns fyra nya bilder: `kostnader.png`, `dokument.png`, `uppgifter_1.png` och `Historik.png` i `docs/Design/`.
 
@@ -100,6 +100,8 @@ Tonys beslut 2026-10-17, efter att ha gått igenom staging.
 **§ 3: hjälten bär inga handlingar.** Knappen *Edit container* och menyknappen bredvid den, med *Change cover* som enda rad, är borttagna ur hjälten. Båda ledde till val som redan finns under fliken *Settings*, där också bildbytet står. Mobilens penna i toppraden står kvar. Hjälten visar bilden, namnet, arten, beskrivningen och talen.
 
 **§ 4: fliken *Uppgifter* heter *To do*.** Fliken och dess sidrubrik bär samma ord som huvudmenyns rad, så att samma sorts lista inte har två namn. Flikarna är fortfarande samma, i samma ordning.
+
+*Ersatt 2026-11-14 av ADR-0075: listan heter Tasks.*
 
 ## Uppföljning 2026-11-10 — hjälten på itemvyn
 
