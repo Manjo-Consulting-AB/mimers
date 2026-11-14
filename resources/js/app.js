@@ -43,8 +43,19 @@ router.on('finish', (event) => {
     }
 });
 
+/*
+ * Produktens namn i fliktiteln — se issue 1225.
+ *
+ * `import.meta.env.VITE_APP_NAME` bakas in i bundlen vid bygget, och värdet
+ * kommer ur `.env`, som bara finns lokalt. Artefakten byggs i GitHub Actions
+ * utan den filen, så utan reserven blev titeln "To do — undefined" på både
+ * staging och i produktionen. Reserven gör titeln rätt i varje bygge, även
+ * `ci.yml`.
+ */
+const appName = import.meta.env.VITE_APP_NAME || 'Mimers';
+
 createInertiaApp({
-    title: (title) => (title ? `${title} — ${import.meta.env.VITE_APP_NAME}` : import.meta.env.VITE_APP_NAME),
+    title: (title) => (title ? `${title} — ${appName}` : appName),
 
     /*
      * Förhämtningens livslängd — se issue 277 § Beslut 1. En förhämtad sida
