@@ -423,12 +423,61 @@ def kapa_felutskrift(text, grans):
 STEG_ANALYS = "analys"
 STEG_TESTER = "tester"
 STEG_ROTT_PA_BASEN = "rott-pa-basen"
+STEG_BYGGE = "bygge"
+
+# Katalogerna testforutsattningar.php jämför manifestets mtime mot. Speglade här
+# i stället för importerade - skriptet är PHP och körs av `composer test`, det
+# här skriptet är python och körs av kön. Drift fångas av
+# test_process_next_issue.py, som jämför listan med skriptets.
+BYGGKALLOR = ("resources/js", "resources/css")
+
+
+def bygget_ar_inaktuellt(rot):
+    """Är den byggda frontenden äldre än källorna, eller saknas den?
+
+    Ren funktion, avsiktligt: hela beslutet är en mtime-jämförelse mot
+    public/build/manifest.json, och den ska gå att pröva utan processanrop.
+
+    Speglar testforutsattningar.php. Sedan issue 1152 (#1206) fäller det
+    skriptet hela sviten när en fil under resources/js/ eller resources/css/
+    är nyare än manifestet. Kön satte förr bara upp miljön en gång, i
+    `composer setup`; varje försök som redigerade en .vue-fil efteråt föll
+    därför innan ett enda prov körts, och utfallet avgjordes av i vilken
+    ordning agenten råkade bygga (issue #1222, #1273). Kön äger miljön och
+    håller därför bygget färskt i stället - skriptet i sig ska fortsatt säga
+    till, inte laga (se dess docblock).
+
+    Saknat manifest är samma fel som ett inaktuellt: UtrullningsartefaktTest
+    läser filen. is_file och getmtime följer länkar, precis som PHP-varianten;
+    followlinks speglar dess FOLLOW_SYMLINKS.
+    """
+    manifest = os.path.join(rot, "public", "build", "manifest.json")
+    if not os.path.isfile(manifest):
+        return True
+
+    manifest_tid = os.path.getmtime(manifest)
+    for katalog in BYGGKALLOR:
+        sokvag = os.path.join(rot, katalog)
+        if not os.path.isdir(sokvag):
+            continue
+        for katalog_rot, _, filer in os.walk(sokvag, followlinks=True):
+            for fil in filer:
+                try:
+                    if os.path.getmtime(os.path.join(katalog_rot, fil)) > manifest_tid:
+                        return True
+                except OSError:
+                    # En bruten länk eller en fil som hann försvinna säger
+                    # ingenting om bygget; resten av trädet får avgöra.
+                    continue
+
+    return False
 
 
 def run_local_tests(cwd):
     """
     Kvalitetsgrind: Pint (auto-fix, aldrig ett skäl att fela), PHPStan
-    (composer analyse), testsviten (composer test), och rott-pa-basen.sh -
+    (composer analyse), frontendbygget när det är inaktuellt (npm run build),
+    testsviten (composer test), och rott-pa-basen.sh -
     bevisar att nya/ändrade tester faktiskt är röda på baskommiten, annars
     bevisar en avbockad "Klart när"-punkt ingenting (se 13b i
     [[deepseek-shadow-run-results]]). Körs vid varje försök i FAS 1/2 och
@@ -442,10 +491,11 @@ def run_local_tests(cwd):
     opåverkad.
 
     Returnerar (passed: bool, output: str, steg: str). `steg` säger vilket led
-    som fällde - STEG_ANALYS, STEG_TESTER eller STEG_ROTT_PA_BASEN - och är tom
-    när allt är grönt. Anroparen behöver skilja dem åt: bara ett rött
-    testsvitsled kan bero på att sviten är röd redan på main (se
-    sviten_ar_rod_pa_basen()).
+    som fällde - STEG_ANALYS, STEG_BYGGE, STEG_TESTER eller STEG_ROTT_PA_BASEN
+    - och är tom när allt är grönt. Anroparen behöver skilja dem åt: bara ett
+    rött testsvitsled kan bero på att sviten är röd redan på main (se
+    sviten_ar_rod_pa_basen()), och ett rött byggled är agentens kod, inte
+    basen.
     """
     run_cmd(["composer", "fix"], check=False, cwd=cwd)
 
@@ -453,6 +503,18 @@ def run_local_tests(cwd):
     if analyse.returncode != 0:
         output = (analyse.stdout or "") + "\n" + (analyse.stderr or "")
         return False, f"PHPStan (composer analyse) hittade fel:\n{output}", STEG_ANALYS
+
+    # Frontenden byggs bara i `composer setup`, en gång vid bootstrap. Utan
+    # den här kontrollen faller varje försök som rör resources/ på
+    # testforutsattningar.php - efter att agenten redan gjort sitt arbete
+    # (issue #1222, #1273). Ett rött bygge returneras som eget led så att
+    # agenten får byggets utskrift och inte ett förvirrande testfel.
+    if bygget_ar_inaktuellt(cwd):
+        print("--> Frontenden är äldre än resources/ - bygger om innan sviten körs...")
+        bygge = run_cmd(["npm", "run", "build"], check=False, cwd=cwd)
+        if bygge.returncode != 0:
+            output = (bygge.stdout or "") + "\n" + (bygge.stderr or "")
+            return False, f"Frontendbygget (npm run build) misslyckades:\n{output}", STEG_BYGGE
 
     res = run_cmd(["composer", "test"], check=False, cwd=cwd)
     if res.returncode != 0:
