@@ -275,13 +275,13 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
 
     // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
     // ruttens — användaren ska möta samma ord i menyn som på sidan.
-    expect(trans('ui.nav.tasks', [], 'en'))->toBe('To do')
-        ->and(trans('ui.todo.heading', [], 'en'))->toBe('To do');
+    expect(trans('ui.nav.tasks', [], 'en'))->toBe('Tasks')
+        ->and(trans('ui.todo.heading', [], 'en'))->toBe('Tasks');
 
     // Och nyckeln följer med i de delade propsen till varje sida layouten
     // renderar, alltså är raden läsbar överallt och inte bara på en sida.
     actingAs(User::factory()->create())->get('/dashboard')->assertInertia(
-        fn (AssertableInertia $page) => $page->where('translations.nav.tasks', 'To do')
+        fn (AssertableInertia $page) => $page->where('translations.nav.tasks', 'Tasks')
     );
 });
 

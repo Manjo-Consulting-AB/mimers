@@ -277,7 +277,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         ->toContain(':label="item.name"');
 
     // Sju flikar sedan issue 332 ([[ADR-0068 Itemets sida och skapandet]]
-    // § 4): Overview, Relations, Documents, Costs, To do, Loans, History.
+    // § 4): Overview, Relations, Documents, Costs, Tasks, Loans, History.
     // Informations- och taggfliken har utgått; nycklarna `attachments` och
     // `schedules` står still.
     expect(itemflikNycklar($vy))->toBe([
@@ -302,7 +302,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     // Och de visade orden är ADR:ens.
     expect(array_map(fn (string $nyckel): string => trans("ui.{$nyckel}", [], 'en'), itemflikEtiketter($vy)))
-        ->toBe(['Overview', 'Relations', 'Documents', 'Costs', 'To do', 'Loans', 'History']);
+        ->toBe(['Overview', 'Relations', 'Documents', 'Costs', 'Tasks', 'Loans', 'History']);
 
     foreach (itemflikEtiketter($vy) as $nyckel) {
         $mening = trans("ui.{$nyckel}", [], 'en');
@@ -362,7 +362,7 @@ it('har fliken Kostnader i itemets flikrad', function () {
 
     expect($nycklar)->toContain('costs');
 
-    // Före To do, Loans och History (ADR-0068 § 4).
+    // Före Tasks, Loans och History (ADR-0068 § 4).
     expect(array_search('costs', $nycklar, true))->toBe(3);
     expect($nycklar[count($nycklar) - 1])->toBe('history');
 
