@@ -2,10 +2,12 @@
 
 namespace App\Actions\Account;
 
+use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Usage\AdjustUsage;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
 use Illuminate\Support\Collection;
@@ -31,7 +33,9 @@ use Illuminate\Support\Facades\Storage;
  * 2. bilagor kontot betalar för i containers det inte äger: `billed_account_id`
  *    flyttas till containerns ägarkonto (issue 143 · [[ADR-0045 Radering av
  *    konto och person]] § Beslut 1) — innehållet tillhör containern och
- *    gallras inte här,
+ *    gallras inte här. Personbilagorna har ingen container att följa och
+ *    rensas i stället (issue 379 · [[ADR-0076 Profilbilden]] § 5,
+ *    `rensaPersonbilagor()`),
  * 3. författarkolumnerna mot kontot nollställs (ADR-0045 § Beslut 2) — samma
  *    skäl: raden är någon annans innehåll och står kvar, utan avsändare,
  * 4. varje container kontot äger, genom PurgeContainer — med withTrashed(),
@@ -100,6 +104,12 @@ class DeleteAccount
             // containergallringen nedan, som bara rör kontots egna.
             $this->flyttaFrammandeBilagor($account);
             $this->nollstallFattarkolumner($accountId);
+
+            // Personbilagorna har ingen container att följa (ADR-0076
+            // § 5): de lämnas inte kvar med en `billed_account_id` som pekar
+            // på ett konto som just ska bort — det hade fällt
+            // account-raderingen på RESTRICT-nyckeln. Se metoden nedan.
+            $this->rensaPersonbilagor($account);
 
             // Antalen till loggen läses INNAN raderingen — efteråt finns
             // inget kvar att beskriva den med (issue 29b § Beslut 8).
@@ -296,6 +306,13 @@ class DeleteAccount
             ->join('container', 'container.id', '=', DB::raw('coalesce(item.container_id, attachment.container_id)'))
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
             ->where('attachment.billed_account_id', $account->id)
+            // En personbilaga har varken item eller container och får
+            // ALDRIG ett containerkonto som betalare — den hör till
+            // personen och följer ingen container (issue 379 · [[ADR-0076
+            // Profilbilden]] § 5). Villkoret står skrivet rakt ut fastän
+            // coalesce redan ger NULL och joinen då inte träffar: nästa
+            // läsare ska inte behöva slutleda det ur en SQL-detalj.
+            ->whereNull('attachment.user_id')
             ->where('container.account_id', '!=', $account->id)
             ->get([
                 'attachment.id',
@@ -319,6 +336,42 @@ class DeleteAccount
                     'updated_at' => now(),
                 ]);
         }
+    }
+
+    /**
+     * Personbilagorna kontot betalar för (issue 379 · [[ADR-0076
+     * Profilbilden]] § 5).
+     *
+     * **De flyttas aldrig till en container.** En personbilaga har varken
+     * `item_id` eller `container_id`, och `flyttaFrammandeBilagor()` ovan
+     * hade ändå aldrig hittat en container åt den. Den kan alltså inte följa
+     * med på samma sätt som en främmande itembilaga, och ett
+     * `billed_account_id` som pekar på ett konto som raderas faller på
+     * RESTRICT-nyckeln längst ned.
+     *
+     * **Därför rensas den**, genom samma PurgeAttachment som
+     * PurgeContent::attachment() delegerar till: bytena lämnar räknaren,
+     * `stored_file.reference_count` minskar, och `user.avatar_attachment_id`
+     * nollställs av sin ON DELETE SET NULL.
+     * Det följer ADR-0076 § 3 — en person utan personkonto har ingen kvot att
+     * belasta och kan inte ha en profilbild — och ADR § 5: bilden hör till
+     * personen och följer aldrig med en container. Personen själv raderas inte
+     * här; hennes rad står kvar och kan ladda upp en ny bild om hon får ett
+     * nytt personkonto.
+     *
+     * Ingen soft-delete-scope: även en slängd personbilaga bär RESTRICT-nyckeln
+     * och måste bort, av samma skäl som i flyttaFrammandeBilagor().
+     */
+    private function rensaPersonbilagor(Account $account): void
+    {
+        Attachment::withTrashed()
+            ->where('billed_account_id', $account->id)
+            ->whereNotNull('user_id')
+            ->get()
+            // Samma lövaction som PurgeContent::attachment() anropar, och
+            // därför konstruerad här på samma sätt som AdjustUsage i den
+            // actionen: den har inga beroenden att injicera.
+            ->each(fn (Attachment $attachment) => (new PurgeAttachment)->handle($attachment));
     }
 
     /**

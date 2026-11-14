@@ -120,6 +120,12 @@ class StorageController extends Controller
         $attachments = Attachment::query()
             ->select('attachment.*')
             ->where('billed_account_id', $account->id)
+            // En personbilaga är profilbilden (issue 379 · [[ADR-0076
+            // Profilbilden]] § 5): den listas inte som rensbar, för ytan ska
+            // inte erbjuda att radera någon annans ansikte. Bytena räknas
+            // fortfarande i kvoten genom `usage_counter`, och `usage` nedan
+            // läses därifrån — summan blir alltså rätt utan raden.
+            ->whereNull('attachment.user_id')
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
             ->with([
                 'storedFile',
@@ -209,6 +215,10 @@ class StorageController extends Controller
 
         $attachments = Attachment::query()
             ->where('billed_account_id', $account->id)
+            // Samma undantag som i index(): en personbilaga är aldrig
+            // rensbar härifrån, inte ens om dess ULID skulle skickas in
+            // förbi listan (issue 379 · [[ADR-0076 Profilbilden]] § 5).
+            ->whereNull('user_id')
             ->whereIn('ulid', $request->validated('attachments'))
             ->get()
             ->keyBy('ulid');
