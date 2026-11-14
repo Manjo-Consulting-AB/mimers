@@ -81,6 +81,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0073 Översiktens ordning]] | Personen väljer ordning och bredd på containeröversiktens paneler, för alla containrar; en tom panel står kvar; egen dragkod och inget paket | [[Konton och åtkomst]], Frontend |
 | [[ADR-0074 Registrering i vyn]] | Ny information registreras i vyn, före listan, med en snabbrad eller ett infällbart formulär som står kvar efter sparning; inboxen är förvald på containerns *Tasks* | Frontend |
 | [[ADR-0075 Tasks som listans namn]] | Listan heter Tasks i varje text användaren ser, aldrig To do; identifierarna står kvar | Frontend |
+| [[ADR-0076 Profilbilden]] | Profilbilden är en bilaga som tillhör en person, med fokuspunkt och zoom som icke-destruktiv beskärning; den ses av den som delar ett konto eller en container med personen | [[Filer och lagring]], [[Konton och åtkomst]], Frontend |
 
 ## Om att ändra ett beslut
 
