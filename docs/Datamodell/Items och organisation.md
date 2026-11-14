@@ -136,7 +136,7 @@ Kostnader som hör till ett item. En rad per kostnad, precis som i en huvudbok �
 | item_id | FK | **Obligatorisk.** Ingen kostnad utan item. |
 | incurred_on | DATE | Kostnadens datum, inte registreringsdatumet |
 | amount | BIGINT | Minsta valutaenhet. Får vara negativt — kreditfaktura, returnerad del, garantiersättning. |
-| currency | CHAR(3) | |
+| currency | CHAR(3) | En aktiv ISO 4217-kod, se nedan. |
 | description | VARCHAR(255) | |
 | supplier | VARCHAR(255) NULL | Fritext med autocomplete, se nedan |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
@@ -144,6 +144,8 @@ Kostnader som hör till ett item. En rad per kostnad, precis som i en huvudbok �
 | deleted_at | | |
 
 Index: `(item_id, deleted_at, incurred_on)`, `(container_id, deleted_at, incurred_on)`, `(container_id, deleted_at, supplier)`.
+
+**Valutan är en aktiv ISO 4217-kod.** Servern godtar bara koder ur en lista över aktiva valutor; historiska som `DEM` och `FRF` ingår inte. Samma regel gäller `account.currency` ([[Konton och åtkomst]]) och `container.currency`. En befintlig rad med en ogiltig kod står kvar och visas, men en ändring av den kräver en giltig kod. Dessutom gäller containerns urval, se `container_allowed_currency` nedan. Se [[ADR-0078 Valutor ur ISO 4217]].
 
 **Ingen koppling till `schedule_occurrence`.** Kostnaden hör till itemet, inte till ett enskilt utfört jobb. Gränssnittet erbjuder att registrera en kostnad när en uppgift bockas av, med förekomstens datum förifyllt — men ingen relation lagras. Se [[Scheman och uppgifter]] och motiveringen i ADR-0016.
 
@@ -178,6 +180,23 @@ Rapporten läser `cost_entry` och grupperar på det itemen redan är klassade me
 - per tidsperiod, på `incurred_on`
 
 **Summera alltid per valuta.** Ingen omräkning görs i MVP. Avrunda först vid presentation, aldrig per rad före summering — annars visar totalen inte samma sak som raderna ovanför.
+
+## container_allowed_currency
+
+Vilka valutor ägaren tillåter vid registrering av kostnader i en container. Se [[ADR-0078 Valutor ur ISO 4217]] § Beslut 4.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | |
+| container_id | FK → container | |
+| currency | CHAR(3) | En aktiv ISO 4217-kod |
+| created_at, updated_at | | |
+
+UNIQUE `(container_id, currency)`. Ingen `ulid` och ingen `deleted_at`: raden syns aldrig i API:et som egen resurs och är inget innehåll att återställa.
+
+**Ingen rad betyder alla valutor.** Containerns egen `currency` (och, när den är `NULL`, kontots) ingår alltid och behöver inte stå här. Urvalet gäller **nya rader och ändrade valutor**: en `cost_entry` i en valuta som senare tagits bort ur urvalet står kvar och kan redigeras på andra fält. Servern upprätthåller regeln med 422 `currency.not_allowed`.
+
+Raderna rensas med containern (`PurgeContainer`) och följer med i exporten.
 
 ## Sök och filtrering
 
