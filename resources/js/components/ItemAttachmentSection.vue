@@ -186,6 +186,18 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
+ * Itemets adress. Funktionen stod här innan kön bröts ut (issue 1166 ·
+ * [AttachmentUploadQueue.vue]), och kön har sin egen kopia — den bygger
+ * adressen ur sina egna props och ska kunna ladda upp till vilket item som
+ * helst. Sektionens fyra anrop (radera, flytta/kopiera, *Use as cover* och
+ * *Back to Inbox*) går fortfarande härifrån, så den måste definieras här och
+ * importeras aldrig från kön.
+ */
+function itemUrl() {
+    return `/containers/${props.containerUlid}/items/${props.itemUlid}`;
+}
+
+/*
  * Registreringen i vyn (issue 1209 · [[ADR-0074 Registrering i vyn]] § 1–3):
  * samma infällbara formulär som på containerns dokumentflik. `uploading` är
  * köns `busy` och gör att Escape frågar före stängning. Tomt lägets åtgärd

@@ -719,3 +719,28 @@ it('lämnar /api:s tre bilagerutter oförändrade', function () {
         ->assertJsonPath('error.code', 'quota.max_file_size_exceeded')
         ->assertJsonPath('error.data', ['limit_bytes' => 1024, 'file_bytes' => 2048]);
 });
+
+// --- adressen: varje anropare definierar itemUrl() -----------------------
+
+it('låter varje komponent som anropar itemUrl() också definiera den', function () {
+    // Adressen byggs i den komponent som äger anropet: sektionen har sina
+    // fyra (radera, flytta/kopiera, *Use as cover* och *Back to Inbox*) och
+    // kön har sin uppladdning. När kön bröts ut (issue 1166) följde funktionen
+    // med dit medan de fyra anropen stannade kvar, och varje `router.*`
+    // kastade `ReferenceError: itemUrl is not defined` innan den gick iväg.
+    // Inertia fångar felet i emit-hanteraren, så väljaren stängdes som om
+    // valet gick igenom (issue 1222). Ingen lint fäller en odefinierad
+    // identifierare i en Vue-mall, alltså läser provet källkoden som text.
+    foreach (['ItemAttachmentSection.vue', 'AttachmentUploadQueue.vue'] as $filnamn) {
+        $kod = File::get(resource_path("js/components/{$filnamn}"));
+
+        if (! str_contains($kod, 'itemUrl(')) {
+            continue;
+        }
+
+        expect($kod)->toMatch(
+            '/function itemUrl\(|const itemUrl\b/',
+            "{$filnamn} anropar itemUrl() utan att definiera den",
+        );
+    }
+});
