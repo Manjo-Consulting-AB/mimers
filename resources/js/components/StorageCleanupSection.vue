@@ -32,9 +32,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Bekräftelsen är webbläsarens egen dialog med serverns mening ur `lang/`**
  * (Beslut 6), samma mönster som detaljvyns radering och uppladdningsköns:
  * ingen modal komponent och ingen sträng i JavaScript. Texten säger antalet
- * filer och det frigjorda utrymmet, pekar på papperskorgen och de 30 dagarna —
- * och säger aldrig "raderas permanent", för bilagorna mjukraderas och kan
- * återställas ur containerns papperskorg (62a).
+ * filer och det frigjorda utrymmet, och säger att de raderas för gott — den
+ * nämner varken papperskorgen eller de 30 dagarna, för bilagorna raderas för
+ * gott och kan inte återställas (issue 1060).
  *
  * **Bilagor vars item eller container ligger i papperskorgen syns och är
  * markerade** (Beslut 3): de räknas fortfarande mot kontot och ska gå att

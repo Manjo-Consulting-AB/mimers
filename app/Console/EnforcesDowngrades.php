@@ -2,7 +2,6 @@
 
 namespace App\Console;
 
-use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Trash\PurgeContent;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -36,22 +35,27 @@ use Throwable;
  *
  * **Papperskorgen räknas i kvoten** ([[ADR-0009 Kvoter och livscykel]] §
  * Uppföljning 2026-11-11): en slängd bilaga ligger i `usage_counter` tills
- * den raderats fysiskt. Steg 4 går därför i två steg. Först töms det som
- * redan är slängt — äldst `deleted_at` först, genom PurgeContent::attachment()
- * — så länge räknaren ligger över gränsen. Räcker det inte slängs kontots
- * LEVANDE bilagor, nyast först, genom TrashAttachment tills de levande
- * ligger på eller under gränsen; räknaren sjunker inte av en slängning, så
- * loopen styrs av ett levande tal som räknas en gång och dras ned lokalt.
- * De nyslängda bilagorna ligger sedan i papperskorgen i 30 dagar och räknas
- * under tiden, så kontot kan vara `active` på gratisnivån och ändå ligga
- * över kvoten — uppladdningar är spärrade tills papperskorgen tömts. Det är
- * avsett. Målet är gratisplanens `storage_bytes` (Beslut 3), läst genom
- * planuppslaget — aldrig en konstant och aldrig kontots gamla plan.
+ * den raderats fysiskt. Steg 4 raderar därför för gott och aldrig till
+ * papperskorgen (§ Uppföljning 2026-11-14, Tonys beslut 2026-11-14): först
+ * töms det som redan är slängt — äldst `deleted_at` först — och sedan raderas
+ * kontots LEVANDE bilagor, nyast först (`created_at` fallande med `id`
+ * fallande), tills kontots förbrukning ligger på eller under gränsen. Båda
+ * vägarna går genom PurgeContent::attachment(), samma väg som lagringsvyn
+ * (StorageController). En fysisk radering minskar räknaren direkt, så loopen
+ * styrs av `usedBytes` och läses om efter varje bilaga — någon lokal räkning
+ * av de levande bytena behövs inte. Den slutar så snart räknaren ligger lika
+ * med eller under gränsen, eller när bilagorna tar slut; den snurrar aldrig.
+ * Efter steg 4 ligger kontot inom kvoten, och ingenting jobbet tagit bort
+ * ligger kvar i papperskorgen och räknas. Målet är gratisplanens
+ * `storage_bytes` (Beslut 3), läst genom planuppslaget — aldrig en konstant
+ * och aldrig kontots gamla plan.
  *
- * Förbrukningen i steg 1 läses ur `usage_counter`, inte som en egen SUM, och
- * läses om efter varje fysisk radering. Loopen slutar så snart räknaren
- * ligger lika med eller under gränsen, eller när bilagorna tar slut — den
- * snurrar aldrig.
+ * **Händelseloggen får ingen rad.** Lagringsvyns radering skriver ingen rad
+ * där: PurgeContent::attachment() går genom PurgeAttachment, som varken
+ * loggar eller känner en användare. Steg 4 gör då detsamma — en
+ * `attachment.deleted`-rad med `user_id` null skulle beskriva en radering
+ * användaren inte gjort och som ingen kan handla efter. Tömningen syns i
+ * stället i driftloggen (`downgrade.enforced`).
  *
  * **Rättslig spärr:** täcks kontot av en spärr (LegalHold::covers) görs
  * ingenting — ingen radering, ingen statusändring. `downgrade.legal_hold`
@@ -63,13 +67,12 @@ use Throwable;
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
  * `Schedule::command(...)` — se AGENTS.md § Subprocesser i driftmiljön.
- * Klassens beroenden (TrashAttachment, PurgeContent) injiceras för att testerna ska
- * kunna låta en bilaga kasta — samma mönster som PurgesExpiredTrash.
+ * Klassens beroende (PurgeContent) injiceras för att testerna ska kunna låta
+ * en bilaga kasta — samma mönster som PurgesExpiredTrash.
  */
 class EnforcesDowngrades
 {
     public function __construct(
-        private readonly TrashAttachment $trashAttachment,
         private readonly PurgeContent $purgeContent,
     ) {}
 
@@ -148,35 +151,32 @@ class EnforcesDowngrades
             // En gräns som är null betyder obegränsat (issue 25): det finns
             // inget att komma under, och ingenting att radera.
             if ($limit !== null) {
-                // Steg 1: töm det som redan är slängt, äldst slängd först.
-                // En fysisk radering minskar räknaren; finns inget slängt
-                // kvar går vi vidare till de levande.
+                // Räknaren är måttet hela vägen: en fysisk radering minskar
+                // den direkt, så loopen läses om efter varje bilaga och
+                // behöver ingen lokal räkning av de levande bytena.
                 while ($this->usedBytes($row->id) > $limit) {
+                    // Papperskorgen först: det som redan är slängt töms,
+                    // äldst slängd först. Det räknas fortfarande i kvoten, så
+                    // det är den billigaste frigöringen — och det enda som
+                    // behövs när kontots slängda byten räcker.
                     $trashed = Attachment::onlyTrashed()
                         ->where('billed_account_id', $row->id)
                         ->orderBy('deleted_at')
                         ->orderBy('id')
                         ->first();
 
-                    if ($trashed === null) {
-                        break;
+                    if ($trashed !== null) {
+                        $this->purgeContent->attachment($trashed);
+                        $purged++;
+
+                        continue;
                     }
 
-                    $this->purgeContent->attachment($trashed);
-                    $purged++;
-                }
-
-                // Steg 2: släng levande bilagor, nyast först, tills de
-                // LEVANDE ligger på eller under gränsen. Räknaren rör sig
-                // inte av en slängning, så det levande talet räknas en gång
-                // och dras ned lokalt.
-                $liveBytes = (int) DB::table('attachment')
-                    ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-                    ->where('attachment.billed_account_id', $row->id)
-                    ->whereNull('attachment.deleted_at')
-                    ->sum('stored_file.byte_size');
-
-                while ($liveBytes > $limit) {
+                    // Sedan de levande, nyast först, för gott — samma väg som
+                    // lagringsvyn (StorageController) och av samma skäl:
+                    // kontot är fruset, papperskorgen räknas i kvoten, och en
+                    // slängning skulle kräva att användaren gick in en gång
+                    // till och tömde den innan kontot kom under gränsen.
                     $attachment = Attachment::query()
                         ->where('billed_account_id', $row->id)
                         ->orderByDesc('created_at')
@@ -195,12 +195,9 @@ class EnforcesDowngrades
 
                     $byteSize = (int) $attachment->storedFile()->value('byte_size');
 
-                    if ($this->trashAttachment->handle($attachment)) {
-                        $removed++;
-                        $bytesFreed += $byteSize;
-                    }
-
-                    $liveBytes -= $byteSize;
+                    $this->purgeContent->attachment($attachment);
+                    $removed++;
+                    $bytesFreed += $byteSize;
                 }
             }
 

@@ -1,12 +1,12 @@
 <?php
 
+use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Attachment\TrashAttachment;
-use App\Actions\Audit\RecordAuditEvent;
-use App\Actions\Container\RemoveContainerCover;
 use App\Actions\Trash\PurgeContent;
 use App\Console\EnforcesDowngrades;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\LegalHold;
@@ -30,9 +30,10 @@ use function Pest\Laravel\postJson;
  *
  * 28a byggde steg 1 och 2 (read_only, fristen och urvalslistan). Den här
  * filen testar det jobb som kör när fristen gått ut: bilagor raderas
- * automatiskt, nyast först, tills kontot ligger under GRATISplanens gräns,
- * och kontot återgår till active på gratisnivån. Items raderas aldrig — bara
- * bilagor, det är hela ADR-0009.
+ * automatiskt för gott, nyast först, tills kontot ligger under GRATISplanens
+ * gräns, och kontot återgår till active på gratisnivån. Ingen bilaga som
+ * jobbet tar bort hamnar i papperskorgen (ADR-0009 § Uppföljning
+ * 2026-11-14). Items raderas aldrig — bara bilagor, det är hela ADR-0009.
  *
  * Klassens `handle()` anropas direkt, precis som PurgesExpiredTrash testas i
  * GallringTest. Tiden styrs med Carbon::setTestNow() — fristen är tre
@@ -140,8 +141,8 @@ function raderingForbrukning(int $accountId): int
 }
 
 /**
- * Summan av kontots LEVANDE bilagors byten — det tal steg 2 i nedgraderingen
- * styrs av.
+ * Summan av kontots LEVANDE bilagors byten — det som står kvar efter att
+ * steg 4 raderat för gott.
  */
 function raderingLevande(int $accountId): int
 {
@@ -155,9 +156,9 @@ function raderingLevande(int $accountId): int
 /**
  * Kör jobbet precis som schemaläggningen gör.
  */
-function raderingKör(?TrashAttachment $trashAttachment = null): void
+function raderingKör(?PurgeContent $purgeContent = null): void
 {
-    (new EnforcesDowngrades($trashAttachment ?? app(TrashAttachment::class), app(PurgeContent::class)))->handle();
+    (new EnforcesDowngrades($purgeContent ?? app(PurgeContent::class)))->handle();
 }
 
 it('inga items raderas — bara bilagor', function () {
@@ -311,13 +312,13 @@ it('bilagor raderas nyast först', function () {
 
     raderingKör();
 
-    // Nyast först tills kontot ligger under gränsen: 500 + 500 är över 500,
-    // 200 är under — så $mellan och $nyast ryker, $äldst står kvar.
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
-    expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->not->toBeNull();
+    // Nyast först tills kontot ligger under gränsen: 1 200 → 700 → 200, så
+    // $mellan och $nyast ryker för gott och $äldst står kvar.
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->whereKey($mellan->id)->exists())->toBeFalse();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
-    // De slängda räknas kvar i förbrukningen; det är de LEVANDE som hamnar på gränsen.
-    expect(raderingForbrukning($account->id))->toBe(1200);
+    // En fysisk radering minskar räknaren: det som står kvar är det äldsta.
+    expect(raderingForbrukning($account->id))->toBe(200);
     expect(raderingLevande($account->id))->toBe(200);
 });
 
@@ -337,12 +338,12 @@ it('raderingen slutar så snart kontot ligger under gränsen', function () {
     raderingKör();
 
     // 300 tas bort → 1100 (över), nästa 300 → 800 (under) — där slutar det.
-    expect(DB::table('attachment')->where('id', $yngst->id)->value('deleted_at'))->not->toBeNull();
-    expect(DB::table('attachment')->where('id', $yngre->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($yngst->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->whereKey($yngre->id)->exists())->toBeFalse();
     expect(DB::table('attachment')->where('id', $äldre->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(Attachment::query()->where('billed_account_id', $account->id)->count())->toBe(2);
-    expect(raderingForbrukning($account->id))->toBe(1400);
+    expect(raderingForbrukning($account->id))->toBe(800);
     expect(raderingLevande($account->id))->toBe(800);
 });
 
@@ -365,14 +366,14 @@ it('målet är gratisplanens gräns', function () {
 
     // Kontot ligger på pro (10 000) — en radering mot PRO-gränsen skulle ta
     // bort ingenting. Mot gratisgränsen (1 000) räcker en bilaga: 1 500 → 1 000.
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
     expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
-    expect(raderingForbrukning($account->id))->toBe(1500);
+    expect(raderingForbrukning($account->id))->toBe(1000);
     expect(raderingLevande($account->id))->toBe(1000);
 });
 
-it('raderade bilagor hamnar i papperskorgen', function () {
+it('raderade bilagor raderas för gott och hamnar inte i papperskorgen', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     sättPlangräns('free', 'storage_bytes', 1000);
     [$account] = raderingForfalltKonto();
@@ -385,15 +386,21 @@ it('raderade bilagor hamnar i papperskorgen', function () {
 
     raderingKör();
 
-    // Mjukraderat, inte borttaget: raden finns i papperskorgen och bytena
-    // ligger kvar — gallring är 20b:s jobb (ADR-0008).
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
-    expect(Attachment::onlyTrashed()->whereKey($nyast->id)->exists())->toBeTrue();
-    expect(StoredFile::query()->whereKey($nyast->stored_file_id)->exists())->toBeTrue();
+    // Borta på riktigt, inte mjukraderat: raden finns inte ens för
+    // papperskorgen (ADR-0009 § Uppföljning 2026-11-14). Bytena ligger kvar
+    // på disken med sin markering — den fysiska raderingen är 17b:s jobb.
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
+    expect(Attachment::onlyTrashed()->where('billed_account_id', $account->id)->count())->toBe(0);
+    expect(StoredFile::query()->whereKey($nyast->stored_file_id)->value('purge_after'))->not->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
+
+    // Ingen rad i händelseloggen: lagringsvyns radering skriver ingen, och
+    // steg 4 behandlar sin radering likadant (ADR-0009 § Uppföljning
+    // 2026-11-14). Tömningen syns bara i driftloggen.
+    expect(DB::table('audit_log')->where('action', AuditLog::ACTION_ATTACHMENT_DELETED)->count())->toBe(0);
 });
 
-it('förbrukningen ändras inte av det som slängdes', function () {
+it('förbrukningen minskar med de raderade bilagornas storlek', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     sättPlangräns('free', 'storage_bytes', 1000);
     [$account] = raderingForfalltKonto();
@@ -406,10 +413,11 @@ it('förbrukningen ändras inte av det som slängdes', function () {
 
     raderingKör();
 
-    // Papperskorgen räknas: räknaren rör sig först när bilagan raderas fysiskt.
-    expect(raderingForbrukning($account->id))->toBe(1200);
+    // En fysisk radering frigör direkt: 1 200 − 500. Det är hela skillnaden
+    // mot en slängning, som hade låtit räknaren stå kvar på 1 200.
+    expect(raderingForbrukning($account->id))->toBe(700);
     expect(raderingLevande($account->id))->toBe(700);
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
 });
 
 it('bilagor på ett annat konto rörs inte', function () {
@@ -431,11 +439,56 @@ it('bilagor på ett annat konto rörs inte', function () {
 
     raderingKör();
 
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $deras->id)->value('deleted_at'))->toBeNull();
     expect(raderingLevande($account->id))->toBe(800);
-    expect(raderingForbrukning($account->id))->toBe(1600);
+    expect(raderingForbrukning($account->id))->toBe(800);
+});
+
+it('en delad stored_file överlever raderingen och bara reference_count minskar', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    sättPlangräns('free', 'storage_bytes', 100);
+    [$account] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+
+    // Samma bytes på två konton (ADR-0006): EN stored_file med två
+    // referenser. Kontot som nedgraderas äger bara sin egen bilaga.
+    $storedFile = StoredFile::factory()->create(['byte_size' => 800, 'reference_count' => 2]);
+
+    $egen = Attachment::factory()->for($item, 'item')->create([
+        'stored_file_id' => $storedFile->id,
+        'uploaded_by_user_id' => $user->id,
+        'billed_account_id' => $account->id,
+    ]);
+    raderingStallForbrukning($account->id, 800);
+
+    $annatKonto = Account::factory()->create();
+    $annanAnvandare = User::factory()->create();
+    [, $annatItem] = raderingContainerItem($annatKonto, $annanAnvandare);
+    $deras = Attachment::factory()->for($annatItem, 'item')->create([
+        'stored_file_id' => $storedFile->id,
+        'uploaded_by_user_id' => $annanAnvandare->id,
+        'billed_account_id' => $annatKonto->id,
+    ]);
+    raderingStallForbrukning($annatKonto->id, 800);
+
+    raderingKör();
+
+    // Den egna bilagan är borta för gott; den andras står kvar.
+    expect(Attachment::withTrashed()->whereKey($egen->id)->exists())->toBeFalse();
+    expect(DB::table('attachment')->where('id', $deras->id)->value('deleted_at'))->toBeNull();
+
+    // Bytena överlever: räknaren faller till ett, och ingen markering för
+    // fysisk radering sätts så länge någon refererar filen.
+    $storedFile->refresh();
+    expect($storedFile->reference_count)->toBe(1);
+    expect($storedFile->purge_after)->toBeNull();
+
+    // Bara det nedgraderade kontots förbrukning rörs.
+    expect(raderingForbrukning($account->id))->toBe(0);
+    expect(raderingForbrukning($annatKonto->id))->toBe(800);
 });
 
 it('kontot återgår till active och prenumerationen blir cancelled', function () {
@@ -484,7 +537,7 @@ it('ett konto som redan ligger under gränsen flyttas till active utan radering'
     expect($subscription->refresh()->status)->toBe('cancelled');
 });
 
-it('en räknare som ligger över sanningen rör inga levande bilagor som ryms', function () {
+it('en räknare som ligger över sanningen raderar tills bilagorna tar slut och loggar det', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     $logg = Log::spy();
     sättPlangräns('free', 'storage_bytes', 100);
@@ -494,22 +547,31 @@ it('en räknare som ligger över sanningen rör inga levande bilagor som ryms', 
     $bilaga = raderingBilaga($item, $user, $account, 100);
 
     // Räknaren står på 300 — mer än bilagorna väger (en räknare avstämningen
-    // inte hunnit rätta). Steg 2 styrs av de LEVANDE bytena (100, ryms), så
-    // ingen bilaga slängs; kontot blir ändå active.
+    // inte hunnit rätta). Räknaren är måttet (ADR-0009 § Uppföljning
+    // 2026-11-14): bilagan raderas, räknaren faller till 200, och sedan tar
+    // bilagorna slut. Skyddet mot att radera allt loggar det i stället för
+    // att snurra.
     raderingStallForbrukning($account->id, 300);
 
     raderingKör();
 
-    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
     expect($account->refresh()->status)->toBe('active');
     expect($subscription->refresh()->status)->toBe('cancelled');
-    expect(raderingForbrukning($account->id))->toBe(300);
+    expect(raderingForbrukning($account->id))->toBe(200);
+
+    $logg->shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.attachments_exhausted'
+            && ($kontext['account_ulid'] ?? null) === $account->ulid
+            && ($kontext['used_bytes'] ?? null) === 200
+            && ($kontext['limit_bytes'] ?? null) === 100,
+    );
 
     $logg->shouldHaveReceived('info')->once()->withArgs(
         fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.enforced'
             && ($kontext['account_ulid'] ?? null) === $account->ulid
             && ($kontext['purged'] ?? null) === 0
-            && ($kontext['removed'] ?? null) === 0,
+            && ($kontext['removed'] ?? null) === 1,
     );
 });
 
@@ -545,7 +607,7 @@ it('steg 1: det slängda raderas fysiskt, äldst slängd först, och ingen levan
     );
 });
 
-it('steg 2: räcker det slängda inte slängs levande nyast först tills de levande ryms', function () {
+it('steg 2: räcker det slängda inte raderas levande nyast först för gott, och kontot ligger inom gränsen efteråt', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     sättPlangräns('free', 'storage_bytes', 500);
     [$account, $subscription] = raderingForfalltKonto();
@@ -560,14 +622,19 @@ it('steg 2: räcker det slängda inte slängs levande nyast först tills de leva
 
     raderingKör();
 
-    // Det slängda (100) tömmer 700 → 600, fortfarande över. De levande väger
-    // 600 och ska ner till 500: bara den nyaste slängs — inte en enda till.
+    // Det slängda (100) tömmer 700 → 600, fortfarande över. Då raderas den
+    // nyaste levande (200) för gott → 400, och loopen stannar: kontot ligger
+    // inom gränsen, och ingen av de andra rörs.
     expect(Attachment::withTrashed()->whereKey($slängd->id)->exists())->toBeFalse();
-    expect(DB::table('attachment')->where('id', $nyast->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($nyast->id)->exists())->toBeFalse();
     expect(DB::table('attachment')->where('id', $mellan->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(raderingLevande($account->id))->toBe(400);
-    expect(raderingForbrukning($account->id))->toBe(600);
+    expect(raderingForbrukning($account->id))->toBe(400);
+    expect(raderingForbrukning($account->id))->toBeLessThanOrEqual(500);
+
+    // Ingenting ligger kvar i papperskorgen och räknas.
+    expect(Attachment::onlyTrashed()->where('billed_account_id', $account->id)->count())->toBe(0);
 
     expect($account->refresh()->status)->toBe('active');
     expect($subscription->refresh()->status)->toBe('cancelled');
@@ -591,8 +658,8 @@ it('ett konto med fler levande bilagor än gränsen rymmer förlorar inte alla',
 
     expect(DB::table('attachment')->where('id', $äldst->id)->value('deleted_at'))->toBeNull();
     expect(DB::table('attachment')->where('id', $äldre->id)->value('deleted_at'))->toBeNull();
-    expect(DB::table('attachment')->where('id', $yngre->id)->value('deleted_at'))->not->toBeNull();
-    expect(DB::table('attachment')->where('id', $yngst->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($yngre->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->whereKey($yngst->id)->exists())->toBeFalse();
     expect(raderingLevande($account->id))->toBe(800);
 });
 
@@ -686,26 +753,27 @@ it('ett fallerande konto stoppar inte körningen', function () {
     $friskBilaga = raderingBilaga($frisktItem, $user, $friskt, 1200);
     raderingStallForbrukning($friskt->id, 1200);
 
-    // En TrashAttachment som kastar för just det trasiga kontots bilaga —
-    // samma teknik som GallringTest använder för att låta en rad kasta.
-    $trashAttachment = new class($trasigt->id, app(RecordAuditEvent::class)) extends TrashAttachment
+    // En PurgeContent som kastar för just det trasiga kontots bilaga — samma
+    // teknik som GallringTest använder för att låta en rad kasta, och samma
+    // injektionspunkt som jobbet nu har.
+    $purgeContent = new class($trasigt->id, app(PurgeAttachment::class)) extends PurgeContent
     {
-        public function __construct(private readonly int $trasigtKontoId, RecordAuditEvent $recordAuditEvent)
+        public function __construct(private readonly int $trasigtKontoId, PurgeAttachment $purgeAttachment)
         {
-            parent::__construct($recordAuditEvent, app(RemoveContainerCover::class));
+            parent::__construct($purgeAttachment);
         }
 
-        public function handle(Attachment $attachment, ?User $actor = null): bool
+        public function attachment(Attachment $attachment): void
         {
             if ($attachment->billed_account_id === $this->trasigtKontoId) {
                 throw new RuntimeException('trasigt konto');
             }
 
-            return parent::handle($attachment, $actor);
+            parent::attachment($attachment);
         }
     };
 
-    raderingKör($trashAttachment);
+    raderingKör($purgeContent);
 
     // Det trasiga kontot rullades tillbaka helt och tas om nästa natt; det
     // friska blev klart.
@@ -714,7 +782,7 @@ it('ett fallerande konto stoppar inte körningen', function () {
     expect($trasigSubscription->refresh()->status)->toBe('past_due');
 
     expect($friskt->refresh()->status)->toBe('active');
-    expect(DB::table('attachment')->where('id', $friskBilaga->id)->value('deleted_at'))->not->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($friskBilaga->id)->exists())->toBeFalse();
     expect($friskSubscription->refresh()->status)->toBe('cancelled');
 
     $logg->shouldHaveReceived('error')->once()->withArgs(
