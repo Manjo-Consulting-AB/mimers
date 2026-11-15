@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -71,6 +72,18 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+        ],
+
+        // Issue 390 · ADR-0079 § 3: prestandaloggen, JSON en rad per händelse,
+        // 30 dagars gallring. Ingen användare, IP eller URL, se
+        // App\Http\Middleware\LogSlowRequests.
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => 'info',
+            'days' => 30,
+            'formatter' => JsonFormatter::class,
+            'formatter_with' => ['appendNewline' => true],
         ],
 
         'monthly' => [
