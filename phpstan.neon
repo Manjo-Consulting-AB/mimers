@@ -10,7 +10,7 @@ parameters:
     # ~450 MiB; med parallella agenter i egna worktrees räckte inte minnet och
     # earlyoom dödade agentsessionerna (2026-11-15).
     parallel:
-        maxNumberOfProcess: 1
+        maximumNumberOfProcesses: 1
 
     paths:
         - app
