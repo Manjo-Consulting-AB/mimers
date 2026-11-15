@@ -160,6 +160,25 @@ it('ger zoomreglaget gränserna 100 och 300', function () {
 });
 
 /*
+ * Klart när: redigeraren visar exakt vad avataren visar.
+ *
+ * Maskens cirkel ska ha ytans radie — halva `EDITOR_SIZE` — så att den kant
+ * som mörkläggs ligger på avatarens kant och inte innanför den. Ett `circle`
+ * utan storleksangivelse får `farthest-corner`, som på en kvadratisk yta ger
+ * radien `EDITOR_SIZE / √2` och en ring av maskad bild innanför cirkeln.
+ * `closest-side` ger i stället halva sidan. Både `maskImage` och
+ * `WebkitMaskImage` bär samma sträng, eftersom webbläsaren annars faller
+ * tillbaka på den ena.
+ */
+it('låter masken följa ytans kant så att den matchar avatarens cirkel', function () {
+    $profil = utsnittvyKod('pages/Settings/Profile.vue');
+    $mask = 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)';
+
+    expect($profil)->toContain("maskImage: '{$mask}'")
+        ->toContain("WebkitMaskImage: '{$mask}'");
+});
+
+/*
  * Klart när: katalogen har nycklarna.
  *
  * Redigerarens texter ligger under `settings.profile.avatar`, som resten av

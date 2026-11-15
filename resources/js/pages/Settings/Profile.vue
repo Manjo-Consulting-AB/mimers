@@ -204,13 +204,16 @@ const editorReady = computed(() => editorNatural.value.width > 0 && editorNatura
 /*
  * Maskens stil: en cirkel i mitten lämnas genomskinlig, resten av ytan bär
  * den mörka tonen — hörnen utanför avataren mörkläggs, och det som syns i
- * cirkeln är exakt vad avataren visar. En mask och ingen `box-shadow`: skuggan
+ * cirkeln är exakt vad avataren visar. `closest-side` ger cirkeln ytans halva
+ * bredd, samma radie som avataren; utan storleksangivelse hade `circle` fått
+ * `farthest-corner` och maskat en ring innanför avatarns kant. En mask och
+ * ingen `box-shadow`: skuggan
  * är en roll (ADR-0057 § 6), och den här konturen är ingen skugga. Ingen SVG
  * heller — ikoner går genom `UiIcon` (ADR-0057 § 2), och masken är ingen ikon.
  */
 const maskStyle = {
-    maskImage: 'radial-gradient(circle at center, transparent 0 50%, black 50%)',
-    WebkitMaskImage: 'radial-gradient(circle at center, transparent 0 50%, black 50%)',
+    maskImage: 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)',
+    WebkitMaskImage: 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)',
 };
 
 function openEditor(event) {
