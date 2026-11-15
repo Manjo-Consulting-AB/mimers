@@ -129,13 +129,14 @@ it('ger redigeringsvyn containerns ikon och färg', function () {
 });
 
 /*
- * Klart när: ett val av ikon och färg sparas med formuläret.
+ * Klart när: ett val av ikon och färg sparas direkt.
  *
- * PATCH skickar paret som väljaren gör, och redigeringsvyn läser tillbaka
- * samma två värden ur `ContainerResource`. Formuläret fyller sina fält ur
- * resursen, så ett sparat val och ett nytt val är samma väg.
+ * Väljaren skickar `choose` till sidan, som gör sin EGEN PATCH med bara
+ * `icon` och `icon_color` — inte formulärets. `preserveState` håller
+ * osparade fält kvar i vyn, så ett ikonval aldrig nollställer det
+ * användaren skrivit men ännu inte sparat (Tonys regel 2026-11-14).
  */
-it('sparar en vald ikon och färg med formuläret', function () {
+it('sparar en vald ikon och färg direkt', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerikonvaljareKontext();
@@ -143,7 +144,6 @@ it('sparar en vald ikon och färg med formuläret', function () {
     $url = "/containers/{$container->ulid}";
 
     actingAs($anvandare)->patch($url, [
-        'name' => $container->name,
         'icon' => 'house',
         'icon_color' => 'amber',
     ])->assertRedirect("{$url}/edit");
@@ -163,23 +163,66 @@ it('sparar en vald ikon och färg med formuläret', function () {
 
     $vy = containerikonvaljareKod('pages/Containers/Edit.vue');
 
-    expect($vy)->toContain('icon: props.container.icon ?? null')
-        ->toContain('icon_color: props.container.icon_color ?? null');
+    // Valet bor inte i formuläret: en ikon får aldrig följa med *Save*.
+    // Två rader och inte en kedja — `not->toContain` mitt i en kedja fäller
+    // phpstan (Expectation::not finns bara på det första ledet).
+    preg_match('/useForm\(\{(.*?)\n\}\)/s', $vy, $formular);
+
+    expect($formular[1] ?? '')->toContain('name: props.container.name');
+    expect($formular[1] ?? '')->not->toContain('icon');
 
     preg_match('/function chooseIcon\(\{ icon, color \}\)\s*\{(.*?)\n\}/s', $vy, $traff);
 
     expect($traff[1] ?? '')
-        ->toContain('form.icon = icon')
-        ->toContain('form.icon_color = color');
+        ->toContain('router.patch(`/containers/${props.container.ulid}`')
+        ->toContain('{ icon, icon_color: color }')
+        ->toContain('preserveScroll: true')
+        ->toContain('preserveState: true');
 });
 
 /*
- * Klart när: *Remove icon* tömmer båda.
+ * Klart när: ett PATCH med bara ikonen lämnar formulärets fält orörda.
  *
- * Väljaren skickar `remove` till formuläret, som tömmer båda fälten i samma
- * funktion — en färg utan ikon är inget val. PATCH skickar de två `null` som
- * `UpdateContainerRequest` säger `sometimes|nullable` om, och
- * redigeringsvyn läser tillbaka dem.
+ * `UpdateContainerRequest` säger `sometimes` om varje fält, så en kropp utan
+ * `name`, `kind`, `description` och `currency` rör dem inte. Det är det som
+ * gör direktsparningen säker: den som skriver i namnfältet och sedan väljer
+ * en ikon har kvar sitt namn i rutan — och servern har det orört.
+ */
+it('lämnar formulärets fält orörda när bara ikonen sparas', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerikonvaljareKontext();
+
+    $container->update([
+        'name' => 'Båten',
+        'kind' => 'Segelbåt',
+        'description' => 'I sjön sedan 1998.',
+        'currency' => 'SEK',
+    ]);
+
+    $url = "/containers/{$container->ulid}";
+
+    actingAs($anvandare)->patch($url, [
+        'icon' => 'sailboat',
+        'icon_color' => 'teal',
+    ])->assertRedirect("{$url}/edit");
+
+    $container->refresh();
+
+    expect($container->icon)->toBe('sailboat')
+        ->and($container->icon_color)->toBe('teal')
+        ->and($container->name)->toBe('Båten')
+        ->and($container->kind)->toBe('Segelbåt')
+        ->and($container->description)->toBe('I sjön sedan 1998.')
+        ->and($container->currency)->toBe('SEK');
+});
+
+/*
+ * Klart när: *Remove icon* tömmer båda, direkt.
+ *
+ * Väljaren skickar `remove` till sidan, som gör sin egen PATCH med de två
+ * `null` som `UpdateContainerRequest` säger `sometimes|nullable` om — en färg
+ * utan ikon är inget val. Redigeringsvyn läser tillbaka dem ur serverns svar.
  */
 it('tömmer ikonen och färgen med Remove icon', function () {
     withoutVite();
@@ -191,7 +234,6 @@ it('tömmer ikonen och färgen med Remove icon', function () {
     $url = "/containers/{$container->ulid}";
 
     actingAs($anvandare)->patch($url, [
-        'name' => $container->name,
         'icon' => null,
         'icon_color' => null,
     ])->assertRedirect("{$url}/edit");
@@ -214,8 +256,10 @@ it('tömmer ikonen och färgen med Remove icon', function () {
     preg_match('/function removeIcon\(\)\s*\{(.*?)\n\}/s', $vy, $traff);
 
     expect($traff[1] ?? '')
-        ->toContain('form.icon = null')
-        ->toContain('form.icon_color = null');
+        ->toContain('router.patch(`/containers/${props.container.ulid}`')
+        ->toContain('{ icon: null, icon_color: null }')
+        ->toContain('preserveScroll: true')
+        ->toContain('preserveState: true');
 });
 
 /*
@@ -265,17 +309,49 @@ it('ritar ikonsektionen bredvid bilden och bara med rätten att uppdatera', func
 /*
  * Klart när: sektionen visar den valda ikonen i sin färg, eller lådan.
  *
- * Med ett val ritar `ItemIcon` ikonen i `tile` och palettens färg. Utan val
- * ritas rollen `container` med `UiIcon` i den grå rutan — `ItemIcon` ritar
+ * Med ett val ritar `ItemIcon` ikonen i `tile` och palettens färg — ur
+ * `props.container`, alltså serverns svar, aldrig ur ett lokalt utkast. Utan
+ * val ritas rollen `container` med `UiIcon` i den grå rutan — `ItemIcon` ritar
  * `item` som fallback tills proppen `fallback` kommer i issue 316, och en
  * container utan ikon ska se ut som containerns övriga tomma ytor.
  */
 it('visar den valda ikonen eller containerns roll i lådan', function () {
     $vy = containerikonvaljareKod('pages/Containers/Edit.vue');
 
-    expect($vy)->toMatch('/<ItemIcon\s+v-if="form\.icon"\s+:name="form\.icon"\s+:color="form\.icon_color"\s+:size="24"\s+tile\s*\/>/')
+    expect($vy)->toMatch('/<ItemIcon\s+v-if="container\.icon"\s+:name="container\.icon"\s+:color="container\.icon_color"\s+:size="24"\s+tile\s*\/>/')
         ->toContain('<UiIcon name="container" :size="24" />')
         ->toContain('bg-surface-sunken');
+
+    // Väljaren får samma två värden, så `aria-pressed` visar det som faktiskt
+    // är sparat.
+    expect($vy)->toContain(':icon="container.icon"')
+        ->toContain(':color="container.icon_color"');
+});
+
+/*
+ * Klart när: ett val sparar direkt och statusraden säger vad som hände.
+ *
+ * `iconPending` stänger *Choose icon* medan anropet är i luften, och raden
+ * under väljaren bär `role="status"` för beskedet och `role="alert"` för ett
+ * fel (GenomgangTest § Beslut 6). Texterna kommer ur `lang/`, aldrig ur
+ * filen.
+ */
+it('visar en statusrad efter ett sparat val', function () {
+    $vy = containerikonvaljareKod('pages/Containers/Edit.vue');
+
+    expect($vy)
+        ->toContain(':disabled="iconPending"')
+        ->toContain('role="status"')
+        ->toContain('role="alert"')
+        ->toContain("t('container.edit.icon_saved')")
+        ->toContain("t('container.edit.icon_removed')");
+
+    // Båda funktionerna sätter sin egen status efter serverns svar.
+    preg_match('/function chooseIcon\(\{ icon, color \}\)\s*\{(.*?)\n\}/s', $vy, $val);
+    preg_match('/function removeIcon\(\)\s*\{(.*?)\n\}/s', $vy, $bort);
+
+    expect($val[1] ?? '')->toContain("iconStatus.value = 'saved'")
+        ->and($bort[1] ?? '')->toContain("iconStatus.value = 'removed'");
 });
 
 /*
@@ -330,9 +406,10 @@ it('återanvänder ItemIconPicker utan en container-gren', function () {
 });
 
 /*
- * Texterna återanvänds ur `item.form.*` där orden passar, och de finns i
- * katalogen. Inga nya nycklar under `container.` behövdes: *Icon* och
- * *Choose icon* säger samma sak på båda ytorna.
+ * Texterna återanvänds ur `item.form.*` där orden passar, och de nya
+ * statusraderna bor under `container.edit.*` i katalogen. Inga nya nycklar
+ * under `item.` behövdes: *Icon* och *Choose icon* säger samma sak på båda
+ * ytorna.
  */
 it('hämtar sektionens ord ur lang/en/ui.php', function () {
     $vy = containerikonvaljareKod('pages/Containers/Edit.vue');
@@ -341,7 +418,7 @@ it('hämtar sektionens ord ur lang/en/ui.php', function () {
         ->toContain("t('item.form.icon')")
         ->toContain("t('item.form.icon_choose')");
 
-    foreach (['item.form.icon', 'item.form.icon_choose'] as $nyckel) {
+    foreach (['item.form.icon', 'item.form.icon_choose', 'container.edit.icon_saved', 'container.edit.icon_removed'] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 });

@@ -29,12 +29,13 @@ defineOptions({
  * `ContainerSettingsLayout` — och bär den prop leden kräver: `container` ur
  * App\Http\Resources\ContainerResource (issue 275).
  *
- * EN PATCH mot /containers/{ulid}, och bara `name`, `kind`, `description` —
+ * FORMULÄRETS PATCH mot /containers/{ulid} bär `name`, `kind`, `description` —
  * sedan issue 88 · [[ADR-0039 Containerns översikt]] — och `currency` (issue
  * 85 · [[ADR-0037 Valutans arv]]). `UpdateContainerRequest` tar
  * inte emot något annat, så ett `account`-fält här hade varit en yta som inte
  * gör något. Att flytta en container mellan konton är ägarbyte (issue 39),
- * inte en inställning.
+ * inte en inställning. Sidan gör en PATCH till — ikonvalets (se nedan), som
+ * bär bara `icon` och `icon_color`.
  *
  * **Beskrivningen är ett fritextfält och ingenting mer.** Den är frivillig,
  * den får sättas, ändras och tömmas, och den visas ordagrant — ingen
@@ -106,11 +107,16 @@ defineOptions({
  * `ContainerPolicy::update` på nytt.
  *
  * **Ikonavsnittet kom med issue 315 · [[ADR-0064 Containerns ikon]] § 3 och
- * 4.** Det är samma väljare som itemets formulär använder, med samma ark,
- * samma sökfält och samma *Remove icon*: valet skrivs i formulärets `icon` och
- * `icon_color` vid varje klick, och väljaren håller inget eget utkast. Utan
- * vald ikon ritas containerns roll `container` i den grå rutan — inte itemets,
- * som är `ItemIcon`:s fallback tills proppen `fallback` kommer i issue 316.
+ * 4, och sparar direkt sedan Tonys fynd 2026-11-14.** Regeln för sidan är att
+ * ett val i en väljare sparas direkt och text sparas med *Save*: ikonen
+ * fungerar som containerns bild i avsnittet under, inte som formulärets
+ * textfält. Det är samma väljare som itemets formulär använder, med samma
+ * ark, samma sökfält och samma *Remove icon*, men valet skrivs inte i
+ * formuläret — varje klick skickar sin egen PATCH med bara `icon` och
+ * `icon_color`, och `preserveState` håller osparade fält kvar. Den visade
+ * ikonen läses ur `props.container`, alltså serverns svar. Utan vald ikon
+ * ritas containerns roll `container` i den grå rutan — inte itemets, som är
+ * `ItemIcon`:s fallback tills proppen `fallback` kommer i issue 316.
  * Sektionen ritas ur `can.update`, samma flagga som formuläret och bilden.
  */
 const props = defineProps({
@@ -141,34 +147,77 @@ const form = useForm({
     // ett giltigt svar — inte ett fält användaren glömt (issue 85 ·
     // [[ADR-0037 Valutans arv]]).
     currency: props.currency ?? '',
-    // Ikonen och färgen (issue 315): containerns egna presentationsval ur
-    // `ContainerResource`, alltid med — även som `null`. Ett uttryckligt
-    // `null` i PATCH tömmer båda, se `UpdateContainerRequest`.
-    icon: props.container.icon ?? null,
-    icon_color: props.container.icon_color ?? null,
 });
 
-// Ikonväljarens tillstånd (issue 315). `ItemForm` äger sitt på samma sätt:
-// väljaren får det öppna läget och öppnarens element, och formuläret äger
-// valet.
+// Ikonväljarens tillstånd (issue 315, direktsparning sedan Tonys fynd
+// 2026-11-14). Väljaren får det öppna läget och öppnarens element; valet bor
+// inte i `form`, utan skickas i en egen PATCH och läses tillbaka ur
+// `props.container`. `iconPending` stänger *Choose icon* medan anropet är i
+// luften, och statusraden säger vad som hände — valet syns redan i rutan
+// bredvid, så det är ett besked och ingen bekräftelsedialog.
 const iconPickerOpen = ref(false);
 const iconTrigger = ref(null);
+const iconPending = ref(false);
+const iconStatus = ref(null);
+const iconError = ref(null);
 
 function openIconPicker(element) {
     iconTrigger.value = element;
     iconPickerOpen.value = true;
 }
 
+/*
+ * Ett val sparas direkt: en PATCH med BARA `icon` och `icon_color`.
+ * `UpdateContainerRequest` har `sometimes` på varje fält, så servern rör
+ * inget annat — namnet, arten, beskrivningen och valutan användaren skriver
+ * i formuläret ligger kvar orörda. `preserveState` håller dem också kvar i
+ * vyn, så ett ikonval aldrig nollställer osparade ändringar.
+ */
 function chooseIcon({ icon, color }) {
-    form.icon = icon;
-    form.icon_color = color;
+    iconStatus.value = null;
+    iconError.value = null;
+
+    router.patch(`/containers/${props.container.ulid}`, { icon, icon_color: color }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            iconPending.value = true;
+        },
+        onFinish: () => {
+            iconPending.value = false;
+        },
+        onSuccess: () => {
+            iconStatus.value = 'saved';
+        },
+        onError: (errors) => {
+            iconError.value = errors.icon ?? errors.icon_color ?? null;
+        },
+    });
 }
 
 // En färg utan ikon är inget val, så *Remove icon* tömmer båda — samma regel
-// som i `ItemForm`.
+// som i `ItemForm`. Anropet är valets eget och bär de två `null` som
+// `UpdateContainerRequest` säger `sometimes|nullable` om.
 function removeIcon() {
-    form.icon = null;
-    form.icon_color = null;
+    iconStatus.value = null;
+    iconError.value = null;
+
+    router.patch(`/containers/${props.container.ulid}`, { icon: null, icon_color: null }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            iconPending.value = true;
+        },
+        onFinish: () => {
+            iconPending.value = false;
+        },
+        onSuccess: () => {
+            iconStatus.value = 'removed';
+        },
+        onError: (errors) => {
+            iconError.value = errors.icon ?? errors.icon_color ?? null;
+        },
+    });
 }
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
@@ -318,23 +367,24 @@ async function destroy() {
     <!--
         Ikonen (issue 315 · [[ADR-0064 Containerns ikon]] § 3 och 4), bredvid
         bilden. Väljaren är samma `ItemIconPicker` som itemets formulär
-        använder, och sektionen ritas ur `can.update` som formuläret och
-        bilden: den som bara får läsa har ingen ikon att välja.
+        använder, men valet sparas direkt — som containerns bild i avsnittet
+        under — och inte med formulärets *Save* (Tonys regel 2026-11-14).
+        Sektionen ritas ur `can.update` som formuläret och bilden: den som
+        bara får läsa har ingen ikon att välja.
     -->
     <section v-if="can.update" class="mt-12 border-t border-border pt-6">
         <h2 class="text-title">{{ t('item.form.icon') }}</h2>
 
         <div class="mt-4 flex flex-wrap items-center gap-4">
             <!--
-                Den valda ikonen i sin färg och sin ruta. Utan val ritas
-                containerns roll i den grå rutan i stället — `ItemIcon` ritar
-                `item` som fallback tills proppen `fallback` kommer i issue
-                316, och en container ska inte se ut som ett item.
+                Den valda ikonen i sin färg och sin ruta, ur serverns svar —
+                inte ur ett lokalt utkast. Utan val ritas containerns roll i
+                den grå rutan i stället.
             -->
             <ItemIcon
-                v-if="form.icon"
-                :name="form.icon"
-                :color="form.icon_color"
+                v-if="container.icon"
+                :name="container.icon"
+                :color="container.icon_color"
                 :size="24"
                 tile
             />
@@ -350,21 +400,32 @@ async function destroy() {
             <!--
                 En rå `<button>` av samma skäl som i `ItemForm`: den skickar
                 sitt eget element vidare till väljaren, och väljaren lämnar
-                tillbaka fokus dit när arket stängs.
+                tillbaka fokus dit när arket stängs. Avstängd medan ett val
+                sparas — ett andra val innan det första svarat hade blivit två
+                skrivningar i rad.
             -->
             <button
                 type="button"
-                class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+                :disabled="iconPending"
+                class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted disabled:opacity-50"
                 @click="openIconPicker($event.currentTarget)"
             >
                 {{ t('item.form.icon_choose') }}
             </button>
         </div>
 
+        <!-- Statusraden: valet sparas direkt, och här står vad som hände. Ett
+             fel bär `role="alert"`; beskedet `role="status"`. -->
+        <p v-if="iconError" role="alert" class="mt-2 text-sm text-danger">{{ iconError }}</p>
+
+        <p v-else-if="iconStatus" role="status" class="mt-2 text-sm text-ink-subtle">
+            {{ iconStatus === 'removed' ? t('container.edit.icon_removed') : t('container.edit.icon_saved') }}
+        </p>
+
         <ItemIconPicker
             :open="iconPickerOpen"
-            :icon="form.icon"
-            :color="form.icon_color"
+            :icon="container.icon"
+            :color="container.icon_color"
             :trigger="iconTrigger"
             @choose="chooseIcon"
             @remove="removeIcon"

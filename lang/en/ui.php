@@ -2226,6 +2226,13 @@ return [
             'sections' => 'More in this container',
 
             'submit' => 'Save',
+
+            // Ett ikonval sparas direkt (Tonys regel 2026-11-14: ett val i en
+            // väljare sparas direkt, text sparas med *Save*). Raden under
+            // väljaren säger vad som hände, och valet syns redan i rutan
+            // bredvid — därför två korta besked och ingen bekräftelsedialog.
+            'icon_saved' => 'Icon saved',
+            'icon_removed' => 'Icon removed',
         ],
 
         // The deletion, see issue 62b decisions 4 and 5. `confirm` carries the
