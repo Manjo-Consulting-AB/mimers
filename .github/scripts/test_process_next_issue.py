@@ -1612,6 +1612,13 @@ def test_atgardsvarven_eskalerar_ett_steg_uppat():
     assert p.atgardsvarv_for("opus") == [("Opus", "opus")] * 3
 
 
+def test_peak_hours_stoppar_bara_deepseek():
+    assert p.vantar_pa_peak(["Build"], True)
+    assert not p.vantar_pa_peak(["Build"], False)
+    assert not p.vantar_pa_peak(["Build", "model:sonnet"], True)
+    assert not p.vantar_pa_peak(["Build", "model:opus"], True)
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
