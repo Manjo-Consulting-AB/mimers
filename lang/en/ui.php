@@ -1861,26 +1861,46 @@ return [
         'included' => 'Included',
         'not_included' => 'Not included',
 
-        // The five steps of the downgrade, word for word from [[Planer och
-        // kvoter]] § Nedgradering (decision 6) — and what does NOT happen,
-        // which is the most important thing on the page: items are never
-        // deleted, cost rows are never deleted.
+        // The downgrade explained before it happens, and no longer word for
+        // word from [[Planer och kvoter]] § Nedgradering: the text is Tony's
+        // proposal, corrected against how the downgrade works after #1060 and
+        // #1231 — step 4 deletes for good, which is what #1231 made true. What
+        // does NOT happen is still the most important thing on the page: items
+        // are never deleted, cost rows are never deleted.
+        //
+        // **The bold is the title.** Every step is `{title, body}` and the
+        // view draws the title in `<strong>`; no key carries markup. The last
+        // step has a title and no body — an empty string is a missing string
+        // (SprakTest), so `body` is absent rather than blank.
         'downgrade' => [
-            'heading' => 'If you downgrade',
-            'intro' => 'Your items are never deleted — only attachments are. It works like this:',
+            'heading' => 'What happens if you downgrade?',
+            'lead' => 'Your items are never deleted. Only attachments may be removed.',
+            'intro' => 'Your items and their information are always yours. Only attachments may need to go when your account returns to the Free plan.',
 
             'steps' => [
-                'freeze' => 'The payment fails and the account is frozen. Nothing is deleted.',
-                'choose' => 'You get your attachments listed and choose yourself what has to go — you know which forty holiday photos can go and which inspection report cannot.',
-                'grace' => 'You have three months to pay or export.',
-                'purge' => 'If nothing happens, the attachments are deleted automatically, newest first, until the account fits within Free.',
-                'restore' => 'The account returns to active on the free level.',
+                'freeze' => [
+                    'title' => 'Your account becomes read-only.',
+                    'body' => 'If a payment fails or your subscription ends, you can still view and export everything, but you can\'t add or change anything. Nothing is deleted.',
+                ],
+                'choose' => [
+                    'title' => 'You choose what to remove.',
+                    'body' => 'Your attachments are what take up the space. You\'ll see them listed, largest first, and decide which ones to keep. What you remove is deleted permanently and frees up space right away.',
+                ],
+                'grace' => [
+                    'title' => 'You have three months.',
+                    'body' => 'Renew your subscription or export your data. We\'ll remind you a month and a week before anything is removed.',
+                ],
+                'purge' => [
+                    'title' => 'Otherwise, attachments are deleted automatically,',
+                    'body' => 'newest first, until your account fits within the Free plan. They are deleted permanently and do not go to the trash.',
+                ],
+                'restore' => [
+                    'title' => 'Your account returns to Free.',
+                ],
             ],
 
-            'kept' => [
-                'items' => 'Your items are never deleted.',
-                'costs' => 'Cost rows are never deleted. The receipts may go with the attachments — the numbers stay.',
-            ],
+            // The closing paragraph: the item stays, the cost rows stay.
+            'kept' => 'Even when an attachment is removed, the item stays. Cost records stay too, even if their receipts go. Only the storage beyond the Free plan\'s limits is removed.',
 
             // The preview (decision 7). Concrete when the account is over the
             // free limit, and "everything fits" with no numbers about deletion

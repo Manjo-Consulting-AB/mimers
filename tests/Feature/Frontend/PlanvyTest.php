@@ -13,6 +13,7 @@ use App\Models\StoredFile;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -478,35 +479,88 @@ it('kraschar inte för ett konto utan prenumeration', function () {
 });
 
 /*
- * Klart när: nedgraderingens fem steg förklaras, inklusive att items och
- * kostnadsrader aldrig raderas (Beslut 6).
+ * Klart när: avsnittet om nedgradering visar texten ordagrant, med `lead`
+ * framhävt överst och stegens titlar i fetstil.
  *
- * Texten är statisk och bor i lang/ under `plan.downgrade.*`. Att meningen
- * finns och att vyn läser den prövas här; att den engelska sidan inte visar
- * svenska vaktas av SprakTest.
+ * Texten är statisk och bor i lang/ under `plan.downgrade.*`. Varje nyckel
+ * jämförs mening för mening, så ett ordbyte i katalogen faller här. Ingen
+ * nyckel bär markup — fetstilen är titelns plats i mallen.
  */
-it('förklarar nedgraderingens fem steg och att items och kostnadsrader aldrig raderas', function () {
-    foreach (['freeze', 'choose', 'grace', 'purge', 'restore'] as $steg) {
-        planvyNyckel("ui.plan.downgrade.steps.{$steg}");
+it('förklarar nedgraderingen med lead först och titel och brödtext per steg', function () {
+    $katalog = 'ui.plan.downgrade';
+
+    expect(trans("{$katalog}.heading", [], 'en'))
+        ->toBe('What happens if you downgrade?')
+        ->and(trans("{$katalog}.lead", [], 'en'))
+        ->toBe('Your items are never deleted. Only attachments may be removed.')
+        ->and(trans("{$katalog}.intro", [], 'en'))
+        ->toBe('Your items and their information are always yours. Only attachments may need to go when your account returns to the Free plan.')
+        ->and(trans("{$katalog}.kept", [], 'en'))
+        ->toBe('Even when an attachment is removed, the item stays. Cost records stay too, even if their receipts go. Only the storage beyond the Free plan\'s limits is removed.');
+
+    // Stegen, ordagrant: titeln är det som står i fetstil, brödtexten det som
+    // följer. Sista steget har bara en titel — ingen tom sträng i katalogen.
+    $steg = [
+        'freeze' => [
+            'Your account becomes read-only.',
+            'If a payment fails or your subscription ends, you can still view and export everything, but you can\'t add or change anything. Nothing is deleted.',
+        ],
+        'choose' => [
+            'You choose what to remove.',
+            'Your attachments are what take up the space. You\'ll see them listed, largest first, and decide which ones to keep. What you remove is deleted permanently and frees up space right away.',
+        ],
+        'grace' => [
+            'You have three months.',
+            'Renew your subscription or export your data. We\'ll remind you a month and a week before anything is removed.',
+        ],
+        'purge' => [
+            'Otherwise, attachments are deleted automatically,',
+            'newest first, until your account fits within the Free plan. They are deleted permanently and do not go to the trash.',
+        ],
+        'restore' => [
+            'Your account returns to Free.',
+            null,
+        ],
+    ];
+
+    foreach ($steg as $nyckel => [$titel, $brödtext]) {
+        expect(trans("{$katalog}.steps.{$nyckel}.title", [], 'en'))->toBe($titel);
+
+        if ($brödtext !== null) {
+            expect(trans("{$katalog}.steps.{$nyckel}.body", [], 'en'))->toBe($brödtext);
+        }
     }
 
-    planvyNyckel('ui.plan.downgrade.kept.items');
-    planvyNyckel('ui.plan.downgrade.kept.costs');
-    planvyNyckel('ui.plan.downgrade.heading');
-    planvyNyckel('ui.plan.downgrade.intro');
+    // Ingen sträng bär markup: fetstilen hör till mallen, inte till orden.
+    foreach (Arr::dot(trans($katalog, [], 'en')) as $nyckel => $varde) {
+        expect($varde)->not->toContain('<', "{$katalog}.{$nyckel} bär markup");
+    }
 
     $vy = File::get(resource_path('js/pages/Settings/Plan.vue'));
 
-    foreach (['freeze', 'choose', 'grace', 'purge', 'restore'] as $steg) {
-        expect($vy)->toContain("plan.downgrade.steps.{$steg}");
+    // `lead` står före stegen, och den är framhävd: större än stegens text och
+    // i fetstil.
+    expect(strpos($vy, "plan.downgrade.lead'"))
+        ->toBeLessThan(strpos($vy, 'plan.downgrade.steps.freeze.title'));
+
+    $leadRad = collect(explode("\n", $vy))
+        ->first(fn (string $rad) => str_contains($rad, "plan.downgrade.lead'"));
+
+    expect($leadRad)->toContain('font-semibold')->toContain('text-base');
+
+    // Stegen ritar titeln i `<strong>` och brödtexten efter — alla fem titlar,
+    // och de fyra brödtexterna.
+    foreach ($steg as $nyckel => [$titel, $brödtext]) {
+        expect($vy)->toContain("<strong>{{ t('plan.downgrade.steps.{$nyckel}.title') }}</strong>");
+
+        if ($brödtext !== null) {
+            expect($vy)->toContain("t('plan.downgrade.steps.{$nyckel}.body')");
+        }
     }
 
-    expect($vy)->toContain('plan.downgrade.kept.items')
-        ->and($vy)->toContain('plan.downgrade.kept.costs');
-
-    // Nyast först står i texten om steg 4 — det är ordningen raderingen
-    // faktiskt använder, och förhandsvisningen räknar i samma ordning.
-    expect(trans('ui.plan.downgrade.steps.purge', [], 'en'))->toContain('newest first');
+    // De två gamla nycklarna är borta och inte tomma: ingenting läser dem.
+    expect(trans('ui.plan.downgrade.kept.items', [], 'en'))->toBe('ui.plan.downgrade.kept.items')
+        ->and(trans('ui.plan.downgrade.kept.costs', [], 'en'))->toBe('ui.plan.downgrade.kept.costs');
 });
 
 /*
