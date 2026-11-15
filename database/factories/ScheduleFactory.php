@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -28,6 +29,9 @@ class ScheduleFactory extends Factory
             'anchor_date' => fake()->date(),
             'lead_days' => 0,
             'is_active' => true,
+            // Betalaren är containerns ägare (ADR-0081 § 3).
+            'billed_account_id' => fn (array $attributes) => Container::withTrashed()
+                ->find(Item::withTrashed()->find($attributes['item_id'])->container_id)->account_id,
         ];
     }
 }

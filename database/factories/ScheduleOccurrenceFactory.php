@@ -44,6 +44,8 @@ class ScheduleOccurrenceFactory extends Factory
             'completed_by_user_id' => null,
             'completed_by_account_id' => null,
             'completion_note' => null,
+            // NULL tills en anteckning skrivs (ADR-0081 § 3).
+            'billed_account_id' => null,
         ];
     }
 

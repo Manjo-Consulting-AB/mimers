@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\DB;
  */
 class AdjustUsage
 {
-    public function handle(int $accountId, int $bytesDelta = 0, int $containersDelta = 0): void
+    public function handle(int $accountId, int $bytesDelta = 0, int $containersDelta = 0, int $metadataDelta = 0): void
     {
         // Steg 1: se till att raden finns. Upsert (inte updateOrInsert) är
         // det som gör skapandet race-fritt: inserten och "finns den redan,
@@ -44,6 +44,7 @@ class AdjustUsage
                 'account_id' => $accountId,
                 'storage_bytes' => 0,
                 'container_count' => 0,
+                'metadata_bytes' => 0,
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
@@ -59,6 +60,12 @@ class AdjustUsage
 
         if ($containersDelta !== 0) {
             $changes['container_count'] = $this->changeAsSql('container_count', $containersDelta);
+        }
+
+        // Textens byte (ADR-0081 § 1), hållna isär från filernas så att
+        // lagringsvyn kan visa dem var för sig. Samma SQL och samma klampning.
+        if ($metadataDelta !== 0) {
+            $changes['metadata_bytes'] = $this->changeAsSql('metadata_bytes', $metadataDelta);
         }
 
         if ($changes !== []) {

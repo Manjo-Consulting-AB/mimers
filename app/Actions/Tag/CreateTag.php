@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -51,6 +52,7 @@ class CreateTag
             } else {
                 $tag = new Tag(['name' => $name, 'color' => $color]);
                 $tag->container_id = $container->id;
+                $tag->billed_account_id = Payer::idFor($actor, $container);
                 $tag->save();
             }
 

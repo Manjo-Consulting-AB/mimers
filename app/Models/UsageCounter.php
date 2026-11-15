@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * läses genom sitt konto (issue 26a § Beslut 1). Ingen SoftDeletes — en
  * räknare är inte användarskapat innehåll.
  */
-#[Fillable(['account_id', 'storage_bytes', 'container_count'])]
+#[Fillable(['account_id', 'storage_bytes', 'container_count', 'metadata_bytes'])]
 class UsageCounter extends Model
 {
     /** @use HasFactory<UsageCounterFactory> */
@@ -45,6 +45,7 @@ class UsageCounter extends Model
         return [
             'storage_bytes' => 'integer',
             'container_count' => 'integer',
+            'metadata_bytes' => 'integer',
         ];
     }
 

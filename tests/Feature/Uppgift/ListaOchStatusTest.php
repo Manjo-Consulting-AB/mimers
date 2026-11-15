@@ -137,6 +137,7 @@ it('migreringen ger befintliga förekomster next och befintliga scheman förvale
     $schemaId = DB::table('schedule')->insertGetId([
         'ulid' => (string) Str::ulid(),
         'item_id' => $item->id,
+        'billed_account_id' => $item->container->account_id,
         'title' => 'Byt impeller',
         'recurrence_type' => 'none',
         'lead_days' => 0,

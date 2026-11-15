@@ -522,6 +522,7 @@ it('har varken lagt till eller tagit bort en kolumn i cost_entry', function () {
         'supplier',
         'created_by_user_id',
         'created_by_account_id',
+        'billed_account_id',
         'created_at',
         'updated_at',
         'deleted_at',

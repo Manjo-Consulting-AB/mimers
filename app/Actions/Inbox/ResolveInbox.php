@@ -108,6 +108,7 @@ class ResolveInbox
         $item->container_id = $container->id;
         $item->created_by_user_id = $user->id;
         $item->created_by_account_id = $container->account_id;
+        $item->billed_account_id = $container->account_id;
         $item->save();
 
         return $item;

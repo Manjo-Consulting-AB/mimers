@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Container;
 use App\Models\Item;
 use App\Models\Loan;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -26,6 +27,9 @@ class LoanFactory extends Factory
             'due_at' => null,
             'returned_at' => null,
             'note' => null,
+            // Betalaren är containerns ägare (ADR-0081 § 3).
+            'billed_account_id' => fn (array $attributes) => Container::withTrashed()
+                ->find(Item::withTrashed()->find($attributes['item_id'])->container_id)->account_id,
         ];
     }
 }

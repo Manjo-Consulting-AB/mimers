@@ -71,6 +71,8 @@ class CreateItem
             $item->category_id = $category?->id;
             $item->created_by_user_id = $actor->id;
             $item->created_by_account_id = $account->id;
+            // Betalaren är det agerande kontot (ADR-0081 § 3), samma som författaren.
+            $item->billed_account_id = $account->id;
             $item->save();
 
             // Först itemet, sedan det som hänger på det: listan sorterar

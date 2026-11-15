@@ -23,6 +23,10 @@ class CategoryFactory extends Factory
             'parent_id' => null,
             'name' => fake()->words(2, true),
             'position' => 1,
+            // Betalaren är containerns ägare, som för en rad skapad av ägaren
+            // (ADR-0081 § 3).
+            'billed_account_id' => fn (array $attributes) => Container::withTrashed()
+                ->find($attributes['container_id'])->account_id,
         ];
     }
 }

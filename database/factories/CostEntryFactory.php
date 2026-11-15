@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Account;
+use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\User;
@@ -36,6 +37,11 @@ class CostEntryFactory extends Factory
             'supplier' => null,
             'created_by_user_id' => User::factory(),
             'created_by_account_id' => Account::factory(),
+            // Betalaren är författaren (ADR-0081 § 3).
+            'billed_account_id' => fn (array $attributes) => $attributes['created_by_account_id']
+                // Författaren kan vara nollställd (ADR-0045 § Beslut 2): då är
+                // det containerns ägare som betalar.
+                ?? Container::withTrashed()->find($attributes['container_id'])->account_id,
         ];
     }
 }
