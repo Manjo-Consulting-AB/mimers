@@ -53,10 +53,27 @@ jobs:
       - name: Bygg backend
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
+      # Källkartor (issue 388): bygget skapar dem dolda (vite.config.js,
+      # `sourcemap: 'hidden'`) och @sentry/vite-plugin laddar upp dem för
+      # releasen när SENTRY_AUTH_TOKEN finns. Saknas token hoppas uppladdningen
+      # över utan att bygget fälls. Kartorna tas alltid bort ur artefakten
+      # efteråt, så att de aldrig publiceras. Releasenamnet är samma som
+      # VERSION nedan: taggen, annars dev-<sha>.
       - name: Bygg frontend
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            export SENTRY_RELEASE="$GITHUB_REF_NAME"
+          else
+            export SENTRY_RELEASE="dev-${GITHUB_SHA::7}"
+          fi
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "SENTRY_AUTH_TOKEN saknas - källkartorna laddas inte upp."
+          fi
           npm ci
           npm run build
+          find public/build -name '*.map' -delete
 
       - name: Paketera
         run: |
@@ -102,6 +119,7 @@ jobs:
           MAILGUN_ENDPOINT: ${{ secrets.MAILGUN_ENDPOINT }}
           MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
           SENTRY_LARAVEL_DSN: ${{ secrets.SENTRY_LARAVEL_DSN }}
+          SENTRY_JS_DSN: ${{ secrets.SENTRY_JS_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -148,6 +166,7 @@ jobs:
             "MAILGUN_ENDPOINT=$MAILGUN_ENDPOINT" \
             "MAILGUN_WEBHOOK_SIGNING_KEY=$MAILGUN_WEBHOOK_SIGNING_KEY" \
             "SENTRY_LARAVEL_DSN=$SENTRY_LARAVEL_DSN" \
+            "SENTRY_JS_DSN=$SENTRY_JS_DSN" \
             "SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT" \
           | ssh -p "$PORT" "$USER@$HOST" "umask 077; cat > $PATH_REMOTE/shared/.env.inkommande"
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE" < deploy/env-uppdatera.sh

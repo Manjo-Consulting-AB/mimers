@@ -27,6 +27,15 @@ return [
     // serialisera en closure. Ser även till att release och pseudonym sätts.
     'before_send' => [ScrubSentryEvent::class, 'beforeSend'],
 
+    // Webbläsarens Sentry (issue 388), delad som propen `sentry` av
+    // HandleInertiaRequests. Ett eget projekt med en egen DSN, som är
+    // offentlig. Nyckeln bor under `tracing` med flit: SDK:n kastar på varje
+    // okänd toppnivånyckel men släpper `tracing` (LARAVEL_SPECIFIC_OPTIONS),
+    // så en egen toppnivånyckel hade fällt serverns klient.
+    'tracing' => [
+        'js_dsn' => env('SENTRY_JS_DSN') ?: null,
+    ],
+
     // Ingen prestandaspårning (ADR-0079 § 3).
     'traces_sample_rate' => 0,
     'profiles_sample_rate' => 0,
