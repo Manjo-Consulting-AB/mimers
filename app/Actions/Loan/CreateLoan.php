@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\User;
+use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -58,6 +59,7 @@ class CreateLoan
             $this->assertNoOpenLoan->handle($lockedItem);
 
             $loan->item_id = $lockedItem->id;
+            $loan->billed_account_id = Payer::idFor($actor, $lockedItem->container);
             $loan->save();
 
             $this->recordAuditEvent->handle(

@@ -108,6 +108,7 @@ class ReopenOccurrence
             $locked->completed_by_user_id = null;
             $locked->completed_by_account_id = null;
             $locked->completion_note = null;
+            $locked->billed_account_id = null;
             $locked->save();
 
             $this->recordAuditEvent->handle(

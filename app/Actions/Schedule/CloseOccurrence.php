@@ -158,6 +158,9 @@ class CloseOccurrence
             $lockedOccurrence->completed_by_user_id = $user->id;
             $lockedOccurrence->completed_by_account_id = $account->id;
             $lockedOccurrence->completion_note = $completionNote;
+            // Anteckningen räknas mot kvoten, och den som skriver den betalar
+            // (ADR-0081 § 3). Utan anteckning finns ingen betalare.
+            $lockedOccurrence->billed_account_id = ($completionNote !== null && $completionNote !== '') ? $account->id : null;
             $lockedOccurrence->save();
 
             // Raden i händelseloggen (issue 110). `completed` och `skipped` är

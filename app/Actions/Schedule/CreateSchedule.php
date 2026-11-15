@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -59,6 +60,7 @@ class CreateSchedule
     {
         DB::transaction(function () use ($item, $actor, $schedule, $gtdList): void {
             $schedule->item_id = $item->id;
+            $schedule->billed_account_id = Payer::idFor($actor, $item->container);
 
             // Listan och förvalet (ADR-0054 § 5, M27 · issue 244).
             //

@@ -21,6 +21,7 @@ use App\Models\Subscription;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\CountedRows;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -154,6 +155,12 @@ class AcceptOwnershipTransfer
             if ($bytesSomFlyttas > 0) {
                 $this->flyttaBokfordaByten($container, $fromAccount, $toAccount, $bytesSomFlyttas);
             }
+
+            // ADR-0081 § 4: raderna i containern som säljaren betalar för får
+            // köparen som betalare, med bytena. Containerraden följer med
+            // containern. Ingen kvotprövning: bytena flyttar som bilagornas,
+            // och rader på ett tredje konto rörs inte.
+            $this->flyttaRader($container, $fromAccount, $toAccount);
 
             // Beslut 8: alla återstående giltiga åtkomster återkallas och
             // öppna inbjudningar sätts till `revoked`. Den nya ägaren
@@ -309,6 +316,23 @@ class AcceptOwnershipTransfer
                 'billed_account_id' => $toAccount->id,
                 'updated_at' => now(),
             ]);
+    }
+
+    /**
+     * Textraderna i containern flyttar från säljaren till köparen
+     * (App\Support\Usage\CountedRows). Containerraden själv är redan flyttad
+     * (`account_id`), så dess byte flyttas här mellan räknarna.
+     */
+    private function flyttaRader(Container $container, Account $fromAccount, Account $toAccount): void
+    {
+        CountedRows::moveContainerPayer($container->id, $fromAccount->id, $toAccount->id);
+
+        $containerBytes = CountedRows::containerBytes($container->id);
+
+        if ($containerBytes > 0) {
+            (new AdjustUsage)->handle($fromAccount->id, metadataDelta: -$containerBytes);
+            (new AdjustUsage)->handle($toAccount->id, metadataDelta: +$containerBytes);
+        }
     }
 
     /**

@@ -131,6 +131,7 @@ it('har en nullbar textkolumn för anteckningen, skild från description', funct
         'cover_attachment_id',
         'created_by_user_id',
         'created_by_account_id',
+        'billed_account_id',
         'deleted_at',
         'created_at',
         'updated_at',

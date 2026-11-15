@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\User;
+use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -52,6 +53,7 @@ class CreateCategory
     {
         $category = new Category(['name' => $name]);
         $category->container_id = $container->id;
+        $category->billed_account_id = Payer::idFor($actor, $container);
         $category->position = $position ?? $this->nextPosition($container, $parent);
 
         DB::transaction(function () use ($container, $parent, $category, $actor): void {

@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
 use App\Models\User;
+use App\Support\Usage\MetadataSize;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +82,18 @@ function avstamningBilaga(Item $item, Account $account, User $user, StoredFile $
 }
 
 /**
+ * Vad kontots containers och items väger i text (ADR-0081, issue 1301).
+ * Fixturen skapar dem, så en räknare som "stämmer" måste bära deras vikt —
+ * `metadata_bytes` är en tredje kolumn avstämningen rättar. Måttet läses ur
+ * MetadataSize på modellerna, inte ur CountedRows som jobbet själv använder.
+ */
+function avstamningText(Account $account): int
+{
+    return Container::withTrashed()->where('account_id', $account->id)->get()->sum(fn (Container $c): int => MetadataSize::of($c))
+        + Item::withTrashed()->where('billed_account_id', $account->id)->get()->sum(fn (Item $i): int => MetadataSize::of($i));
+}
+
+/**
  * Räknarraden för ett konto, eller null om kontot saknar rad.
  */
 function avstamningRad(int $accountId): ?object
@@ -99,6 +112,7 @@ it('en räknare som stämmer rörs inte', function () {
         'account_id' => $account->id,
         'storage_bytes' => 1000,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
     $uppdaterad = $rad->updated_at;
 
@@ -122,6 +136,7 @@ it('en räknare som ligger för högt rättas ner', function () {
         'account_id' => $account->id,
         'storage_bytes' => 2000,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
 
     (new ReconcilesUsageCounters)->handle();
@@ -137,6 +152,7 @@ it('en räknare som ligger för lågt rättas upp', function () {
         'account_id' => $account->id,
         'storage_bytes' => 100,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
 
     (new ReconcilesUsageCounters)->handle();
@@ -151,6 +167,7 @@ it('en avvikelse loggas med konto, fält, räknat och faktiskt värde', function
         'account_id' => $account->id,
         'storage_bytes' => 2000,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
     $logg = Log::spy();
 
@@ -182,7 +199,8 @@ it('ett konto med bilagor men utan räknarrad får en rad', function () {
     // de räknade värdena, och avsaknaden av raden är en avvikelse som larmas.
     expect(avstamningRad($account->id)->storage_bytes)->toBe(1000);
     expect(avstamningRad($account->id)->container_count)->toBe(1);
-    $logg->shouldHaveReceived('warning')->times(2);
+    // storage_bytes, container_count och metadata_bytes (ADR-0081) avviker alla från noll.
+    $logg->shouldHaveReceived('warning')->times(3);
 });
 
 it('ett konto utan bilagor får ingen tom rad', function () {
@@ -228,14 +246,16 @@ it('ett konto med containers men utan bilagor får en rad', function () {
     // En varning, för container_count — fältet vars räknare (0) inte matchar
     // det faktiska (1). storage_bytes står 0 mot 0 och rapporterar ingen
     // avvikelse, oavsett att raden är ny.
-    $logg->shouldHaveReceived('warning')->once()->withArgs(
+    $logg->shouldHaveReceived('warning')->withArgs(
         fn (string $meddelande, array $kontext) => $meddelande === 'usage_counter.drift'
             && ($kontext['account_ulid'] ?? null) === $account->ulid
             && ($kontext['field'] ?? null) === 'container_count'
             && ($kontext['counter'] ?? null) === 0
             && ($kontext['actual'] ?? null) === 1
             && ($kontext['delta'] ?? null) === 1,
-    );
+    )->once();
+    // Containern väger också text, så metadata_bytes avviker och larmar (ADR-0081).
+    expect($rad->metadata_bytes)->toBeGreaterThan(0);
 });
 
 it('mjukraderade bilagor räknas in', function () {
@@ -248,6 +268,7 @@ it('mjukraderade bilagor räknas in', function () {
         'account_id' => $account->id,
         'storage_bytes' => 1000,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
 
     (new ReconcilesUsageCounters)->handle();
@@ -268,6 +289,7 @@ it('bilagor på andra konton räknas inte in', function () {
         'account_id' => $agare->id,
         'storage_bytes' => 0,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($agare),
     ]);
     UsageCounter::factory()->create([
         'account_id' => $varv->id,
@@ -295,6 +317,7 @@ it('två bilagor på samma innehåll räknas båda', function () {
         'account_id' => $account->id,
         'storage_bytes' => 1000,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
 
     (new ReconcilesUsageCounters)->handle();
@@ -417,6 +440,7 @@ it('ett konto med en levande fil på 100 och en slängd på 50 stäms av till 15
         'account_id' => $account->id,
         'storage_bytes' => 150,
         'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
     ]);
     $logg = Log::spy();
 

@@ -80,6 +80,8 @@ class CreateCostEntry
         $cost->container_id = $item->container_id;
         $cost->created_by_user_id = $actor->id;
         $cost->created_by_account_id = $this->attributedAccountId($actor, $container);
+        // Betalaren är samma konto som författaren (ADR-0081 § 3).
+        $cost->billed_account_id = $cost->created_by_account_id;
 
         DB::transaction(function () use ($cost, $item, $actor): void {
             $cost->save();

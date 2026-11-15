@@ -22,6 +22,7 @@ class UsageCounterFactory extends Factory
             'account_id' => Account::factory(),
             'storage_bytes' => 0,
             'container_count' => 0,
+            'metadata_bytes' => 0,
         ];
     }
 }

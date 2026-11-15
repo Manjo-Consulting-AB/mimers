@@ -4,6 +4,7 @@ namespace App\Console;
 
 use App\Models\Account;
 use App\Models\UsageCounter;
+use App\Support\Usage\CountedRows;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -57,6 +58,9 @@ class ReconcilesUsageCounters
     {
         $storageActual = $this->storageBytesPerAccount();
         $containerActual = $this->containerCountPerAccount();
+        // Textens byte (ADR-0081): raderna viktas med MetadataSize i PHP, inte
+        // med SQL LENGTH() som räknar olika på sqlite och MariaDB.
+        $metadataActual = CountedRows::bytesPerAccount();
 
         $drift = 0;
         $konton = 0;
@@ -72,15 +76,17 @@ class ReconcilesUsageCounters
                 'usage_counter.account_id',
                 'usage_counter.storage_bytes',
                 'usage_counter.container_count',
+                'usage_counter.metadata_bytes',
                 'account.ulid as account_ulid',
             ])
-            ->chunkById(100, function ($rader) use (&$allaKontoId, &$drift, &$konton, $storageActual, $containerActual): void {
+            ->chunkById(100, function ($rader) use (&$allaKontoId, &$drift, &$konton, $storageActual, $containerActual, $metadataActual): void {
                 foreach ($rader as $rad) {
                     $allaKontoId[] = (int) $rad->account_id;
                     $konton++;
 
                     $storage = $storageActual[(int) $rad->account_id] ?? 0;
                     $containers = $containerActual[(int) $rad->account_id] ?? 0;
+                    $metadata = $metadataActual[(int) $rad->account_id] ?? 0;
 
                     $andringar = [];
 
@@ -94,6 +100,11 @@ class ReconcilesUsageCounters
                         $andringar['container_count'] = $containers;
                     }
 
+                    if ((int) $rad->metadata_bytes !== $metadata) {
+                        $this->loggaDrift($rad->account_ulid, 'metadata_bytes', (int) $rad->metadata_bytes, $metadata);
+                        $andringar['metadata_bytes'] = $metadata;
+                    }
+
                     if ($andringar !== []) {
                         UsageCounter::query()->where('account_id', $rad->account_id)->update($andringar);
                         $drift++;
@@ -105,7 +116,7 @@ class ReconcilesUsageCounters
         // 26a § Beslut 7. Bara konton med levande innehåll dyker upp i
         // aggregaten, så inga tomma rader skapas för konton som bara finns.
         $saknade = array_diff(
-            array_keys($storageActual + $containerActual),
+            array_keys($storageActual + $containerActual + $metadataActual),
             $allaKontoId,
         );
 
@@ -115,6 +126,7 @@ class ReconcilesUsageCounters
             foreach ($saknade as $accountId) {
                 $storage = $storageActual[$accountId] ?? 0;
                 $containers = $containerActual[$accountId] ?? 0;
+                $metadata = $metadataActual[$accountId] ?? 0;
 
                 if ($storage > 0) {
                     $this->loggaDrift($ulider[$accountId], 'storage_bytes', 0, $storage);
@@ -124,10 +136,15 @@ class ReconcilesUsageCounters
                     $this->loggaDrift($ulider[$accountId], 'container_count', 0, $containers);
                 }
 
+                if ($metadata > 0) {
+                    $this->loggaDrift($ulider[$accountId], 'metadata_bytes', 0, $metadata);
+                }
+
                 UsageCounter::create([
                     'account_id' => $accountId,
                     'storage_bytes' => $storage,
                     'container_count' => $containers,
+                    'metadata_bytes' => $metadata,
                 ]);
 
                 $drift++;

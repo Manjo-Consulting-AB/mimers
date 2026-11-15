@@ -15,6 +15,7 @@ use App\Models\ContainerAccess;
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
 use App\Support\Account\ActingAccount;
+use App\Support\Usage\CountedRows;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -145,6 +146,9 @@ class DeleteAccount
             // Steg 2 och 3 — innehållet i ANDRAS containers. Före
             // containergallringen nedan, som bara rör kontots egna.
             $this->flyttaFrammandeBilagor($account);
+            // Samma regel för räknade rader (ADR-0081 § 4): en kvarlämnad
+            // `billed_account_id` stoppar kontoraderingen på RESTRICT-nyckeln.
+            CountedRows::moveToContainerOwner($accountId);
             $this->nollstallFattarkolumner($accountId);
 
             // Personbilagorna har ingen container att följa (ADR-0076
