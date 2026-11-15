@@ -455,6 +455,14 @@ it('gallrar in_app-rader äldre än 90 dagar och lämnar e-posten orörd', funct
     // Färsk rad: står kvar.
     [$farsk, $farskInApp] = inAppRad($user, Notification::TYPE_TRANSFER_REQUESTED, now()->subDay());
 
+    // Gammal notis som aldrig haft någon leverans — e-posten var avslagen.
+    // Den har ingenting med `in_app` att göra och är fortfarande outboxen som
+    // sammanfattningen och webhookarna läser, så gallringen lämnar den ifred.
+    $utanLeverans = Notification::factory()->create([
+        'user_id' => $user->id,
+        'created_at' => now()->subDays(100),
+    ]);
+
     $resultat = app(PrunesInAppNotifications::class)->handle();
 
     expect($resultat)->toBe(['deliveries' => 2, 'notifications' => 1]);
@@ -470,6 +478,10 @@ it('gallrar in_app-rader äldre än 90 dagar och lämnar e-posten orörd', funct
     // Den ensamma notisen finns inte kvar; den färska gör det.
     expect(Notification::query()->whereKey($gammalEnsam->id)->exists())->toBeFalse();
     expect(Notification::query()->whereKey($farsk->id)->exists())->toBeTrue();
+
+    // En gammal notis som aldrig hade en `in_app`-rad raderas aldrig av den
+    // här gallringen — oavsett att den saknar leveranser.
+    expect(Notification::query()->whereKey($utanLeverans->id)->exists())->toBeTrue();
 });
 
 it('jobbet är schemalagt dagligen med Schedule::call', function () {
