@@ -617,6 +617,12 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
         ->middleware('throttle:uploads');
     Route::delete('/me/avatar', [AvatarController::class, 'destroy']);
 
+    // Issue 382 · Utsnittet, se App\Http\Controllers\Api\AvatarController::crop
+    // och [[ADR-0076 Profilbilden]] § 7. Samma form som webbens
+    // `/settings/profile/avatar/crop`, men svaret är 200 med personens
+    // resurs — klienten ser det nya `focus`-paret och `zoom` direkt.
+    Route::patch('/me/avatar/crop', [AvatarController::class, 'crop']);
+
     // Issue 28 · Nedgraderingen, steg 2 — kontots urvalslista av bilagor,
     // se App\Http\Controllers\Api\AccountStorageController och
     // App\Policies\AccountPolicy. En KONTOruta, inte en containerruta (issue

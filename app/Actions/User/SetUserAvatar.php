@@ -94,6 +94,15 @@ class SetUserAvatar
             $bilaga = $this->storeAttachment->handleForUser($rad, $file, $account);
 
             $rad->avatar_attachment_id = $bilaga->id;
+
+            // Ett utsnitt valt på den FÖRRA bilden säger ingenting om den nya
+            // ([[ADR-0076 Profilbilden]] § 7). Alla tre nollställs på samma
+            // rad som pekaren byts, så CHECK-villkoret aldrig ser en halv
+            // punkt och nästa bild beskärs som förut — mitten och 100 %.
+            $rad->avatar_focus_x = null;
+            $rad->avatar_focus_y = null;
+            $rad->avatar_zoom = null;
+
             $rad->save();
 
             if ($forra !== null && $forra !== $bilaga->id) {

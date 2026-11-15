@@ -689,6 +689,11 @@ return [
         'avatar-updated' => 'Your profile picture has been saved.',
         'avatar-removed' => 'Your profile picture has been removed.',
 
+        // Issue 382 · [[ADR-0076 Profilbilden]] § 7. The crop is a third
+        // write path and says that the framing was saved — not that the
+        // picture was changed, because it was not.
+        'avatar-cropped' => 'The framing of your profile picture has been saved.',
+
         // Issue 65a § Decision 6. Two codes and not one: the page has two
         // forms, and "saved" without saying what had been true but not an
         // answer to what happened.
@@ -1281,6 +1286,23 @@ return [
                 'upload' => 'Upload',
                 'remove' => 'Remove',
                 'uploading' => 'Uploading the picture…',
+
+                /*
+                 * Issue 382 · [[ADR-0076 Profilbilden]] § 7. The editor is
+                 * one sheet with three actions and one surface: Adjust opens
+                 * it, the surface moves the focus point, the slider zooms,
+                 * and Save, Reset and Cancel are the three ways out.
+                 * `crop_label` names the surface for a screen reader and says
+                 * what the arrow keys do — it is the only instruction the
+                 * keyboard user gets.
+                 */
+                'adjust' => 'Adjust',
+                'crop_heading' => 'Adjust the picture',
+                'crop_label' => 'The picture’s focus point. Drag it or use the arrow keys.',
+                'zoom' => 'Zoom',
+                'save' => 'Save',
+                'reset' => 'Reset',
+                'cancel' => 'Cancel',
             ],
 
             'locale' => 'Language',

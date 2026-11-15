@@ -55,6 +55,14 @@ class RemoveUserAvatar
             $bilagaId = $rad->avatar_attachment_id;
 
             $rad->avatar_attachment_id = null;
+
+            // Utsnittet hör till bilden och försvinner med den
+            // ([[ADR-0076 Profilbilden]] § 7): nollställs på samma rad som
+            // pekaren, så en ny bild aldrig ärver den gamlas fokuspunkt.
+            $rad->avatar_focus_x = null;
+            $rad->avatar_focus_y = null;
+            $rad->avatar_zoom = null;
+
             $rad->save();
 
             $bilaga = Attachment::withTrashed()->find($bilagaId);
