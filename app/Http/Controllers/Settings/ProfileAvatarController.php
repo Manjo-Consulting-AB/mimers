@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Settings;
 
 use App\Actions\User\RemoveUserAvatar;
 use App\Actions\User\SetUserAvatar;
+use App\Actions\User\SetUserAvatarCrop;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UserAvatarCropRequest;
 use App\Http\Requests\UserAvatarRequest;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
@@ -14,8 +16,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Webbens yta för profilbilden — uppladdningen och borttagningen, se
- * [[ADR-0076 Profilbilden]] § 2, 3 och 6 och [[M59 Profilbilden]] § 380.
+ * Webbens yta för profilbilden — uppladdningen, borttagningen och utsnittet,
+ * se [[ADR-0076 Profilbilden]] § 2, 3, 6 och 7 samt [[M59 Profilbilden]]
+ * § 380 och § 382.
  *
  * **Ingenting av datamodellen eller kvoten byggs här.**
  * App\Actions\User\SetUserAvatar härleder personkontot, prövar kvoten, laddar
@@ -40,7 +43,7 @@ use Illuminate\Validation\ValidationException;
  * 159), och samma för `avatar.no_personal_account` och
  * `attachment.not_image`.
  *
- * **Båda svarar `back()` med en flash-kod** — mönstret från issue 51
+ * **Alla tre svarar `back()` med en flash-kod** — mönstret från issue 51
  * § Beslut 5, `status` och ingenting annat. Formuläret står på
  * `/settings/profile`, så `back()` är samma sida med färska props.
  */
@@ -82,5 +85,33 @@ class ProfileAvatarController extends Controller
         $removeUserAvatar->handle($request->user());
 
         return back()->with('status', 'avatar-removed');
+    }
+
+    /**
+     * PATCH /settings/profile/avatar/crop — sparar fokuspunkt och zoom, 302
+     * tillbaka till profilsidan med flash-koden `avatar-cropped`.
+     *
+     * **404 när personen saknar bild.** App\Actions\User\SetUserAvatarCrop
+     * returnerar `false` — ett utsnitt på en bild som inte finns är ett
+     * anrop mot ett objekt som inte finns, till skillnad från en borttagning
+     * där frånvaron är ett giltigt tillstånd.
+     *
+     * Flash-koden behövs för att återställningen ska synas som en kvittens:
+     * formuläret skickar och stänger, och servern svarar `back()`.
+     */
+    public function crop(
+        UserAvatarCropRequest $request,
+        SetUserAvatarCrop $setUserAvatarCrop,
+    ): RedirectResponse {
+        if (! $setUserAvatarCrop->handle(
+            $request->user(),
+            $request->integer('x'),
+            $request->integer('y'),
+            $request->integer('zoom'),
+        )) {
+            abort(404);
+        }
+
+        return back()->with('status', 'avatar-cropped');
     }
 }

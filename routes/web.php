@@ -680,6 +680,18 @@ Route::middleware('auth')->group(function () {
         ->name('settings.profile.avatar.destroy');
 
     /*
+     * Issue 382 · Utsnittet, se App\Http\Controllers\Settings\
+     * ProfileAvatarController::crop och [[ADR-0076 Profilbilden]] § 7.
+     *
+     * **Egen rutt under bilden**, som containerns `/cover/focus` (issue 682):
+     * punkten och zoomen hör till bilden och inte till profilen, och en
+     * PATCH mot `/settings/profile` hade blandat dem med namn, språk och
+     * tidszon. Svaret är `back()` med flash-koden `avatar-cropped`.
+     */
+    Route::patch('/settings/profile/avatar/crop', [ProfileAvatarController::class, 'crop'])
+        ->name('settings.profile.avatar.crop');
+
+    /*
      * Issue 130 · E-postadressen går att byta, se
      * App\Http\Controllers\Settings\EmailChangeController och
      * [[M20 Kontot]] § 130.

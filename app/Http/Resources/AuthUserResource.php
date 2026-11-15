@@ -22,14 +22,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * användare, aldrig utelämnad: klienten ska kunna skilja "inte verifierad"
  * från "fältet finns inte".
  *
- * **`avatar` är personens profilbild** ([[ADR-0076 Profilbilden]] § 2 och 6,
- * issue 380): `null` när ingen bild är satt, annars bilagans `ulid` och
- * `has_thumb`. Fältet finns alltid, som `email_verified_at` — vyn ska kunna
- * skilja "ingen bild" från "fältet finns inte" och rita initialerna i det
- * första fallet. `has_thumb` är samma läsning som
- * App\Actions\Item\ResolveItemCover::thumbnails(): miniatyren ritas bara när
- * varianten `thumb` finns (issue 61b § Beslut 1). En mjukraderad bilaga
- * svarar `null`, eftersom relationen bär SoftDeletes-scopet.
+ * **`avatar` är personens profilbild** ([[ADR-0076 Profilbilden]] § 2, 6 och
+ * 7, issue 380 och 382): `null` när ingen bild är satt, annars bilagans
+ * `ulid`, `has_thumb`, `focus` och `zoom`. Fältet finns alltid, som
+ * `email_verified_at` — vyn ska kunna skilja "ingen bild" från "fältet finns
+ * inte" och rita initialerna i det första fallet. `has_thumb` är samma
+ * läsning som App\Actions\Item\ResolveItemCover::thumbnails(): miniatyren
+ * ritas bara när varianten `thumb` finns (issue 61b § Beslut 1). En
+ * mjukraderad bilaga svarar `null`, eftersom relationen bär SoftDeletes-scopet.
+ *
+ * **`focus` och `zoom` är beskärningen** (ADR-0076 § 7). Kolumnerna är
+ * nullbara, och NULL betyder mitten respektive 100 % — resursen fyller i
+ * standardvärdena så att klienten slipper två former av samma sak: den som
+ * aldrig beskuret sin bild får `{ focus: { x: 50, y: 50 }, zoom: 100 }`.
+ * Räkningen som gör värdena till en ritad bild bor i
+ * resources/js/composables/useAvatarCrop.js.
  *
  * @mixin User
  */
@@ -53,6 +60,11 @@ class AuthUserResource extends JsonResource
             'avatar' => $avatar === null ? null : [
                 'ulid' => $avatar->ulid,
                 'has_thumb' => $avatar->storedFile->derivatives->contains('variant', 'thumb'),
+                'focus' => [
+                    'x' => $this->avatar_focus_x ?? 50,
+                    'y' => $this->avatar_focus_y ?? 50,
+                ],
+                'zoom' => $this->avatar_zoom ?? 100,
             ],
         ];
     }

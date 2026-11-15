@@ -68,26 +68,21 @@ it('postar profilbilden med forceFormData och visar Remove bara när det finns e
  * Klart när: avataren i toppraden visar miniatyren när den finns och
  * initialerna annars, också när bilden inte går att ladda.
  *
- * Miniatyren kräver `has_thumb` — `?variant=thumb` mot en bilaga utan derivat
- * är en trasig bild — och `@error` är vägen tillbaka till initialerna.
- * Länkens tillgängliga namn är oförändrat: `alt=""` och `aria-label` på
- * länken.
+ * Sedan issue 382 ritas cirkeln av `UserAvatar`, så skalet importerar och
+ * ritar komponenten i stället för att bära en egen `<img>`: varianten,
+ * `@error`-fallbacken och initialerna bor där nu (och prövas i
+ * ProfilbildUtsnittvyTest). Länkens tillgängliga namn är oförändrat:
+ * `aria-label` på länken bär personens namn.
  */
-it('ritar miniatyren i toppraden när has_thumb är sant och faller tillbaka på initialerna', function () {
+it('ritar profilbilden i toppraden med UserAvatar', function () {
     $kod = profilbildvyKod('layouts/AppLayout.vue');
 
-    expect($kod)->toContain('has_thumb')
-        ->toContain('?variant=thumb')
-        ->toContain('@error')
-        ->toContain('{{ initials }}');
+    expect($kod)->toContain("import UserAvatar from '../components/UserAvatar.vue'")
+        ->toContain('<UserAvatar :user="user" :size="44" />')
+        ->toContain(':aria-label="user.name"');
 
-    preg_match('/<img\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?>/s', $kod, $bild);
-
-    expect($bild)->toHaveCount(1, 'AppLayout.vue ritar ingen profilbild');
-    expect($bild[0])->toContain('alt=""')
-        ->toContain(':src="avatarThumbUrl"')
-        ->toContain('object-cover')
-        ->toContain('@error');
+    // Cirkeln ritas av komponenten, så skalet bär ingen egen <img> längre.
+    expect($kod)->not->toContain('<img');
 });
 
 /*

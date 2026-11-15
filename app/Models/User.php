@@ -128,6 +128,13 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'notifications_cleared_at' => 'datetime',
             'show_upcoming_tasks' => 'boolean',
             'password_hash' => 'hashed',
+            // Beskärningen av profilbilden, se [[ADR-0076 Profilbilden]] § 7
+            // och migrationen 2026_11_15_000000. Kolumnerna är heltal och
+            // ligger utanför #[Fillable], som containerns cover_focus_x/y:
+            // bara App\Actions\User\SetUserAvatarCrop skriver dem.
+            'avatar_focus_x' => 'integer',
+            'avatar_focus_y' => 'integer',
+            'avatar_zoom' => 'integer',
         ];
     }
 

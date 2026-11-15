@@ -10,6 +10,7 @@ import NotificationBell from '../components/NotificationBell.vue';
 import SearchField from '../components/SearchField.vue';
 import ShellContainerList from '../components/ShellContainerList.vue';
 import ShellSections from '../components/ShellSections.vue';
+import UserAvatar from '../components/UserAvatar.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -159,9 +160,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Toppraden bär det som inte är navigering**: plusknappen, sökfältet,
  * klockan och avataren. De tre första är oförändrade komponenter; avataren
- * pekar på `/settings` och ritar profilbilden sedan issue 381
- * ([[ADR-0076 Profilbilden]] § 6) — miniatyren när den finns, initialerna
- * annars.
+ * pekar på `/settings` och ritas sedan issue 382 av
+ * `resources/js/components/UserAvatar.vue` ([[ADR-0076 Profilbilden]] § 6
+ * och 7) — bilden med sitt utsnitt när den finns, initialerna annars.
  *
  * **Sidopanelen och mobilens sidomeny visar samma sektioner i samma
  * ordning** ([[ADR-0048 Mobilen och plusknappen]] § 1): båda ritar
@@ -278,50 +279,16 @@ onMounted(() => {
 });
 
 /*
- * Användarens initialer, till avataren i toppraden. Namnet är data ur den
- * delade proppen — ingen översättningsnyckel och ingen fråga till servern —
- * och formen är den vanliga: första bokstaven i första och sista ordet.
+ * Profilbilden i toppraden, se [[ADR-0076 Profilbilden]] § 6 och 7 samt
+ * [[M59 Profilbilden]] § 381 och § 382. Cirkeln ritas av
+ * resources/js/components/UserAvatar.vue — samma komponent som
+ * förhandsvisningen och redigeraren på profilsidan — så initialerna,
+ * `?variant=thumb`, utsnittet och `@error`-fallbacken bor på ett ställe.
+ * Issue 381 höll formeln här; issue 382 flyttade den när utsnittet kom.
  *
- * Tomt namn ger en tom sträng och inte en krasch: `name` är obligatoriskt i
- * databasen, men en vy som ritar ett tecken ur en sträng ska inte behöva lita
- * på det för att få ritas.
+ * Länkens tillgängliga namn är oförändrat: `UserAvatar` ritar `alt=""`, och
+ * `aria-label` på länken bär personens namn för en skärmläsare.
  */
-const initials = computed(() => {
-    const words = (user.value?.name ?? '').trim().split(/\s+/).filter(Boolean);
-
-    if (words.length === 0) {
-        return '';
-    }
-
-    const first = words[0].charAt(0);
-    const last = words.length > 1 ? words[words.length - 1].charAt(0) : '';
-
-    return (first + last).toUpperCase();
-});
-
-/*
- * Profilbilden i toppraden, se [[ADR-0076 Profilbilden]] § 6 och
- * [[M59 Profilbilden]] § 381. `user.avatar` är `{ ulid, has_thumb }` eller
- * null (AuthUserResource, issue 380), och miniatyren ritas bara när
- * `has_thumb` är sant: `?variant=thumb` mot en bilaga utan derivat är en
- * trasig bild (coverPresentation.js). Utan bild, utan miniatyr eller när
- * bilden inte går att ladda (`@error`) står initialerna kvar — samma
- * fallback som före issue 381. Flaggan nollställs när adressen byts, så en
- * nyuppladdad bild inte ärver en gammal trasig bilds fallback.
- */
-const avatarFailed = ref(false);
-
-const avatarThumbUrl = computed(() => {
-    const avatar = user.value?.avatar;
-
-    return avatar?.has_thumb ? `/files/${avatar.ulid}?variant=thumb` : null;
-});
-
-watch(avatarThumbUrl, () => {
-    avatarFailed.value = false;
-});
-
-const showsAvatarThumb = computed(() => avatarThumbUrl.value !== null && !avatarFailed.value);
 </script>
 
 <template>
@@ -435,11 +402,10 @@ const showsAvatarThumb = computed(() => avatarThumbUrl.value !== null && !avatar
                             raden i sidopanelen.
 
                             **Bilden när den finns, initialerna annars** (issue
-                            381 · [[ADR-0076 Profilbilden]] § 6).
-                            `AuthUserResource` bär `avatar` med `ulid` och
-                            `has_thumb` sedan issue 380, och miniatyren ritas i
-                            samma cirkel och storlek som initialerna med
-                            `object-cover`. `alt=""` med flit: bilden är
+                            381 och 382 · [[ADR-0076 Profilbilden]] § 6 och 7).
+
+                            Cirkeln ritas av `UserAvatar` med storleken 44 px,
+                            samma mått som raden. `alt=""` med flit: bilden är
                             användarens eget ansikte i hennes egen rad, och
                             länkens tillgängliga namn kommer ur `user.name` i
                             `aria-label` — samma namn för en skärmläsare som
@@ -452,15 +418,7 @@ const showsAvatarThumb = computed(() => avatarThumbUrl.value !== null && !avatar
                             :title="user.name"
                             class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill bg-surface-sunken text-title font-semibold text-ink-muted outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         >
-                            <img
-                                v-if="showsAvatarThumb"
-                                :src="avatarThumbUrl"
-                                alt=""
-                                class="h-11 w-11 rounded-pill object-cover"
-                                @error="avatarFailed = true"
-                            >
-
-                            <span v-else>{{ initials }}</span>
+                            <UserAvatar :user="user" :size="44" />
                         </Link>
                     </div>
                 </div>

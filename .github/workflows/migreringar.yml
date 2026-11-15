@@ -96,6 +96,8 @@ jobs:
       # aldrig kör är ingen bevisning. Här körs de mot samma motor som
       # staging och produktion. PersonbilagaTest (issue 379) prövar samma sak
       # för villkorets tre ägare, och måste därför med här.
+      # ProfilbildUtsnittTest (issue 382) prövar paret för profilbildens
+      # fokuspunkt och zoomens intervall, av samma skäl.
       #
       # Miljövariablerna sätts i steget och inte i .env: phpunit.xml pekar
       # DB_CONNECTION på sqlite, och en variabel som redan finns i miljön vinner
@@ -110,4 +112,4 @@ jobs:
           DB_DATABASE: mimers
           DB_USERNAME: root
           DB_PASSWORD: ''
-        run: php artisan test tests/Feature/Attachment/ContainerbildTest.php tests/Feature/Bilaga/PersonbilagaTest.php
+        run: php artisan test tests/Feature/Attachment/ContainerbildTest.php tests/Feature/Bilaga/PersonbilagaTest.php tests/Feature/Konto/ProfilbildUtsnittTest.php
