@@ -50,4 +50,34 @@ return [
     // Loggbrödsmulor på warning och uppåt.
     'logs_channel_level' => 'warning',
 
+    /*
+     * Issue 389 · Hjärtslag från de schemalagda jobben, ADR-0079 § 2. Nyckeln
+     * är postens `->name(...)` i routes/console.php, värdet Sentrys slug.
+     * routes/console.php lägger `sentryMonitor(slug, schema)` på varje post
+     * som står här; schemat är postens eget cron-uttryck. Utan DSN är
+     * `sentryMonitor` verkningslös.
+     *
+     * Gratisnivån har ett begränsat antal bevakare. Räcker kvoten inte: stryk
+     * underifrån, alltså den sista raden först. De fem första är viktigast
+     * (nedgraderingen, papperskorgen, lagrade filer, notisleveransen,
+     * livscykeln). Vaktens eget hjärtslag, `watches-delivery-queues`, ligger
+     * utanför listan och står i routes/console.php. Listan ligger under
+     * `crons` av samma skäl som `tracing` ovan: SDK:n släpper den nyckeln.
+     */
+    'crons' => [
+        'monitors' => [
+            'enforce-downgrades' => 'enforces-downgrades',
+            'deliver-notifications' => 'delivers-notifications',
+            'purge-expired-trash' => 'purges-expired-trash',
+            'purge-expired-stored-files' => 'purges-expired-stored-files',
+            'advance-account-lifecycle' => 'advances-account-lifecycle',
+            'aggregate-usage-metrics' => 'aggregates-usage-metrics',
+            'generate-task-notifications' => 'generates-task-notifications',
+            'send-weekly-digest' => 'sends-weekly-digest',
+            'delete-dormant-accounts' => 'deletes-dormant-accounts',
+            'reconcile-usage-counters' => 'reconciles-usage-counters',
+            'prune-logs' => 'prunes-logs',
+        ],
+    ],
+
 ];

@@ -22,6 +22,7 @@ use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
 use App\Console\ReportsAbuseSignals;
 use App\Console\SendsWeeklyDigest;
+use App\Console\WatchesDeliveryQueues;
 use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -427,6 +428,36 @@ Schedule::call(fn () => app(PrunesExpiredApiTokens::class)->handle())
 Schedule::call(fn () => app(PrunesInAppNotifications::class)->handle())
     ->daily()
     ->name('prune-in-app-notifications');
+
+/*
+ * Issue 389 · Vakten för leveranskörna, var 15:e minut. Se
+ * [[ADR-0079 Övervakning]] § 2 och App\Console\WatchesDeliveryQueues: larmar
+ * Sentry när en e-post- eller webhookleverans väntat i mer än 60 minuter.
+ *
+ * Schemaläggs med `Schedule::call`, aldrig `Schedule::command(...)` eller
+ * `->runInBackground()` — se AGENTS.md § Subprocesser i driftmiljön. Vakten
+ * har ett eget hjärtslag, så att Sentry larmar om den själv slutar köra.
+ */
+Schedule::call(fn () => app(WatchesDeliveryQueues::class)->handle())
+    ->everyFifteenMinutes()
+    ->name('watch-delivery-queues')
+    ->sentryMonitor('watches-delivery-queues');
+
+/*
+ * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]
+ * § 2. Listan (postnamn => slug, i prioritetsordning) bor i
+ * config/sentry.php § crons, så att den kan kortas utan att den här filen
+ * skrivs om. Står loopen efter alla poster den ska bevaka, men före
+ * köarbetaren, som ska ligga sist. Schemat skickas med så att Sentry vet när
+ * nästa incheckning väntas. Utan DSN är `sentryMonitor` verkningslös.
+ */
+foreach ((array) config('sentry.crons.monitors', []) as $name => $slug) {
+    foreach (Schedule::events() as $event) {
+        if ($event->description === $name) {
+            $event->sentryMonitor($slug, schedule: $event->expression);
+        }
+    }
+}
 
 /*
  * Issue 237, omskriven i issue 347 · Köarbetaren: tömmer `jobs`-tabellen varje
