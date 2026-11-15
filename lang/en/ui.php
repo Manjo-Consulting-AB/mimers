@@ -1268,6 +1268,21 @@ return [
                 'taken' => 'That address is already in use. Try another one.',
             ],
 
+            /*
+             * Issue 381 · [[ADR-0076 Profilbilden]] § 6. The section is its
+             * own key because the picture is its own write path: the file is
+             * posted straight to /settings/profile/avatar (no form around
+             * it), and Remove is a DELETE against the same address.
+             * `uploading` is the status line that says the file is on its
+             * way — the buttons are disabled meanwhile.
+             */
+            'avatar' => [
+                'heading' => 'Profile picture',
+                'upload' => 'Upload',
+                'remove' => 'Remove',
+                'uploading' => 'Uploading the picture…',
+            ],
+
             'locale' => 'Language',
             'locale_follow' => 'Follow the account language (:account)',
             'locale_follow_plain' => 'Follow the account language',

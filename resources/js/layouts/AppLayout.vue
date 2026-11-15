@@ -158,9 +158,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  *      i panelen.
  *
  * **Toppraden bär det som inte är navigering**: plusknappen, sökfältet,
- * klockan och avataren. De tre första är oförändrade komponenter; avataren är
- * användarens initialer i en cirkel som pekar på `/settings`, eftersom
- * datamodellen inte har någon avatarbild.
+ * klockan och avataren. De tre första är oförändrade komponenter; avataren
+ * pekar på `/settings` och ritar profilbilden sedan issue 381
+ * ([[ADR-0076 Profilbilden]] § 6) — miniatyren när den finns, initialerna
+ * annars.
  *
  * **Sidopanelen och mobilens sidomeny visar samma sektioner i samma
  * ordning** ([[ADR-0048 Mobilen och plusknappen]] § 1): båda ritar
@@ -297,6 +298,30 @@ const initials = computed(() => {
 
     return (first + last).toUpperCase();
 });
+
+/*
+ * Profilbilden i toppraden, se [[ADR-0076 Profilbilden]] § 6 och
+ * [[M59 Profilbilden]] § 381. `user.avatar` är `{ ulid, has_thumb }` eller
+ * null (AuthUserResource, issue 380), och miniatyren ritas bara när
+ * `has_thumb` är sant: `?variant=thumb` mot en bilaga utan derivat är en
+ * trasig bild (coverPresentation.js). Utan bild, utan miniatyr eller när
+ * bilden inte går att ladda (`@error`) står initialerna kvar — samma
+ * fallback som före issue 381. Flaggan nollställs när adressen byts, så en
+ * nyuppladdad bild inte ärver en gammal trasig bilds fallback.
+ */
+const avatarFailed = ref(false);
+
+const avatarThumbUrl = computed(() => {
+    const avatar = user.value?.avatar;
+
+    return avatar?.has_thumb ? `/files/${avatar.ulid}?variant=thumb` : null;
+});
+
+watch(avatarThumbUrl, () => {
+    avatarFailed.value = false;
+});
+
+const showsAvatarThumb = computed(() => avatarThumbUrl.value !== null && !avatarFailed.value);
 </script>
 
 <template>
@@ -409,15 +434,16 @@ const initials = computed(() => {
                             toppraden och pekar på `/settings`, samma mål som
                             raden i sidopanelen.
 
-                            **Initialerna och ingen bild.** Datamodellen har
-                            ingen avatarbild — `AuthUserResource` bär namn,
-                            e-post, språk, tidszon och enhetssystem — och
-                            bilden i `docs/Design/main.jpeg` ritar ett foto vi
-                            inte har. En cirkel med användarens initialer är
-                            därför den form som går att bygga utan att lova ett
-                            fält som inte finns; namnet bär `title` och
-                            `aria-label`, så raden heter samma sak för en
-                            skärmläsare som för en muspekare.
+                            **Bilden när den finns, initialerna annars** (issue
+                            381 · [[ADR-0076 Profilbilden]] § 6).
+                            `AuthUserResource` bär `avatar` med `ulid` och
+                            `has_thumb` sedan issue 380, och miniatyren ritas i
+                            samma cirkel och storlek som initialerna med
+                            `object-cover`. `alt=""` med flit: bilden är
+                            användarens eget ansikte i hennes egen rad, och
+                            länkens tillgängliga namn kommer ur `user.name` i
+                            `aria-label` — samma namn för en skärmläsare som
+                            för en muspekare.
                         -->
                         <Link
                             v-if="user"
@@ -426,7 +452,15 @@ const initials = computed(() => {
                             :title="user.name"
                             class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill bg-surface-sunken text-title font-semibold text-ink-muted outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         >
-                            {{ initials }}
+                            <img
+                                v-if="showsAvatarThumb"
+                                :src="avatarThumbUrl"
+                                alt=""
+                                class="h-11 w-11 rounded-pill object-cover"
+                                @error="avatarFailed = true"
+                            >
+
+                            <span v-else>{{ initials }}</span>
                         </Link>
                     </div>
                 </div>

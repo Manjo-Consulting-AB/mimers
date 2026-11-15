@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
@@ -61,6 +61,119 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+const page = usePage();
+
+/*
+ * Profilbilden, se [[ADR-0076 Profilbilden]] § 6 och [[M59 Profilbilden]]
+ * § 381.
+ *
+ * **Bilden läses ur den delade proppen, inte ur en sidpropp.** `avatar` är
+ * `{ ulid, has_thumb }` eller null och kommer ur AuthUserResource
+ * (issue 380); kontrollern för profilsidan skickar ingenting eget, och
+ * efter en uppladdning svarar servern `back()` med färska proppar, så cirkeln
+ * byter bild utan att vyn laddar om något själv.
+ *
+ * **Ett val postas direkt.** Filväljaren är den enda kontrollen för
+ * uppladdningen — ingen extra knapp — och `forceFormData` är det som gör
+ * filen till en multipart-kropp. Formen är ContainerCoverSheets
+ * (resources/js/components/ContainerCoverSheet.vue), som är förlagan både
+ * för anropet och för felraden.
+ *
+ * **Fältfelet `file` ritas under avsnittet.** Kvoten, en fil som inte är en
+ * bild och `avatar.no_personal_account` kommer från servern som ett
+ * valideringsfel på `file`, redan översatt (ApiErrorTranslator). Vyn skriver
+ * ingen egen mening för dem.
+ */
+const avatar = computed(() => page.props.auth.user.avatar ?? null);
+
+const initials = computed(() => {
+    const words = (props.name ?? '').trim().split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) {
+        return '';
+    }
+
+    const first = words[0].charAt(0);
+    const last = words.length > 1 ? words[words.length - 1].charAt(0) : '';
+
+    return (first + last).toUpperCase();
+});
+
+/*
+ * Cirkeln visar bilden när den finns. Miniatyren ritas när derivatet finns,
+ * annars originalet: en `<img>` mot `?variant=thumb` som inte är genererad är
+ * en trasig bild (coverPresentation.js), och på den här ytan är originalet
+ * alltid en giltig adress.
+ */
+const avatarSrc = computed(() => {
+    if (avatar.value === null) {
+        return null;
+    }
+
+    return avatar.value.has_thumb
+        ? `/files/${avatar.value.ulid}?variant=thumb`
+        : `/files/${avatar.value.ulid}`;
+});
+
+const imageFailed = ref(false);
+
+watch(avatarSrc, () => {
+    imageFailed.value = false;
+});
+
+const uploading = ref(false);
+const removing = ref(false);
+const avatarError = ref(null);
+
+const busy = computed(() => uploading.value || removing.value);
+
+function onFileSelected(event) {
+    const file = event.target.files?.[0] ?? null;
+
+    // Fältet töms så att SAMMA fil går att välja igen efter ett fel, samma
+    // skäl som i ContainerCoverSheet.
+    event.target.value = '';
+
+    if (file !== null) {
+        uploadAvatar(file);
+    }
+}
+
+function uploadAvatar(file) {
+    avatarError.value = null;
+
+    router.post('/settings/profile/avatar', { file }, {
+        forceFormData: true,
+        preserveScroll: true,
+        onStart: () => {
+            uploading.value = true;
+        },
+        onFinish: () => {
+            uploading.value = false;
+        },
+        onError: (errors) => {
+            avatarError.value = errors.file ?? null;
+        },
+    });
+}
+
+/*
+ * Ingen bekräftelse: bilden laddas lätt upp igen ([[ADR-0047 Containerns
+ * bild]] § Beslut, samma linje som för containerns bild).
+ */
+function removeAvatar() {
+    avatarError.value = null;
+
+    router.delete('/settings/profile/avatar', {
+        preserveScroll: true,
+        onStart: () => {
+            removing.value = true;
+        },
+        onFinish: () => {
+            removing.value = false;
+        },
+    });
+}
 
 const form = useForm({
     name: props.name,
@@ -198,6 +311,67 @@ function submit() {
             {{ form.processing ? t('common.pending.default') : t('settings.profile.submit') }}
         </button>
     </form>
+
+    <!--
+        Profilbilden, se [[ADR-0076 Profilbilden]] § 6. Cirkeln visar bilden
+        när den finns och initialerna annars; *Upload* är filväljaren själv,
+        och *Remove* står bara när det finns en bild. Statusraderna
+        `avatar-updated` och `avatar-removed` ritas av FlashMessage, som alla
+        andra statusrader på sidan.
+    -->
+    <section class="mt-8 flex max-w-lg flex-col gap-4">
+        <h2 class="text-lg font-semibold">{{ t('settings.profile.avatar.heading') }}</h2>
+
+        <div class="flex items-center gap-4">
+            <img
+                v-if="avatarSrc && !imageFailed"
+                :src="avatarSrc"
+                alt=""
+                class="h-16 w-16 shrink-0 rounded-pill object-cover"
+                @error="imageFailed = true"
+            >
+
+            <span
+                v-else
+                class="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-pill bg-surface-sunken text-title font-semibold text-ink-muted"
+            >
+                {{ initials }}
+            </span>
+
+            <div class="flex flex-col gap-2">
+                <label for="avatar-file" class="text-sm font-medium text-slate-800">
+                    {{ t('settings.profile.avatar.upload') }}
+                </label>
+
+                <input
+                    id="avatar-file"
+                    type="file"
+                    accept="image/*"
+                    :disabled="busy"
+                    class="text-sm text-slate-700"
+                    @change="onFileSelected"
+                >
+
+                <button
+                    v-if="avatar"
+                    type="button"
+                    :disabled="busy"
+                    class="self-start inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+                    @click="removeAvatar"
+                >
+                    {{ t('settings.profile.avatar.remove') }}
+                </button>
+            </div>
+        </div>
+
+        <p v-if="uploading" role="status" class="text-sm text-slate-600">
+            {{ t('settings.profile.avatar.uploading') }}
+        </p>
+
+        <!-- Serverns färdigöversatta mening: kvoten, en fil som inte är en
+             bild eller en person utan personkonto. -->
+        <p v-if="avatarError" role="alert" class="text-sm text-danger">{{ avatarError }}</p>
+    </section>
 
     <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 </template>
