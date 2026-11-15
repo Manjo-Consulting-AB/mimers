@@ -321,6 +321,21 @@ const props = defineProps({
     openLoanOverdue: { type: Boolean, required: true },
     /* De avslutade utlåningarna, i samma ordning som `/api` ger dem. */
     loanHistory: { type: Array, required: true },
+    /*
+     * Ättlingarnas öppna lån (issue 1249 · [[ADR-0068 Itemets sida och
+     * skapandet]] § Uppföljning 2026-11-14 punkt 2), ur LoanResource med
+     * `item: {ulid, name}`, `overdue` och radens `can`. Finns BARA när fliken
+     * *Loans* är aktiv och växeln är på — servern lämnar nyckeln helt annars
+     * (se ItemController::show()), och standarden är en tom lista: sektionen
+     * ritas bara på fliken.
+     */
+    descendantOpenLoans: { type: Array, default: () => [] },
+    /*
+     * Ättlingarnas stängda lån, i samma sortering som `loanHistory`, med
+     * `item: {ulid, name}` och radens `can`. Samma regel: bara på fliken och
+     * bara med växeln på.
+     */
+    descendantLoanHistory: { type: Array, default: () => [] },
     /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
     today: { type: String, required: true },
     /*
@@ -1356,6 +1371,9 @@ function toggleFavorite() {
                 :open-loan="openLoan"
                 :open-loan-overdue="openLoanOverdue"
                 :loan-history="loanHistory"
+                :descendant-open-loans="descendantOpenLoans"
+                :descendant-loan-history="descendantLoanHistory"
+                :include-children="includeChildren"
                 :today="today"
                 :can="can"
             />

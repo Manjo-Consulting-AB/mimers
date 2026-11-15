@@ -1,12 +1,14 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
 import UiButton from './UiButton.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import UiTextarea from './UiTextarea.vue';
 import { formatDateOnly } from './itemPresentation.js';
+import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -73,6 +75,17 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * står kvar som rå `<button>`: GenomgangTest tillåter bara webbläsarens egna
  * element som klickbar yta, och en `<UiButton>` hade fallit på den regeln.
  * Beteendet är oförändrat.
+ *
+ * **Ättlingarnas lån ritas med växeln *Include child items* på** (issue 1249 ·
+ * [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14 punkt 1–3).
+ * Växeln, läget och navigeringen är samma komponent och samma composable som
+ * *Tasks*, *Documents* och *Costs* använder, och valet gäller per flik.
+ * Itemets EGNA lån, formuläret för att låna ut och återlämningsfälten är
+ * oförändrade: det som skapar något nytt hör till platsen. En ättlings rad bär
+ * sitt items namn som länk dit, och dess *Return* och *Remove the row* går mot
+ * radens eget item — `loanUrl()` bygger adressen ur radens `item` när den
+ * finns, och `rowCan()` läser radens `can`. Servern prövar samma grindar på
+ * nytt i App\Http\Controllers\LoanController.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -89,6 +102,24 @@ const props = defineProps({
     openLoanOverdue: { type: Boolean, required: true },
     /* De avslutade utlåningarna, i samma ordning som `/api` ger dem. */
     loanHistory: { type: Array, required: true },
+    /*
+     * Ättlingarnas öppna lån (issue 1249 · [[ADR-0068 Itemets sida och
+     * skapandet]] § Uppföljning 2026-11-14 punkt 2). Finns bara när fliken är
+     * aktiv och växeln är på — servern lämnar nyckeln helt annars. Varje rad
+     * bär `item: {ulid, name}`, `overdue` och den radens `can` (se
+     * ItemController::show()).
+     */
+    descendantOpenLoans: { type: Array, default: () => [] },
+    /*
+     * Ättlingarnas stängda lån, i samma sortering som `loanHistory`, med
+     * `item: {ulid, name}` och radens `can`.
+     */
+    descendantLoanHistory: { type: Array, default: () => [] },
+    /*
+     * Växelns läge, ur `?children`. Förvalet är PÅ, som på *Tasks*,
+     * *Documents* och *Costs*.
+     */
+    includeChildren: { type: Boolean, default: true },
     /* Serverns datum, `Y-m-d` — *Tillbaka idag* sätter det här värdet. */
     today: { type: String, required: true },
     can: { type: Object, required: true },
@@ -108,6 +139,40 @@ const { focusFirstError } = useErrorFocus();
 const page = usePage();
 
 const locale = computed(() => page.props.locale);
+
+/*
+ * Växeln *Include child items* (issue 1249 · [[ADR-0068 Itemets sida och
+ * skapandet]] § Uppföljning 2026-11-14 punkt 1). Samma komponent och samma
+ * composable som *Tasks*, *Documents* och *Costs* använder — valet gäller per
+ * flik, och flikradens länkar bär aldrig `children`, så att stänga av på
+ * *Documents* inte påverkar *Loans*.
+ *
+ * `switchPending` och inte `pending`: det senare är radens vänteläge längre
+ * ned, och två flaggor med samma namn hade stängt listans rader när växeln
+ * väntade.
+ */
+const { onlyChildren, pending: switchPending, toggle: toggleChildren } = useIncludeChildren(
+    () => props.includeChildren,
+    () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=loans`,
+);
+
+/*
+ * Itemets namn till växelns hjälptext. Det läses ur `page.props.item`, samma
+ * väg som i ItemAttachmentSection och ItemCostSection: sektionen får sitt item
+ * som ULID, och namnet är sidans — den som ritar fliken har det redan.
+ */
+const itemName = computed(() => page.props.item?.name ?? '');
+
+const childrenHelp = computed(() => t('item.loan.children_help', { item: itemName.value }));
+
+/*
+ * Radens `can`: en ättlings rad bär sitt eget svar ur servern, itemets egna
+ * bär sidans. Servern prövar samma grindar på nytt i varje skrivning — de här
+ * flaggorna ritar bara ytan.
+ */
+function rowCan(loan) {
+    return loan.can ?? props.can;
+}
 
 /* ULID:n för den adress som just kopierades, eller `null` — knappens ord. */
 const copied = ref(null);
@@ -152,7 +217,16 @@ const returnForm = useForm({
 });
 
 function loanUrl(loan) {
-    return `/containers/${props.containerUlid}/items/${props.itemUlid}/loans/${loan.ulid}`;
+    /*
+     * Radens adress går mot RADENS item (issue 1249 · ADR-0068 § Uppföljning
+     * punkt 3). En ättlings rad bär `item` ur servern, och PATCH/DELETE mot
+     * sidans item hade 404:at — routen binder `{loan}` genom itemets
+     * `loans()`-relation. Itemets egna rader bär inget `item` och går mot
+     * sidan man står på.
+     */
+    const item = loan?.item?.ulid ?? props.itemUlid;
+
+    return `/containers/${props.containerUlid}/items/${item}/loans/${loan.ulid}`;
 }
 
 function submit() {
@@ -165,17 +239,55 @@ function submit() {
     });
 }
 
-function submitReturn() {
-    returnForm.patch(loanUrl(props.openLoan), {
+function submitReturn(loan) {
+    returnForm.patch(loanUrl(loan), {
         preserveScroll: true,
         onError: focusFirstError,
     });
 }
 
-function returnToday() {
+function returnToday(loan) {
     returnForm.returned_at = props.today;
-    submitReturn();
+    submitReturn(loan);
 }
+
+/*
+ * *Return* på en ättlings rad (issue 1249 · ADR-0068 § Uppföljning punkt 3).
+ * Knappen registrerar dagens datum — serverns, ur `today`-proppen — precis som
+ * *Back today* på itemets eget lån, men går mot radens item. Ett eget anrop
+ * och ett eget vänteläge: det delade `returnForm` ägs av itemets formulär, och
+ * en rad som trycktes på ska inte låsa det fältet.
+ */
+const returning = ref(null);
+
+function returnDescendant(loan) {
+    router.patch(loanUrl(loan), { returned_at: props.today }, {
+        preserveScroll: true,
+        onStart: () => { returning.value = loan.ulid; },
+        onFinish: () => { returning.value = null; },
+        onError: focusFirstError,
+    });
+}
+
+/*
+ * Historiken som ritas: itemets egna stängda lån och — med växeln på —
+ * ättlingarnas, i SAMMA lista (issue 1249 · ADR-0068 § Uppföljning punkt 2
+ * och 3). Servern sorterar var grupp för sig (`lent_at` fallande med `id`
+ * fallande), och vyn lägger dem i samma ordning över BÅDA: sorteringen jämför
+ * bara `lent_at`, och eftersom den är stabil står varje grupps egen ordning
+ * kvar vid samma datum (itemets rader först).
+ */
+const visibleHistory = computed(() => {
+    const rader = [...props.loanHistory, ...props.descendantLoanHistory];
+
+    return rader.sort((a, b) => {
+        if (a.lent_at === b.lent_at) {
+            return 0;
+        }
+
+        return a.lent_at < b.lent_at ? 1 : -1;
+    });
+});
 
 /*
  * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
@@ -210,6 +322,19 @@ function destroy(loan) {
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.loan.heading') }}</h2>
         <p class="mt-1 text-sm text-ink-muted">{{ t('item.loan.description') }}</p>
+
+        <!--
+            Växeln *Include child items* (issue 1249): överst under rubriken,
+            med flikens egen hjälptext. Samma komponent och samma composable
+            som *Tasks*, *Documents* och *Costs* — valet gäller per flik, och
+            flikradens länkar bär aldrig `children`.
+        -->
+        <IncludeChildrenSwitch
+            :model-value="onlyChildren"
+            :pending="switchPending"
+            :help="childrenHelp"
+            @update:model-value="toggleChildren"
+        />
 
         <!-- Den öppna utlåningen överst (§ Beslut 2). -->
         <div v-if="openLoan" class="mt-4 flex flex-col gap-2 rounded border border-border bg-surface px-4 py-3">
@@ -270,7 +395,7 @@ function destroy(loan) {
                     type="button"
                     :disabled="returnForm.processing"
                     class="inline-flex min-h-11 items-center rounded-control bg-accent px-4 font-medium text-ink-on-accent hover:bg-accent/90 disabled:opacity-50"
-                    @click="returnToday"
+                    @click="returnToday(openLoan)"
                 >
                     {{ t('item.loan.return_today') }}
                 </button>
@@ -287,7 +412,7 @@ function destroy(loan) {
             </div>
 
             <!-- Det egna återlämningsdatumet (§ Beslut 3). -->
-            <form v-if="can.update" class="mt-2 flex max-w-lg flex-col gap-3" @submit.prevent="submitReturn">
+            <form v-if="can.update" class="mt-2 flex max-w-lg flex-col gap-3" @submit.prevent="submitReturn(openLoan)">
                 <FormField
                     v-slot="{ describedBy }"
                     :label="t('item.loan.return_date')"
@@ -434,21 +559,93 @@ function destroy(loan) {
         </template>
 
         <!--
+            Ättlingarnas öppna lån (issue 1249 · ADR-0068 § Uppföljning
+            punkt 1–3): ett eget avsnitt med växeln på, under itemets eget lån
+            och formuläret. Rubriken säger var lånet ligger — i strukturen —
+            och varje rad bär sitt items namn som länk dit. *Return* går mot
+            radens item och ritas efter radens `can`; servern prövar samma
+            grind på nytt.
+        -->
+        <template v-if="onlyChildren && descendantOpenLoans.length > 0">
+            <h3 class="mt-8 text-base font-semibold">{{ t('item.loan.children_heading') }}</h3>
+
+            <ul class="mt-2 flex flex-col gap-2">
+                <li
+                    v-for="loan in descendantOpenLoans"
+                    :key="loan.ulid"
+                    class="flex flex-col gap-2 rounded border border-border bg-surface px-4 py-2"
+                >
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- Platsen: itemets namn som länk till dess lånflik. -->
+                        <Link
+                            :href="`/containers/${containerUlid}/items/${loan.item.ulid}?tab=loans`"
+                            class="inline-flex min-h-11 items-center font-medium text-ink hover:underline"
+                        >
+                            {{ loan.item.name }}
+                        </Link>
+
+                        <span class="text-sm text-ink-muted">
+                            {{ t('item.loan.borrowed_by', { name: loan.borrower_name }) }}
+                        </span>
+
+                        <span class="text-sm text-ink-muted">
+                            {{ t('item.loan.lent_at', { date: formatDateOnly(loan.lent_at, locale) }) }}
+                        </span>
+
+                        <span v-if="loan.due_at" class="text-sm text-ink-muted">
+                            {{ t('item.loan.due_at', { date: formatDateOnly(loan.due_at, locale) }) }}
+                        </span>
+                        <span v-else class="text-sm text-ink-muted">{{ t('item.loan.no_due_at') }}</span>
+
+                        <!-- Försenad är serverns flagga, aldrig klientens
+                             jämförelse — samma regel som itemets eget lån. -->
+                        <span v-if="loan.overdue" class="text-sm font-medium text-danger">
+                            {{ t('item.loan.overdue') }}
+                        </span>
+
+                        <button
+                            v-if="rowCan(loan).update"
+                            type="button"
+                            :disabled="returning === loan.ulid"
+                            class="inline-flex min-h-11 items-center rounded-control bg-accent px-4 font-medium text-ink-on-accent hover:bg-accent/90 disabled:opacity-50"
+                            @click="returnDescendant(loan)"
+                        >
+                            {{ returning === loan.ulid ? t('common.pending.default') : t('item.loan.return_today') }}
+                        </button>
+                    </div>
+                </li>
+            </ul>
+        </template>
+
+        <!--
             Historiken (§ Beslut 2). Rubriken och listan ritas bara när det
             finns en rad: är itemet aldrig utlånat räcker `not_lent` ovan, och
             en andra mening om att historiken är tom säger samma sak en gång
             till.
+
+            Sedan issue 1249 ritar samma lista också ättlingarnas stängda lån
+            när växeln är på — se `visibleHistory` — och en sådan rad bär sitt
+            items namn som länk dit. *Remove the row* går mot radens item och
+            ritas efter radens `can`.
         -->
-        <template v-if="loanHistory.length > 0">
+        <template v-if="visibleHistory.length > 0">
             <h3 class="mt-8 text-base font-semibold">{{ t('item.loan.history_heading') }}</h3>
 
             <ul class="mt-2 flex flex-col gap-2">
                 <li
-                    v-for="loan in loanHistory"
+                    v-for="loan in visibleHistory"
                     :key="loan.ulid"
                     class="flex flex-col gap-1 rounded border border-border bg-surface px-4 py-2"
                 >
                     <div class="flex flex-wrap items-center gap-3">
+                        <Link
+                            v-if="loan.item"
+                            :href="`/containers/${containerUlid}/items/${loan.item.ulid}?tab=loans`"
+                            class="inline-flex min-h-11 items-center font-medium text-ink hover:underline"
+                        >
+                            {{ loan.item.name }}
+                        </Link>
+
                         <span class="font-medium text-ink">{{ loan.borrower_name }}</span>
 
                         <span class="text-sm text-ink-muted">
@@ -462,7 +659,7 @@ function destroy(loan) {
                         <span v-if="loan.borrower_email" class="text-sm text-ink-muted">{{ loan.borrower_email }}</span>
 
                         <button
-                            v-if="can.delete"
+                            v-if="rowCan(loan).delete"
                             type="button"
                             :disabled="pending === loan.ulid"
                             class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
