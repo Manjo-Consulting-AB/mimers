@@ -75,6 +75,17 @@ const root = ref(null);
 const bellButton = ref(null);
 
 function toggle() {
+    /*
+     * Klicket ignoreras medan läsningen postas. Knappen är `aria-disabled` och
+     * inte `disabled`: en inaktiverad knapp tappar fokus till `body`, och då
+     * når Escape inte rotens lyssnare och fokus går inte tillbaka till klockan
+     * (granskningen av #1315). Skrivningen är dessutom idempotent — actionen
+     * rör bara olästa rader — så ett dubbeltryck hade varit ofarligt.
+     */
+    if (marking.value) {
+        return;
+    }
+
     if (isOpen.value) {
         close();
 
@@ -114,9 +125,12 @@ watch(() => page.url, () => {
 });
 
 /*
- * De visade raderna markeras som lästa. `marking` stänger klockan medan
- * skrivningen är på väg (GenomgangTest), och den partiella omladdningen
- * hämtar bara märket — listan på /notifications behåller sina rader.
+ * De visade raderna markeras som lästa. `marking` uttalar vänteläget på
+ * klockan med `aria-disabled` och `:pending` och får `toggle` att ignorera
+ * klicket medan skrivningen är på väg — knappen behåller fokus, till skillnad
+ * från en `disabled` knapp, som tappar det till `body` (granskningen av
+ * #1315). Den partiella omladdningen hämtar bara märket — listan på
+ * /notifications behåller sina rader.
  */
 function markShown(ulids) {
     if (ulids.length === 0) {
@@ -139,16 +153,23 @@ function markShown(ulids) {
             Sidhuvudets klocka: en knapp med ikonen `notifications` (Lucides
             `bell`, se tests/Feature/Frontend/IkonerTest.php). Träffytan är
             44 px, och brickan hänger på ikonens hörn.
+
+            Vänteläget står i `aria-disabled` och i `:pending`, men aldrig i
+            `disabled`: en inaktiverad knapp lämnar fokus till `body`, och då
+            når Escape inte rotens lyssnare och fokus går inte tillbaka till
+            klockan (§ 1). Stängningen gör `toggle`, som ignorerar klicket
+            medan flaggan är satt.
         -->
         <button
             v-if="! isTab"
             ref="bellButton"
             type="button"
-            class="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-300 text-slate-700 disabled:opacity-60"
+            class="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-300 text-slate-700 aria-disabled:opacity-60"
             :aria-label="label"
             :aria-controls="panelId"
             :aria-expanded="isOpen"
-            :disabled="marking"
+            :aria-disabled="marking"
+            :pending="marking"
             @click="toggle"
         >
             <span class="relative inline-flex">

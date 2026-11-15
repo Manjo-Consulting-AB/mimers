@@ -123,6 +123,33 @@ it('ritar klockan med notifications.unread, panel över md: och länk under md:'
 });
 
 /*
+ * Granskningen av #1315, fynd 1: klockan får inte bli `disabled` medan
+ * läsningen postas. En inaktiverad knapp tappar fokus till `body`, och då når
+ * Escape inte rotens lyssnare och fokus går inte tillbaka till klockan (§ 1).
+ * Vänteläget uttalas i stället med `aria-disabled` (till skärmläsaren) och
+ * `:pending` (formen GenomgangTest känner igen runt ett router-anrop), och
+ * `toggle` ignorerar klicket så länge skrivningen är på väg — annars är
+ * vänteläget bara en etikett.
+ */
+it('behåller fokus i klockan medan läsningen postas', function () {
+    $klocka = notisvyKod('components/NotificationBell.vue');
+
+    // Knappen fångas först: ett mönster som letar i hela filen hade också sett
+    // panelens markup.
+    preg_match('/<button\b.*?<\/button>/s', $klocka, $traff);
+    $knapp = $traff[0] ?? '';
+
+    expect($knapp)->not->toBe('', 'NotificationBell.vue ritar ingen <button>');
+    expect($knapp)->not->toContain(':disabled')
+        ->and($knapp)->toContain(':aria-disabled="marking"')
+        // GenomgangTest kräver en väntelägesbindning runt router-anropet;
+        // `:pending` är dess form, och `disabled` får det inte vara.
+        ->and($knapp)->toContain(':pending="marking"');
+
+    expect($klocka)->toContain('if (marking.value)');
+});
+
+/*
  * Klart när (punkt 2): panelen och sidan visar raderna med text per typ.
  * Rader med mål är länkar och rader utan mål är ren text.
  *
