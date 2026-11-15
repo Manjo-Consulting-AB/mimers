@@ -118,12 +118,11 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
-            ->has('preferences', 7)
-            ->where('preferences', fn ($rader) => collect($rader)->pluck('type')->all()
+            // Sju e-postrader och tre `in_app`-rader (issue 386).
+            ->has('preferences', 10)
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all()
                 === app(NotificationPreferences::class)->types())
-            ->where('preferences', fn ($rader) => collect($rader)->every(
-                fn (array $rad) => $rad['channel'] === NotificationDelivery::CHANNEL_EMAIL,
-            ))
             // Första ledet är konstantordningen, inte en sortering: `task.due`
             // deklareras före `task.overdue` i App\Models\Notification.
             ->where('preferences.0.type', Notification::TYPE_TASK_DUE)
@@ -141,9 +140,89 @@ it('listar inte kanalen webhook bland preferenserna', function () {
     actingAs(User::factory()->create())
         ->get('/settings/notifications')
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('preferences', fn ($rader) => collect($rader)->pluck('channel')->unique()->all()
+            ->where('preferences', fn ($rader) => collect($rader)->pluck('channel')->unique()->sort()->values()->all()
+                === [NotificationDelivery::CHANNEL_EMAIL, NotificationDelivery::CHANNEL_IN_APP])
+        );
+});
+
+/*
+ * Issue 386 · Kolumnen In app. Serverns lista över typer som kan ha kanalen
+ * bärs som propp; vyn ritar växeln bara för dem. Förvalet är påslaget.
+ */
+it('bär kolumnen In app för de tre typerna och ingen växel för de andra', function () {
+    withoutVite();
+
+    actingAs(User::factory()->create())
+        ->get('/settings/notifications')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('inAppTypes', fn ($typer) => collect($typer)->sort()->values()->all() === collect([
+                Notification::TYPE_CONTAINER_DELETED,
+                Notification::TYPE_TRANSFER_REQUESTED,
+                Notification::TYPE_QUOTA_WARNING,
+            ])->sort()->values()->all())
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
+                ->every(fn (array $rad) => $rad['enabled'] === true && $rad['is_default'] === true))
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)->count() === 3)
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->where('type', Notification::TYPE_TASK_DUE)->pluck('channel')->all()
                 === [NotificationDelivery::CHANNEL_EMAIL])
         );
+
+    $vy = file_get_contents(resource_path('js/pages/Settings/Notifications.vue'));
+    expect($vy)->toContain("t('notifications.in_app.label')")->toContain('inAppTypes.includes(');
+    expect(trans('ui.notifications.in_app.label', [], 'en'))->toBe('In app');
+});
+
+it('sparar kanalen in_app via webben utan att röra e-posten', function () {
+    withoutVite();
+
+    $anvandare = User::factory()->create();
+    actingAs($anvandare);
+
+    from('/settings/notifications')
+        ->put('/settings/notifications', [
+            'preferences' => [[
+                'type' => Notification::TYPE_TRANSFER_REQUESTED,
+                'channel' => NotificationDelivery::CHANNEL_IN_APP,
+                'enabled' => false,
+                'digest' => false,
+            ]],
+        ])
+        ->assertRedirect('/settings/notifications');
+
+    $rad = NotificationPreference::query()->where('user_id', $anvandare->id)->sole();
+    expect($rad->channel)->toBe(NotificationDelivery::CHANNEL_IN_APP);
+    expect($rad->enabled)->toBeFalse();
+
+    actingAs($anvandare->fresh())
+        ->get('/settings/notifications')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->where('type', Notification::TYPE_TRANSFER_REQUESTED)
+                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
+                ->first()['enabled'] === false)
+        );
+});
+
+it('avvisar digest för in_app via webben', function () {
+    withoutVite();
+
+    actingAs(User::factory()->create());
+
+    from('/settings/notifications')
+        ->put('/settings/notifications', [
+            'preferences' => [[
+                'type' => Notification::TYPE_QUOTA_WARNING,
+                'channel' => NotificationDelivery::CHANNEL_IN_APP,
+                'enabled' => true,
+                'digest' => true,
+            ]],
+        ])
+        ->assertSessionHasErrors('preferences.0.digest');
+
+    expect(NotificationPreference::query()->count())->toBe(0);
 });
 
 /*
@@ -549,8 +628,9 @@ it('lämnar /api-rutterna oförändrade', function () {
 
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
-    expect($svar->json('data'))->toHaveCount(7);
-    expect(collect($svar->json('data'))->pluck('type')->all())
+    // Sju e-postrader och tre `in_app`-rader (issue 386).
+    expect($svar->json('data'))->toHaveCount(10);
+    expect(collect($svar->json('data'))->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());
     expect(collect($svar->json('data'))->every(fn (array $rad) => $rad['is_default'] === true))->toBeTrue();
 

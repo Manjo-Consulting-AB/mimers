@@ -1673,6 +1673,12 @@ return [
             ],
         ],
 
+        // The In app column next to the email choice, see M60 · issue 386.
+        'in_app' => [
+            'intro' => 'Some types can also show up in the notification list in the app. Switch that on or off per type under In app.',
+            'label' => 'In app',
+        ],
+
         'submit' => 'Save',
 
         'quiet_hours' => [
