@@ -411,19 +411,20 @@ it('saknar shellContainers i en vanlig sidladdning och har den vid en partiell o
 
     [, $ägare, $container] = sidopanelKontext();
 
-    get('/')->assertOk()->assertInertia(fn ($page) => $page
+    get('/about')->assertOk()->assertInertia(fn ($page) => $page
         ->where('auth.user', null)
         ->missing('shellContainers')
     );
 
     // Gästen får samma TOMHET som en inloggad utan containrar — formen är
     // densamma, så skalet aldrig behöver två avpackningsvägar. Anropet görs
-    // som gäst, alltså utan `actingAs()`: `/` är den enda sidan en gäst når,
-    // och `shellContainers()` returnerar tidigt för henne.
-    $gäst = get('/', [
+    // som gäst, alltså utan `actingAs()`: `/about` (Info) är publik sedan
+    // `/` blev en omdirigering (issue 1244), och `shellContainers()`
+    // returnerar tidigt för henne.
+    $gäst = get('/about', [
         'X-Inertia' => 'true',
-        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
-        'X-Inertia-Partial-Component' => 'Welcome',
+        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/about')),
+        'X-Inertia-Partial-Component' => 'Info',
         'X-Inertia-Partial-Data' => 'shellContainers',
     ])->assertOk();
 

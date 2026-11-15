@@ -104,14 +104,19 @@ it('renderar serverns valideringsfel på fältet email', function () {
         );
 });
 
-it('cachar rotvyn och renderar en sida efteråt', function () {
+/*
+ * `/` omdirigerar sedan issue 1244 och renderar ingen vy, så provet cachar
+ * vyerna och renderar en publik sida: `/about` (Info) når både en gäst och en
+ * inloggad, som `Welcome` gjorde.
+ */
+it('cachar vyerna och renderar en sida efteråt', function () {
     withoutVite();
 
     Artisan::call('view:cache');
 
-    get('/')
+    get('/about')
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->component('Welcome'));
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('Info'));
 
     Artisan::call('view:clear');
 });
@@ -132,7 +137,7 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
 
     // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
     // testet, och därefter är varje anrop inloggat.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
@@ -197,7 +202,7 @@ it('visar användarens namn som länken till inställningarna', function () {
 
     // Gästen prövas FÖRST, som i provet ovanför: actingAs() sätter guardens
     // användare för resten av testet, och därefter är varje anrop inloggat.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
@@ -259,7 +264,7 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
 
     // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
     // testet, och därefter är varje anrop inloggat.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
@@ -460,7 +465,7 @@ it('ritar notisklockan i sidhuvudet för en inloggad och ingen för en gäst', f
 
     // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
     // testet, och därefter är varje anrop inloggat.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 

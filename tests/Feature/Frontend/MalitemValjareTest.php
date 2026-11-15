@@ -197,7 +197,7 @@ it('bär itemTargets bara på begäran', function () {
     [, $ägare, $container] = malitemKonto();
     malitemItem($container, 'Motorn', $ägare);
 
-    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+    get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('auth.user', null)
         ->missing('itemTargets')
     );

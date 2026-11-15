@@ -29,7 +29,7 @@ use function Pest\Laravel\withSession;
 it('delar ingen användare och inga konton med en gäst', function () {
     withoutVite();
 
-    foreach (['/', '/login'] as $url) {
+    foreach (['/about', '/login'] as $url) {
         get($url)->assertInertia(fn (AssertableInertia $page) => $page
             ->where('auth.user', null)
             ->has('auth.accounts', 0)
@@ -215,7 +215,7 @@ it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter'
     ]);
 
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
-    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+    get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->has('favorites', 0)
         ->where('auth.user', null)
     );
@@ -261,7 +261,7 @@ it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', functi
     // Läsningen av dem prövas i NyligenBesoktaTest och SidopanelTest.
 
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
-    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+    get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('auth.user', null)
         ->where('unreadNotificationCount', 0)
         ->missing('notifications')
