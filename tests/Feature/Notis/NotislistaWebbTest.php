@@ -207,8 +207,15 @@ it('skickar en gäst till inloggningen från alla fyra rutter', function () {
     post('/notifications/read-all')->assertRedirect('/login');
 });
 
-it('skickar en overifierad adress till verifieringen', function () {
+it('släpper in en overifierad adress, som de andra apprutterna', function () {
     $user = User::factory()->unverified()->create();
 
-    actingAs($user)->get('/notifications')->assertRedirect('/email/verify');
+    // Verifieringskravet gäller att ta emot delning, inte att använda appen
+    // (routes/web.php § verification.notice). Klockan postar dessutom till
+    // /notifications/read, så ett `verified` här hade brutit den.
+    expect(notisWebbSida($user)['component'])->toBe('Notifications/Index');
+
+    actingAs($user)->post('/notifications/read')->assertRedirect();
+
+    expect($user->fresh()->notifications_read_at)->not->toBeNull();
 });

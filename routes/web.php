@@ -506,23 +506,25 @@ Route::middleware('auth')->group(function () {
      * App\Http\Controllers\NotificationInboxController — den hör till den
      * gamla panelen och försvinner med den.
      *
-     * Alla fyra ligger bakom `verified`, enligt § 3: en overifierad adress
-     * ska inte kunna läsa eller skriva personliga notiser.
+     * **Ingen `verified`, som de andra apprutterna.** Verifieringskravet i
+     * den här appen gäller att ta emot delning, inte att använda appen (se
+     * `verification.notice` nedan och routes/api.php). Ingen annan rutt bär
+     * `verified`, och API:ets tre rutter gör det inte heller — webben och
+     * API:et svarar lika. På `read` hade kravet dessutom brutit klockan:
+     * resources/js/components/NotificationBell.vue postar dit, och en
+     * overifierad användare hade skickats till `/email/verify` i stället för
+     * att få siffran nollställd.
      */
     Route::get('/notifications', [NotificationController::class, 'index'])
-        ->middleware('verified')
         ->name('notifications.index');
 
     Route::get('/notifications/panel', [NotificationController::class, 'panel'])
-        ->middleware('verified')
         ->name('notifications.panel');
 
     Route::post('/notifications/read', [NotificationController::class, 'read'])
-        ->middleware('verified')
         ->name('notifications.read');
 
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
-        ->middleware('verified')
         ->name('notifications.read-all');
 
     Route::post('/notifications/clear', [NotificationInboxController::class, 'clear'])
