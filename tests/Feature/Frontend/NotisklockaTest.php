@@ -141,7 +141,7 @@ function klockaListan(User $anvandare, string $url = '/dashboard'): array
  * notiserna och inbjudningarna i samma partiella omladdning
  * (resources/js/components/NotificationBell.vue).
  *
- * `klockaListan` ovan frågar bara efter `notifications` — det är vad
+ * `klockaListan` ovan frågar bara efter `notificationList` — det är vad
  * läsningen behöver. Clear rör notiserna medan inbjudningarna ska stå kvar,
  * och då måste båda läsas i samma svar för att jämförelsen ska betyda något.
  *

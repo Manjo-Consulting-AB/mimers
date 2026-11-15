@@ -81,7 +81,7 @@ use Inertia\Middleware;
  * annat: den ritas i sidhuvudet på varje sida, och den kostar EN fråga för
  * notiserna — indexet `(user_id, created_at)` finns för den. Sedan 131
  * tillkommer en fråga för de väntande inbjudningarna, se nedan.
- * `notifications` är LISTAN, och den är `Inertia::optional()`: den hämtas
+ * `notificationList` är LISTAN, och den är `Inertia::optional()`: den hämtas
  * först när klockan öppnas, genom en partiell omladdning av just den nyckeln,
  * och en vanlig sidladdning rör den aldrig. Skillnaden är hela poängen —
  * siffran är billig och behövs överallt, raderna är dyra och behövs sällan.
