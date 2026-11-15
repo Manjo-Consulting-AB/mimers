@@ -842,6 +842,49 @@ class ItemController extends Controller
         $openLoan = $loans->first(fn (Loan $loan): bool => $loan->returned_at === null);
         $history = $loans->reject(fn (Loan $loan): bool => $loan->returned_at === null)->values();
 
+        // Ättlingarnas lån (issue 1249 · [[ADR-0068 Itemets sida och
+        // skapandet]] § Uppföljning 2026-11-14 punkt 1–3). Bara när *Loans*
+        // är den aktiva fliken OCH växeln är på — raderna kostar en fråga, och
+        // den som öppnar itemet för att se sina egna lån ska inte betala för
+        // ättlingarnas.
+        //
+        // Mängden är App\Actions\Item\ResolveVisibleDescendants svar, samma
+        // som *Documents* och *Costs* använder: id:n för de ättlingar
+        // anroparen NÅR. Ett item läsaren inte får `view` på ritas aldrig,
+        // precis som i `ListItemTasks` (#696 Beslut 3).
+        //
+        // Sorteringen är `$loans` egna — `lent_at` fallande med `id` fallande
+        // — och delas i den öppna och historiken här, av samma skäl som
+        // itemets egna rader: `returned_at IS NULL` är den öppna. `item`
+        // laddas eager därför att raden bär sitt items namn och ULID;
+        // containern hängs på för hand nedan, så `can`-grindarna inte slår upp
+        // den per rad.
+        $descendantLoans = $request->query('tab') === 'loans' && $includeChildren
+            ? Loan::query()
+                ->whereIn('item_id', $resolveVisibleDescendants->handle($user, $item)->all())
+                ->with('item')
+                ->orderByDesc('lent_at')
+                ->orderByDesc('id')
+                ->get()
+            : new EloquentCollection;
+
+        // Försenade först, sedan nyast utlånade (issue 1249). Sorteringen är
+        // stabil (PHP 8), så ordningen inom varje grupp står kvar ur frågan
+        // ovan: först de försenade, nyast först, sedan resten, nyast först.
+        // Regeln är samma `isOverdue()` som itemets egen flagga, räknad på
+        // användarens dag ([[ADR-0044 Användarens dag]]).
+        $descendantOpenLoans = $descendantLoans
+            ->filter(fn (Loan $loan): bool => $loan->returned_at === null)
+            ->sortByDesc(fn (Loan $loan): bool => $this->isOverdue($loan, $user))
+            ->values();
+
+        // Historiken har samma sortering som itemets egen `history` —
+        // `lent_at` fallande med `id` fallande — så en ättlings rad står i
+        // samma ordning som en egen hade gjort.
+        $descendantLoanHistory = $descendantLoans
+            ->reject(fn (Loan $loan): bool => $loan->returned_at === null)
+            ->values();
+
         // Kostnaderna kommer med detaljvyns props och aldrig ur ett eget
         // anrop (issue 168 § Beslut 3 · [[ADR-0050 Desktopdesignen]] § 8).
         // Sorteringen är `Api\CostEntryController::index()`s egen —
@@ -1055,6 +1098,29 @@ class ItemController extends Controller
             // format och rörs inte av den här issuen — samma linje som
             // `variants()` ovan.
             'openLoanOverdue' => $openLoan !== null && $this->isOverdue($openLoan, $user),
+
+            // Ättlingarnas lån (issue 1249): bara på *Loans* och bara med
+            // växeln på. Propparna finns då alltid — en tom lista är ett svar
+            // servern HAR gett (itemet saknar ättlingar med lån), medan en
+            // utelämnad nyckel betyder att frågan aldrig ställdes.
+            //
+            // Varje rad är LoanResource plus `item: {ulid, name}` och radens
+            // `can`. `item` ritar platsen och bygger radens adress — *Return*
+            // och *Remove the row* går mot radens item (ADR-0068
+            // § Uppföljning punkt 3) — och `can` är RADENS flaggor, prövade
+            // med samma policyer som rutterna. `overdue` på de öppna raderna
+            // är samma regel som `openLoanOverdue` ovan, så en ättlings rad
+            // aldrig färgas röd av klientens klocka.
+            ...($request->query('tab') === 'loans' && $includeChildren
+                ? [
+                    'descendantOpenLoans' => $descendantOpenLoans
+                        ->map(fn (Loan $loan): array => $this->descendantLoanRow($loan, $user, $container, $request, true))
+                        ->all(),
+                    'descendantLoanHistory' => $descendantLoanHistory
+                        ->map(fn (Loan $loan): array => $this->descendantLoanRow($loan, $user, $container, $request, false))
+                        ->all(),
+                ]
+                : []),
 
             // Kostnaderna (issue 168 § Beslut 3 · [[ADR-0050 Desktopdesignen]]
             // § 8). `costs` är itemets rader i App\Http\Resources\
@@ -2259,6 +2325,42 @@ class ItemController extends Controller
         }
 
         return $names;
+    }
+
+    /**
+     * En ättlings lån som raden på *Loans* ritar den (issue 1249 ·
+     * [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14
+     * punkt 2 och 3): App\Http\Resources\LoanResource plus `item` och radens
+     * `can`, och — för en öppen rad — `overdue`.
+     *
+     * `item` bär bara `{ulid, name}` därför att det är allt raden ritar och
+     * allt adressen behöver; containern hängs på för hand, så `can`-grindarna
+     * kostar inga frågor per rad. `overdue` räknas av `isOverdue()` och
+     * aldrig i vyn — samma regel som `openLoanOverdue`. Historikraden bär
+     * också `can`, eftersom *Remove the row* på den raden prövas mot radens
+     * item och ritas efter radens flagga.
+     *
+     * @return array<string, mixed>
+     */
+    private function descendantLoanRow(Loan $loan, User $user, Container $container, Request $request, bool $withOverdue): array
+    {
+        $rowItem = $loan->item;
+        $rowItem->setRelation('container', $container);
+
+        $row = [
+            ...(new LoanResource($loan))->resolve($request),
+            'item' => ['ulid' => $rowItem->ulid, 'name' => $rowItem->name],
+            'can' => [
+                'update' => Gate::forUser($user)->allows('update', $rowItem),
+                'delete' => Gate::forUser($user)->allows('delete', $rowItem),
+            ],
+        ];
+
+        if ($withOverdue) {
+            $row['overdue'] = $this->isOverdue($loan, $user);
+        }
+
+        return $row;
     }
 
     /**

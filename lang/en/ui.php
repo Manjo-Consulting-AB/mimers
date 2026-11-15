@@ -3830,6 +3830,17 @@ return [
             'heading' => 'Loans',
             'description' => 'Who has the item, and when it is due back.',
 
+            // Issue 1249 · [[ADR-0068 Itemets sida och skapandet]]
+            // § Uppföljning 2026-11-14 punkt 1: the help line under the
+            // *Include child items* switch on the loans tab, and the heading
+            // over the descendants' open loans. The switch label itself is
+            // shared through IncludeChildrenSwitch.vue
+            // (`item.attachment.include_children`); only the sentence naming
+            // the item and the heading over the descendant rows are this
+            // tab's own.
+            'children_help' => 'Shows loans of :item and its child items.',
+            'children_heading' => 'Lent out in the structure',
+
             // The open loan sits on top and the history below (decision 2).
             // `returned_at IS NULL` is the open one, and which row that is
             // arrives pre-computed from the server.
