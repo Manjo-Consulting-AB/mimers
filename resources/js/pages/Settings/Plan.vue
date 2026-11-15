@@ -222,26 +222,35 @@ function graceLabel(days) {
         </dl>
     </section>
 
-    <!-- Nedgraderingen förklaras INNAN den sker (Beslut 6). Stegen är
-         dokumentets fem, och det viktigaste står med lika tydligt: items
-         raderas aldrig, kostnadsrader raderas aldrig. Den som förstår det
-         innan hon hamnar i läget blir kvar som kund. -->
+    <!-- Nedgraderingen förklaras INNAN den sker (Beslut 6). `lead` står först
+         och större: items raderas aldrig, bara bilagor kan försvinna — det är
+         det som avgör om läsaren vågar stanna. Varje steg har titeln i fetstil
+         och brödtexten efter sig; sista steget har bara en titel. Ingen nyckel
+         bär markup: `<strong>` är titelns plats i mallen. -->
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
         <h2 class="text-lg font-semibold">{{ t('plan.downgrade.heading') }}</h2>
+        <p class="mt-3 text-base font-semibold text-slate-900">{{ t('plan.downgrade.lead') }}</p>
         <p class="mt-2 text-sm text-slate-700">{{ t('plan.downgrade.intro') }}</p>
 
         <ol class="mt-4 flex list-decimal flex-col gap-2 pl-5 text-sm text-slate-700">
-            <li>{{ t('plan.downgrade.steps.freeze') }}</li>
-            <li>{{ t('plan.downgrade.steps.choose') }}</li>
-            <li>{{ t('plan.downgrade.steps.grace') }}</li>
-            <li>{{ t('plan.downgrade.steps.purge') }}</li>
-            <li>{{ t('plan.downgrade.steps.restore') }}</li>
+            <li>
+                <strong>{{ t('plan.downgrade.steps.freeze.title') }}</strong> {{ t('plan.downgrade.steps.freeze.body') }}
+            </li>
+            <li>
+                <strong>{{ t('plan.downgrade.steps.choose.title') }}</strong> {{ t('plan.downgrade.steps.choose.body') }}
+            </li>
+            <li>
+                <strong>{{ t('plan.downgrade.steps.grace.title') }}</strong> {{ t('plan.downgrade.steps.grace.body') }}
+            </li>
+            <li>
+                <strong>{{ t('plan.downgrade.steps.purge.title') }}</strong> {{ t('plan.downgrade.steps.purge.body') }}
+            </li>
+            <li>
+                <strong>{{ t('plan.downgrade.steps.restore.title') }}</strong>
+            </li>
         </ol>
 
-        <div class="mt-4 flex flex-col gap-1 text-sm text-slate-900">
-            <p>{{ t('plan.downgrade.kept.items') }}</p>
-            <p>{{ t('plan.downgrade.kept.costs') }}</p>
-        </div>
+        <p class="mt-4 text-sm text-slate-900">{{ t('plan.downgrade.kept') }}</p>
 
         <!-- Förhandsvisningen är konkret (Beslut 7): hur mycket över, och
              hur många bilagor som skulle gå nyast först. Under gränsen
