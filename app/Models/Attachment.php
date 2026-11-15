@@ -12,23 +12,24 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Kopplingen mellan ett item eller en container och de lagrade bytena, med
- * användarens eget filnamn — se [[Filer och lagring]] § attachment och
- * [[ADR-0006 Innehållsadresserad lagring]]. Två användare som laddar upp
- * samma manual får två rader här, en rad i stored_file; varje rad bär sitt
- * eget `filename`.
+ * Kopplingen mellan ett item, en container eller en person och de lagrade
+ * bytena, med användarens eget filnamn — se [[Filer och lagring]]
+ * § attachment och [[ADR-0006 Innehållsadresserad lagring]]. Två användare
+ * som laddar upp samma manual får två rader här, en rad i stored_file; varje
+ * rad bär sitt eget `filename`.
  *
- * **Exakt en av `item_id` och `container_id` är satt** ([[ADR-0047
- * Containerns bild]] § Beslut). Villkoret upprätthålls av ett CHECK i
- * databasen; den här klassen läser det genom `accessSubject()` och
- * `owningContainer()` i stället för att varje läsare själv ska fråga
- * "vilket item tillhör bilagan?".
+ * **Exakt en av `item_id`, `container_id` och `user_id` är satt**
+ * ([[ADR-0047 Containerns bild]] och [[ADR-0076 Profilbilden]] § 1).
+ * Villkoret upprätthålls av ett CHECK i databasen; den här klassen läser det
+ * genom `accessSubject()` och `owningContainer()` i stället för att varje
+ * läsare själv ska fråga "vilket item tillhör bilagan?".
  *
- * `item_id`, `container_id`, `stored_file_id`, `uploaded_by_user_id` och
- * `billed_account_id` är medvetet UTESLUTNA ur `#[Fillable]`: de sätts
- * explicit av App\Actions\Attachment\StoreAttachment (från rutten, från
- * dedupresultatet, från token och från kroppens `account`), aldrig via
- * massildelning — samma resonemang som `Item`, se issue 16a § Beslut 14.
+ * `item_id`, `container_id`, `user_id`, `stored_file_id`,
+ * `uploaded_by_user_id` och `billed_account_id` är medvetet UTESLUTNA ur
+ * `#[Fillable]`: de sätts explicit av App\Actions\Attachment\StoreAttachment
+ * (från rutten, från dedupresultatet, från token och från kroppens
+ * `account`), aldrig via massildelning — samma resonemang som `Item`, se
+ * issue 16a § Beslut 14.
  */
 #[Fillable(['filename', 'kind'])]
 #[RouteKey('ulid')]
@@ -69,23 +70,43 @@ class Attachment extends Model
     }
 
     /**
+     * Personen bilagan hör till, eller null för en item- eller
+     * containerbilaga. Det är profilbildens ägare ([[ADR-0076 Profilbilden]]
+     * § 1).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
      * Modellen behörigheten prövas mot: containern för en containerbilaga,
-     * itemet för en itembilaga. Null när ingen av dem finns.
+     * itemet för en itembilaga, personen för en personbilaga. Null när ingen
+     * av dem finns.
      *
      * **Frågan "vilket item tillhör bilagan?" ställs här och inte hos
      * anroparen** ([[ADR-0047 Containerns bild]] § Beslut, sista stycket).
-     * Grinden blir `view` på containern när `container_id` är satt och
-     * `view` på itemet när `item_id` är satt — containern för att bilden är
-     * containerns ansikte och den som når containern ser den, itemet för att
-     * [[ADR-0028 Åtkomst på itemnivå]] gäller en itembilaga.
+     * Grinden blir `view` på containern när `container_id` är satt, `view` på
+     * itemet när `item_id` är satt och `viewAvatar` på personen när
+     * `user_id` är satt — containern för att bilden är containerns ansikte och
+     * den som når containern ser den, itemet för att [[ADR-0028 Åtkomst på
+     * itemnivå]] gäller en itembilaga, och personen för att synligheten står i
+     * [[ADR-0076 Profilbilden]] § 4.
      *
-     * Containern läses genom relationen och bär därmed sitt SoftDeletes-scope:
-     * en mjukraderad container svarar null, precis som ett mjukraderat item
-     * gör. Anroparen behöver alltså bara pröva `trashed()` på det som
-     * faktiskt kom tillbaka.
+     * Containern och personen läses genom relationerna. Containern bär sitt
+     * SoftDeletes-scope — en mjukraderad container svarar null, precis som ett
+     * mjukraderat item gör — medan `user` inte har någon soft delete alls.
+     * Anroparen behöver alltså bara pröva `trashed()` på det som faktiskt kan
+     * vara mjukraderat.
      */
-    public function accessSubject(): Item|Container|null
+    public function accessSubject(): Item|Container|User|null
     {
+        if ($this->user_id !== null) {
+            return $this->user;
+        }
+
         return $this->container_id !== null ? $this->container : $this->item;
     }
 
@@ -101,6 +122,13 @@ class Attachment extends Model
     public function owningContainer(): ?Container
     {
         $subject = $this->accessSubject();
+
+        // En personbilaga hör till en person och aldrig till en container —
+        // profilbilden följer inte med någon container ([[ADR-0076
+        // Profilbilden]] § 5).
+        if ($subject instanceof User) {
+            return null;
+        }
 
         return $subject instanceof Container ? $subject : $subject?->container;
     }

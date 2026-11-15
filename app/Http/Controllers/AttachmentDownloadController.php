@@ -7,6 +7,7 @@ use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\SecurityLog;
+use App\Models\User;
 use App\Support\Files\AttachmentDelivery;
 use App\Support\Files\FileOrigin;
 use Illuminate\Http\Request;
@@ -51,10 +52,12 @@ use Symfony\Component\HttpFoundation\Response;
  * omfångsbegränsad mottagare hade kunnat hämta en bilaga på ett item hon inte
  * ser.
  *
- * **Sedan issue 158 har en bilaga två slag** ([[ADR-0047 Containerns bild]]).
- * Ägaren kommer ur App\Models\Attachment::accessSubject() — itemet för en
- * itembilaga, containern för en containerbilaga — och grinden ställs mot
- * exakt det som kom tillbaka. Containern för en itembilaga grindas alltså
+ * **Sedan issue 158 har en bilaga två slag, och sedan issue 379 tre**
+ * ([[ADR-0047 Containerns bild]] och [[ADR-0076 Profilbilden]]). Ägaren kommer
+ * ur App\Models\Attachment::accessSubject() — itemet för en itembilaga,
+ * containern för en containerbilaga, personen för en personbilaga — och
+ * grinden ställs mot exakt det som kom tillbaka: `view` för de två första,
+ * `viewAvatar` för personen. Containern för en itembilaga grindas alltså
  * fortfarande INTE: dess `view` hade släppt igenom varje medlem i ägarkontot
  * och därmed också en itemgrant-innehavare förbi itemets omfång. Valet av
  * ägare är det enda som avgör, och det valet bor i modellen och inte här.
@@ -80,42 +83,61 @@ class AttachmentDownloadController extends Controller
         RecordAttachmentOpen $recordAttachmentOpen,
         RecordSecurityEvent $recordSecurityEvent,
     ): Response {
-        $attachment->load(['storedFile', 'item.container', 'container']);
+        $attachment->load(['storedFile', 'item.container', 'container', 'user']);
 
-        // Vilket item eller vilken container bilagan hör till avgörs på ETT
-        // ställe, i modellen ([[ADR-0047 Containerns bild]] § Beslut, sista
-        // stycket) — inte här. Sedan issue 158 finns två slag av bilaga, och
-        // den här raden var den enda som frågade "vilket item?".
+        // Vilket item, vilken container eller vilken person bilagan hör till
+        // avgörs på ETT ställe, i modellen ([[ADR-0047 Containerns bild]]
+        // § Beslut, sista stycket, och [[ADR-0076 Profilbilden]] § 1) — inte
+        // här. Sedan issue 158 finns två slag av bilaga, och sedan issue 379
+        // finns tre.
         //
-        // SoftDeletes' globala scope gäller genom relationerna: båda är
-        // belongsTo mot mjukraderingsmodeller, så ett raderat item eller en
-        // raderad container ger null här och 404 redan i === null-grenen.
+        // SoftDeletes' globala scope gäller genom item- och
+        // containerrelationerna: båda är belongsTo mot
+        // mjukraderingsmodeller, så ett raderat item eller en raderad
+        // container ger null här och 404 redan i === null-grenen.
         // trashed()-anropet är bälte-och-hängslen om någon senare lägger
         // withTrashed() i bindningen — det är inte det som skyddar i dag
-        // (Beslut 7).
+        // (Beslut 7). `user` har ingen soft delete och prövas därför aldrig
+        // med trashed().
         $subject = $attachment->accessSubject();
 
-        if ($subject === null || $subject->trashed()) {
+        if ($subject === null) {
             abort(404);
         }
 
-        // Containern i säkerhetsloggen nedan. För en itembilaga är det
-        // itemets container, för en containerbilaga containern själv.
-        $container = $attachment->owningContainer();
+        if ($subject instanceof User) {
+            // En personbilaga hör inte till någon container: kravet på en
+            // icke-mjukraderad container hoppas över, och grinden är
+            // [[ADR-0076 Profilbilden]] § 4 i stället för `view` på ett item
+            // eller en container. Säkerhetsloggens container är null — det
+            // finns ingen container vars ägarkonto nedladdningen kan mätas
+            // mot — och skrivs därför inte (se recordForeignDownload()).
+            Gate::authorize('viewAvatar', $subject);
 
-        if ($container === null || $container->trashed()) {
-            abort(404);
+            $container = null;
+        } else {
+            if ($subject->trashed()) {
+                abort(404);
+            }
+
+            // Containern i säkerhetsloggen nedan. För en itembilaga är det
+            // itemets container, för en containerbilaga containern själv.
+            $container = $attachment->owningContainer();
+
+            if ($container === null || $container->trashed()) {
+                abort(404);
+            }
+
+            // Grinden blir `view` på containern när `container_id` är satt
+            // och `view` på itemet när `item_id` är satt (ADR-0047 § Beslut).
+            // För en itembilaga är det alltså alltjämt itemgrinden, och
+            // [[ADR-0028 Åtkomst på itemnivå]] gäller oförändrat: en
+            // omfångsbegränsad mottagare når sitt item och inget annat. För
+            // en containerbilaga är det containergrinden, som en itemgrant
+            // passerar — bilden är containerns ansikte, och den som ser
+            // containerns namn ser också dess bild.
+            Gate::authorize('view', $subject);
         }
-
-        // Grinden blir `view` på containern när `container_id` är satt och
-        // `view` på itemet när `item_id` är satt (ADR-0047 § Beslut). För en
-        // itembilaga är det alltså alltjämt itemgrinden, och
-        // [[ADR-0028 Åtkomst på itemnivå]] gäller oförändrat: en
-        // omfångsbegränsad mottagare når sitt item och inget annat. För en
-        // containerbilaga är det containergrinden, som en itemgrant passerar
-        // — bilden är containerns ansikte, och den som ser containerns namn
-        // ser också dess bild.
-        Gate::authorize('view', $subject);
 
         $variant = $request->query('variant');
         $filorigin = FileOrigin::host();
@@ -152,10 +174,12 @@ class AttachmentDownloadController extends Controller
      *
      * **Vad som är en öppning avgörs här, och bara här.** Två undantag:
      *
-     * - **Containerns egen bild räknas aldrig** ([[ADR-0047 Containerns
-     *   bild]]). En bilaga med `item_id = NULL` hör till containern och inte
-     *   till något item, och en containerbild är containerns ansikte — den
-     *   ritas i skalet och inte av någon som öppnat en fil.
+     * - **Containerns egen bild och profilbilden räknas aldrig**
+     *   ([[ADR-0047 Containerns bild]] och [[ADR-0076 Profilbilden]] § 1). En
+     *   bilaga med `item_id = NULL` hör till containern eller personen och
+     *   inte till något item; båda bilderna ritas i skalet och inte av någon
+     *   som öppnat en fil. Undantaget är alltså detsamma som före issue 379 —
+     *   en personbilaga faller på samma `item_id === null`.
      * - **Miniatyren räknas inte.** `?variant=thumb` ritas i en lista utan
      *   att någon öppnat något, och en rad för den hade fyllt taket med
      *   filer ingen tittat på. Det som räknas är nedladdningen och
@@ -238,9 +262,19 @@ class AttachmentDownloadController extends Controller
     private function recordForeignDownload(
         Request $request,
         Attachment $attachment,
-        Container $container,
+        ?Container $container,
         RecordSecurityEvent $recordSecurityEvent,
     ): void {
+        // En personbilaga har ingen container, och därmed ingen ägarkontoräknare
+        // att mäta nedladdningen mot. Att skriva en rad per visad avatar vore
+        // dessutom en logg över varje gång en delad bild ritas, inte en
+        // missbrukssignal — så raden skrivs inte alls ([[ADR-0076
+        // Profilbilden]] § 4). `container` är alltså null här, och det är
+        // hela skillnaden mot de två andra slagen.
+        if ($container === null) {
+            return;
+        }
+
         $user = $request->user();
 
         // `accounts` är den lista App\Actions\Access\ResolveItemScope läste

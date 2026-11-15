@@ -627,9 +627,10 @@ it('känner inte igen omslagsbilden i /api', function () {
  * kolumn läggs till — det är hela punkten: vilken bild som är itemets är ett
  * faktum om ITEMET.
  *
- * `container_id` kom med issue 158 ([[ADR-0047 Containerns bild]]), av
- * samma skäl som gjorde att pekaren hamnade på `item` och inte här: vilken
- * bild som är itemets — eller containerns — är ett faktum om ägaren.
+ * `container_id` kom med issue 158 ([[ADR-0047 Containerns bild]]) och
+ * `user_id` med issue 379 ([[ADR-0076 Profilbilden]]), av samma skäl som
+ * gjorde att pekaren hamnade på `item` och inte här: vilken bild som är
+ * itemets — eller containerns, eller personens — är ett faktum om ägaren.
  * `attachment` bär bara VEM raden hör till, och listan uppdaterades av den
  * som lade till kolumnen, precis som regeln ovan säger.
  *
@@ -657,6 +658,7 @@ it('har ingen ny kolumn på attachment', function () {
         'ulid',
         'updated_at',
         'uploaded_by_user_id',
+        'user_id',
     ]);
 });
 

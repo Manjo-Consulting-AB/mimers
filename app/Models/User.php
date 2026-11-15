@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -175,6 +176,40 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     public function inboxContainer(): HasOne
     {
         return $this->hasOne(Container::class, 'inbox_user_id');
+    }
+
+    /**
+     * Personens profilbild — en pekare till en av personens EGNA bilagor, se
+     * [[ADR-0076 Profilbilden]] § 1 och [[Filer och lagring]] § attachment.
+     * Nullbar och frivillig, som containerns bild: den som inte väljer någon
+     * bild får initialerna i stället.
+     *
+     * Pekaren är en PREFERENS och inte data. Att bilagan verkligen är
+     * personens egen — `attachment.user_id = hennes id` — kan ett
+     * CHECK-villkor inte uttrycka, så det upprätthålls i den action som sätter
+     * pekaren (issue 380), precis som för containern.
+     *
+     * @return BelongsTo<Attachment, $this>
+     */
+    public function avatarAttachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'avatar_attachment_id');
+    }
+
+    /**
+     * Bilagorna som hör till personen — profilbilden och det som en framtida
+     * yta lägger här — se [[ADR-0076 Profilbilden]] § 1.
+     *
+     * Relationen bär ingen åtkomst: den säger vilka bilagor som är personens,
+     * inte vem som får se dem. Synligheten är App\Policies\UserPolicy::
+     * viewAvatar() för bilden och leveransen, och de andra läsarna (exporten,
+     * papperskorgen, lagringsvyn) väljer personbilagor bort.
+     *
+     * @return HasMany<Attachment, $this>
+     */
+    public function avatarAttachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
     }
 
     /**
