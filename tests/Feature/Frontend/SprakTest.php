@@ -1456,6 +1456,18 @@ it('hämtar raderingsformulärets strängar ur ui.php', function () {
         ->toContain('Mimers recommends handing over ownership')
         ->toContain('the members lose their access, along with anything they added');
 
+    // Läget utan medlemsnamn: bara en obesvarad inbjudan. Meningen får inte
+    // bära `:members` alls — annars hade den slutat i "active members: ." —
+    // och nämner i stället containrarna.
+    $inbjuden = Lang::get('ui.settings.security.deletion.warning.shared_container_invited', [
+        'account' => 'Hemmet',
+        'containers' => 'Köket',
+    ], 'en');
+
+    expect($inbjuden)->toContain('The account Hemmet has containers with pending invitations: Köket.')
+        ->toContain('Mimers recommends handing over ownership')
+        ->and($inbjuden)->not->toContain(':members');
+
     expect(Lang::get('ui.settings.security.deletion.warning_confirm_required', [], 'en'))
         ->not->toBe('ui.settings.security.deletion.warning_confirm_required');
 

@@ -71,9 +71,17 @@ function blockerSentence(blocker) {
  * Meningen för en upplysning, ur samma namnform som spärrens: kodens sista
  * led är nyckelns sista led. Medlemmarnas namn fyller `:members` — det är
  * personerna som förlorar åtkomsten, inte bara containrarna.
+ *
+ * **En tom medlemslista har en egen mening.** `members` är tom när containern
+ * bara har en obesvarad inbjudan: räkningen ser inbjudan som en aktiv medlem,
+ * men mottagaren har inget konto att hämta ett namn ur. Meningen med
+ * `:members` hade då slutat i "active members: ." — i stället väljs
+ * `shared_container_invited`, som nämner containrarna och inbjudningarna.
  */
 function warningSentence(warning) {
-    return t(`settings.security.deletion.warning.${warning.code.split('.').pop()}`, {
+    const sort = warning.code.split('.').pop() + (warning.members.length === 0 ? '_invited' : '');
+
+    return t(`settings.security.deletion.warning.${sort}`, {
         account: warning.account,
         containers: warning.containers.join(', '),
         members: warning.members.join(', '),

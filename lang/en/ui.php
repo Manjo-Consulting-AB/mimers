@@ -1503,6 +1503,14 @@ return [
              * `shared_container` inte längre under `blocker`. `:members` fylls
              * med medlemmarnas namn av vyn, precis som `:containers`.
              *
+             * **En väntande inbjudan har inget namn att räkna upp.**
+             * `containersWithActiveMembers()` räknar en obesvarad inbjudan som
+             * aktiv medlem, men mottagaren har inget konto och bidrar därför
+             * inte med ett namn — `members` är då tom, och meningen med
+             * `:members` hade slutat i "active members: .". Vyn väljer i det
+             * läget `warning.shared_container_invited`, som nämner containrarna
+             * i stället för medlemmarna.
+             *
              * **`warning_confirm_required` är fältfelet**, både på begäran
              * och på bekräftelsen. Samma nyckel på båda ställena, så de två
              * inte kan glida isär.
@@ -1523,6 +1531,10 @@ return [
                 'warnings_heading' => 'Before you delete your account',
                 'warning' => [
                     'shared_container' => 'The account :account has containers with active members: :members. Mimers recommends handing over ownership of these containers before the account is deleted. If you go ahead, the containers are deleted and the members lose their access, along with anything they added.',
+                    // Läget utan medlemsnamn: bara en obesvarad inbjudan. Samma
+                    // konsekvens, men ingen att räkna upp — därför `:containers`
+                    // i stället för `:members`.
+                    'shared_container_invited' => 'The account :account has containers with pending invitations: :containers. Mimers recommends handing over ownership of these containers before the account is deleted. If you go ahead, the containers are deleted, and the invitations can no longer be accepted.',
                 ],
                 'warning_confirm' => 'I understand. Delete the containers and remove the members\' access.',
                 'warning_confirm_required' => 'Confirm that you understand what happens to the containers before you continue.',

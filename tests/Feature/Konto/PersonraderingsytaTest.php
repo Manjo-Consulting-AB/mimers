@@ -6,6 +6,7 @@ use App\Models\LegalHold;
 use App\Models\User;
 use App\Models\UserDeletion;
 use App\Notifications\UserDeletionConfirmationNotification;
+use App\Support\Auth\RecoveryCodeBroker;
 use App\Support\User\DeletionBlocker;
 use App\Support\User\DeletionWarning;
 use Illuminate\Support\Facades\DB;
@@ -169,6 +170,39 @@ it('visar upplysningen med kontot, containrarna och medlemmarna', function () {
 });
 
 /*
+ * En container vars enda aktiva medlem är en obesvarad inbjudan har inget
+ * namn att räkna upp. `members` är då tom, och meningen med `:members` hade
+ * slutat i "active members: .". Ytan väljer därför en egen mening,
+ * `warning.shared_container_invited`, som nämner containrarna.
+ */
+it('visar en upplysning utan medlemsnamn när containern bara har en inbjudan', function () {
+    withoutVite();
+
+    $person = User::factory()->create();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+
+    bjudInRad($container, 'blivande@exempel.se', 'pending', now()->addDays(7));
+
+    actingAs($person)
+        ->get('/settings/security')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings.0.code', DeletionWarning::CODE_SHARED_CONTAINER)
+            ->where('deletion.warnings.0.account', $konto->name)
+            ->where('deletion.warnings.0.containers', [$container->name])
+            // Mottagaren har inget konto och ingen rad att hämta ett namn ur.
+            ->where('deletion.warnings.0.members', []));
+
+    // Och vyn väljer den mening som klarar en tom lista.
+    $sammanfattning = File::get(resource_path('js/components/UserDeletionSummary.vue'));
+
+    expect($sammanfattning)->toContain('warning.members.length === 0')
+        ->and($sammanfattning)->toContain('_invited');
+});
+
+/*
  * Den rättsliga spärren bär ingen data alls, och det är hela poängen
  * (DeletionBlocker::legalHold()): att ett konto är spärrat är i sig en uppgift
  * om en pågående utredning, och varken vyn eller sidpropen får röja vilket
@@ -314,6 +348,51 @@ it('vägrar begäran utan giltig kod när tvåfaktorn är på', function () {
     from('/settings/security')
         ->post('/settings/delete-user', ['code' => totpKodFör($secret)])
         ->assertRedirect('/settings/security')
+        ->assertSessionHas('status', 'user-deletion-requested');
+
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
+});
+
+/*
+ * Ett fältfel förbrukar ingenting — inte heller en återställningskod.
+ * `ensureWarningsConfirmed()` prövas därför FÖRE `authenticate()`: annars
+ * hade TwoFactorChallenge::verify() förbrukat koden innan fältfelet på
+ * `confirm_warnings` ens hann uppstå, och personen hade stått utan den kod
+ * hon just använde. Provet använder samma kod två gånger: första gången utan
+ * rutan (fältfel, koden kvar), andra gången med rutan (begäran går igenom).
+ */
+it('förbrukar inte en återställningskod när confirm_warnings saknas', function () {
+    Notification::fake();
+
+    [$person] = användareMedBekräftadTotp();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+
+    beviljaAccess($container, User::factory()->create(), 'read', 'managed');
+
+    $återställningskod = RecoveryCodeBroker::generate($person)[0];
+
+    actingAs($person);
+
+    from('/settings/security')
+        ->post('/settings/delete-user', ['code' => $återställningskod])
+        ->assertRedirect('/settings/security')
+        ->assertSessionHasErrors('confirm_warnings')
+        ->assertSessionDoesntHaveErrors(['code']);
+
+    // Ingen begäran och inget mejl: fältfelet kom före både koden och utskicket.
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(0);
+
+    Notification::assertNothingSent();
+
+    // SAMMA kod, nu med rutan: den var aldrig förbrukad.
+    from('/settings/security')
+        ->post('/settings/delete-user', [
+            'code' => $återställningskod,
+            'confirm_warnings' => true,
+        ])
+        ->assertRedirect('/settings/security')
+        ->assertSessionHasNoErrors()
         ->assertSessionHas('status', 'user-deletion-requested');
 
     expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);

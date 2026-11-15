@@ -107,14 +107,17 @@ class UserDeletionController extends Controller
         RequestUserDeletion $requestUserDeletion,
         DeleteUser $deleteUser,
     ): RedirectResponse {
+        // Upplysningarna prövas FÖRE tvåfaktorn. `authenticate()` förbrukar
+        // en återställningskod när en sådan används, och ett fältfel på
+        // `confirm_warnings` ska inte kosta personen den koden — ett
+        // fältfel förbrukar ingenting. Finns upplysningar och rutan är inte
+        // ikryssad blir det alltså ett fältfel här, innan någon kod prövas
+        // eller förbrukas och innan något mejl skickas.
+        $request->ensureWarningsConfirmed($deleteUser);
+
         // Kastar ValidationException vid fel kod. Ingenting har skrivits när
         // den kastar.
         $request->authenticate();
-
-        // Finns upplysningar och rutan är inte ikryssad blir det ett fältfel
-        // på `confirm_warnings`, och inget mejl skickas — upplysningen är
-        // ingen spärr men ett samtycke till konsekvensen.
-        $request->ensureWarningsConfirmed($deleteUser);
 
         $requestUserDeletion->handle(
             $request->user(),
