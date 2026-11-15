@@ -609,17 +609,18 @@ it('skickar en utloggad besökare från /notifications/clear till inloggningen',
 });
 
 /*
- * Källkodsprovet: rubriken är borta ur panelen, Clear-knappen och dess rutt
- * finns kvar, och strängen ligger i `lang/en/ui.php`. Panelen bär sitt namn
- * som `aria-label` i stället — det prövas i webbläsaren och står i PR-kroppen.
+ * Källkodsprovet: den gamla panelen är borta ur klockan sedan M60 · issue
+ * 385, som ersätter den med notislistan i appen
+ * (resources/js/components/NotificationBell.vue och
+ * tests/Feature/Frontend/NotislistavyTest.php). Kvar sedan issue 647 är
+ * serverns beteende — kolumnen, skrivningen och de två följderna — som
+ * prövas ovanför; rutten `/notifications/clear` och strängen `inbox.clear`
+ * står kvar tills App\Http\Controllers\NotificationInboxController tas bort.
  */
-it('ritar ingen rubrik i panelen och Clear under listan', function () {
+it('ritar inte den gamla panelen i klockan', function () {
     $kod = File::get(resource_path('js/components/NotificationBell.vue'));
 
-    expect($kod)->not->toContain('<h2');
-
-    expect($kod)->toContain("t('inbox.clear')")
-        ->toContain('/notifications/clear');
-
-    expect(trans('ui.inbox.clear', [], 'en'))->toBe('Clear');
+    expect($kod)->not->toContain('/notifications/clear')
+        ->and($kod)->not->toContain("t('inbox.clear')")
+        ->and($kod)->not->toContain('<h2');
 });

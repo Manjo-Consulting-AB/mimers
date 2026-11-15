@@ -451,6 +451,10 @@ it('hämtar skalets strängar ur ui.php', function () {
         'js/layouts/AppLayout.vue',
         'js/layouts/ContainerLayout.vue',
         'js/components/NotificationBell.vue',
+        // Panelen kom med M60 · issue 385 och ligger i samma svep: den är
+        // klockans yta och ritas bara när klockan öppnas. Dess egna nycklar är
+        // panelens namn, *See all* och det tomma läget.
+        'js/components/NotificationPanel.vue',
         'js/components/ShellSections.vue',
         'js/components/MobileTabBar.vue',
         'js/components/MobileMenu.vue',
