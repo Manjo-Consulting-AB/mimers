@@ -346,6 +346,7 @@ function outcomeLabel(login) {
         :accounts-to-delete="props.deletion.accountsToDelete"
         :accounts-to-leave="props.deletion.accountsToLeave"
         :blockers="props.deletion.blockers"
+        :warnings="props.deletion.warnings"
         :totp-enabled="props.totpEnabled"
     />
 </template>

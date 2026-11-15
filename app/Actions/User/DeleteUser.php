@@ -17,7 +17,9 @@ use App\Models\OwnershipTransfer;
 use App\Models\SecurityLog;
 use App\Models\User;
 use App\Support\User\DeletionBlocker;
+use App\Support\User\DeletionWarning;
 use App\Support\User\UserDeletionBlocked;
+use App\Support\User\UserDeletionNeedsConfirmation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -29,13 +31,20 @@ use Illuminate\Support\Facades\DB;
  * `handle()` prövar dem en gång till — en kontroll som förlitar sig på att
  * anroparen gjorde rätt är ingen kontroll.
  *
- * Två ingångar:
+ * Tre ingångar:
  *
  * - `blockers()` — det som står i vägen, som en lista av
  *   App\Support\User\DeletionBlocker. Den som vill visa raderingen innan
  *   den sker läser den här; den rör ingenting.
+ * - `warnings()` — det personen ska upplysas om men som inte spärrar, som
+ *   en lista av App\Support\User\DeletionWarning. Sedan 2026-11-14 är en
+ *   delad container en upplysning och ingen spärr (ADR-0045 § Uppföljning
+ *   2026-11-14): containern raderas med kontot, och medlemmarna förlorar
+ *   åtkomsten.
  * - `handle()` — raderar. Kastar App\Support\User\UserDeletionBlocked med
- *   listan om något spärrar, och då har ingenting hänt.
+ *   spärrarna om något spärrar, och App\Support\User\
+ *   UserDeletionNeedsConfirmation med upplysningarna om de inte har
+ *   bekräftats. I båda fallen har ingenting hänt.
  *
  * **Kontona avgörs först.** Ett konto där personen är enda medlem raderas
  * med DeleteAccount — samma action som livscykeln använder, med samma
@@ -103,6 +112,11 @@ class DeleteUser
      * begäran och bekräftelsen ska stoppa raderingen, inte passera för att
      * den var prövad en gång.
      *
+     * **En delad container står inte här längre.** Sedan ADR-0045
+     * § Uppföljning 2026-11-14 raderas containrarna med kontot och
+     * medlemmarna förlorar åtkomsten; det är en upplysning personen
+     * bekräftar, inte ett hinder. Se `warnings()`.
+     *
      * @return list<DeletionBlocker>
      */
     public function blockers(User $user): array
@@ -120,15 +134,8 @@ class DeleteUser
             }
 
             if ($this->isSoleMember($account, $user)) {
-                // Kontot raderas — då gäller livscykelns spärr för delade
-                // containers (29b § Beslut 3–4): ägarskapet ska erbjudas
-                // medlemmarna först, och vägen ut är ägarbytet.
-                $containers = $this->containersWithActiveMembers($account);
-
-                if ($containers->isNotEmpty()) {
-                    $blockers[] = DeletionBlocker::sharedContainer($account, $containers);
-                }
-
+                // Kontot raderas. Det spärrar ingenting i sig — men
+                // `warnings()` upplyser om containrarna som följer med.
                 continue;
             }
 
@@ -140,6 +147,57 @@ class DeleteUser
         }
 
         return $blockers;
+    }
+
+    /**
+     * Det personen ska upplysas om innan raderingen — tomt när det inte
+     * finns något att upplysa om.
+     *
+     * **En delad container är en upplysning, ingen spärr** (ADR-0045
+     * § Uppföljning 2026-11-14): ett konto där personen är enda medlem
+     * raderas med sina containrar, och medlemmarna förlorar åtkomsten
+     * tillsammans med det de själva lagt till där. Personen måste kryssa i
+     * att hon förstår det, både när raderingen begärs och när länken i
+     * mejlet öppnas.
+     *
+     * **Samma räkning som spärren använde före 2026-11-14.**
+     * `containersWithActiveMembers()` avgör vilka containrar som har aktiva
+     * medlemmar, och `membersOf()` ger personerna som förlorar åtkomsten —
+     * samma mottagare som `container.deleted`-notisen går till (issue 1235,
+     * App\Actions\Account\DeleteAccount::recipientsFor()).
+     *
+     * Läses av ytan och en gång till inuti transaktionen av `handle()`: en
+     * medlem som tillkommit mellan begäran och bekräftelsen ska kräva ett
+     * nytt samtycke, inte passera på det gamla.
+     *
+     * @return list<DeletionWarning>
+     */
+    public function warnings(User $user): array
+    {
+        $warnings = [];
+
+        foreach ($this->accounts($user) as $account) {
+            // Bara de konton som raderas kan förlora medlemmar. Ett konto
+            // personen lämnar står kvar med sina containrar och sina
+            // medlemmar, och då finns ingenting att upplysa om.
+            if (! $this->isSoleMember($account, $user)) {
+                continue;
+            }
+
+            $containers = $this->containersWithActiveMembers($account);
+
+            if ($containers->isEmpty()) {
+                continue;
+            }
+
+            $warnings[] = DeletionWarning::sharedContainer(
+                $account,
+                $containers,
+                $this->membersOf($containers, $user),
+            );
+        }
+
+        return $warnings;
     }
 
     /**
@@ -174,14 +232,23 @@ class DeleteUser
     }
 
     /**
-     * Raderar personen, eller kastar med listan över det som spärrar.
+     * Raderar personen, eller kastar med listan över det som spärrar eller
+     * det som måste bekräftas.
+     *
+     * `$confirmedWarnings` är personens ikryssade ruta. Den har ett
+     * standardvärde av kompatibilitetsskäl — anropare som raderar en person
+     * utan upplysningar behöver inte känna till begreppet — men en person
+     * MED upplysningar kastar undantaget när värdet är falskt.
      *
      * @throws UserDeletionBlocked när `blockers()` inte är tom; ingenting har
      *                             då raderats.
+     * @throws UserDeletionNeedsConfirmation när `warnings()` inte är tom och
+     *                                       `$confirmedWarnings` är falsk;
+     *                                       ingenting har då raderats.
      */
-    public function handle(User $user): void
+    public function handle(User $user, bool $confirmedWarnings = false): void
     {
-        DB::transaction(function () use ($user): void {
+        DB::transaction(function () use ($user, $confirmedWarnings): void {
             // Raden läses om under låset, samma mönster som
             // DeletesDormantAccounts::deleteEligibleAccount: en person som
             // redan raderats (två flikar, två begäranden) ska inte raderas
@@ -199,6 +266,17 @@ class DeleteUser
 
             if ($blockers !== []) {
                 throw new UserDeletionBlocked($blockers);
+            }
+
+            // Upplysningarna läses om under samma lås och av samma skäl som
+            // spärrarna: en medlem som tillkommit mellan begäran och
+            // bekräftelsen ska kräva ett nytt samtycke. Kontrollen ligger
+            // före varje skrivning, så ett kastat undantag lämnar
+            // transaktionen orörd.
+            $warnings = $this->warnings($row);
+
+            if ($warnings !== [] && ! $confirmedWarnings) {
+                throw new UserDeletionNeedsConfirmation($warnings);
             }
 
             $toDelete = $this->accountsWhereSoleMember($row);
@@ -357,6 +435,62 @@ class DeleteUser
                 });
             })
             ->pluck('ulid');
+    }
+
+    /**
+     * Personerna som förlorar åtkomsten när containrarna raderas — deras
+     * ULID, aldrig namnen (DeletionWarning bär bara identifierare).
+     *
+     * Samma mottagare som `container.deleted`-notisen går till (issue 1235,
+     * App\Actions\Account\DeleteAccount::recipientsFor()): en giltig
+     * `container_access` på container- eller itemnivå, där en grant till ett
+     * konto gäller kontots samtliga personer. En återkallad eller utgången
+     * åtkomst ger ingen rad, och en obesvarad inbjudan räknas inte — hon har
+     * inget konto att förlora åtkomst med.
+     *
+     * Personen själv utesluts: det är hon som raderar sig, och hon står inte
+     * kvar och förlorar något. En person med flera åtkomster i samma
+     * container får en rad, inte en per åtkomst (`array_unique()`).
+     *
+     * @param  Collection<int, string>  $containerUlids  Containrarnas ULID.
+     * @return Collection<int, string> Medlemmarnas ULID.
+     */
+    private function membersOf(Collection $containerUlids, User $user): Collection
+    {
+        $containerIds = Container::withTrashed()
+            ->whereIn('ulid', $containerUlids->all())
+            ->pluck('id');
+
+        /** @var list<int> $userIds */
+        $userIds = [];
+
+        $accesses = ContainerAccess::query()
+            ->whereIn('container_id', $containerIds)
+            ->valid()
+            ->get(['grantee_type', 'grantee_id']);
+
+        foreach ($accesses as $access) {
+            if ($access->grantee_type === 'user') {
+                $userIds[] = (int) $access->grantee_id;
+
+                continue;
+            }
+
+            foreach (DB::table('account_user')->where('account_id', $access->grantee_id)->pluck('user_id') as $id) {
+                $userIds[] = (int) $id;
+            }
+        }
+
+        $userIds = array_values(array_diff(array_unique($userIds), [$user->getKey()]));
+
+        /** @var Collection<int, string> $ulids */
+        $ulids = User::query()
+            ->whereIn('id', $userIds)
+            ->orderBy('name')
+            ->orderBy('id')
+            ->pluck('ulid');
+
+        return $ulids;
     }
 
     /**

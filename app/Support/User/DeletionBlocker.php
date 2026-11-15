@@ -38,6 +38,13 @@ final readonly class DeletionBlocker
      * Ett konto där personen är enda medlem äger en container med aktiva
      * medlemmar. Samma spärr som i livscykeln (29b § Beslut 3–4): ägarskapet
      * ska erbjudas dem först, och vägen ut är ägarbytet.
+     *
+     * **App\Actions\User\DeleteUser producerar den inte längre.** Sedan
+     * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14 är
+     * en delad container en upplysning personen bekräftar
+     * (App\Support\User\DeletionWarning), inte ett hinder. Koden står kvar
+     * för livscykeln, som spärrar på samma sätt tills #1237 ändrar den, och
+     * för `reason`-fältet i dess logg.
      */
     public const CODE_SHARED_CONTAINER = 'user.deletion_blocked.shared_container';
 

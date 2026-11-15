@@ -10,6 +10,7 @@ use App\Models\SecurityLog;
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
 use App\Support\User\DeletionBlocker;
+use App\Support\User\DeletionWarning;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -164,17 +165,26 @@ class SecurityController extends Controller
      * utredning, och den ska inte gå att läsa ur en sidprop
      * (DeletionBlocker::legalHold()).
      *
+     * **Upplysningarna har samma form och samma uppslag.** Sedan
+     * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14 är
+     * en delad container ingen spärr utan en upplysning
+     * (App\Support\User\DeletionWarning), och den bär kontot, containrarna
+     * och medlemmarna som ULID. Här blir de namn — medlemmarna inkluderade,
+     * för det är deras namn meningen nämner.
+     *
      * Ingen `withTrashed()` på kontona: en person är inte medlem i ett
      * mjukraderat konto — `account` har ingen `deleted_at` — så uppslaget är
      * ett vanligt. Containrarna däremot kan vara mjukraderade, och
      * `containersWithActiveMembers()` räknar dem med flit: en mjukraderad
-     * container med aktiva medlemmar spärrar lika mycket som en levande, och
-     * en spärr vars namn inte går att slå upp vore en spärr utan väg ut.
+     * container med aktiva medlemmar kräver samma bekräftelse som en levande,
+     * och en upplysning vars namn inte går att slå upp vore en upplysning utan
+     * innehåll.
      *
      * @return array{
      *     accountsToDelete: list<array{ulid: string, name: string}>,
      *     accountsToLeave: list<array{ulid: string, name: string}>,
-     *     blockers: list<array{code: string, account: string|null, containers: list<string>}>
+     *     blockers: list<array{code: string, account: string|null, containers: list<string>}>,
+     *     warnings: list<array{code: string, account: string|null, containers: list<string>, members: list<string>}>
      * }
      */
     public static function deletionSummary(User $user, DeleteUser $deleteUser): array
@@ -209,6 +219,17 @@ class SecurityController extends Controller
                     'containers' => self::containerNames($blocker->data['containers'] ?? []),
                 ],
                 $deleteUser->blockers($user),
+            ),
+            'warnings' => array_map(
+                fn (DeletionWarning $warning): array => [
+                    'code' => $warning->code,
+                    // Samma form som spärrarna: `data` är alltid satt för
+                    // den enda sorten, men uppslagen tål att fältet saknas.
+                    'account' => self::accountName($warning->data['account'] ?? null),
+                    'containers' => self::containerNames($warning->data['containers'] ?? []),
+                    'members' => self::userNames($warning->data['members'] ?? []),
+                ],
+                $deleteUser->warnings($user),
             ),
         ];
     }
@@ -253,6 +274,40 @@ class SecurityController extends Controller
         /** @var list<string> $names */
         $names = Container::withTrashed()
             ->whereIn('ulid', $ulids)
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return $names;
+    }
+
+    /**
+     * Medlemmarnas namn ur deras ULID:er.
+     *
+     * Samma ordning som App\Actions\User\DeleteUser::membersOf() valde
+     * raderna i: namn och sedan id, så listan i meningen är densamma varje
+     * gång. En medlem som inte längre finns ger ingen rad — listan kortas
+     * hellre än visar ett ULID i meningen.
+     *
+     * @return list<string>
+     */
+    private static function userNames(mixed $ulids): array
+    {
+        if (! is_array($ulids)) {
+            return [];
+        }
+
+        $ulids = array_values(array_filter($ulids, is_string(...)));
+
+        if ($ulids === []) {
+            return [];
+        }
+
+        /** @var list<string> $names */
+        $names = User::query()
+            ->whereIn('ulid', $ulids)
+            ->orderBy('name')
+            ->orderBy('id')
             ->pluck('name')
             ->values()
             ->all();

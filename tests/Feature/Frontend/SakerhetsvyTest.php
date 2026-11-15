@@ -398,6 +398,7 @@ it('renderar personraderingen på säkerhetssidan', function () {
         ->and($vy)->toContain(':accounts-to-delete="props.deletion.accountsToDelete"')
         ->and($vy)->toContain(':accounts-to-leave="props.deletion.accountsToLeave"')
         ->and($vy)->toContain(':blockers="props.deletion.blockers"')
+        ->and($vy)->toContain(':warnings="props.deletion.warnings"')
         // Kodfältet följer samma prop som tvåfaktorns eget formulär: kontot
         // har en andra faktor, eller så har det inte.
         ->and($vy)->toContain(':totp-enabled="props.totpEnabled"');
@@ -406,7 +407,22 @@ it('renderar personraderingen på säkerhetssidan', function () {
     $formulär = File::get(resource_path('js/components/UserDeletionForm.vue'));
 
     expect($formulär)->toContain('settings.security.deletion.heading')
-        ->and($formulär)->toContain('settings.security.deletion.blocked_heading');
+        ->and($formulär)->toContain('settings.security.deletion.blocked_heading')
+        // Upplysningens ruta, kryssruta och knapp — de nya nycklarna.
+        ->and($formulär)->toContain('settings.security.deletion.warning_confirm')
+        ->and($formulär)->toContain('settings.security.deletion.delete_anyway')
+        ->and($formulär)->toContain('v-model="form.confirm_warnings"')
+        // Knappen är avstängd tills rutan är ikryssad, och submit() vaktar
+        // samma villkor för den som tabbar sig fram.
+        ->and($formulär)->toContain(':disabled="blocked || needsConfirmation || form.processing"')
+        ->and($formulär)->toContain('if (blocked.value || needsConfirmation.value) {');
+
+    // Spärren och upplysningen ritas i två olika rutor, med var sin `v-if`.
+    $sammanfattning = File::get(resource_path('js/components/UserDeletionSummary.vue'));
+
+    expect($sammanfattning)->toContain('settings.security.deletion.warnings_heading')
+        ->and($sammanfattning)->toContain('v-if="props.warnings.length > 0"')
+        ->and($sammanfattning)->toContain('v-if="props.blockers.length > 0"');
 });
 
 /*

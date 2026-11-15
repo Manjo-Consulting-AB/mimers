@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Actions\User\DeleteUser;
+use App\Models\User;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
 use App\Support\Auth\TwoFactorChallenge;
@@ -19,12 +21,14 @@ use Illuminate\Validation\ValidationException;
  * UpdatePasswordRequest och RequestEmailChangeRequest. Det finns alltså inget
  * annat objekt att pröva mot, och ingen policy att anropa.
  *
- * **Ingen bekräftelse i kroppen, ingen fras att skriva av.** Ett fält där
+ * **Ingen fras att skriva av, men en ruta att kryssa i.** Ett fält där
  * användaren skriver "radera" hade varit en tröskel mot ett snabbt klick, men
  * den verkliga tröskeln är mejlet: raderingen sker inte här, den sker när
- * länken till kontots egen adress öppnas. En bekräftelse i formuläret hade
- * dessutom varit en mening att översätta och att skriva av rätt, och den
- * hade gett intrycket att begäran redan var raderingen.
+ * länken till kontots egen adress öppnas. `confirm_warnings` är något annat —
+ * ett samtycke till en KONSEKVENS, inte en bekräftelse av begäran. Finns
+ * upplysningar (en delad container, [[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-11-14) får begäran inte gå igenom utan den, och inget
+ * mejl skickas. Se `ensureWarningsConfirmed()`.
  *
  * **Tvåfaktorn prövas oförändrat.** Den som har en bekräftad andra faktor
  * måste ange en giltig kod, eller en återställningskod, för att en radering
@@ -57,7 +61,48 @@ class RequestUserDeletionRequest extends FormRequest
             // ensam hade avvisat det som "inte en sträng". Fältet ska kunna
             // vara tomt — det är frånvaron av en kod, inte en ogiltig sådan.
             'code' => ['sometimes', 'nullable', 'string'],
+
+            // Rutan personen kryssar i när `DeleteUser::warnings()` inte är
+            // tom. Frånvarande räknas som falsk — se
+            // ensureWarningsConfirmed() — och `boolean` avvisar ett värde
+            // som varken är sant eller falskt i stället för att gissa.
+            'confirm_warnings' => ['sometimes', 'boolean'],
         ];
+    }
+
+    /**
+     * Personen måste ha bekräftat upplysningarna innan begäran tas emot.
+     *
+     * **Kontrollen ligger här och inte i `DeleteUser`.** Actionen prövar
+     * samma sak en gång till när länken öppnas — en kontroll som förlitar
+     * sig på att anroparen gjorde rätt är ingen kontroll — men vid BEGÄRAN
+     * är det ett fältfel och ingenting annat: inget mejl skickas, ingen rad
+     * skrivs, och personen ser rutan hon missade.
+     *
+     * Upplysningarna läses ur App\Actions\User\DeleteUser, samma källa som
+     * ytan visade och som bekräftelsen prövar mot.
+     *
+     * @throws ValidationException
+     */
+    public function ensureWarningsConfirmed(DeleteUser $deleteUser): void
+    {
+        if ($this->boolean('confirm_warnings')) {
+            return;
+        }
+
+        $user = $this->user();
+
+        if (! $user instanceof User) {
+            return;
+        }
+
+        if ($deleteUser->warnings($user) === []) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'confirm_warnings' => __('ui.settings.security.deletion.warning_confirm_required'),
+        ]);
     }
 
     /**

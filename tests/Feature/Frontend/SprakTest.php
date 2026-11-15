@@ -1392,11 +1392,13 @@ it('hämtar e-postformulärets strängar ur ui.php', function () {
  * kodfältets etikett är inloggningens (`auth.code.label` — samma etikett,
  * samma sak att skriva in).
  *
- * **Spärrarnas meningar nås med en dynamisk nyckel** —
- * ``t(`…blocker.${blocker.code.split('.').pop()}`)`` — och fångas därför inte
- * av mönstret som läser de literala uppslagen. De tre leden räknas upp
- * uttryckligen här, och de är desamma som App\Support\User\DeletionBlocker
- * stavar: en spärr utan mening syns i vyn som den råa nyckeln.
+ * **Spärrarnas och upplysningarnas meningar nås med dynamiska nycklar** —
+ * ``t(`…blocker.${blocker.code.split('.').pop()}`)`` och samma form under
+ * `…warning.` — och fångas därför inte av mönstret som läser de literala
+ * uppslagen. Leden räknas upp uttryckligen här, och de är desamma som
+ * App\Support\User\DeletionBlocker respektive DeletionWarning stavar: en spärr
+ * eller upplysning utan mening syns i vyn som den råa nyckeln. Sedan
+ * 2026-11-14 är `shared_container` ingen spärr utan en upplysning.
  *
  * **Ordet prövas.** Kontot heter *account* i gränssnittet och är något annat
  * än personen (ett konto med andra medlemmar lämnas), så copyn får inte säga
@@ -1406,8 +1408,8 @@ it('hämtar raderingsformulärets strängar ur ui.php', function () {
     $vy = File::get(resource_path('js/components/UserDeletionForm.vue'));
 
     // Fönstret `(?<![\w$.])`: form.reset('code') och
-    // blocker.code.split('.') innehåller sekvensen `t('…`, och utan det hade
-    // fältnamn lästs som översättningsnycklar.
+    // blocker.code.split('.')/warning.code.split('.') innehåller sekvensen
+    // `t('…`, och utan det hade fältnamn lästs som översättningsnycklar.
     preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $vy, $träffar);
 
     expect($träffar[1])->toContain('settings.security.deletion.heading')
@@ -1420,11 +1422,42 @@ it('hämtar raderingsformulärets strängar ur ui.php', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
-    foreach (['sole_owner', 'shared_container', 'legal_hold'] as $led) {
+    foreach (['sole_owner', 'legal_hold'] as $led) {
         $nyckel = "ui.settings.security.deletion.blocker.{$led}";
 
         expect(Lang::get($nyckel, [], 'en'))->not->toBe($nyckel);
     }
+
+    /*
+     * En delad container är ingen spärr längre ([[ADR-0045 Radering av konto
+     * och person]] § Uppföljning 2026-11-14): nyckeln är borta ur `blocker`,
+     * och upplysningen har sina egna ord under `warning`.
+     */
+    expect(Lang::get('ui.settings.security.deletion.blocker.shared_container', [], 'en'))
+        ->toBe('ui.settings.security.deletion.blocker.shared_container');
+
+    expect(Lang::get('ui.settings.security.deletion.warnings_heading', [], 'en'))
+        ->toBe('Before you delete your account')
+        ->and(Lang::get('ui.settings.security.deletion.blocked_heading', [], 'en'))
+        ->toBe("Deletion isn't possible right now")
+        ->and(Lang::get('ui.settings.security.deletion.delete_anyway', [], 'en'))
+        ->toBe('Delete anyway')
+        ->and(Lang::get('ui.settings.security.deletion.warning_confirm', [], 'en'))
+        ->toBe("I understand. Delete the containers and remove the members' access.");
+
+    // Upplysningens mening bär kontot och medlemmarna — det är namnen
+    // personen ska känna igen, inte bara containrarna.
+    $mening = Lang::get('ui.settings.security.deletion.warning.shared_container', [
+        'account' => 'Hemmet',
+        'members' => 'Maja Medlem',
+    ], 'en');
+
+    expect($mening)->toContain('The account Hemmet has containers with active members: Maja Medlem.')
+        ->toContain('Mimers recommends handing over ownership')
+        ->toContain('the members lose their access, along with anything they added');
+
+    expect(Lang::get('ui.settings.security.deletion.warning_confirm_required', [], 'en'))
+        ->not->toBe('ui.settings.security.deletion.warning_confirm_required');
 
     foreach ([
         'ui.flash.user-deletion-requested',

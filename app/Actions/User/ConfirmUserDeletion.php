@@ -5,6 +5,7 @@ namespace App\Actions\User;
 use App\Models\User;
 use App\Models\UserDeletion;
 use App\Support\User\UserDeletionBlocked;
+use App\Support\User\UserDeletionNeedsConfirmation;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
@@ -91,6 +92,11 @@ class ConfirmUserDeletion
      *
      * @param  string  $rawToken  Klartexten ur länken. Hashen är det enda
      *                            som finns i databasen.
+     * @param  bool  $confirmedWarnings  Personens ikryssade ruta. Skickas
+     *                                   rakt vidare till DeleteUser, som
+     *                                   prövar upplysningarna mot raden som
+     *                                   den ser ut NU — en medlem kan ha
+     *                                   tillkommit sedan begäran.
      * @return User Den raderade modellen. Raden är borta; modellen bär
      *              fortfarande sitt id, så anroparen kan jämföra den med
      *              `$request->user()`.
@@ -101,8 +107,12 @@ class ConfirmUserDeletion
      * @throws UserDeletionBlocked En spärr står i vägen. Ingenting har
      *                             raderats, och länken är fortfarande
      *                             lösbar.
+     * @throws UserDeletionNeedsConfirmation Upplysningarna är inte
+     *                                       bekräftade. Ingenting har
+     *                                       raderats, och länken är
+     *                                       fortfarande lösbar.
      */
-    public function handle(string $rawToken): User
+    public function handle(string $rawToken, bool $confirmedWarnings = false): User
     {
         $deletion = $this->validDeletion($rawToken);
 
@@ -112,7 +122,7 @@ class ConfirmUserDeletion
 
         $user = $deletion->user;
 
-        DB::transaction(function () use ($deletion, $user): void {
+        DB::transaction(function () use ($deletion, $user, $confirmedWarnings): void {
             // Förbrukningen: noll träffar betyder att en annan request hann
             // först, och svaret ska vara detsamma som för ett okänt token.
             // `expires_at` prövas HÄR och inte bara i läsningen ovan: en ny
@@ -131,9 +141,11 @@ class ConfirmUserDeletion
                 $this->notFound();
             }
 
-            // Kastar UserDeletionBlocked om något spärrar, och fäller då hela
-            // transaktionen — förbrukningen ovan med den.
-            $this->deleteUser->handle($user);
+            // Kastar UserDeletionBlocked om något spärrar, och
+            // UserDeletionNeedsConfirmation om upplysningarna inte är
+            // bekräftade. Båda fäller hela transaktionen — förbrukningen
+            // ovan med den.
+            $this->deleteUser->handle($user, $confirmedWarnings);
         });
 
         return $user;

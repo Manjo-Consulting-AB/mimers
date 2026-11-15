@@ -34,6 +34,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * densamma, ritas här. `UserDeletionForm` och `ConfirmUserDeletion` fyller
  * den med var sin mening.
  *
+ * **Spärrar och upplysningar är två rutor, inte en.** En spärr säger att
+ * raderingen inte går att göra; en upplysning säger att den går men att den
+ * får konsekvenser ([[ADR-0045 Radering av konto och person]] § Uppföljning
+ * 2026-11-14). De ritas därför aldrig i samma ruta, och upplysningens rubrik
+ * och mening är komponentens egna — de är desamma på båda ytorna, till
+ * skillnad från spärrens.
+ *
  * **Ordet.** Kontot heter *account* i gränssnittet och är något annat än
  * personen: ett konto där någon annan är medlem lämnas, och bara
  * medlemskapet försvinner. Rubrikerna säger därför vad som faktiskt händer
@@ -43,6 +50,7 @@ const props = defineProps({
     accountsToDelete: { type: Array, required: true },
     accountsToLeave: { type: Array, required: true },
     blockers: { type: Array, required: true },
+    warnings: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -56,6 +64,19 @@ function blockerSentence(blocker) {
     return t(`settings.security.deletion.blocker.${blocker.code.split('.').pop()}`, {
         account: blocker.account,
         containers: blocker.containers.join(', '),
+    });
+}
+
+/*
+ * Meningen för en upplysning, ur samma namnform som spärrens: kodens sista
+ * led är nyckelns sista led. Medlemmarnas namn fyller `:members` — det är
+ * personerna som förlorar åtkomsten, inte bara containrarna.
+ */
+function warningSentence(warning) {
+    return t(`settings.security.deletion.warning.${warning.code.split('.').pop()}`, {
+        account: warning.account,
+        containers: warning.containers.join(', '),
+        members: warning.members.join(', '),
     });
 }
 </script>
@@ -84,10 +105,24 @@ function blockerSentence(blocker) {
         <p v-else class="text-sm text-slate-700">{{ t('settings.security.deletion.accounts_none') }}</p>
     </div>
 
+    <!-- Upplysningen har sin egen ruta och sina egna ord: den säger inte att
+         raderingen är stoppad, bara vad den får för konsekvenser. Rutan läses
+         av skärmläsaren innan kryssrutan och knappen. -->
+    <div v-if="props.warnings.length > 0" class="flex flex-col gap-2 rounded border border-amber-300 bg-amber-50 p-4">
+        <h3 class="font-medium text-amber-900">{{ t('settings.security.deletion.warnings_heading') }}</h3>
+
+        <ul class="flex flex-col gap-1 text-sm text-amber-900">
+            <li v-for="(warning, index) in props.warnings" :key="`${warning.code}-${index}`">
+                {{ warningSentence(warning) }}
+            </li>
+        </ul>
+    </div>
+
     <!-- Spärren står i vyn och läses av skärmläsaren innan knappen klickas —
          inte i en confirm()-dialog, som varken går att översätta eller att
          testa. Sidan som använder komponenten fyller `#blocked` med sin
-         rubrik och sin mening. -->
+         rubrik och sin mening. Det är en EGEN ruta, skild från upplysningen
+         ovan: en spärr är inte samma sak som en varning. -->
     <div v-if="props.blockers.length > 0" class="flex flex-col gap-2 rounded border border-amber-300 bg-amber-50 p-4">
         <slot name="blocked" />
 
