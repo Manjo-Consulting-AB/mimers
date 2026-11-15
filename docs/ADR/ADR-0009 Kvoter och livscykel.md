@@ -1,6 +1,6 @@
 # ADR-0009 Kvoter och livscykel
 
-**Status:** Antagen 2026-08-03 · Steg 4 justerat 2026-11-14 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Steg 4 justerat 2026-11-14 · Steg 4 justerat 2026-11-15 · [[ADR-index]]
 
 ## Kontext
 
@@ -72,3 +72,13 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 **Det ersätter** meningen i § Uppföljning 2026-11-11 om att de nyslängda bilagorna ligger i papperskorgen i 30 dagar, och att kontot därför kan vara `active` men ändå ligga över kvoten. Efter steg 4 ligger kontot inom kvoten.
 
 **Varför:** kontot är fruset, och användaren har haft tre månader och flera varningar på sig att välja själv. En papperskorg som räknas i kvoten frigör inget och kräver en extra tömning. Samma skäl gällde redan när lagringsvyn fick radera för gott: användaren ska inte behöva gå in en gång till och tömma papperskorgen. Regeln missades för den automatiska rensningen. Ett konto under rättslig spärr rörs fortfarande inte av steg 4. Se [[Planer och kvoter]] § Nedgradering.
+
+## Uppföljning 2026-11-15 — all data räknas, items raderas sist
+
+[[ADR-0081 All lagrad data räknas mot kvoten]] låter kvoten räkna text tillsammans med filer och ändrar steg 4. Det påverkar tre saker i den här ADR:en.
+
+**Rubriken "radera bilagor, aldrig items" gäller inte längre fullt ut.** Items raderas sist, och bara i kontots egna containrar: steg 4 tar först slängda och levande bilagor, och items bara om filerna inte räcker för att komma ner till gränsen. Innehåll som kontot betalar för i andra containrar raderas inte, det flyttas till containerns ägare. Ordningen och reglerna står i ADR-0081 § 6.
+
+**Motiveringen står kvar, som skäl till ordningen.** Att items förstörs sist är just för att det är dem som gör att någon betalar igen.
+
+**"Metadatan är mikroskopisk" gäller den vanliga användaren, inte ett skript.** Utan att text räknades kunde ett skript mot API:et fylla databasen och backuperna gratis.

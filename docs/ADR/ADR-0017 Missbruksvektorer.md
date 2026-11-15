@@ -1,6 +1,6 @@
 # ADR-0017 Missbruksvektorer
 
-**Status:** Antagen 2026-08-04 · Punkt 7 om utlåningspåminnelser tillagd 2026-08-22 · [[ADR-index]]
+**Status:** Antagen 2026-08-04 · Punkt 7 om utlåningspåminnelser tillagd 2026-08-22 · Mätningen kompletterad 2026-11-15 · [[ADR-index]]
 
 ## Kontext
 
@@ -69,6 +69,8 @@ Det kostar en aning bekvämlighet och tar bort hela vektorn — ingen avanmälni
 ### Mätningen
 
 En **nattlig rapport, inte realtidsspärrar.** Fyra tal räcker som utgångsläge: nya gratiskonton per vecka, andel som aldrig laddar upp något, lagring per gratiskonto, utskickade mejl per konto. Ingenting av det kräver ny data — allt finns i tabeller som redan skrivs.
+
+Sedan 2026-11-15 tillkommer två tal: **text per gratiskonto** (`usage_counter.metadata_bytes`) och **antal items per gratiskonto**, slängda medräknade. Ett tak på antal items per plan läggs inte; det prövas om talen visar ett behov. **Befintligt skydd** mot att fylla databasen med skript: texten räknas mot lagringskvoten, och varje skrivande anrop går genom en begränsare per användare (förval 120 per minut, `429` med `rate_limit.writes_exceeded` på `/api`). Se [[ADR-0081 All lagrad data räknas mot kvoten]].
 
 ## Motivering
 

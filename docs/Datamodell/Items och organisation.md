@@ -26,6 +26,7 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
 | created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
 Index: `(container_id, deleted_at)`, `(container_id, category_id, deleted_at)`, FULLTEXT på `(name, description, manufacturer, model, serial_number)`.
@@ -43,6 +44,7 @@ Hierarkisk, per container. Ett item tillhör högst en kategori — det är hela
 | parent_id | FK → category NULL | |
 | name | VARCHAR(255) | |
 | position | INT | Sorteringsordning bland syskon |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
 Index: `(container_id, parent_id, deleted_at)`.
@@ -61,6 +63,7 @@ Platt, per container. Inga undertaggar, medvetet.
 | container_id | FK | |
 | name | VARCHAR(100) | |
 | color | CHAR(7) NULL | |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
 UNIQUE `(container_id, name)`.
@@ -120,6 +123,7 @@ Utlåning. Markera en pryl som utlånad, hålla reda på vem som har den, och bl
 | due_at | DATE NULL | |
 | returned_at | DATE NULL | |
 | note | TEXT NULL | |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 
 Index: `(item_id, returned_at)`.
 
@@ -141,6 +145,7 @@ Kostnader som hör till ett item. En rad per kostnad, precis som i en huvudbok �
 | supplier | VARCHAR(255) NULL | Fritext med autocomplete, se nedan |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
 | created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
 Index: `(item_id, deleted_at, incurred_on)`, `(container_id, deleted_at, incurred_on)`, `(container_id, deleted_at, supplier)`.

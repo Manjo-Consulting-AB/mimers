@@ -27,6 +27,7 @@ Noll eller flera per item. En livflotte har både treårig service och ett certi
 | lead_days | SMALLINT UNSIGNED | Hur många dagar innan förfall uppgiften dyker upp. Motsvarar OmniFocus defer. |
 | is_active | BOOLEAN | Pausad utan att raderas |
 | default_gtd_list | VARCHAR(10) NULL | `next` \| `someday` — förvalet för en ny förekomst. Sätts när uppgiften skapas på ett item eller bearbetas ur inboxen; null när schemat ligger i inboxen, se [[ADR-0054 Inboxen]] § 5 |
+| billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
 Index: `(item_id, deleted_at)`.
@@ -56,6 +57,7 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 | completed_by_user_id | FK NULL | |
 | completed_by_account_id | FK NULL | Varvet, inte den anställde |
 | completion_note | TEXT NULL | "Bytte även termostaten" |
+| billed_account_id | FK → account NULL | Kontot som betalar för `completion_note` mot kvoten. `NULL` tills en anteckning skrivs. Inget påslag per rad, se [[Planer och kvoter]] § usage_counter |
 
 Index: `(schedule_id, status)`, `(due_at, status)` för todo-listan över alla containers.
 
