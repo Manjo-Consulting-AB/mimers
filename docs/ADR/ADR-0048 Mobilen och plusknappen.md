@@ -1,6 +1,6 @@
 # ADR-0048 Mobilen och plusknappen
 
-**Status:** Antagen 2026-09-27 · Kompletterar [[ADR-0042 Designsystemet]] med mobilmockupen · Står fast vid [[ADR-0035 Relationen mellan objekt]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
+**Status:** Antagen 2026-09-27 · Kompletterar [[ADR-0042 Designsystemet]] med mobilmockupen · Står fast vid [[ADR-0035 Relationen mellan objekt]] och [[ADR-0041 Itemets vy]] · § 4 (grafens meny) ändras av [[ADR-0080 Ny förälder från kartan]] om den antas · [[ADR-index]]
 
 Tonys beslut 2026-09-27, vid genomgången av `docs/Design/mobil.png` och vid planeringen av [[M23 Mobilen och kartan]].
 
