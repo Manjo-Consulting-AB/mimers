@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Account\DeleteAccount;
+use App\Actions\Notification\CreateNotification;
 use App\Mail\NotificationMail;
 use App\Models\Account;
 use App\Models\Container;
@@ -208,6 +209,23 @@ it('den raderade personen och en obesvarad inbjudan får ingen notis', function 
     expect(containerRaderadNotiser())->toHaveCount(0);
 });
 
+it('en mottagare utan konto hindrar inte raderingen', function () {
+    [$konto] = containerRaderadKonto();
+    $container = Container::factory()->for($konto, 'account')->create();
+
+    // En person utan något konto alls: ActingAccount::for() kastar
+    // ModelNotFoundException. Notisen hoppas över, men raderingen ska gå
+    // igenom — en notis får aldrig blockera den (granskningsfynd 2026-11-15).
+    $utanKonto = User::factory()->create();
+    beviljaAccess($container, $utanKonto, 'read', 'member');
+
+    app(DeleteAccount::class)->handle($konto, DeleteAccount::REASON_OWNER_DELETED);
+
+    expect(containerRaderadNotiser())->toHaveCount(0)
+        ->and(Account::query()->whereKey($konto->id)->exists())->toBeFalse()
+        ->and(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
+});
+
 it('notisen pekar inte på det raderade kontot eller containern, och raderingen lyckas', function () {
     [$konto] = containerRaderadKonto();
     $container = Container::factory()->for($konto, 'account')->create(['name' => 'Vindil']);
@@ -288,12 +306,28 @@ it('mejlet renderas för båda skälen och saknar länk till containern', functi
 
 it('en körning till ger ingen dubblett', function () {
     [$konto] = containerRaderadKonto();
-    $container = Container::factory()->for($konto, 'account')->create();
+    $container = Container::factory()->for($konto, 'account')->create(['name' => 'Vindil']);
 
-    [$mottagare] = containerRaderadMottagare();
+    [$mottagare, $personkonto] = containerRaderadMottagare();
     beviljaAccess($container, $mottagare, 'read', 'member');
 
-    app(DeleteAccount::class)->handle($konto, DeleteAccount::REASON_OWNER_DELETED);
+    // Samma logiska händelse ligger redan i outboxen, med den nyckel
+    // DeleteAccount bygger. En andra leverans ska återanvända raden i stället
+    // för att skapa en till — det är samma väg en omkörning tar den dag
+    // containern och åtkomsten fortfarande finns.
+    //
+    // En andra DeleteAccount-körning bevisar ingenting: kontot och dess
+    // containrar är redan borta, så noll notiser skapas oavsett dedupeKey.
+    // Det var granskningsfyndet 2026-11-15. Med raden här faller provet om
+    // DeleteAccount inte skickar med nyckeln, eller om dess form ändras.
+    app(CreateNotification::class)->handle(
+        type: NotificationModel::TYPE_CONTAINER_DELETED,
+        account: $personkonto,
+        user: $mottagare,
+        payload: ['container' => $container->name, 'reason' => DeleteAccount::REASON_OWNER_DELETED],
+        dedupeKey: NotificationModel::TYPE_CONTAINER_DELETED.":{$container->ulid}:{$mottagare->ulid}",
+    );
+
     app(DeleteAccount::class)->handle($konto, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(containerRaderadNotiser()->where('user_id', $mottagare->id))->toHaveCount(1);

@@ -15,6 +15,7 @@ use App\Models\ContainerAccess;
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
 use App\Support\Account\ActingAccount;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -298,6 +299,9 @@ class DeleteAccount
      * gallras i samma transaktion. Payloaden bär containerns namn som
      * ögonblicksbild, och skälet styr vilken mening mejlet renderar.
      *
+     * En mottagare som saknar konto helt hoppas över med en loggrad: hon kan
+     * inte bära en notisrad, och en notis får aldrig blockera en radering.
+     *
      * @param  Collection<int, Container>  $containers
      */
     private function notifyContainerMembers(Account $account, Collection $containers, string $reason): void
@@ -312,13 +316,30 @@ class DeleteAccount
 
         foreach ($containers as $container) {
             foreach ($this->recipientsFor($container, $deletedMemberIds) as $recipient) {
+                try {
+                    $recipientAccount = $actingAccount->for($recipient, $container);
+                } catch (ModelNotFoundException) {
+                    // En person utan något konto alls kan inte bära en
+                    // notisrad — `account_id` är obligatoriskt — och får
+                    // aldrig blockera raderingen: `firstOrFail()` skulle
+                    // rulla tillbaka hela transaktionen och göra det
+                    // vilande jobbet återkommande (granskningsfynd
+                    // 2026-11-15). Logga och hoppa över mottagaren.
+                    Log::warning('notification.container_deleted_no_account', [
+                        'container_ulid' => $container->ulid,
+                        'user_ulid' => $recipient->ulid,
+                    ]);
+
+                    continue;
+                }
+
                 app(CreateNotification::class)->handle(
                     type: NotificationModel::TYPE_CONTAINER_DELETED,
                     // Mottagarens personkonto, genom samma uppslag som
                     // ActingAccount — aldrig kontot som raderas. Personen är
                     // inte medlem i det (de uteslöts ovan), så uppslaget kan
                     // inte landa där.
-                    account: $actingAccount->for($recipient, $container),
+                    account: $recipientAccount,
                     user: $recipient,
                     container: null,
                     payload: [
