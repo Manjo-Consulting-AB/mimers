@@ -28,7 +28,9 @@ use App\Models\User;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookEndpoint;
 use App\Support\User\DeletionBlocker;
+use App\Support\User\DeletionWarning;
 use App\Support\User\UserDeletionBlocked;
+use App\Support\User\UserDeletionNeedsConfirmation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -440,8 +442,10 @@ it('en person i ett konto med andra medlemmar lämnar kontot, och kontot står k
 });
 
 /*
- * Klart när: var och en av de tre spärrarna gör att ingenting raderas och ger
- * sin kod.
+ * Klart när: var och en av spärrarna gör att ingenting raderas och ger sin
+ * kod. Den delade containern är ingen spärr längre — den prövas som
+ * upplysning nedanför ([[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-11-14).
  */
 
 it('en ensam ägare i ett konto med andra medlemmar spärrar raderingen', function () {
@@ -470,45 +474,81 @@ it('en annan ägare i kontot tar bort spärren', function () {
     expect(app(DeleteUser::class)->blockers($person))->toBe([]);
 });
 
-it('en delad container i ett konto som skulle raderas spärrar raderingen', function () {
+/*
+ * Klart när: en delad container spärrar inte längre. Den är en upplysning som
+ * kräver en ikryssad ruta — [[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-11-14.
+ */
+it('en delad container i ett konto som skulle raderas är en upplysning, inte en spärr', function () {
     $person = User::factory()->create();
     $konto = personraderingEgetKonto($person);
     $container = personraderingContainer($konto);
-    $gäst = Account::factory()->create();
+    $medlem = User::factory()->create(['name' => 'Maja Medlem']);
 
-    beviljaAccess($container, $gäst, 'read', 'managed');
+    beviljaAccess($container, $medlem, 'read', 'managed');
 
-    $blockers = app(DeleteUser::class)->blockers($person);
+    // Ingen spärr: containern raderas med kontot, och medlemmen förlorar
+    // åtkomsten. Det personen ska göra är att bekräfta det, inte att häva
+    // något först.
+    expect(app(DeleteUser::class)->blockers($person))->toBe([]);
 
-    expect($blockers)->toHaveCount(1)
-        ->and($blockers[0]->code)->toBe(DeletionBlocker::CODE_SHARED_CONTAINER)
-        ->and($blockers[0]->data)->toBe([
+    $warnings = app(DeleteUser::class)->warnings($person);
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0]->code)->toBe(DeletionWarning::CODE_SHARED_CONTAINER)
+        // Upplysningen bär kontot, containrarna OCH medlemmarna som ULID —
+        // namnen slås upp i ytan, aldrig här.
+        ->and($warnings[0]->data)->toBe([
             'account' => $konto->ulid,
             'containers' => [$container->ulid],
+            'members' => [$medlem->ulid],
         ]);
 
     expect(fn () => app(DeleteUser::class)->handle($person))
-        ->toThrow(UserDeletionBlocked::class);
+        ->toThrow(UserDeletionNeedsConfirmation::class);
 
+    // Ingenting raderat: personen, kontot och containern står kvar.
     expect(User::query()->whereKey($person->id)->exists())->toBeTrue()
         ->and(Account::query()->whereKey($konto->id)->exists())->toBeTrue()
         ->and(Container::query()->whereKey($container->id)->exists())->toBeTrue();
 });
 
-it('en obesvarad inbjudan räknas som en aktiv medlem och spärrar', function () {
+it('en person med en delad container raderas när upplysningen bekräftats', function () {
+    $person = User::factory()->create();
+    $konto = personraderingEgetKonto($person);
+    $container = personraderingContainer($konto);
+    $medlem = User::factory()->create();
+
+    beviljaAccess($container, $medlem, 'read', 'managed');
+
+    app(DeleteUser::class)->handle($person, confirmedWarnings: true);
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and(Account::query()->whereKey($konto->id)->exists())->toBeFalse()
+        ->and(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
+});
+
+it('en obesvarad inbjudan räknas som en aktiv medlem och ger en upplysning', function () {
     $person = User::factory()->create();
     $konto = personraderingEgetKonto($person);
     $container = personraderingContainer($konto);
 
     bjudInRad($container, 'blivande@exempel.se', 'pending', now()->addDays(7));
 
-    $blockers = app(DeleteUser::class)->blockers($person);
+    // Samma räkning som spärren använde före 2026-11-14: en obesvarad
+    // inbjudan är en aktiv medlem, och containern raderas med kontot.
+    expect(app(DeleteUser::class)->blockers($person))->toBe([]);
 
-    expect($blockers)->toHaveCount(1)
-        ->and($blockers[0]->code)->toBe(DeletionBlocker::CODE_SHARED_CONTAINER);
+    $warnings = app(DeleteUser::class)->warnings($person);
+
+    expect($warnings)->toHaveCount(1)
+        ->and($warnings[0]->code)->toBe(DeletionWarning::CODE_SHARED_CONTAINER)
+        ->and($warnings[0]->data['containers'])->toBe([$container->ulid])
+        // Mottagaren har inget konto och ingen rad att hämta ett namn ur.
+        ->and($warnings[0]->data['members'])->toBe([]);
 
     expect(fn () => app(DeleteUser::class)->handle($person))
-        ->toThrow(UserDeletionBlocked::class);
+        ->toThrow(UserDeletionNeedsConfirmation::class);
 });
 
 it('en återkallad åtkomst spärrar inte', function () {

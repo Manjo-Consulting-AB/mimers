@@ -6,7 +6,9 @@ use App\Models\LegalHold;
 use App\Models\User;
 use App\Models\UserDeletion;
 use App\Notifications\UserDeletionConfirmationNotification;
+use App\Support\Auth\RecoveryCodeBroker;
 use App\Support\User\DeletionBlocker;
+use App\Support\User\DeletionWarning;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Notification;
@@ -101,7 +103,7 @@ function raderingsytaLänk(User $person): string
  * gick igenom — varje prov som använder hjälparen förväntar sig ett lyckat
  * utskick, och ett tyst misslyckande hade gjort provet grönt av fel skäl.
  *
- * @param  array<string, string>  $overrides
+ * @param  array<string, mixed>  $overrides
  */
 function raderingsytaBegär(User $person, array $overrides = []): string
 {
@@ -133,27 +135,71 @@ it('visar vilka konton som raderas och vilka som lämnas', function () {
             ->where('deletion.accountsToLeave', [
                 ['ulid' => $delat->ulid, 'name' => $delat->name],
             ])
-            ->where('deletion.blockers', []));
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings', []));
 });
 
-it('visar spärren med kontot och containern den gäller', function () {
+/*
+ * Klart när: en delad container är en upplysning, inte en spärr. Ytan visar
+ * kontot, containrarna OCH medlemmarna — det är deras namn meningen nämner,
+ * inte bara containrarnas ([[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-11-14).
+ */
+it('visar upplysningen med kontot, containrarna och medlemmarna', function () {
+    withoutVite();
+
+    $person = User::factory()->create();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+    $medlem = User::factory()->create(['name' => 'Maja Medlem']);
+
+    beviljaAccess($container, $medlem, 'read', 'managed');
+
+    actingAs($person)
+        ->get('/settings/security')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            // Ingen spärr: raderingen GÅR att göra, den ska bara bekräftas.
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings.0.code', DeletionWarning::CODE_SHARED_CONTAINER)
+            // Namnen och inte ULID:erna: upplysningen kommer som
+            // identifierare och blir läsbar först här.
+            ->where('deletion.warnings.0.account', $konto->name)
+            ->where('deletion.warnings.0.containers', [$container->name])
+            ->where('deletion.warnings.0.members', ['Maja Medlem']));
+});
+
+/*
+ * En container vars enda aktiva medlem är en obesvarad inbjudan har inget
+ * namn att räkna upp. `members` är då tom, och meningen med `:members` hade
+ * slutat i "active members: .". Ytan väljer därför en egen mening,
+ * `warning.shared_container_invited`, som nämner containrarna.
+ */
+it('visar en upplysning utan medlemsnamn när containern bara har en inbjudan', function () {
     withoutVite();
 
     $person = User::factory()->create();
     $konto = raderingsytaEgetKonto($person);
     $container = raderingsytaContainer($konto);
 
-    beviljaAccess($container, Account::factory()->create(), 'read', 'managed');
+    bjudInRad($container, 'blivande@exempel.se', 'pending', now()->addDays(7));
 
     actingAs($person)
         ->get('/settings/security')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('deletion.blockers.0.code', DeletionBlocker::CODE_SHARED_CONTAINER)
-            // Namnen och inte ULID:erna: spärren kommer som en identifierare
-            // och blir läsbar först här.
-            ->where('deletion.blockers.0.account', $konto->name)
-            ->where('deletion.blockers.0.containers', [$container->name]));
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings.0.code', DeletionWarning::CODE_SHARED_CONTAINER)
+            ->where('deletion.warnings.0.account', $konto->name)
+            ->where('deletion.warnings.0.containers', [$container->name])
+            // Mottagaren har inget konto och ingen rad att hämta ett namn ur.
+            ->where('deletion.warnings.0.members', []));
+
+    // Och vyn väljer den mening som klarar en tom lista.
+    $sammanfattning = File::get(resource_path('js/components/UserDeletionSummary.vue'));
+
+    expect($sammanfattning)->toContain('warning.members.length === 0')
+        ->and($sammanfattning)->toContain('_invited');
 });
 
 /*
@@ -179,15 +225,20 @@ it('avslöjar ingenting om vilket konto en rättslig spärr gäller', function (
             ->where('deletion.blockers.0.containers', []));
 });
 
-it('stänger av knappen när något spärrar', function () {
+it('stänger av knappen när något spärrar, och tills upplysningen bekräftats', function () {
     $vy = File::get(resource_path('js/components/UserDeletionForm.vue'));
 
     // En avstängd knapp hindrar ett klick men inte Enter i ett fält — därför
     // vaktar submit() också. Båda raderna prövas: utan den andra vore
-    // "begäran går inte att göra" falskt för den som tabbar sig fram.
+    // "begäran går inte att göra" falskt för den som tabbar sig fram. Samma
+    // vakts för upplysningen: knappen heter *Delete anyway* och är avstängd
+    // tills rutan är ikryssad.
     expect($vy)->toContain('const blocked = computed(() => props.blockers.length > 0)')
-        ->and($vy)->toContain(':disabled="blocked || form.processing"')
-        ->and($vy)->toContain('if (blocked.value) {');
+        ->and($vy)->toContain('const needsConfirmation = computed(() => hasWarnings.value && !form.confirm_warnings)')
+        ->and($vy)->toContain(':disabled="blocked || needsConfirmation || form.processing"')
+        ->and($vy)->toContain('if (blocked.value || needsConfirmation.value) {')
+        ->and($vy)->toContain('v-model="form.confirm_warnings"')
+        ->and($vy)->toContain('settings.security.deletion.delete_anyway');
 });
 
 // --- Begäran -------------------------------------------------------------
@@ -302,6 +353,110 @@ it('vägrar begäran utan giltig kod när tvåfaktorn är på', function () {
     expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
 });
 
+/*
+ * Ett fältfel förbrukar ingenting — inte heller en återställningskod.
+ * `ensureWarningsConfirmed()` prövas därför FÖRE `authenticate()`: annars
+ * hade TwoFactorChallenge::verify() förbrukat koden innan fältfelet på
+ * `confirm_warnings` ens hann uppstå, och personen hade stått utan den kod
+ * hon just använde. Provet använder samma kod två gånger: första gången utan
+ * rutan (fältfel, koden kvar), andra gången med rutan (begäran går igenom).
+ */
+it('förbrukar inte en återställningskod när confirm_warnings saknas', function () {
+    Notification::fake();
+
+    [$person] = användareMedBekräftadTotp();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+
+    beviljaAccess($container, User::factory()->create(), 'read', 'managed');
+
+    $återställningskod = RecoveryCodeBroker::generate($person)[0];
+
+    actingAs($person);
+
+    from('/settings/security')
+        ->post('/settings/delete-user', ['code' => $återställningskod])
+        ->assertRedirect('/settings/security')
+        ->assertSessionHasErrors('confirm_warnings')
+        ->assertSessionDoesntHaveErrors(['code']);
+
+    // Ingen begäran och inget mejl: fältfelet kom före både koden och utskicket.
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(0);
+
+    Notification::assertNothingSent();
+
+    // SAMMA kod, nu med rutan: den var aldrig förbrukad.
+    from('/settings/security')
+        ->post('/settings/delete-user', [
+            'code' => $återställningskod,
+            'confirm_warnings' => true,
+        ])
+        ->assertRedirect('/settings/security')
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('status', 'user-deletion-requested');
+
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
+});
+
+/*
+ * Klart när: begäran kräver `confirm_warnings` när det finns upplysningar —
+ * och klarar sig utan när det inte finns några. Upplysningen är ingen spärr,
+ * så ett fältfel är hela hindret: ingen rad skrivs och inget mejl skickas.
+ */
+it('kräver confirm_warnings när det finns upplysningar, och skickar inget mejl', function () {
+    Notification::fake();
+
+    $person = User::factory()->create();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+
+    beviljaAccess($container, User::factory()->create(), 'read', 'managed');
+
+    actingAs($person);
+
+    from('/settings/security')
+        ->post('/settings/delete-user', [])
+        ->assertRedirect('/settings/security')
+        ->assertSessionHasErrors('confirm_warnings');
+
+    // Ingen begäran skriven och inget mejl skickat: rutan är ett samtycke,
+    // och utan den går begäran inte igenom.
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(0)
+        ->and(User::query()->whereKey($person->id)->exists())->toBeTrue();
+
+    Notification::assertNothingSent();
+});
+
+it('tar emot begäran när upplysningen har bekräftats', function () {
+    Notification::fake();
+
+    $person = User::factory()->create();
+    $konto = raderingsytaEgetKonto($person);
+    $container = raderingsytaContainer($konto);
+
+    beviljaAccess($container, User::factory()->create(), 'read', 'managed');
+
+    actingAs($person);
+
+    raderingsytaBegär($person, ['confirm_warnings' => true]);
+
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
+});
+
+it('kräver ingen bekräftelse när det inte finns upplysningar', function () {
+    Notification::fake();
+
+    $person = User::factory()->create();
+    raderingsytaDelatKonto($person);
+
+    actingAs($person);
+
+    // Ingen `confirm_warnings` i kroppen, och begäran går igenom ändå.
+    raderingsytaBegär($person);
+
+    expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
+});
+
 // --- Komponenten ----------------------------------------------------------
 
 /*
@@ -320,20 +475,30 @@ it('ritar listan och spärrarna med UserDeletionSummary', function () {
         // Spärrens rubrik och mening är formulärets egna: det är BEGÄRAN som
         // inte kan göras, och bekräftelsesidan säger samma sak om raderingen.
         ->and($formulär)->toContain('settings.security.deletion.blocked')
+        // Upplysningarna går in i samma komponent och ritas i en egen ruta.
+        ->and($formulär)->toContain(':warnings="props.warnings"')
         // Och den gemensamma komponenten används av båda ytorna.
         ->and($bekräftelse)->toContain("import UserDeletionSummary from '../../components/UserDeletionSummary.vue'")
         ->and($bekräftelse)->toContain('<UserDeletionSummary')
+        ->and($bekräftelse)->toContain(':warnings="props.deletion.warnings"')
         // Klart när: spärren stänger av knappen på bekräftelsesidan. En
         // avstängd knapp hindrar ett klick men inte Enter i ett fält, och
-        // därför vaktar submit() också — samma två rader som i formuläret.
+        // därför vaktar submit() också — samma rader som i formuläret.
         ->and($bekräftelse)->toContain('const blocked = computed(() => props.deletion.blockers.length > 0)')
-        ->and($bekräftelse)->toContain(':disabled="blocked || form.processing"')
-        ->and($bekräftelse)->toContain('if (blocked.value) {');
+        ->and($bekräftelse)->toContain('const needsConfirmation = computed(() => hasWarnings.value && !form.confirm_warnings)')
+        ->and($bekräftelse)->toContain(':disabled="blocked || needsConfirmation || form.processing"')
+        ->and($bekräftelse)->toContain('if (blocked.value || needsConfirmation.value) {')
+        ->and($bekräftelse)->toContain('v-model="form.confirm_warnings"');
 
     // Listorna står i sammanfattningen och ingen annanstans — en avskrift i
     // någon av ytorna hade varit en andra sanning om vad raderingen gör.
+    // Spärren och upplysningen är TVÅ rutor, med var sin `v-if`: en spärr
+    // säger att raderingen inte går, en upplysning vad den får för följder.
     expect($sammanfattning)->toContain('settings.security.deletion.accounts_deleted_heading')
         ->and($sammanfattning)->toContain('settings.security.deletion.accounts_left_heading')
+        ->and($sammanfattning)->toContain('settings.security.deletion.warnings_heading')
+        ->and($sammanfattning)->toContain('v-if="props.warnings.length > 0"')
+        ->and($sammanfattning)->toContain('v-if="props.blockers.length > 0"')
         ->and($formulär)->not->toContain('accounts_deleted_heading')
         ->and($bekräftelse)->not->toContain('accounts_deleted_heading');
 });

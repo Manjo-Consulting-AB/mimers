@@ -1,9 +1,11 @@
 <?php
 
 use App\Models\Account;
+use App\Models\LegalHold;
 use App\Models\User;
 use App\Models\UserDeletion;
 use App\Support\User\DeletionBlocker;
+use App\Support\User\DeletionWarning;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -12,6 +14,7 @@ use Inertia\Testing\AssertableInertia;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\assertGuest;
+use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\post;
 use function Pest\Laravel\travel;
@@ -79,7 +82,8 @@ it('visar bekräftelsesidan för en gäst och raderar ingenting', function () {
             ->where('deletion.accountsToLeave', [
                 ['ulid' => $delat->ulid, 'name' => $delat->name],
             ])
-            ->where('deletion.blockers', []));
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings', []));
 
     // Mellansteget: ingen har raderats av att länken öppnades.
     expect(User::query()->whereKey($person->id)->exists())->toBeTrue()
@@ -197,22 +201,19 @@ it('visar spärren på bekräftelsesidan och stoppar raderingen', function () {
 
     $länk = raderingsytaBegär($person);
 
-    // Spärren uppstår EFTER begäran: en container i kontot får en aktiv
-    // medlem. Begäran kunde tas emot — spärren fanns inte då.
-    $container = raderingsytaContainer($konto);
-    $atkomst = beviljaAccess($container, Account::factory()->create(), 'read', 'managed');
+    // Spärren uppstår EFTER begäran: en rättslig spärr läggs på kontot.
+    // Begäran kunde tas emot — spärren fanns inte då. Den delade containern
+    // är ingen spärr sedan 2026-11-14, så den rättsliga spärren är det som
+    // fortfarande stoppar på den här vägen.
+    LegalHold::factory()->create(['account_id' => $konto->id]);
 
     raderingslankSomGäst();
 
-    // Sidan visar spärren med kontot och containern den gäller, och knappen
-    // stängs av `blockers` — samma prop som formuläret läser.
     get($länk)
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/ConfirmUserDeletion')
-            ->where('deletion.blockers.0.code', DeletionBlocker::CODE_SHARED_CONTAINER)
-            ->where('deletion.blockers.0.account', $konto->name)
-            ->where('deletion.blockers.0.containers', [$container->name]));
+            ->where('deletion.blockers.0.code', DeletionBlocker::CODE_LEGAL_HOLD));
 
     post($länk)
         ->assertRedirect(route('settings.delete-user.confirm', ['token' => basename($länk)]))
@@ -228,12 +229,71 @@ it('visar spärren på bekräftelsesidan och stoppar raderingen', function () {
         ->whereNull('confirmed_at')
         ->count())->toBe(1);
 
-    // Hävs spärren går samma länk igenom. `revoked_at` är inte `#[Fillable]`
-    // (ContainerAccess § docblock: återkallningen har en egen åtgärd), så
-    // raden skrivs direkt — samma väg som gallringen tar.
-    DB::table('container_access')->where('id', $atkomst->id)->update(['revoked_at' => now()]);
+    // Hävs spärren går samma länk igenom.
+    DB::table('legal_hold')->where('account_id', $konto->id)->update(['lifted_at' => now()]);
 
     post($länk)->assertRedirect('/');
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse();
+});
+
+// --- En upplysning mellan begäran och länken -----------------------------
+
+/*
+ * Klart när: bekräftelsen visar upplysningarna som de ser ut NU — en medlem
+ * som tillkommit efter begäran syns — och kräver `confirm_warnings`.
+ * Upplysningen är ingen spärr, så ett fältfel är hela hindret; länken
+ * förbrukas inte av det (transaktionen rullas tillbaka), och samma länk går
+ * igenom när rutan är ikryssad.
+ */
+it('visar upplysningen på bekräftelsesidan, kräver bekräftelse och förbrukar inte länken på ett fältfel', function () {
+    Notification::fake();
+    withoutVite();
+
+    $person = User::factory()->create();
+    $konto = raderingsytaEgetKonto($person);
+
+    actingAs($person);
+
+    // Begäran görs innan det finns något att upplysa om.
+    $länk = raderingsytaBegär($person);
+
+    // Medlemmen tillkommer EFTER begäran. Sidan räknar om underlaget vid varje
+    // GET, så det är den här medlemmen som syns och kräver samtycke.
+    $container = raderingsytaContainer($konto);
+    $medlem = User::factory()->create(['name' => 'Maja Medlem']);
+    beviljaAccess($container, $medlem, 'read', 'managed');
+
+    raderingslankSomGäst();
+
+    get($länk)
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Settings/ConfirmUserDeletion')
+            ->where('deletion.blockers', [])
+            ->where('deletion.warnings.0.code', DeletionWarning::CODE_SHARED_CONTAINER)
+            ->where('deletion.warnings.0.account', $konto->name)
+            ->where('deletion.warnings.0.containers', [$container->name])
+            ->where('deletion.warnings.0.members', ['Maja Medlem']));
+
+    // Utan rutan: ett fältfel, och ingenting raderat.
+    from($länk)
+        ->post($länk, [])
+        ->assertSessionHasErrors('confirm_warnings');
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeTrue()
+        ->and(Account::query()->whereKey($konto->id)->exists())->toBeTrue()
+        // Länken är fortfarande lösbar: fältfelet rullade tillbaka
+        // förbrukningen med resten av transaktionen.
+        ->and(UserDeletion::query()
+            ->where('user_id', $person->id)
+            ->whereNull('confirmed_at')
+            ->count())->toBe(1);
+
+    // Med rutan går SAMMA länk igenom.
+    post($länk, ['confirm_warnings' => true])
+        ->assertRedirect('/')
+        ->assertSessionHas('status', 'user-deleted');
 
     expect(User::query()->whereKey($person->id)->exists())->toBeFalse();
 });

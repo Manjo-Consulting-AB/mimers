@@ -9,9 +9,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\RequestUserDeletionRequest;
 use App\Models\User;
 use App\Support\User\UserDeletionBlocked;
+use App\Support\User\UserDeletionNeedsConfirmation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -69,6 +71,14 @@ use Symfony\Component\HttpFoundation\Response;
  * `DeleteUser::blockers()` igen). Ingenting har raderats, och eftersom hela
  * transaktionen rullade tillbaka är länken fortfarande lösbar inom timmen.
  *
+ * **Upplysningen är ett fältfel, inte en spärr.** En delad container hindrar
+ * inte raderingen men kräver ett samtycke ([[ADR-0045 Radering av konto och
+ * person]] § Uppföljning 2026-11-14). Är rutan inte ikryssad kastar
+ * App\Support\User\UserDeletionNeedsConfirmation inifrån transaktionen, och
+ * här blir den ett fältfel på `confirm_warnings` — samma svar som begäran ger.
+ * Förbrukningen av tokenet rullades tillbaka med resten, så ett fältfel
+ * förbrukar inte länken.
+ *
  * **Utloggningen gäller bara den raderade.** Var sessionen personens egen loggas
  * hon ut — `user`-raden är borta och `sessions`-raderna med den, och en session
  * som pekar på ingenting ska inte lämnas kvar. Är någon annan inloggad rörs
@@ -95,7 +105,16 @@ class UserDeletionController extends Controller
     public function store(
         RequestUserDeletionRequest $request,
         RequestUserDeletion $requestUserDeletion,
+        DeleteUser $deleteUser,
     ): RedirectResponse {
+        // Upplysningarna prövas FÖRE tvåfaktorn. `authenticate()` förbrukar
+        // en återställningskod när en sådan används, och ett fältfel på
+        // `confirm_warnings` ska inte kosta personen den koden — ett
+        // fältfel förbrukar ingenting. Finns upplysningar och rutan är inte
+        // ikryssad blir det alltså ett fältfel här, innan någon kod prövas
+        // eller förbrukas och innan något mejl skickas.
+        $request->ensureWarningsConfirmed($deleteUser);
+
         // Kastar ValidationException vid fel kod. Ingenting har skrivits när
         // den kastar.
         $request->authenticate();
@@ -113,8 +132,10 @@ class UserDeletionController extends Controller
      * GET /settings/delete-user/{token} — bekräftelsesidan, länken ur mejlet.
      *
      * **En GET som inte raderar någonting** (ADR-0045 § Uppföljning 2026-09-28,
-     * beslut 2). Den renderar vad en radering skulle göra — samma tre listor
-     * som säkerhetssidan, ur samma källa — och en knapp. Mellansteget är
+     * beslut 2). Den renderar vad en radering skulle göra — samma underlag
+     * som säkerhetssidan, ur samma källa — och en knapp. Upplysningarna
+     * räknas om vid varje GET, så sidan visar listan som den ser ut NU: en
+     * medlem som tillkommit sedan begäran syns här. Mellansteget är
      * också det som gör att en mejlskanner som förhandshämtar länkar inte
      * raderar någon, och det som ger `POST`:en en CSRF-skyddad sida att utgå
      * ifrån: länkrutterna ligger i `web`, och sessionen finns alltså.
@@ -180,7 +201,17 @@ class UserDeletionController extends Controller
         $current = $request->user();
 
         try {
-            $person = $confirmUserDeletion->handle($token);
+            $person = $confirmUserDeletion->handle($token, $request->boolean('confirm_warnings'));
+        } catch (UserDeletionNeedsConfirmation) {
+            // Upplysningarna är inga spärrar, men de kräver ett samtycke
+            // även här: en medlem kan ha tillkommit sedan begäran, och
+            // sidan visar listan som den ser ut NU. Undantaget kastas inifrån
+            // transaktionen, så förbrukningen av tokenet rullades tillbaka —
+            // ett fältfel förbrukar inte länken, och samma länk går att
+            // skicka igen när rutan är ikryssad.
+            throw ValidationException::withMessages([
+                'confirm_warnings' => __('ui.settings.security.deletion.warning_confirm_required'),
+            ]);
         } catch (UserDeletionBlocked) {
             // Ingenting raderat, länken fortfarande lösbar. Sidan visar
             // spärren med det den gäller.

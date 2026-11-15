@@ -39,6 +39,13 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * En avstängd knapp hindrar ett klick men inte Enter i ett fält, och
  * "begäran går inte att göra" ska vara sant även för den som tabbar sig fram.
  *
+ * **Upplysningen kräver en ikryssad ruta.** En delad container spärrar inte
+ * längre ([[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14),
+ * men personen ska veta att containrarna raderas och att medlemmarna förlorar
+ * åtkomsten. Knappen heter *Delete anyway* när upplysningar finns och är
+ * avstängd tills rutan är ikryssad; `submit()` vaktar samma villkor, av samma
+ * skäl som mot spärren. Fältfelet `confirm_warnings` ritas vid rutan.
+ *
  * **Kodfältet finns bara när tvåfaktorn är på**, av samma skäl och med samma
  * villkor som i PasswordForm: `totpEnabled` speglar `totp_confirmed_at`, och
  * serverns TwoFactorChallenge är den som prövar koden. Vyn avgör inte om en
@@ -48,24 +55,27 @@ const props = defineProps({
     accountsToDelete: { type: Array, required: true },
     accountsToLeave: { type: Array, required: true },
     blockers: { type: Array, required: true },
+    warnings: { type: Array, required: true },
     totpEnabled: { type: Boolean, required: true },
 });
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
-const form = useForm({ code: '' });
+const form = useForm({ code: '', confirm_warnings: false });
 
 const blocked = computed(() => props.blockers.length > 0);
+const hasWarnings = computed(() => props.warnings.length > 0);
+const needsConfirmation = computed(() => hasWarnings.value && !form.confirm_warnings);
 
 function submit() {
-    if (blocked.value) {
+    if (blocked.value || needsConfirmation.value) {
         return;
     }
 
     form.post('/settings/delete-user', {
         onError: focusFirstError,
-        onSuccess: () => form.reset('code'),
+        onSuccess: () => form.reset('code', 'confirm_warnings'),
     });
 }
 </script>
@@ -86,6 +96,7 @@ function submit() {
             :accounts-to-delete="props.accountsToDelete"
             :accounts-to-leave="props.accountsToLeave"
             :blockers="props.blockers"
+            :warnings="props.warnings"
         >
             <template #blocked>
                 <h3 class="font-medium text-amber-900">{{ t('settings.security.deletion.blocked_heading') }}</h3>
@@ -118,6 +129,31 @@ function submit() {
                 </FormField>
             </template>
 
+            <!-- Upplysningens samtycke. Rutan finns bara när det finns något
+                 att upplysas om, och samma villkor stänger av knappen och
+                 vakas av submit(). Fältfelet ritas vid rutan, det är där
+                 personen kan åtgärda det. -->
+            <template v-if="hasWarnings">
+                <label for="confirm_warnings" class="flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                        id="confirm_warnings"
+                        v-model="form.confirm_warnings"
+                        type="checkbox"
+                        name="confirm_warnings"
+                        class="mt-1"
+                    >
+                    <span>{{ t('settings.security.deletion.warning_confirm') }}</span>
+                </label>
+
+                <p
+                    v-if="form.errors.confirm_warnings"
+                    role="alert"
+                    class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                >
+                    {{ form.errors.confirm_warnings }}
+                </p>
+            </template>
+
             <!-- Takgränsens fel, inte ett fältfel: begränsaren är
                  inloggningens och lägger sitt fel på `email`, ett fält det
                  här formuläret inte har. Samma form som PasswordForm. -->
@@ -133,12 +169,14 @@ function submit() {
 
             <button
                 type="submit"
-                :disabled="blocked || form.processing"
+                :disabled="blocked || needsConfirmation || form.processing"
                 class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
             >
                 {{ blocked
                     ? t('settings.security.deletion.blocked_button')
-                    : (form.processing ? t('common.pending.default') : t('settings.security.deletion.submit')) }}
+                    : (hasWarnings
+                        ? t('settings.security.deletion.delete_anyway')
+                        : (form.processing ? t('common.pending.default') : t('settings.security.deletion.submit'))) }}
             </button>
         </form>
     </section>

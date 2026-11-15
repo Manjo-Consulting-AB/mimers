@@ -1492,6 +1492,28 @@ return [
              * rule: it carries no data at all, and its sentence names nothing
              * — that a container is under legal hold is itself information
              * about an investigation (DeletionBlocker::legalHold()).
+             *
+             * **Upplysningarna har sin egen rubrik och sina egna ord.** Sedan
+             * [[ADR-0045 Radering av konto och person]] § Uppföljning
+             * 2026-11-14 är en delad container ingen spärr: containrarna
+             * raderas med kontot och medlemmarna förlorar åtkomsten. Det är
+             * något personen ska veta och kryssa i, inte ett hinder — därför
+             * `warnings_heading`, `warning.shared_container`,
+             * `warning_confirm` och `delete_anyway`, och därför står
+             * `shared_container` inte längre under `blocker`. `:members` fylls
+             * med medlemmarnas namn av vyn, precis som `:containers`.
+             *
+             * **En väntande inbjudan har inget namn att räkna upp.**
+             * `containersWithActiveMembers()` räknar en obesvarad inbjudan som
+             * aktiv medlem, men mottagaren har inget konto och bidrar därför
+             * inte med ett namn — `members` är då tom, och meningen med
+             * `:members` hade slutat i "active members: .". Vyn väljer i det
+             * läget `warning.shared_container_invited`, som nämner containrarna
+             * i stället för medlemmarna.
+             *
+             * **`warning_confirm_required` är fältfelet**, både på begäran
+             * och på bekräftelsen. Samma nyckel på båda ställena, så de två
+             * inte kan glida isär.
              */
             'deletion' => [
                 'heading' => 'Delete yourself',
@@ -1502,13 +1524,24 @@ return [
                 'accounts_left_heading' => 'Accounts that are kept',
                 'accounts_none' => 'None.',
 
-                'blocked_heading' => 'The deletion is stopped',
+                'blocked_heading' => 'Deletion isn\'t possible right now',
                 'blocked' => 'Something is in the way, so no request can be made right now.',
                 'blocked_button' => 'Deletion is not possible',
 
+                'warnings_heading' => 'Before you delete your account',
+                'warning' => [
+                    'shared_container' => 'The account :account has containers with active members: :members. Mimers recommends handing over ownership of these containers before the account is deleted. If you go ahead, the containers are deleted and the members lose their access, along with anything they added.',
+                    // Läget utan medlemsnamn: bara en obesvarad inbjudan. Samma
+                    // konsekvens, men ingen att räkna upp — därför `:containers`
+                    // i stället för `:members`.
+                    'shared_container_invited' => 'The account :account has containers with pending invitations: :containers. Mimers recommends handing over ownership of these containers before the account is deleted. If you go ahead, the containers are deleted, and the invitations can no longer be accepted.',
+                ],
+                'warning_confirm' => 'I understand. Delete the containers and remove the members\' access.',
+                'warning_confirm_required' => 'Confirm that you understand what happens to the containers before you continue.',
+                'delete_anyway' => 'Delete anyway',
+
                 'blocker' => [
                     'sole_owner' => 'You are the only owner of :account, which has other members. An account cannot be left without an owner — hand the ownership over to another member first.',
-                    'shared_container' => 'The account :account has containers with active members: :containers. The ownership has to be handed over before the account can be deleted.',
                     // Neutralt med flit: spärren bär ingen data, och meningen
                     // får inte avslöja vilket konto den gäller.
                     'legal_hold' => 'The deletion is stopped by a legal hold. Contact us if you want to know more.',
