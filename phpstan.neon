@@ -6,6 +6,12 @@ parameters:
 
     parseModelCastsMethod: true
 
+    # En process, inte en per kärna. VPS:en har 2 GB RAM och varje worker tar
+    # ~450 MiB; med parallella agenter i egna worktrees räckte inte minnet och
+    # earlyoom dödade agentsessionerna (2026-11-15).
+    parallel:
+        maxNumberOfProcess: 1
+
     paths:
         - app
         - bootstrap
