@@ -634,6 +634,55 @@ it('sparar nivån direkt med router.patch och utan Save', function () {
 });
 
 /*
+ * Klart när: ett val sparas direkt (issue 1250 § 1) — också gästens
+ * utgångsdatum. Fältet skickar `expires_at` i sin EGEN PATCH när det ändras,
+ * och kroppen bär bara datumet: `sometimes` i den delade FormRequesten
+ * lämnar nivån orörd, precis som ett nivåval lämnar utgången orörd (det
+ * beteendet prövas serverside ovanför).
+ */
+it('sparar utgångsdatumet direkt med router.patch', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    expect($rad)->toContain('router.patch(url, { expires_at: expiresAt.value }');
+    expect($rad)->toContain('@change="saveExpiry"');
+});
+
+/*
+ * Klart när: ett värde servern inte sparade visas inte som sparat.
+ *
+ * `onError` anropas bara för ett valideringssvar (422). Ett fryst ägarkonto
+ * får 403 på PATCH, och ett nätfel ger inget svar alls — ingen av dem når
+ * `onError`, så en återställning som bara stod där hade lämnat väljaren på
+ * ett värde ägaren trodde gällde. Utfallet avgörs därför i `onFinish`, där
+ * propen bär serverns värde.
+ */
+it('ställer tillbaka nivån och utgången när anropet inte gick igenom', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    foreach (['saveLevel', 'saveExpiry'] as $funktion) {
+        $start = strpos($rad, "function {$funktion}(");
+
+        expect($start)->not->toBeFalse("{$funktion} saknas i raden");
+
+        $kropp = substr($rad, $start);
+        $kropp = substr($kropp, 0, strpos($kropp, "\n}"));
+
+        $finish = strpos($kropp, 'onFinish:');
+        $aterstallning = strpos($kropp, 'if (! ');
+
+        expect($finish)->not->toBeFalse("{$funktion} saknar onFinish");
+        expect($aterstallning)->not->toBeFalse("{$funktion} ställer inte tillbaka något värde");
+        expect($aterstallning)->toBeGreaterThan($finish);
+    }
+
+    // Återställningen läser serverns värde ur propen, och ett avbrutet anrop
+    // gör samma sak.
+    expect($rad)->toContain('level.value = props.access.level')
+        ->and($rad)->toContain('expiresAt.value = hasExpiry ? dateInput(props.access.expires_at) : null')
+        ->and($rad)->toContain('onCancel:');
+});
+
+/*
  * Klart när: borttagningen frågar först, och frågan är appens egen dialog
  * (issue 330) med danger-ton. Ingen Inertia-länk som postar en DELETE och
  * ingen webbläsardialog.
@@ -655,6 +704,22 @@ it('frågar i UiConfirmDialog innan åtkomsten tas bort', function () {
     expect($en['sharing']['accesses']['remove'])->toBe('Remove access');
     expect($en['sharing']['accesses']['remove_heading'])->not->toBe('');
     expect($en['sharing']['accesses']['remove_body'])->not->toBe('');
+});
+
+/*
+ * Klart när: en borttagning som inte går igenom säger det.
+ *
+ * Ett fryst konto får 403 på DELETE och ett nätfel ger inget svar alls —
+ * båda stänger dialogen utan att raden försvinner. Utan besked ser det ut som
+ * att åtkomsten är borta. Raden bär därför en felmening, som de andra
+ * ytorna som skriver `t('error.generic')` när anropet fallerar.
+ */
+it('ger besked när borttagningen inte går igenom', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    expect($rad)->toContain('removeError')
+        ->and($rad)->toContain("t('error.generic')")
+        ->and($rad)->toContain('role="alert"');
 });
 
 /*

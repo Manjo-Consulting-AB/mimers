@@ -57,6 +57,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * radering. Ingen egen Inertia-länk med metod delete och ingen
  * webbläsardialog: frågan ska se ut som resten av produkten.
  *
+ * **Ett misslyckat anrop ställer tillbaka det visade värdet.** `onError`
+ * anropas bara för ett valideringssvar (422). Ett fryst ägarkonto får 403 på
+ * PATCH, och ett nätfel eller ett avbrutet anrop ger inget svar alls — ingen
+ * av dem når `onError`. Utfallet avgörs därför i `onFinish`, där propen bär
+ * serverns värde: sparades ingenting ställs väljaren och datumfältet tillbaka
+ * i stället för att visa ett värde ägaren tror gäller. Samma mekanism bär
+ * borttagningens besked: raden säger att det inte gick, i stället för att
+ * dialogen stängs som om åtkomsten var borta.
+ *
  * **Ingen knapp döljs eller stängs av efter behörighet.** Behörighetskontroller
  * görs i policies, aldrig genom att gömma en knapp ([[M10 Webbfrontend]]),
  * och ett fryst ägarkonto som får 403 på PATCH får den förklaringen i en rad
@@ -115,18 +124,25 @@ const status = ref(null);
 const confirming = ref(false);
 const removeTrigger = ref(null);
 const revoking = ref(false);
+const removeError = ref(null);
 
 /*
  * Nivån, sparad direkt. Kroppen bär bara `level`: `sometimes` i den delade
  * FormRequesten lämnar `expires_at` orörd, så ett nivåval flyttar aldrig ett
  * gästkontos utgång.
+ *
+ * Utfallet avgörs i `onFinish` och inte i `onError`: bara ett
+ * valideringssvar (422) når `onError`, medan ett fryst konto (403) och ett
+ * nätfel går förbi den. Propen är serverns värde, så när den inte bär det
+ * valda värdet efter anropet har ingenting sparats — och då ställs väljaren
+ * tillbaka.
  */
 function saveLevel(value) {
     if (value === props.access.level) {
         return;
     }
 
-    const previous = level.value;
+    let saved = false;
 
     level.value = value;
     levelError.value = null;
@@ -140,24 +156,37 @@ function saveLevel(value) {
         },
         onFinish: () => {
             pending.value = false;
+
+            if (! saved) {
+                level.value = props.access.level;
+            }
         },
         onSuccess: () => {
+            saved = true;
             status.value = 'updated';
         },
         onError: (errors) => {
-            level.value = previous;
             levelError.value = errors.level ?? errors.expires_at ?? null;
+        },
+        onCancel: () => {
+            level.value = props.access.level;
         },
     });
 }
 
-/* Utgången, sparad direkt och i sin egen PATCH av samma skäl som nivån. */
+/* Utgången, sparad direkt och i sin egen PATCH av samma skäl som nivån.
+ * Samma utfallskontroll som `saveLevel`: ett 403 eller ett nätfel anropar
+ * aldrig `onError`, så fältet ställs tillbaka i `onFinish` när propen inte
+ * bär det nya datumet.
+ */
 function saveExpiry() {
     const saved = hasExpiry ? dateInput(props.access.expires_at) : null;
 
     if (expiresAt.value === null || expiresAt.value === saved) {
         return;
     }
+
+    let stored = false;
 
     expiryError.value = null;
     status.value = null;
@@ -170,13 +199,20 @@ function saveExpiry() {
         },
         onFinish: () => {
             pending.value = false;
+
+            if (! stored) {
+                expiresAt.value = hasExpiry ? dateInput(props.access.expires_at) : null;
+            }
         },
         onSuccess: () => {
+            stored = true;
             status.value = 'updated';
         },
         onError: (errors) => {
-            expiresAt.value = saved;
             expiryError.value = errors.expires_at ?? errors.level ?? null;
+        },
+        onCancel: () => {
+            expiresAt.value = hasExpiry ? dateInput(props.access.expires_at) : null;
         },
     });
 }
@@ -186,7 +222,17 @@ function openRemove(element) {
     confirming.value = true;
 }
 
+/*
+ * Borttagningen, med besked när den inte gick igenom. Dialogen stängs i
+ * `onFinish` — också efter ett 403 eller ett nätfel — och då säger raden att
+ * anropet misslyckades i stället för att tyst se ut som att åtkomsten är
+ * borta. Samma utfallskontroll som `saveLevel`, av samma skäl.
+ */
 function remove() {
+    let removed = false;
+
+    removeError.value = null;
+
     router.delete(url, {
         preserveScroll: true,
         onStart: () => {
@@ -195,6 +241,13 @@ function remove() {
         onFinish: () => {
             revoking.value = false;
             confirming.value = false;
+
+            if (! removed) {
+                removeError.value = t('error.generic');
+            }
+        },
+        onSuccess: () => {
+            removed = true;
         },
     });
 }
@@ -251,6 +304,12 @@ function remove() {
              bär `role="status"`; fältfelen bär `role="alert"` där de hör. -->
         <p v-if="status" role="status" class="text-meta text-ink-subtle">
             {{ t('sharing.accesses.updated') }}
+        </p>
+
+        <!-- Borttagningen gick inte igenom. Felet bär `role="alert"` och står
+             på raden, dit blicken redan är — dialogen är stängd. -->
+        <p v-if="removeError" role="alert" class="text-body text-danger">
+            {{ removeError }}
         </p>
 
         <button
