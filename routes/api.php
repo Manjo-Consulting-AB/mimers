@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
+use App\Http\Controllers\Api\AvatarController;
 use App\Http\Controllers\Api\CalendarFeedController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ContainerAccessController;
@@ -603,6 +604,18 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/me/notification-preferences', [NotificationPreferenceController::class, 'index']);
     Route::put('/me/notification-preferences', [NotificationPreferenceController::class, 'update']);
     Route::patch('/me/quiet-hours', [QuietHoursController::class, 'update']);
+
+    // Issue 380 · Profilbilden, se App\Http\Controllers\Api\AvatarController
+    // och [[ADR-0076 Profilbilden]] § 2, 3 och 6. Två toppnivårutter under
+    // /me, av samma skäl som preferensytan ovan: bilden är användarens EGEN,
+    // och en rutt utan identifierare går inte att peka fel. POST svarar 201
+    // med personens resurs (App\Http\Resources\AuthUserResource), DELETE 204.
+    // `throttle:uploads` på uppladdningen — samma spärr som de andra
+    // ruttarna som skriver byte (issue 16a, App\Providers\AppServiceProvider
+    // ::configureUploadRateLimiting()).
+    Route::post('/me/avatar', [AvatarController::class, 'store'])
+        ->middleware('throttle:uploads');
+    Route::delete('/me/avatar', [AvatarController::class, 'destroy']);
 
     // Issue 28 · Nedgraderingen, steg 2 — kontots urvalslista av bilagor,
     // se App\Http\Controllers\Api\AccountStorageController och

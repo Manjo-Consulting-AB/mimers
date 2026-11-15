@@ -681,6 +681,14 @@ return [
         'profile-updated' => 'Your profile has been saved.',
         'account-updated' => 'The account details have been saved.',
 
+        // Issue 380 · [[ADR-0076 Profilbilden]]. Two codes and not one:
+        // setting and removing are two different things, and the removal is
+        // NOT "deleted" — a profile picture never enters the trash, it is
+        // purged at once (ADR-0076 § 2), so the sentence must not promise a
+        // restore that does not exist.
+        'avatar-updated' => 'Your profile picture has been saved.',
+        'avatar-removed' => 'Your profile picture has been removed.',
+
         // Issue 65a § Decision 6. Two codes and not one: the page has two
         // forms, and "saved" without saying what had been true but not an
         // answer to what happened.
@@ -922,6 +930,15 @@ return [
             // refused whole: nothing is moved. The sentence says what the
             // action needs, not which file was wrong.
             'not_in_inbox' => 'Only files in your own inbox can be processed.',
+        ],
+
+        // Issue 380 · [[ADR-0076 Profilbilden]] § 3. A person without a
+        // personal account has no quota to charge, so she cannot save a
+        // profile picture — she keeps her initials and gets this sentence.
+        // The code is `avatar.no_personal_account`; on the web it becomes a
+        // field error on `file`, on /api it stays a code.
+        'avatar' => [
+            'no_personal_account' => 'A profile picture needs a personal account, and you do not have one.',
         ],
 
         // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`
