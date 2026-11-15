@@ -47,8 +47,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * datum, alltså aldrig som `null` — den delade UpdateContainerAccessRequest
  * tillåter det, men webbytan erbjuder det inte: en `guest` utan utgång
  * motsäger § Beslut 5, och vägen från gäst till permanent går genom `kind`,
- * som är `prohibited` med flit. Raden under fältet säger det, i stället för
- * att ägaren ska leta efter en knapp som inte finns.
+ * som är `prohibited` med flit. Att tömma `type="date"` ger `''` och inte
+ * `null`, så `saveExpiry` fångar det tomma värdet FÖRE anropet och ställer
+ * tillbaka fältet: annars hade servern gjort `''` till `null` och rensat
+ * utgången. Raden under fältet säger det, i stället för att ägaren ska leta
+ * efter en knapp som inte finns.
  *
  * **Borttagningen går genom UiConfirmDialog.** Dialogen är appens egen fråga
  * (issue 330), och fokusfällan är webbläsarens `<dialog>`; `trigger` lämnar
@@ -182,7 +185,19 @@ function saveLevel(value) {
 function saveExpiry() {
     const saved = hasExpiry ? dateInput(props.access.expires_at) : null;
 
-    if (expiresAt.value === null || expiresAt.value === saved) {
+    /*
+     * Ett tömt `<input type="date">` ger `''`, inte `null` (backspace eller
+     * Rensa). Servern gör `''` till `null`, och `nullable` hade då rensat
+     * gästens utgång — en gest hade räckt. Ett tomt värde är därför inget att
+     * spara: fältet ställs tillbaka innan anropet.
+     */
+    if (! expiresAt.value) {
+        expiresAt.value = saved;
+
+        return;
+    }
+
+    if (expiresAt.value === saved) {
         return;
     }
 

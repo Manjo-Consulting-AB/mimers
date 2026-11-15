@@ -648,6 +648,37 @@ it('sparar utgångsdatumet direkt med router.patch', function () {
 });
 
 /*
+ * Klart när: webbytan erbjuder ingen väg att tömma utgången — inte heller
+ * genom att tömma fältet.
+ *
+ * Ett `<input type="date">` som töms (backspace eller Rensa) ger `''`, inte
+ * `null`. Servern gör `''` till `null`, och `nullable` i den delade
+ * UpdateContainerAccessRequest hade då rensat gästens utgång på en enda gest.
+ * Ett beteendeprov räcker inte: servern TILLÅTER `null` på `/api`, så det är
+ * klientens vakt som ska prövas — att den står FÖRE anropet.
+ */
+it('skickar aldrig ett tomt utgångsdatum', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    $start = strpos($rad, 'function saveExpiry(');
+
+    expect($start)->not->toBeFalse('saveExpiry saknas i raden');
+
+    $kropp = substr($rad, $start);
+    $kropp = substr($kropp, 0, strpos($kropp, "\n}"));
+
+    $vakt = strpos($kropp, 'if (! expiresAt.value)');
+    $anrop = strpos($kropp, 'router.patch(');
+
+    expect($vakt)->not->toBeFalse('saveExpiry fångar inte ett tomt värde');
+    expect($anrop)->not->toBeFalse('saveExpiry anropar inte router.patch');
+    expect($vakt)->toBeLessThan($anrop);
+
+    // Fältet ställs tillbaka till serverns värde, inte till tomt.
+    expect($kropp)->toContain('expiresAt.value = saved');
+});
+
+/*
  * Klart när: ett värde servern inte sparade visas inte som sparat.
  *
  * `onError` anropas bara för ett valideringssvar (422). Ett fryst ägarkonto
@@ -668,9 +699,13 @@ it('ställer tillbaka nivån och utgången när anropet inte gick igenom', funct
         $kropp = substr($kropp, 0, strpos($kropp, "\n}"));
 
         $finish = strpos($kropp, 'onFinish:');
-        $aterstallning = strpos($kropp, 'if (! ');
 
         expect($finish)->not->toBeFalse("{$funktion} saknar onFinish");
+
+        // Leta efter återställningen INIFRÅN onFinish: funktionen kan bära
+        // tidigare vakter av samma form (saveExpiry fångar ett tomt datum).
+        $aterstallning = strpos($kropp, 'if (! ', $finish);
+
         expect($aterstallning)->not->toBeFalse("{$funktion} ställer inte tillbaka något värde");
         expect($aterstallning)->toBeGreaterThan($finish);
     }
