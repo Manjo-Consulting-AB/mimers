@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, watch } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
+import CurrencyField from './CurrencyField.vue';
 import FormField from './FormField.vue';
 import UiButton from './UiButton.vue';
 import UiInput from './UiInput.vue';
@@ -136,10 +137,11 @@ function submit() {
 
         <!--
             Valutan är förifylld ur containerns arv
-            ([[ADR-0037 Valutans arv]]) och går att skriva över: arvet
-            är ett förslag, aldrig ett tvång. Fältet är synligt och
-            inte dolt — ett värde som ändå står i datan ska stå framme
-            för den som skriver raden.
+            ([[ADR-0037 Valutans arv]]) och går att ändra: arvet är ett
+            förslag, aldrig ett tvång. Fältet är en sökruta över de aktiva
+            ISO 4217-koderna ([[ADR-0078 Valutor ur ISO 4217]] § 2), synligt
+            och inte dolt — ett värde som ändå står i datan ska stå framme för
+            den som skriver raden.
         -->
         <FormField
             v-slot="{ describedBy }"
@@ -147,11 +149,10 @@ function submit() {
             id="cost-currency"
             :error="form.errors.currency"
         >
-            <UiInput
+            <CurrencyField
                 id="cost-currency"
                 v-model="form.currency"
                 :described-by="describedBy"
-                maxlength="3"
             />
         </FormField>
 

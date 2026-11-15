@@ -17,6 +17,22 @@ use Illuminate\Validation\ValidationException;
 final class ValidationErrorMapper
 {
     /**
+     * Regler vars felkod inte följer `validation.<regel>`.
+     *
+     * App\Rules\IsoCurrency ger `currency.invalid`, se [[ADR-0078 Valutor ur
+     * ISO 4217]] § 1 och issue 1253: koden är domänens, som varje annan kod i
+     * API-höljet (AGENTS.md § Felformat i API:et), och klienten ska kunna
+     * känna igen den utan att känna till regelns klassnamn. Regeln själv
+     * fortsätter heta IsoCurrency — mappningen bor här därför att den är en
+     * del av API-kontraktet och inte av valideringen.
+     *
+     * @var array<string, string>
+     */
+    private const FAILURE_CODES = [
+        'App\\Rules\\IsoCurrency' => 'currency.invalid',
+    ];
+
+    /**
      * @return array<string, list<array{code: string, data: array<string, mixed>|\stdClass}>>
      */
     public static function fields(ValidationException $exception): array
@@ -45,13 +61,21 @@ final class ValidationErrorMapper
 
             foreach ($rules as $rule => $parameters) {
                 $fields[$field][] = [
-                    'code' => 'validation.'.self::ruleCode($rule),
+                    'code' => self::failureCode($rule),
                     'data' => ApiError::asJsonObject(self::ruleData($rule, $parameters)),
                 ];
             }
         }
 
         return $fields;
+    }
+
+    /**
+     * Fältfelets kod: regelns egna undantag först, annars den generella formen.
+     */
+    private static function failureCode(string $rule): string
+    {
+        return self::FAILURE_CODES[$rule] ?? 'validation.'.self::ruleCode($rule);
     }
 
     private static function ruleCode(string $rule): string

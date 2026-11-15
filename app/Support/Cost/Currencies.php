@@ -2,6 +2,8 @@
 
 namespace App\Support\Cost;
 
+use ResourceBundle;
+
 /**
  * De valutakoder servern godtar, se [[ADR-0078 Valutor ur ISO 4217]] § 1 och
  * issue 1252.
@@ -22,9 +24,23 @@ namespace App\Support\Cost;
  *
  * Koderna är versaler och sorterade. Listan på ett ställe är poängen:
  * valideringen i #1253, sökrutan och containerns urval läser samma klass.
+ *
+ * **Namnen kommer ur ICU** (`intl`, `ICUDATA-curr`) på användarens språk, med
+ * koden som reserv när bundlen saknas eller koden inte har ett namn där. Att
+ * namnen inte ligger i `lang/` är med flit: de är ISO:s och CLDR:s data, inte
+ * vår copy, och en katalog per språk hade gjort 180 rader att underhålla för
+ * hand. Uppslaget memoiseras per locale — `options()` frågar efter varje kod,
+ * och en bundle per kod hade varit 180 uppslag per sidladdning.
  */
 final class Currencies
 {
+    /**
+     * Namnen per locale, lästa en gång per process.
+     *
+     * @var array<string, array<string, string>>
+     */
+    private static array $names = [];
+
     /**
      * Aktiva ISO 4217-koder, sorterade.
      *
@@ -70,5 +86,90 @@ final class Currencies
     public static function codes(): array
     {
         return self::CODES;
+    }
+
+    /**
+     * Kodens namn på $locale, eller koden själv när ICU inte har något namn.
+     *
+     * Koden normaliseras till versaler så att anroparen kan skicka det värde
+     * den har — valideringen har redan versaliserat, men en läsare av API:t
+     * eller en testare ska inte behöva känna till den ordningen.
+     */
+    public static function name(string $code, string $locale): string
+    {
+        return self::namesFor($locale)[mb_strtoupper($code)] ?? mb_strtoupper($code);
+    }
+
+    /**
+     * Hela listan som `{code, name}` på $locale, sorterad på kod.
+     *
+     * Formen är den sökrutan och `currencies`-proppen talar: fältet matchar
+     * både kod och namn, och servern skickar därför båda. Sorteringen är
+     * listans egen — koden är den stabila ordningen, och namnen skiljer sig
+     * mellan språk.
+     *
+     * @return list<array{code: string, name: string}>
+     */
+    public static function options(string $locale): array
+    {
+        return array_map(static fn (string $code): array => [
+            'code' => $code,
+            'name' => self::name($code, $locale),
+        ], self::CODES);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function namesFor(string $locale): array
+    {
+        if (array_key_exists($locale, self::$names)) {
+            return self::$names[$locale];
+        }
+
+        $names = self::readNames($locale);
+
+        // `en_GB` bär ingen valutabundle i ICU; primärspråket gör det. Samma
+        // reserv som `LocaleResolver` använder för katalogerna, och samma
+        // svar för `en` och `en_GB` — men bara när den exakta strängen
+        // saknar data.
+        if ($names === [] && str_contains($locale, '_')) {
+            $names = self::readNames(strstr($locale, '_', true) ?: $locale);
+        }
+
+        return self::$names[$locale] = $names;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function readNames(string $locale): array
+    {
+        if (! class_exists(ResourceBundle::class)) {
+            return [];
+        }
+
+        try {
+            $currencies = ResourceBundle::create($locale, 'ICUDATA-curr')?->get('Currencies');
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (! $currencies instanceof ResourceBundle) {
+            return [];
+        }
+
+        $names = [];
+
+        foreach (self::CODES as $code) {
+            $entry = $currencies->get($code);
+            $name = $entry instanceof ResourceBundle ? $entry->get(1) : null;
+
+            if (is_string($name) && $name !== '') {
+                $names[$code] = $name;
+            }
+        }
+
+        return $names;
     }
 }

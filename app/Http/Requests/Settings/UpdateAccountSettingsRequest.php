@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Rules\IsoCurrency;
 use DateTimeZone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -52,10 +53,13 @@ use Illuminate\Validation\Rule;
  * App\Http\Requests\UpdateQuietHoursRequest, som skriver samma kolumn på
  * användaren; ändrar du den ena, ändra den andra.
  *
- * `currency` prövas däremot på FORMEN (`alpha`, `size:3`) och normaliseras
- * till versaler, exakt som i App\Http\Requests\Container\
- * UpdateContainerRequest: en valuta är ingen uppräkning, och en lista i koden
- * vore domänen inbyggd i den ([[ADR-0033 Produktens omfång]]).
+ * `currency` prövas mot de aktiva ISO 4217-koderna i
+ * App\Support\Cost\Currencies genom App\Rules\IsoCurrency, och normaliseras
+ * till versaler — exakt som i App\Http\Requests\Container\
+ * UpdateContainerRequest ([[ADR-0078 Valutor ur ISO 4217]] § 1). Kontot har
+ * ingen API-yta; requesten används bara av
+ * App\Http\Controllers\Settings\AccountSettingsController, men regeln är
+ * densamma som kostnadens och containerns.
  */
 class UpdateAccountSettingsRequest extends FormRequest
 {
@@ -94,7 +98,7 @@ class UpdateAccountSettingsRequest extends FormRequest
             'locale' => ['required', Rule::in(['sv_SE', 'en_GB'])],
             'timezone' => ['required', Rule::in(DateTimeZone::listIdentifiers())],
             'unit_system' => ['required', Rule::in(['metric', 'imperial'])],
-            'currency' => ['sometimes', 'required', 'string', 'alpha', 'size:3'],
+            'currency' => ['sometimes', 'required', 'string', new IsoCurrency],
         ];
     }
 }

@@ -29,6 +29,14 @@ return [
         ],
     ],
 
+    // The currency field's own words, see issue 1253 · [[ADR-0078 Valutor ur
+    // ISO 4217]] § 2 · resources/js/components/CurrencyField.vue. `inherit` is
+    // the empty choice a container offers — an empty box is the answer
+    // "follow the account", not a missing value ([[ADR-0037 Valutans arv]]).
+    'currency' => [
+        'inherit' => 'Inherit from the account',
+    ],
+
     // The app's own confirmation dialog, see issue 330 · [[ADR-0068 Itemets sida
     // och skapandet]] § 6 · resources/js/components/UiConfirmDialog.vue. The
     // dialog carries only the word it owns itself: the question, the body and
@@ -2216,7 +2224,7 @@ return [
             // names the account's currency instead of saying "the account's":
             // what the container falls back on has to be readable on the page.
             'currency' => 'Currency',
-            'currency_hint' => 'Three letters, for example SEK. Leave the field empty and the container uses the account\'s currency (:currency).',
+            'currency_hint' => 'Leave the field empty and the container uses the account\'s currency (:currency).',
 
             // Issue 101: the seven sections that did not fit in the tab row are
             // gathered here — categories, tags, sharing, the calendar link, the

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Cost;
 
+use App\Rules\IsoCurrency;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -19,6 +20,16 @@ use Illuminate\Foundation\Http\FormRequest;
  * `amount` är en sträng i huvudenhet och formas av MinorUnits i kontrollern
  * (§ Beslut 4 och 5). `currency` normaliseras till versaler och `supplier`
  * trimmas i prepareForValidation() (§ Beslut 11).
+ *
+ * **En befintlig rad med en kod utanför ISO 4217 står kvar och visas.** Att
+ * rätta den i tysthet är just vad [[ADR-0078 Valutor ur ISO 4217]] § 3 och
+ * [[ADR-0037 Valutans arv]] vill undvika: raden är sanningen om vad som
+ * betalades. En PATCH som bara rör beskrivningen, datumet eller leverantören
+ * godtas därför utan att valutan nämns — `required_with` kräver paret först
+ * när BELOPPET ändras. Skickas beloppet måste valutan följa med, och då
+ * prövas den mot listan som en ny rad: en ogiltig kod kan alltså inte skrivas
+ * in, bara stå kvar (ADR-0078 § 1). `alpha|size:3` ersattes av
+ * App\Rules\IsoCurrency i issue 1253.
  */
 class UpdateCostEntryRequest extends FormRequest
 {
@@ -58,7 +69,7 @@ class UpdateCostEntryRequest extends FormRequest
         return [
             'incurred_on' => ['sometimes', 'date'],
             'amount' => ['required_with:currency', 'string'],
-            'currency' => ['required_with:amount', 'string', 'alpha', 'size:3'],
+            'currency' => ['required_with:amount', 'string', new IsoCurrency],
             'description' => ['sometimes', 'string', 'max:255'],
             'supplier' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];

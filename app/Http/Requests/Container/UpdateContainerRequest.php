@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Container;
 
 use App\Models\Item;
+use App\Rules\IsoCurrency;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,10 +29,11 @@ use Illuminate\Validation\Rule;
  * vilket är hela skillnaden mellan `null` och en egen valuta
  * (App\Models\Container::effectiveCurrency()).
  *
- * **Valutan normaliseras till versaler** och formas som `alpha|size:3`, inte
- * mot en lista — samma regel och samma skäl som i App\Http\Requests\Cost\
- * StoreCostEntryRequest: en valuta är ingen uppräkning, och en lista i koden
- * vore domänen inbyggd i den ([[ADR-0033 Produktens omfång]]).
+ * **Valutan normaliseras till versaler** och prövas mot de aktiva ISO
+ * 4217-koderna i App\Support\Cost\Currencies genom App\Rules\IsoCurrency —
+ * samma regel som i App\Http\Requests\Cost\StoreCostEntryRequest
+ * ([[ADR-0078 Valutor ur ISO 4217]] § 1). En tom ruta blir `null` och betyder
+ * fortfarande "ärv kontot"; listan prövas bara när ett värde är där.
  *
  * **Containerns valuta ändrar aldrig en skriven kostnadsrad.**
  * `cost_entry.currency` rörs inte av den här requesten, av kontrollern eller
@@ -101,7 +103,7 @@ class UpdateContainerRequest extends FormRequest
             // ingenting annat. En nyckel som SAKNAS rör inte beskrivningen —
             // `sometimes` skiljer "töm den" från "ändra den inte".
             'description' => ['sometimes', 'nullable', 'string'],
-            'currency' => ['sometimes', 'nullable', 'string', 'alpha', 'size:3'],
+            'currency' => ['sometimes', 'nullable', 'string', new IsoCurrency],
             'icon' => ['sometimes', 'nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
             'icon_color' => ['sometimes', 'nullable', Rule::in(Item::ICON_COLORS)],
         ];

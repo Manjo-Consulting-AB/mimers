@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import CostEntryForm from './CostEntryForm.vue';
+import CurrencyField from './CurrencyField.vue';
 import FormField from './FormField.vue';
 import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
 import InlineCreate from './InlineCreate.vue';
@@ -676,17 +677,24 @@ function destroy(cost) {
                         />
                     </FormField>
 
+                    <!--
+                        Redigeringens valutafält är samma sökruta som det nya
+                        formuläret använder (issue 1253 · [[ADR-0078 Valutor
+                        ur ISO 4217]] § 2). En rad med en kod utanför listan
+                        visas som förut — koden står kvar i rutan — och en
+                        ändring av bara beskrivningen skickar ingen valuta
+                        (se patchBody()).
+                    -->
                     <FormField
                         v-slot="{ describedBy }"
                         :label="t('item.cost.form_currency')"
                         id="cost-edit-currency"
                         :error="editForm.errors.currency"
                     >
-                        <UiInput
+                        <CurrencyField
                             id="cost-edit-currency"
                             v-model="editForm.currency"
                             :described-by="describedBy"
-                            maxlength="3"
                         />
                     </FormField>
 
