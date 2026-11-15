@@ -4,10 +4,10 @@ import { formatLocaleDate } from '../composables/useRelativeDate.js';
  * Hur en åtkomstrad beskrivs, se issue 55a § Beslut 5, 6 och 7.
  *
  * Två ytor renderar samma rad: den giltiga raden i ContainerAccessRow.vue —
- * med nivåfältet och återkalla-knappen — och den historiska raden i
- * Sharing.vue, som bara redovisas. Beskrivningen av omfånget, av vad `kind`
- * betyder och av vem mottagaren och beviljaren är får inte formuleras två
- * gånger: då kan de två listorna säga olika saker om samma rad.
+ * med nivåfältet, utgångsdatumet och *Remove access* — och den historiska
+ * raden i Sharing.vue, som bara redovisas. Beskrivningen av omfånget, av vad
+ * `kind` betyder och av vem mottagaren och beviljaren är får inte formuleras
+ * två gånger: då kan de två listorna säga olika saker om samma rad.
  *
  * Filen tar `t` som argument, precis som resources/js/i18n/translate.js.
  * Texten kommer alltså fortfarande ur lang/{locale}/ui.php; den här filen

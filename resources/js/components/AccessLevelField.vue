@@ -35,12 +35,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Ingen klientvalidering och inget eget felmeddelande: `error` kommer ur
  * `form.errors.level`, som Inertia fyller från sessionens felpåse när
  * servern nekat — samma mönster som FormField.
+ *
+ * **`disabled` stänger fältet medan ett val sparas** (issue 1250). Raden på
+ * delningssidan sparar nivån direkt, och ett andra klick innan det första
+ * svarat hade blivit två skrivningar i rad — samma skäl som `IconPending`
+ * i Containers/Edit.vue. Fältet ritas kvar och stängs av, det vill säga
+ * döljs inte: den som tabbar igenom raden ska hitta samma fyra nivåer,
+ * bara inte kunna välja en till.
  */
 const props = defineProps({
     levels: { type: Array, required: true },
     modelValue: { type: String, required: true },
     id: { type: String, required: true },
     error: { type: String, default: null },
+    disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -59,13 +67,13 @@ const errorId = computed(() => `${props.id}-error`);
 
 <template>
     <fieldset class="flex flex-col gap-3">
-        <legend class="text-sm font-medium text-slate-800">{{ t('sharing.accesses.level') }}</legend>
+        <legend class="text-body font-medium text-ink">{{ t('sharing.accesses.level') }}</legend>
 
         <label
             v-for="level in common"
             :key="level"
             :for="inputId(level)"
-            class="flex min-h-11 cursor-pointer gap-2 rounded border border-slate-300 bg-white p-2"
+            class="flex min-h-11 cursor-pointer gap-2 rounded-control border border-border bg-surface p-2"
         >
             <input
                 :id="inputId(level)"
@@ -73,19 +81,20 @@ const errorId = computed(() => `${props.id}-error`);
                 :name="id"
                 :value="level"
                 :checked="modelValue === level"
+                :disabled="disabled"
                 class="mt-1"
                 @change="emit('update:modelValue', level)"
             >
             <span class="flex flex-col">
-                <span class="text-sm">{{ t(`sharing.level.${level}.label`) }}</span>
-                <span class="text-xs text-slate-600">{{ t(`sharing.level.${level}.description`) }}</span>
+                <span class="text-body text-ink">{{ t(`sharing.level.${level}.label`) }}</span>
+                <span class="text-meta text-ink-muted">{{ t(`sharing.level.${level}.description`) }}</span>
             </span>
         </label>
 
-        <details class="rounded border border-slate-300 bg-white">
-            <summary class="cursor-pointer p-2 text-sm text-slate-700">{{ t('sharing.advanced') }}</summary>
+        <details class="rounded-control border border-border bg-surface">
+            <summary class="cursor-pointer p-2 text-body text-ink">{{ t('sharing.advanced') }}</summary>
 
-            <div class="flex flex-col gap-2 border-t border-slate-200 p-2">
+            <div class="flex flex-col gap-2 border-t border-border p-2">
                 <label
                     v-for="level in advanced"
                     :key="level"
@@ -98,12 +107,13 @@ const errorId = computed(() => `${props.id}-error`);
                         :name="id"
                         :value="level"
                         :checked="modelValue === level"
+                        :disabled="disabled"
                         class="mt-1"
                         @change="emit('update:modelValue', level)"
                     >
                     <span class="flex flex-col">
-                        <span class="text-sm">{{ t(`sharing.level.${level}.label`) }}</span>
-                        <span class="text-xs text-slate-600">{{ t(`sharing.level.${level}.description`) }}</span>
+                        <span class="text-body text-ink">{{ t(`sharing.level.${level}.label`) }}</span>
+                        <span class="text-meta text-ink-muted">{{ t(`sharing.level.${level}.description`) }}</span>
                     </span>
                 </label>
             </div>
@@ -121,7 +131,7 @@ const errorId = computed(() => `${props.id}-error`);
             :id="errorId"
             role="alert"
             tabindex="-1"
-            class="text-sm text-red-700 outline-none"
+            class="text-body text-danger outline-none"
         >
             {{ error }}
         </p>

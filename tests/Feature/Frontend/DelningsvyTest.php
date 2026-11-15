@@ -29,14 +29,21 @@ use function Pest\Laravel\withoutVite;
  * resources/js/pages/Containers/Sharing.vue och
  * resources/js/components/AccessLevelField.vue.
  *
+ * Sedan issue 1250 är deltagarlistan och åtkomstlistan EN lista, *People with
+ * access*: ägarkontot överst utan kontroller, sedan en rad per giltig åtkomst
+ * med nivåväljaren som sparar direkt, gästens utgångsdatum och *Remove
+ * access* bakom en bekräftelsedialog. Historiken står sist i ett `<details>`.
+ * Servern är oförändrad — det är vyn och texterna som flyttade.
+ *
  * Inbjudningarna — avsändarytan, mejlets landningssida och acceptflödet — är
  * 55b och prövas inte här.
  *
- * Den viktigaste gränsen i filen är den mellan sidans två sektioner: en
- * `read`-guest ser deltagarna, och `accesses`-propen är `null` för henne —
- * inte en tom lista, och inte en fylld som vyn låter bli att rendera. Ett test
- * som bara tittade på den renderade HTML:en hade missat precis det som gör
- * skillnad (Beslut 3).
+ * Den viktigaste gränsen i filen är den mellan sidans två publiker: en
+ * `read`-guest ser listan, och `accesses`-propen är `null` för henne — inte en
+ * tom lista, och inte en fylld som vyn låter bli att rendera. Ett test som bara
+ * tittade på den renderade HTML:en hade missat precis det som gör skillnad
+ * (Beslut 3). Utan `accesses` finns varken nivåväljare, utgångsdatum,
+ * borttagning eller historik.
  *
  * Den andra är att `PATCH` och `DELETE` svarar som webben gör och inte som
  * `/api` gör (Beslut 9): en flash-kod och ett formulärfel, aldrig en
@@ -115,10 +122,11 @@ it('skickar en utloggad besökare till inloggningen från delningsrutterna', fun
 });
 
 /*
- * Klart när: sidan renderar för en medlem i ägarkontot, med BÅDE Deltagare
- * och Åtkomster.
+ * Klart när: sidan renderar för en medlem i ägarkontot, med den enda listan
+ * och med kontrollerna. `participants` och `accesses` är kvar som propar —
+ * servern är oförändrad — men vyn ritar dem som EN lista sedan issue 1250.
  */
-it('renderar delningssidan med både deltagare och åtkomster för en medlem i ägarkontot', function () {
+it('renderar delningssidan med den enda listan för en medlem i ägarkontot', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = delningsKontext();
@@ -412,16 +420,22 @@ it('skickar mottagarens och beviljarens namn i egna uppslag', function () {
 });
 
 /*
- * Klart när: en giltig åtkomstrad visar mottagarens och beviljarens namn.
- * Raden renderar etiketterna ur accessPresentation.js och aldrig ULID:en
- * själv — `access.grantee` är uppslagsnyckeln, inte texten.
+ * Klart när: en giltig åtkomstrad visar mottagarens namn. Raden renderar
+ * etiketten ur accessPresentation.js och aldrig ULID:en själv —
+ * `access.grantee` är uppslagsnyckeln, inte texten.
+ *
+ * Sedan issue 1250 bär raden inte längre beviljaren: listan svarar på VEM som
+ * har åtkomst och till VAD, och *vem som beviljade* stod som en tredje rad i
+ * småstil utan att någon frågade efter den. Uppslaget `grantedByNames` finns
+ * kvar i svaret — det är kontraktet mellan kontroller och vy — men raden
+ * läser det inte.
  */
 it('renderar namn i stället för ULID på en giltig rad', function () {
     $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
     $beskrivning = File::get(resource_path('js/components/accessPresentation.js'));
 
     expect($rad)->toContain('granteeLabel(t, granteeNames, access)');
-    expect($rad)->toContain('grantedByLabel(t, grantedByNames, access)');
+    expect($rad)->toContain('accessScopeLabel(t, itemNames, access)');
     expect($rad)->not->toContain('{{ access.grantee }}');
     expect($rad)->not->toContain('{{ access.granted_by }}');
 
@@ -597,24 +611,232 @@ it('visar nivåerna och deras beskrivningar', function () {
 });
 
 /*
+ * Klart när: ett val sparas direkt (issue 1250 § 1). Nivåväljaren postar
+ * `level` i sin EGEN PATCH, raden har ingen *Save*, och väljaren är avstängd
+ * medan anropet pågår. Källkodsprov av samma skäl som grannproven: valet är
+ * klientsidans, och det som går att avgöra på serversidan är formen på
+ * anropet.
+ */
+it('sparar nivån direkt med router.patch och utan Save', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    // Kroppen bär `level` och ingenting annat: `sometimes` i den delade
+    // FormRequesten lämnar då utgången orörd — beteendet prövas ovan.
+    expect($rad)->toContain('router.patch(url, { level: value }');
+    expect($rad)->toContain("t('sharing.accesses.updated')");
+    expect($rad)->toContain(':disabled="pending"');
+
+    // Ingen *Save*, inget formulär och ingen skicka-knapp: regeln från issue
+    // 1245 är att ett val sparas direkt och text sparas med *Save*.
+    expect($rad)->not->toContain('sharing.accesses.save');
+    expect($rad)->not->toContain('useForm');
+    expect($rad)->not->toContain('type="submit"');
+});
+
+/*
+ * Klart när: borttagningen frågar först, och frågan är appens egen dialog
+ * (issue 330) med danger-ton. Ingen Inertia-länk som postar en DELETE och
+ * ingen webbläsardialog.
+ */
+it('frågar i UiConfirmDialog innan åtkomsten tas bort', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    expect($rad)->toContain('UiConfirmDialog');
+    expect($rad)->toContain('tone="danger"');
+    expect($rad)->toContain("t('sharing.accesses.remove')");
+    expect($rad)->toContain("t('sharing.accesses.remove_heading')");
+    expect($rad)->toContain("t('sharing.accesses.remove_body')");
+    expect($rad)->toContain('router.delete(url');
+
+    expect($rad)->not->toContain('<Link');
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['sharing']['accesses']['remove'])->toBe('Remove access');
+    expect($en['sharing']['accesses']['remove_heading'])->not->toBe('');
+    expect($en['sharing']['accesses']['remove_body'])->not->toBe('');
+});
+
+/*
+ * Klart när: ägarkontot står överst i listan (issue 1250 § 1). Raden ritas ur
+ * deltagarlistans första post — ägarkontot är alltid den (issue 9c § Beslut
+ * 3) — och står före åtkomsterna i mallen, med rollen *Owner* och utan
+ * kontroller.
+ */
+it('ställer ägarkontot överst i listan', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Sharing.vue'));
+
+    expect($vy)->toContain('const owner = computed(() => props.participants[0]');
+    expect($vy)->toContain("t('sharing.role.owner')");
+
+    $agare = strpos($vy, "t('sharing.role.owner')");
+    $atkomster = strpos($vy, 'v-for="access in validAccesses"');
+
+    expect($agare)->not->toBeFalse();
+    expect($atkomster)->not->toBeFalse();
+    expect($agare)->toBeLessThan($atkomster);
+});
+
+/*
+ * Klart när: historiken står sist i ett hopfällt avsnitt (issue 1250 § 3).
+ * Provet läser ordningen i mallen: `<details>` står efter inbjudningarna, och
+ * avsnittet ritas bara när `accesses` finns — en icke-ägare har ingen
+ * historik att fälla ut.
+ */
+it('ställer historiken sist i ett hopfällt avsnitt', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Sharing.vue'));
+
+    $detaljer = strpos($vy, '<details');
+    $inbjudningar = strpos($vy, "t('sharing.invitations.heading')");
+
+    expect($detaljer)->not->toBeFalse();
+    expect($inbjudningar)->not->toBeFalse();
+    expect($detaljer)->toBeGreaterThan($inbjudningar);
+
+    expect($vy)->toContain('v-if="accesses && historicalAccesses.length > 0"');
+    // Hopfällt från början: elementet bär ingen `open`.
+    expect($vy)->not->toMatch('/<details[^>]*\sopen/');
+    expect($vy)->toContain("t('sharing.history.heading')");
+});
+
+/*
+ * Klart när: en icke-ägare ser listan utan kontroller (issue 1250 § 1).
+ * Listan ritas ur `participants` när `accesses` är `null`, och
+ * radkomponenten — som bär nivå, utgång och borttagning — ritas bara i
+ * grenen där `accesses` finns.
+ */
+it('visar listan utan kontroller för en icke-ägare', function () {
+    withoutVite();
+
+    [, , $container] = delningsKontext();
+    $innehavare = User::factory()->create();
+    delningsAccess($container, $innehavare, 'write');
+
+    actingAs($innehavare)->get("/containers/{$container->ulid}/sharing")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('accesses', null)
+            ->where('invitations', null)
+            ->has('participants', 2)
+        );
+
+    $vy = File::get(resource_path('js/pages/Containers/Sharing.vue'));
+
+    // Samma lista, men ur deltagarlistan: namn och roll.
+    expect($vy)->toContain('v-for="participant in participants"');
+    expect($vy)->toContain('t(`sharing.role.${participant.role}`)');
+
+    // Kontrollerna hänger på `accesses` — inte på en egen flagga som kan
+    // glida isär från serverns svar.
+    $gren = strpos($vy, 'v-if="accesses"');
+    $kontroller = strpos($vy, '<ContainerAccessRow');
+
+    expect($gren)->not->toBeFalse();
+    expect($kontroller)->not->toBeFalse();
+    expect($kontroller)->toBeGreaterThan($gren);
+});
+
+/*
+ * Klart när: sidan använder designsystemets tokens (issue 1250 § 4).
+ * Källkodsprov: de gamla palettnivåerna `slate-*`, `blue-700` och `red-700`
+ * får inte finnas kvar i vyn, raden eller nivåfältet — färgerna kommer ur
+ * rollerna i resources/css/app.css, samma regel som [[ADR-0042
+ * Designsystemet]] § Beslut.
+ */
+it('använder designsystemets tokens på delningssidan', function () {
+    $filer = [
+        'js/pages/Containers/Sharing.vue',
+        'js/components/ContainerAccessRow.vue',
+        'js/components/AccessLevelField.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        $kod = File::get(resource_path($fil));
+
+        expect($kod)->not->toMatch(
+            '/\b(?:slate|blue|red)-\d{2,3}\b/',
+            "{$fil} bär en palettfärg i stället för en roll",
+        );
+    }
+
+    $vy = File::get(resource_path($filer[0]));
+
+    foreach ([
+        'border-border',
+        'bg-surface',
+        'text-ink',
+        'text-ink-muted',
+        'rounded-card',
+        'text-title',
+        'text-body',
+        'text-meta',
+    ] as $token) {
+        expect($vy)->toContain($token);
+    }
+});
+
+/*
+ * Klart när: texterna finns under `sharing`, och de som inte längre läses är
+ * borta (issue 1250 § 6). `participants.*`, `accesses.heading/description`,
+ * `accesses.save` och `accesses.revoke` lästes bara av den gamla vyn; en
+ * kvarglömd nyckel är en mening som kan börja gälla igen av misstag.
+ */
+it('har den enda listans texter och inga kvarglömda nycklar', function () {
+    $en = require lang_path('en/ui.php');
+
+    expect($en['sharing']['accesses']['people_heading'])->toBe('People with access');
+
+    foreach (['updated', 'remove', 'remove_heading', 'remove_body'] as $nyckel) {
+        expect($en['sharing']['accesses'][$nyckel])->not->toBe('');
+    }
+
+    expect($en['sharing']['history']['heading'])->toBe('Revoked and expired access');
+
+    expect($en['sharing'])->not->toHaveKey('participants');
+    expect($en['sharing']['accesses'])->not->toHaveKey('save');
+    expect($en['sharing']['accesses'])->not->toHaveKey('heading');
+    expect($en['sharing']['accesses'])->not->toHaveKey('description');
+    expect($en['sharing']['accesses'])->not->toHaveKey('revoke');
+});
+
+/*
  * Klart när: PATCH sparar `level` för en medlem i ägarkontot, och nivån syns
  * ändrad efteråt.
+ *
+ * Issue 1250:s beteendeprov: en PATCH med BARA `level` lämnar `expires_at`
+ * orört. Den delade UpdateContainerAccessRequest har `sometimes` på båda
+ * fälten, så den som inte skickas rörs inte — radens två kontroller skickar
+ * därför sina egna kroppar, och ett nivåval flyttar aldrig ett gästkontos
+ * utgång. Regeln formulerades i issue 72 § Beslut 4; här prövas den på
+ * webbens rutt.
  */
-it('sparar nivån och visar den ändrad efteråt', function () {
+it('sparar nivån, lämnar utgången orörd och visar nivån ändrad efteråt', function () {
     withoutVite();
 
     [, $anvandare, $container] = delningsKontext();
-    $access = delningsAccess($container, User::factory()->create(), 'read');
+    $access = delningsAccess(
+        $container,
+        User::factory()->create(),
+        'read',
+        'guest',
+        expiresAt: now()->addWeek(),
+    );
+
+    $utgang = $access->expires_at->toIso8601String();
 
     actingAs($anvandare)
         ->patch("/containers/{$container->ulid}/accesses/{$access->ulid}", ['level' => 'write'])
         ->assertRedirect()
         ->assertSessionHas('status', 'access-updated');
 
-    expect($access->refresh()->level)->toBe('write');
+    $access->refresh();
+
+    expect($access->level)->toBe('write');
+    expect($access->expires_at->toIso8601String())->toBe($utgang);
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
         ->where('accesses.0.level', 'write')
+        ->where('accesses.0.expires_at', $utgang)
     );
 });
 
@@ -730,7 +952,11 @@ it('ger ett fältfel vid expires_at för ett datum i det förflutna', function (
 
     $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
 
-    expect($rad)->toContain('form.errors.expires_at');
+    // Raden bär fältets eget fel, med `role="alert"` och ett id som fältet
+    // pekar på — och `min` är i morgon, för `after:now` tolkar dagens datum
+    // som midnatt bakåt.
+    expect($rad)->toContain('expiryError');
+    expect($rad)->toContain('role="alert"');
     expect($rad)->toContain(':min="tomorrow"');
 });
 

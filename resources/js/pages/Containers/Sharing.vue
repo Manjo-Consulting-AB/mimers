@@ -18,21 +18,37 @@ defineOptions({
 });
 
 /*
- * Delningssidan, se issue 55a § Beslut 3 och 7.
+ * Delningssidan, se issue 55a § Beslut 3 och 7 och issue 1250.
  *
  * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.
  *
- * **Två sektioner med olika publik, och den ena datan kommer inte alls.**
- * Deltagarna har grinden `view()` — varje deltagare ser dem, också en
- * `read`-guest — och visar namn och roll, aldrig en e-postadress, en nivå,
- * ett utgångsdatum eller vem som beviljade. Åtkomsterna har grinden
- * `viewAccesses()`, alltså medlemskap i ägarkontot.
+ * **En lista, inte två** (issue 1250). Deltagarlistan och åtkomstlistan sade
+ * samma sak två gånger, och nivåväljaren — det ägaren kom hit för att göra —
+ * stod längst ner i små textrader. Nu heter listan *People with access*:
+ * ägarkontot överst utan kontroller, sedan en rad per giltig åtkomst med
+ * namnet i body-storlek och omfånget under. Har en person flera åtkomster
+ * står de som var sin rad under samma namn — två omfång, inte två personer.
+ * Ett `managed`-konto är fortfarande en post, aldrig en per anställd.
  *
- * `accesses` är `null` när svaret är nej, och då renderas sektionen inte. Det
- * är inte samma sak som en tom lista: en prop som ligger i sidans HTML är
+ * **Kontrollerna finns bara för den som får se åtkomsterna.** `accesses` är
+ * `null` när svaret är nej, och då ritas raderna ur `participants` i stället
+ * — namn och roll, samma innehåll som deltagarlistan hade före issue 1250.
+ * Det är inte samma sak som en tom lista: en prop som ligger i sidans HTML är
  * utlämnad oavsett vad den här filen gör med den, och kontrollern skickar
- * därför ingenting alls. Ingen `v-if` här är något skydd — den är formatering.
+ * därför ingenting alls. Ingen `v-if` här är något skydd — den är
+ * formatering. Historiken är av samma skäl bara ägarens.
+ *
+ * **Text sparas med *Save*, val sparas direkt** (Tonys regel från issue
+ * 1245). Nivån och gästens utgångsdatum skrivs därför i sina egna PATCH:er
+ * från raden, utan *Save* (se ContainerAccessRow.vue); inbjudningsformuläret
+ * är text och behåller sin knapp.
+ *
+ * **Historiken står sist, hopfälld** (issue 1250 § 3). Återkallade och
+ * utgångna åtkomster är något man läser efteråt, inte en yta man arbetar i,
+ * och de hade legat mellan åtkomsterna och inbjudningarna och trängt undan
+ * det man kom hit för. Innehållet är oförändrat: namn, vad raden betydde,
+ * omfång och datum.
  *
  * **Giltiga och historiska rader delas i vyn** (Beslut 7).
  * `ContainerAccessResource` bär `revoked_at` och `expires_at` och ingen
@@ -41,13 +57,14 @@ defineOptions({
  * redan som två tidsstämplar, och en andra sanning om tillståndet är en
  * sanning som kan glida isär.
  *
- * **Tredje sektionen: Inbjudningar** (issue 55b § Beslut 5). Samma grind som
- * åtkomsterna — `viewAccesses()`, alltså medlemskap i ägarkontot — och
- * `invitations` är `null` för den som inte får se dem. En obesvarad inbjudan
- * röjer en e-postadress, och listan är därför lika känslig som förvaltningsvyn;
- * här visas adressen med flit, för det är avsändarens egen lista över vad hon
- * skickat. Formuläret kräver `manageAccess()` (skrivningen) och ritas därför
- * bara för `can.manage`, medan listan ritas ur `invitations`.
+ * **Inbjudningarna står direkt efter listan** (issue 1250 § 2, issue 55b
+ * § Beslut 5). Samma grind som åtkomsterna — `viewAccesses()`, alltså
+ * medlemskap i ägarkontot — och `invitations` är `null` för den som inte får
+ * se dem. En obesvarad inbjudan röjer en e-postadress, och listan är därför
+ * lika känslig som förvaltningsvyn; här visas adressen med flit, för det är
+ * avsändarens egen lista över vad hon skickat. Formuläret kräver
+ * `manageAccess()` (skrivningen) och ritas därför bara för `can.manage`,
+ * medan listan ritas ur `invitations`.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -74,6 +91,9 @@ const page = usePage();
  * användaren ska upptäcka den som ett 403 (Beslut 9).
  */
 const isFrozenOwner = computed(() => props.can.revoke && !props.can.manage);
+
+/* Ägarkontot är alltid deltagarlistans första post (issue 9c § Beslut 3). */
+const owner = computed(() => props.participants[0] ?? null);
 
 const isValid = (access) =>
     access.revoked_at === null && (access.expires_at === null || new Date(access.expires_at) > new Date());
@@ -114,34 +134,32 @@ const invitationInviter = (invitation) =>
 <template>
     <Head :title="t('sharing.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('sharing.heading') }}</h1>
+    <h1 class="text-2xl font-semibold text-ink">{{ t('sharing.heading') }}</h1>
 
+    <!--
+        Den enda listan (issue 1250 § 1). Ägarkontot först, sedan en rad per
+        giltig åtkomst. Behörighetsmeningen står EN gång över listan och inte
+        per rad.
+    -->
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('sharing.participants.heading') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ t('sharing.participants.description') }}</p>
+        <h2 class="text-title font-semibold text-ink">{{ t('sharing.accesses.people_heading') }}</h2>
+        <p class="mt-1 text-body text-ink-muted">{{ t('sharing.accesses.limits') }}</p>
 
-        <ul class="mt-4 flex flex-col gap-2">
-            <li
-                v-for="participant in participants"
-                :key="`${participant.type}-${participant.ulid}`"
-                class="flex items-center gap-2 rounded border border-slate-300 bg-white px-4 py-2"
-            >
-                <span>{{ participant.name }}</span>
-                <span class="text-xs text-slate-600">{{ t(`sharing.role.${participant.role}`) }}</span>
-            </li>
-        </ul>
-    </section>
-
-    <section v-if="accesses" class="mt-10">
-        <h2 class="text-lg font-semibold">{{ t('sharing.accesses.heading') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ t('sharing.accesses.description') }}</p>
-        <p class="mt-1 text-sm text-slate-600">{{ t('sharing.accesses.limits') }}</p>
-
-        <p v-if="isFrozenOwner" class="mt-4 rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <p v-if="isFrozenOwner" class="mt-4 rounded-card border border-warning bg-warning/10 px-4 py-2 text-body text-ink">
             {{ t('sharing.frozen') }}
         </p>
 
-        <ul class="mt-4 flex flex-col gap-3">
+        <ul v-if="accesses" class="mt-4 flex flex-col gap-2">
+            <!-- Ägarkontot: namn och roll, utan kontroller. Det finns ingen
+                 nivå att välja och ingen åtkomst att ta bort. -->
+            <li
+                v-if="owner"
+                class="flex min-h-11 flex-col gap-1 rounded-card border border-border bg-surface px-4 py-2"
+            >
+                <span class="text-body font-medium text-ink">{{ owner.name }}</span>
+                <span class="text-meta text-ink-muted">{{ t('sharing.role.owner') }}</span>
+            </li>
+
             <ContainerAccessRow
                 v-for="access in validAccesses"
                 :key="access.ulid"
@@ -149,41 +167,33 @@ const invitationInviter = (invitation) =>
                 :access="access"
                 :item-names="itemNames"
                 :grantee-names="granteeNames"
-                :granted-by-names="grantedByNames"
                 :levels="levels"
             />
         </ul>
 
-        <template v-if="historicalAccesses.length > 0">
-            <h3 class="mt-8 text-base font-semibold">{{ t('sharing.history.heading') }}</h3>
-
-            <ul class="mt-3 flex flex-col gap-2">
-                <li
-                    v-for="access in historicalAccesses"
-                    :key="access.ulid"
-                    class="flex flex-col gap-1 rounded border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
-                >
-                    <!-- Vems åtkomst som klipptes är hela skälet till att
-                         historiken finns — ett datum utan namn svarar
-                         inte på frågan. -->
-                    <span class="text-slate-700">{{ granteeLabel(t, granteeNames, access) }}</span>
-                    <span class="text-slate-700">{{ accessKindLabel(t, access) }}</span>
-                    <span class="text-slate-700">{{ accessScopeLabel(t, itemNames, access) }}</span>
-                    <span class="text-xs text-slate-600">{{ historyDate(access) }}</span>
-                </li>
-            </ul>
-        </template>
+        <!-- Utan `accesses` ritas samma lista ur deltagarlistan: namn och
+             roll, ingen nivå, inget utgångsdatum och ingen borttagning. -->
+        <ul v-else class="mt-4 flex flex-col gap-2">
+            <li
+                v-for="participant in participants"
+                :key="`${participant.type}-${participant.ulid}`"
+                class="flex min-h-11 flex-col gap-1 rounded-card border border-border bg-surface px-4 py-2"
+            >
+                <span class="text-body font-medium text-ink">{{ participant.name }}</span>
+                <span class="text-meta text-ink-muted">{{ t(`sharing.role.${participant.role}`) }}</span>
+            </li>
+        </ul>
     </section>
 
     <!--
-        Tredje sektionen, se issue 55b § Beslut 5. `invitations` är `null`
-        för en deltagare som inte är medlem i ägarkontot, och då ritas
-        ingenting — ingen v-if här är ett skydd, den är formatering.
-        Kontrollern skickar ingenting alls.
+        Inbjudningarna, direkt efter listan (issue 1250 § 2), se issue 55b
+        § Beslut 5. `invitations` är `null` för en deltagare som inte är
+        medlem i ägarkontot, och då ritas ingenting — ingen v-if här är ett
+        skydd, den är formatering. Kontrollern skickar ingenting alls.
     -->
     <section v-if="invitations" class="mt-10">
-        <h2 class="text-lg font-semibold">{{ t('sharing.invitations.heading') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ t('sharing.invitations.description') }}</p>
+        <h2 class="text-title font-semibold text-ink">{{ t('sharing.invitations.heading') }}</h2>
+        <p class="mt-1 text-body text-ink-muted">{{ t('sharing.invitations.description') }}</p>
 
         <!--
             Ett svar som inte går att dra tillbaka — en redan besvarad rad
@@ -195,7 +205,7 @@ const invitationInviter = (invitation) =>
         <p
             v-if="page.props.errors.invitation"
             role="alert"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            class="mt-4 rounded-card border border-warning bg-warning/10 px-3 py-2 text-body text-ink"
         >
             {{ page.props.errors.invitation }}
         </p>
@@ -211,16 +221,16 @@ const invitationInviter = (invitation) =>
             <li
                 v-for="invitation in invitations"
                 :key="invitation.ulid"
-                class="flex flex-col gap-1 rounded border border-slate-300 bg-white px-4 py-2 text-sm"
+                class="flex flex-col gap-1 rounded-card border border-border bg-surface px-4 py-2 text-body"
             >
-                <span class="font-medium text-slate-800">{{ invitation.email }}</span>
-                <span class="text-slate-700">{{ t(`sharing.level.${invitation.level}.label`) }}</span>
-                <span class="text-slate-700">{{ invitationScope(invitation) }}</span>
-                <span class="text-slate-700">{{ t(`sharing.invitations.status.${invitation.status}`) }}</span>
-                <span class="text-xs text-slate-600">
+                <span class="font-medium text-ink">{{ invitation.email }}</span>
+                <span class="text-ink">{{ t(`sharing.level.${invitation.level}.label`) }}</span>
+                <span class="text-ink">{{ invitationScope(invitation) }}</span>
+                <span class="text-ink">{{ t(`sharing.invitations.status.${invitation.status}`) }}</span>
+                <span class="text-meta text-ink-muted">
                     {{ t('sharing.invitations.expires', { date: formatDate(invitation.expires_at, page.props.locale) }) }}
                 </span>
-                <span class="text-xs text-slate-600">
+                <span class="text-meta text-ink-muted">
                     {{ t('sharing.invitations.invited_by') }}: {{ invitationInviter(invitation) }}
                 </span>
 
@@ -230,13 +240,45 @@ const invitationInviter = (invitation) =>
                     method="delete"
                     as="button"
                     preserve-scroll
-                    class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
+                    class="inline-flex min-h-11 items-center self-start text-body text-danger underline"
                 >
                     {{ t('sharing.invitations.revoke') }}
                 </Link>
             </li>
         </ul>
 
-        <p v-else class="mt-4 text-sm text-slate-600">{{ t('sharing.invitations.empty') }}</p>
+        <p v-else class="mt-4 text-body text-ink-muted">{{ t('sharing.invitations.empty') }}</p>
     </section>
+
+    <!--
+        Historiken sist och hopfälld från början (issue 1250 § 3), se
+        Beslut 7. `<details>` är tangentbordets egen yta: summary är
+        fokuserbart och fälls ut med Enter eller mellanslag, utan egen
+        tabbhanterare. Bara ägaren har `accesses`, och därför är det också
+        bara hon som har en historik att fälla ut.
+    -->
+    <details
+        v-if="accesses && historicalAccesses.length > 0"
+        class="mt-10 rounded-card border border-border bg-surface"
+    >
+        <summary class="flex min-h-11 cursor-pointer items-center px-4 text-title font-semibold text-ink">
+            {{ t('sharing.history.heading') }}
+        </summary>
+
+        <ul class="flex flex-col gap-2 border-t border-border p-4">
+            <li
+                v-for="access in historicalAccesses"
+                :key="access.ulid"
+                class="flex flex-col gap-1 rounded-control bg-surface-sunken px-4 py-2 text-body"
+            >
+                <!-- Vems åtkomst som klipptes är hela skälet till att
+                     historiken finns — ett datum utan namn svarar
+                     inte på frågan. -->
+                <span class="text-ink">{{ granteeLabel(t, granteeNames, access) }}</span>
+                <span class="text-ink">{{ accessKindLabel(t, access) }}</span>
+                <span class="text-ink">{{ accessScopeLabel(t, itemNames, access) }}</span>
+                <span class="text-meta text-ink-muted">{{ historyDate(access) }}</span>
+            </li>
+        </ul>
+    </details>
 </template>
