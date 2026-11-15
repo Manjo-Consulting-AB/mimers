@@ -34,7 +34,7 @@ class NotificationPreferenceController extends Controller
 {
     /**
      * GET /api/me/notification-preferences — 200. Alla typer × kanalen
-     * `email`, i konstanternas ordning, med det EFFEKTIVA värdet: raden om
+     * `email`, plus kanalen `in_app` för de typer som kan ha den (issue 386), i konstanternas ordning, med det EFFEKTIVA värdet: raden om
      * en finns, annars förvalet i kod (Beslut 2). `is_default` skiljer de två
      * åt. Kanalen `webhook` listas inte (31a § Beslut 4).
      */
@@ -86,30 +86,32 @@ class NotificationPreferenceController extends Controller
 
         $rows = NotificationPreference::query()
             ->where('user_id', $user->getKey())
-            ->where('channel', NotificationDelivery::CHANNEL_EMAIL)
+            ->whereIn('channel', [NotificationDelivery::CHANNEL_EMAIL, NotificationDelivery::CHANNEL_IN_APP])
             ->get()
-            ->keyBy('type');
+            ->keyBy(fn (NotificationPreference $row): string => $row->type.'|'.$row->channel);
+
+        $inAppTypes = $preferences->inAppTypes();
 
         $items = [];
 
         foreach ($preferences->types() as $type) {
-            $row = $rows->get($type);
+            $channels = [NotificationDelivery::CHANNEL_EMAIL];
 
-            $items[] = $row === null
-                ? [
+            if (in_array($type, $inAppTypes, true)) {
+                $channels[] = NotificationDelivery::CHANNEL_IN_APP;
+            }
+
+            foreach ($channels as $channel) {
+                $row = $rows->get($type.'|'.$channel);
+
+                $items[] = [
                     'type' => $type,
-                    'channel' => NotificationDelivery::CHANNEL_EMAIL,
-                    'enabled' => $preferences->isEnabled(null, $type, NotificationDelivery::CHANNEL_EMAIL),
-                    'digest' => $preferences->digest(null, $type, NotificationDelivery::CHANNEL_EMAIL),
-                    'is_default' => true,
-                ]
-                : [
-                    'type' => $type,
-                    'channel' => NotificationDelivery::CHANNEL_EMAIL,
-                    'enabled' => $row->enabled,
-                    'digest' => $row->digest,
-                    'is_default' => false,
+                    'channel' => $channel,
+                    'enabled' => $row === null ? $preferences->isEnabled(null, $type, $channel) : $row->enabled,
+                    'digest' => $row === null ? $preferences->digest(null, $type, $channel) : $row->digest,
+                    'is_default' => $row === null,
                 ];
+            }
         }
 
         return NotificationPreferenceResource::collection($items)->response();

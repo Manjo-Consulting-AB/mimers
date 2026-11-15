@@ -277,3 +277,16 @@ it('samma avanmälan två gånger ger en rad', function () {
     expect($rader)->toHaveCount(1);
     expect($rader->first()->enabled)->toBeFalse();
 });
+
+it('en avregistrering från mejlet rör inte in_app', function () {
+    $user = User::factory()->create();
+    $preferences = app(NotificationPreferences::class);
+
+    post(avregistreringsUrl($user, Notification::TYPE_QUOTA_WARNING))->assertOk();
+
+    // Bara e-postraden skrivs; `in_app` är kvar på förvalet (påslagen).
+    $rad = NotificationPreference::query()->where('user_id', $user->id)->sole();
+    expect($rad->channel)->toBe(NotificationDelivery::CHANNEL_EMAIL);
+    expect($preferences->isEnabled($user, Notification::TYPE_QUOTA_WARNING, NotificationDelivery::CHANNEL_EMAIL))->toBeFalse();
+    expect($preferences->isEnabled($user, Notification::TYPE_QUOTA_WARNING, NotificationDelivery::CHANNEL_IN_APP))->toBeTrue();
+});

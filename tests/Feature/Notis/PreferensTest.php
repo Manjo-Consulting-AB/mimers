@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Notification\CreateNotification;
+use App\Http\Requests\UpdateNotificationPreferencesRequest;
 use App\Models\Account;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
@@ -181,4 +182,71 @@ it('migreringen raderar preferensrader för inbjudningstypen', function () {
 
     expect(NotificationPreference::query()->where('type', 'invitation.received')->exists())->toBeFalse();
     expect(NotificationPreference::query()->where('type', Notification::TYPE_TASK_DUE)->exists())->toBeTrue();
+});
+
+/*
+ * Issue 386 · Kanalen `in_app` som förval ([[ADR-0077 Notislistan i appen]] § 4).
+ */
+it('in_app är påslagen som förval för de tre första typerna och avslagen för resten', function () {
+    $user = User::factory()->create();
+    $preferences = app(NotificationPreferences::class);
+
+    foreach ([Notification::TYPE_CONTAINER_DELETED, Notification::TYPE_TRANSFER_REQUESTED, Notification::TYPE_QUOTA_WARNING] as $typ) {
+        expect($preferences->isEnabled($user, $typ, NotificationDelivery::CHANNEL_IN_APP))->toBeTrue($typ);
+        expect($preferences->digest($user, $typ, NotificationDelivery::CHANNEL_IN_APP))->toBeFalse($typ);
+    }
+
+    foreach ([
+        Notification::TYPE_TASK_DUE,
+        Notification::TYPE_TASK_OVERDUE,
+        Notification::TYPE_LOAN_DUE,
+        Notification::TYPE_ACCOUNT_INACTIVE,
+        'future.type',
+    ] as $typ) {
+        expect($preferences->isEnabled($user, $typ, NotificationDelivery::CHANNEL_IN_APP))->toBeFalse($typ);
+    }
+
+    // E-postens förval är orörda.
+    expect($preferences->isEnabled($user, Notification::TYPE_QUOTA_WARNING, NotificationDelivery::CHANNEL_EMAIL))->toBeTrue();
+    expect($preferences->isEnabled($user, Notification::TYPE_TASK_DUE, NotificationDelivery::CHANNEL_EMAIL))->toBeTrue();
+});
+
+it('en avslagen in_app ger ingen rad men e-posten kommer ändå', function () {
+    [$account, $user] = preferensKontext();
+    NotificationPreference::factory()->create([
+        'user_id' => $user->id,
+        'type' => Notification::TYPE_QUOTA_WARNING,
+        'channel' => NotificationDelivery::CHANNEL_IN_APP,
+        'enabled' => false,
+        'digest' => false,
+    ]);
+
+    $notis = app(CreateNotification::class)->handle(
+        type: Notification::TYPE_QUOTA_WARNING,
+        account: $account,
+        user: $user,
+    );
+
+    $kanaler = NotificationDelivery::query()->where('notification_id', $notis->id)->pluck('channel')->all();
+    expect($kanaler)->toBe([NotificationDelivery::CHANNEL_EMAIL]);
+});
+
+it('digest för in_app ger valideringsfel', function () {
+    $request = new UpdateNotificationPreferencesRequest;
+    $rad = fn (bool $digest): array => [
+        'preferences' => [[
+            'type' => Notification::TYPE_QUOTA_WARNING,
+            'channel' => NotificationDelivery::CHANNEL_IN_APP,
+            'enabled' => true,
+            'digest' => $digest,
+        ]],
+    ];
+    $regler = $request->rules(app(NotificationPreferences::class));
+
+    $validator = validator($rad(true), $regler);
+    expect($validator->fails())->toBeTrue();
+    expect($validator->errors()->keys())->toBe(['preferences.0.digest']);
+
+    // Samma rad med digest = false är giltig.
+    expect(validator($rad(false), $regler)->fails())->toBeFalse();
 });

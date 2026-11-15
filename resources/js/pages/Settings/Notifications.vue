@@ -47,6 +47,8 @@ defineOptions({ layout: [AppLayout, SettingsLayout] });
  */
 const props = defineProps({
     preferences: { type: Array, required: true },
+    /* Typerna som kan ha kanalen `in_app` — listan bor i servern (issue 386). */
+    inAppTypes: { type: Array, default: () => [] },
     quietHoursStart: { type: String, default: null },
     quietHoursEnd: { type: String, default: null },
     timezone: { type: String, default: null },
@@ -54,6 +56,13 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+
+/* E-postraderna ritas som lägesgrupper; `in_app`-raderna som en växel var. */
+const emailPreferences = computed(() => props.preferences.filter((preference) => preference.channel === 'email'));
+
+const inAppPreference = (type) => props.preferences.find(
+    (preference) => preference.type === type && preference.channel === 'in_app',
+);
 
 /* `type` → läge, och bara för de typer användaren faktiskt rört. */
 const edits = ref({});
@@ -63,7 +72,24 @@ const modeFor = (preference) => edits.value[preference.type] ?? modeOf(preferenc
 /* Rörd = användaren har valt ett läge för typen, oavsett vilket. */
 const touched = (preference) => Object.prototype.hasOwnProperty.call(edits.value, preference.type);
 
-const changed = computed(() => props.preferences.filter(touched));
+const changed = computed(() => emailPreferences.value.filter(touched));
+
+/*
+ * `in_app` är en växel, inte tre lägen: `type` → påslagen, bara för de typer
+ * användaren rört. Samma regel som för e-posten — en rörd växel blir en rad
+ * även när värdet är förvalet. `digest` är alltid falskt för kanalen.
+ */
+const inAppEdits = ref({});
+
+const inAppOn = (type) => inAppEdits.value[type] ?? inAppPreference(type)?.enabled ?? false;
+
+const inAppChanged = computed(() => Object.keys(inAppEdits.value));
+
+function setInApp(type, enabled) {
+    inAppEdits.value = { ...inAppEdits.value, [type]: enabled };
+}
+
+const anyChanged = computed(() => changed.value.length > 0 || inAppChanged.value.length > 0);
 
 function setMode(type, mode) {
     edits.value = { ...edits.value, [type]: mode };
@@ -82,16 +108,25 @@ const preferencesError = computed(() => Object.entries(form.errors)
     .map(([, message]) => message)[0] ?? null);
 
 function submitPreferences() {
-    form.preferences = changed.value.map((preference) => ({
-        type: preference.type,
-        channel: preference.channel,
-        ...valuesFor(edits.value[preference.type]),
-    }));
+    form.preferences = [
+        ...changed.value.map((preference) => ({
+            type: preference.type,
+            channel: preference.channel,
+            ...valuesFor(edits.value[preference.type]),
+        })),
+        ...inAppChanged.value.map((type) => ({
+            type,
+            channel: 'in_app',
+            enabled: inAppEdits.value[type],
+            digest: false,
+        })),
+    ];
 
     form.put('/settings/notifications', {
         onError: focusFirstError,
         onSuccess: () => {
             edits.value = {};
+            inAppEdits.value = {};
         },
     });
 }
@@ -109,14 +144,37 @@ function submitPreferences() {
         <!-- Förvalet och skälet till det (Beslut 3): säsongen. -->
         <p class="text-sm text-slate-700">{{ t('notifications.digest_default') }}</p>
 
-        <NotificationPreferenceRow
-            v-for="preference in props.preferences"
+        <p class="text-sm text-slate-700">{{ t('notifications.in_app.intro') }}</p>
+
+        <div
+            v-for="preference in emailPreferences"
             :key="preference.type"
-            :preference="preference"
-            :mode="modeFor(preference)"
-            :touched="touched(preference)"
-            @update:mode="setMode(preference.type, $event)"
-        />
+            class="flex flex-col gap-2 md:flex-row md:items-start"
+        >
+            <div class="md:flex-1">
+                <NotificationPreferenceRow
+                    :preference="preference"
+                    :mode="modeFor(preference)"
+                    :touched="touched(preference)"
+                    @update:mode="setMode(preference.type, $event)"
+                />
+            </div>
+
+            <!-- Kolumnen In app: en växel, bara för typer som kan ha kanalen. -->
+            <label
+                v-if="props.inAppTypes.includes(preference.type)"
+                :for="`in-app-${preference.type.replace(/\./g, '-')}`"
+                class="flex min-h-11 cursor-pointer items-center gap-2 md:w-40"
+            >
+                <input
+                    :id="`in-app-${preference.type.replace(/\./g, '-')}`"
+                    type="checkbox"
+                    :checked="inAppOn(preference.type)"
+                    @change="setInApp(preference.type, $event.target.checked)"
+                >
+                <span class="text-sm">{{ t('notifications.in_app.label') }}</span>
+            </label>
+        </div>
 
         <p v-if="preferencesError" role="alert" tabindex="-1" class="text-sm text-red-700 outline-none">
             {{ preferencesError }}
@@ -124,7 +182,7 @@ function submitPreferences() {
 
         <button
             type="submit"
-            :disabled="form.processing || changed.length === 0"
+            :disabled="form.processing || !anyChanged"
             class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
             {{ form.processing ? t('common.pending.default') : t('notifications.submit') }}

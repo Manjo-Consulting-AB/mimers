@@ -21,7 +21,10 @@ use Illuminate\Validation\Rule;
  * någon TYPES-lista, bara konstanterna. Listan bor därför i
  * NotificationPreferences::types(), se Frågor och antaganden i PR:en.
  *
- * `channel` är en sluten mängd och bara `email` accepteras — webhooken är
+ * `channel` är en sluten mängd: `email` och `in_app` accepteras (issue 386,
+ * [[ADR-0077 Notislistan i appen]] § 4). `digest` godtas bara för `email`;
+ * för `in_app` måste den vara falsk, en rad i listan är ingen sammanfattning.
+ * Webhooken är
  * en integration ett konto registrerat med egna `event_types` och frågar
  * aldrig den här tabellen (31a § Beslut 4).
  *
@@ -43,9 +46,9 @@ class UpdateNotificationPreferencesRequest extends FormRequest
         return [
             'preferences' => ['required', 'array', 'min:1', 'max:50'],
             'preferences.*.type' => ['required', 'string', Rule::in($preferences->types())],
-            'preferences.*.channel' => ['required', 'string', Rule::in([NotificationDelivery::CHANNEL_EMAIL])],
+            'preferences.*.channel' => ['required', 'string', Rule::in([NotificationDelivery::CHANNEL_EMAIL, NotificationDelivery::CHANNEL_IN_APP])],
             'preferences.*.enabled' => ['required', 'boolean'],
-            'preferences.*.digest' => ['required', 'boolean'],
+            'preferences.*.digest' => ['required', 'boolean', 'declined_if:preferences.*.channel,'.NotificationDelivery::CHANNEL_IN_APP],
         ];
     }
 }

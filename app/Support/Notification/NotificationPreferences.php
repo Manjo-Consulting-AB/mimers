@@ -24,8 +24,8 @@ use App\Models\User;
  * webhookraderna på sin egen grund.
  *
  * **`in_app` kom med issue 383** ([[ADR-0077 Notislistan i appen]] § 4).
- * Kanalen har ett eget förval per typ, avslaget för alla i den här issuen;
- * 386 slår på det för de första typerna. `digest` är alltid falsk för
+ * Kanalen har ett eget förval per typ: påslaget för de typer som listas i
+ * IN_APP_DEFAULTS (issue 386), avslaget för alla andra. `digest` är alltid falsk för
  * `in_app` — en rad i listan är ingen sammanfattning.
  */
 final class NotificationPreferences
@@ -59,6 +59,24 @@ final class NotificationPreferences
     ];
 
     /**
+     * Typerna som kan ha kanalen `in_app`, med förvalet för den
+     * ([[ADR-0077 Notislistan i appen]] § 4). Den första omgången är
+     * `container.deleted`, `transfer.requested` och `quota.warning`, alla
+     * påslagna. `task.due` och `task.overdue` får kanalen senare. En typ som
+     * inte står här har kanalen avslagen och visar ingen växel för den.
+     *
+     * Det här är den enda listan: inställningssidan och API:et läser den via
+     * inAppTypes() och förvalet slås upp härifrån.
+     *
+     * @var array<string, array{enabled: bool, digest: bool}>
+     */
+    private const IN_APP_DEFAULTS = [
+        Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
+        Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
+        Notification::TYPE_CONTAINER_DELETED => ['enabled' => true, 'digest' => false],
+    ];
+
+    /**
      * Okänd typ: `enabled = true`, `digest = false` (Beslut 3). Ett förval
      * som tystar det okända tappar notiser den dag M8 lägger till en typ och
      * glömmer raden här.
@@ -78,6 +96,19 @@ final class NotificationPreferences
     public function types(): array
     {
         return array_keys(self::EMAIL_DEFAULTS);
+    }
+
+    /**
+     * Typerna som kan ha kanalen `in_app`, i `types()`-ordning.
+     *
+     * @return list<string>
+     */
+    public function inAppTypes(): array
+    {
+        return array_values(array_filter(
+            $this->types(),
+            fn (string $type): bool => isset(self::IN_APP_DEFAULTS[$type]),
+        ));
     }
 
     /**
@@ -169,12 +200,9 @@ final class NotificationPreferences
         }
 
         if ($channel === NotificationDelivery::CHANNEL_IN_APP) {
-            // Avslagen för VARJE typ i issue 383 — kanalen finns, men ingen
-            // typ har den påslagen förrän 386 lägger till de första tre
-            // ([[ADR-0077 Notislistan i appen]] § 4). Ett "på" här hade
-            // fyllt listan med rader ingen bett om, och okända typer ska
-            // aldrig få kanalen av misstag.
-            return ['enabled' => false, 'digest' => false];
+            // Påslagen bara för typerna i IN_APP_DEFAULTS; okända typer får
+            // aldrig kanalen av misstag.
+            return self::IN_APP_DEFAULTS[$type] ?? ['enabled' => false, 'digest' => false];
         }
 
         return self::UNKNOWN_DEFAULT;

@@ -138,13 +138,20 @@ it('skriver en in_app-rad med status sent direkt, även under tysta timmar', fun
     expect($inApp->claimed_at)->toBeNull();
 });
 
-it('har in_app avslagen som förval för alla kända typer', function () {
+it('har in_app avslagen som förval för alla kända typer utom de tre första', function () {
     $user = User::factory()->create();
     $preferences = app(NotificationPreferences::class);
 
+    // Issue 386: de tre första typerna har kanalen påslagen som förval.
+    $paslagna = [
+        Notification::TYPE_CONTAINER_DELETED,
+        Notification::TYPE_TRANSFER_REQUESTED,
+        Notification::TYPE_QUOTA_WARNING,
+    ];
+
     foreach ($preferences->types() as $type) {
         expect($preferences->isEnabled($user, $type, NotificationDelivery::CHANNEL_IN_APP))
-            ->toBeFalse("in_app ska vara av för {$type}");
+            ->toBe(in_array($type, $paslagna, true), "in_app-förvalet stämmer inte för {$type}");
     }
 
     // Även en okänd typ är avslagen: ett "på" hade fyllt listan med rader
@@ -155,9 +162,10 @@ it('har in_app avslagen som förval för alla kända typer', function () {
 it('en avslagen in_app ger ingen rad, och e-posten påverkas inte', function () {
     [$account, $user] = inAppKonto();
 
-    // Förvalet för transfer.requested: e-post på, in_app av.
+    // Förvalet för loan.due: e-post på, in_app av (issue 386 slog på kanalen
+    // för transfer.requested, så provet använder en typ som ännu inte har den).
     $notis = app(CreateNotification::class)->handle(
-        type: Notification::TYPE_TRANSFER_REQUESTED,
+        type: Notification::TYPE_LOAN_DUE,
         account: $account,
         user: $user,
     );

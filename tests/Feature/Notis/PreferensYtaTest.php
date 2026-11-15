@@ -34,13 +34,30 @@ function preferensYtaKontext(): array
 }
 
 /**
- * Svarslistan som en karta typ => rad, för att slippa indexerad åtkomst.
+ * Svarslistans e-postrader som en karta typ => rad, för att slippa indexerad
+ * åtkomst. Raderna för `in_app` (issue 386) hämtas med preferensKartaInApp().
  *
  * @return array<string, array<string, mixed>>
  */
 function preferensKarta(TestResponse $response): array
 {
-    return collect($response->json('data'))->keyBy('type')->all();
+    return collect($response->json('data'))
+        ->where('channel', NotificationDelivery::CHANNEL_EMAIL)
+        ->keyBy('type')
+        ->all();
+}
+
+/**
+ * Svarslistans rader för kanalen `in_app` som en karta typ => rad.
+ *
+ * @return array<string, array<string, mixed>>
+ */
+function preferensKartaInApp(TestResponse $response): array
+{
+    return collect($response->json('data'))
+        ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
+        ->keyBy('type')
+        ->all();
 }
 
 it('en oinloggad begäran avvisas', function () {
@@ -74,12 +91,76 @@ it('listan bär inte kanalen webhook', function () {
 
     $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
 
-    // Precis en rad per typ, alla för kanalen email — ingen webhook-rad som
-    // inte gör något (31a § Beslut 4).
+    // Precis en e-postrad per typ — ingen webhook-rad som inte gör något
+    // (31a § Beslut 4). Kanalerna som finns är `email` och `in_app`.
     expect($karta)->toHaveCount(7);
-    foreach ($karta as $rad) {
-        expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
+
+    $kanaler = collect(getJson('/api/me/notification-preferences', $headers)->json('data'))
+        ->pluck('channel')->unique()->sort()->values()->all();
+    expect($kanaler)->toBe([NotificationDelivery::CHANNEL_EMAIL, NotificationDelivery::CHANNEL_IN_APP]);
+});
+
+/*
+ * Issue 386 · Kanalen `in_app` i preferensytan ([[ADR-0077 Notislistan i
+ * appen]] § 4): en rad per typ och kanal, `in_app` bara för de tre typer som
+ * kan ha den, och förvalet påslaget.
+ */
+it('listan bär in_app för de tre typerna, påslagen som förval', function () {
+    [, , $headers] = preferensYtaKontext();
+
+    $inApp = preferensKartaInApp(getJson('/api/me/notification-preferences', $headers));
+
+    expect(array_keys($inApp))->toEqualCanonicalizing([
+        Notification::TYPE_CONTAINER_DELETED,
+        Notification::TYPE_TRANSFER_REQUESTED,
+        Notification::TYPE_QUOTA_WARNING,
+    ]);
+    foreach ($inApp as $rad) {
+        expect($rad['enabled'])->toBeTrue();
+        expect($rad['digest'])->toBeFalse();
+        expect($rad['is_default'])->toBeTrue();
     }
+});
+
+it('en uppdatering med kanalen in_app sparar en rad och rör inte e-posten', function () {
+    [, $user, $headers] = preferensYtaKontext();
+
+    $svar = putJson('/api/me/notification-preferences', [
+        'preferences' => [[
+            'type' => Notification::TYPE_QUOTA_WARNING,
+            'channel' => NotificationDelivery::CHANNEL_IN_APP,
+            'enabled' => false,
+            'digest' => false,
+        ]],
+    ], $headers)->assertOk();
+
+    expect(preferensKartaInApp($svar)[Notification::TYPE_QUOTA_WARNING])->toMatchArray([
+        'enabled' => false,
+        'is_default' => false,
+    ]);
+    expect(preferensKarta($svar)[Notification::TYPE_QUOTA_WARNING]['is_default'])->toBeTrue();
+
+    $rad = NotificationPreference::query()->where('user_id', $user->id)->sole();
+    expect($rad->channel)->toBe(NotificationDelivery::CHANNEL_IN_APP);
+    expect($rad->enabled)->toBeFalse();
+});
+
+it('digest för in_app avvisas', function () {
+    [, , $headers] = preferensYtaKontext();
+
+    $svar = putJson('/api/me/notification-preferences', [
+        'preferences' => [[
+            'type' => Notification::TYPE_QUOTA_WARNING,
+            'channel' => NotificationDelivery::CHANNEL_IN_APP,
+            'enabled' => true,
+            'digest' => true,
+        ]],
+    ], $headers);
+
+    $svar->assertStatus(422);
+    expect($svar->json('error.code'))->toBe('validation.failed');
+    expect($svar->json('error.data.fields'))->toHaveKey('preferences.0.digest');
+    expect(NotificationPreference::query()->count())->toBe(0);
 });
 
 /*

@@ -55,7 +55,7 @@ class NotificationSettingsController extends Controller
      * behöver dessutom tidszonen i samma svar. Formen hålls identisk med flit,
      * så att de två ytorna inte kan säga olika saker om samma rad.
      *
-     * Kanalen `webhook` listas inte: preferenser styr inte webhooks (31a
+     * Kanalerna är `email` och `in_app` (issue 386). Kanalen `webhook` listas inte: preferenser styr inte webhooks (31a
      * § Beslut 4). Den kommer ändå med som fält per typ, så att vyn kan skicka
      * tillbaka den i PUT-kroppen utan att själv namnge en kanal.
      */
@@ -65,6 +65,9 @@ class NotificationSettingsController extends Controller
 
         return Inertia::render('Settings/Notifications', [
             'preferences' => $this->preferences($user),
+
+            // Typerna som kan ha kanalen `in_app` — en lista, i servern.
+            'inAppTypes' => app(NotificationPreferences::class)->inAppTypes(),
 
             // `H:i` eller `null`, samma form som requesten vill ha (Beslut 4):
             // kolumnen är MySQL TIME och bär `22:00:00` i databasen.
@@ -135,6 +138,10 @@ class NotificationSettingsController extends Controller
      * Den effektiva listan för en användare: raden om en finns, annars
      * förvalet i kod (31a § Beslut 2), i `types()`-ordning.
      *
+     * Varje typ har en rad för `email` och, för de typer som kan ha den, en
+     * för `in_app` (issue 386). Listan över de senare kommer ur
+     * `NotificationPreferences::inAppTypes()` och bärs också som propp.
+     *
      * Ett konstant antal frågor: en uppslagning av användarens rader, och inga
      * fler — förvalen hämtas med `$user = null`, vilket aldrig frågar
      * databasen.
@@ -147,26 +154,33 @@ class NotificationSettingsController extends Controller
 
         $rows = NotificationPreference::query()
             ->where('user_id', $user->getKey())
-            ->where('channel', NotificationDelivery::CHANNEL_EMAIL)
+            ->whereIn('channel', [NotificationDelivery::CHANNEL_EMAIL, NotificationDelivery::CHANNEL_IN_APP])
             ->get()
-            ->keyBy('type');
+            ->keyBy(fn (NotificationPreference $row): string => $row->type.'|'.$row->channel);
+
+        $inAppTypes = $defaults->inAppTypes();
 
         $items = [];
 
         foreach ($defaults->types() as $type) {
-            $row = $rows->get($type);
+            $channels = [NotificationDelivery::CHANNEL_EMAIL];
 
-            $items[] = [
-                'type' => $type,
-                'channel' => NotificationDelivery::CHANNEL_EMAIL,
-                'enabled' => $row === null
-                    ? $defaults->isEnabled(null, $type, NotificationDelivery::CHANNEL_EMAIL)
-                    : $row->enabled,
-                'digest' => $row === null
-                    ? $defaults->digest(null, $type, NotificationDelivery::CHANNEL_EMAIL)
-                    : $row->digest,
-                'is_default' => $row === null,
-            ];
+            // `in_app` listas bara för de typer som kan ha kanalen.
+            if (in_array($type, $inAppTypes, true)) {
+                $channels[] = NotificationDelivery::CHANNEL_IN_APP;
+            }
+
+            foreach ($channels as $channel) {
+                $row = $rows->get($type.'|'.$channel);
+
+                $items[] = [
+                    'type' => $type,
+                    'channel' => $channel,
+                    'enabled' => $row === null ? $defaults->isEnabled(null, $type, $channel) : $row->enabled,
+                    'digest' => $row === null ? $defaults->digest(null, $type, $channel) : $row->digest,
+                    'is_default' => $row === null,
+                ];
+            }
         }
 
         return $items;
