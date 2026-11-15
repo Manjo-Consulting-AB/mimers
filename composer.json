@@ -16,6 +16,7 @@
         "laravel/scout": "^11.6",
         "laravel/tinker": "^3.0",
         "pragmarx/google2fa": "^9.1",
+        "sentry/sentry-laravel": "^4.30",
         "symfony/http-client": "^8.1",
         "symfony/mailgun-mailer": "^8.1"
     },

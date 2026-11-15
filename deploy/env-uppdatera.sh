@@ -28,7 +28,7 @@ INKOMMANDE="$APP/shared/.env.inkommande"
 trap 'rm -f "$INKOMMANDE"' EXIT
 
 # Fail-closed på båda: en .env som inte finns ska skapas för hand, inte av en
-# utrullning som bara känner sju nycklar. Och saknas fragmentet är steget före
+# utrullning som bara känner nio nycklar. Och saknas fragmentet är steget före
 # trasigt - då är rätt utfall att stanna, inte att rulla ut mot en gammal env.
 [ -r "$ENVFIL" ] || { echo "$ENVFIL saknas eller går inte att läsa. Skapa den för hand, se Pipeline.md § Engångsuppsättning."; exit 1; }
 [ -r "$INKOMMANDE" ] || { echo "$INKOMMANDE saknas - steget som skickar secrets kördes inte."; exit 1; }

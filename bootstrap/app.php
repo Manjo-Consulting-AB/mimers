@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RestrictFileOriginToDelivery;
+use App\Http\Middleware\ScrubSentryEvent;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\SetSecurityHeaders;
 use App\Http\Middleware\UpdateLastActiveAt;
@@ -15,6 +16,7 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Sentry\Laravel\Integration;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -93,6 +95,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(SetSecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Issue 387 · Felrapportering till Sentry, ADR-0079 § 1. Utan DSN gör
+        // SDK:n ingenting. Klientfelen (validering, 403, 404, 419, 401 och
+        // ApiException under 500) rapporteras aldrig; listan bor på ett
+        // ställe, i ScrubSentryEvent, och before_send i config/sentry.php
+        // stoppar dem en gång till.
+        $exceptions->dontReport(ScrubSentryEvent::CLIENT_ERRORS);
+        $exceptions->dontReportWhen(ScrubSentryEvent::isClientError(...));
+        Integration::handles($exceptions);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
