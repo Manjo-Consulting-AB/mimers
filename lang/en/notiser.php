@@ -37,6 +37,21 @@ return [
         'line' => 'A transfer request is waiting for the container ":container". Sign in to see it under Transfers.',
         'action' => 'View transfer',
     ],
+    /*
+     * Containern raderades med kontot som ägde den (issue 1235 ·
+     * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14).
+     * En mening per skäl: mottagaren ska veta om ägaren raderade sig själv
+     * eller om kontot legat vilande i arton månader. Mejlet har ingen länk
+     * till containern — den finns inte längre — så vyn väljer meningen ur
+     * payloadens `reason` i stället för den vanliga `line`-nyckeln.
+     */
+    'container_deleted' => [
+        'subject' => 'The container ":container" has been deleted',
+        'greeting' => 'Hello!',
+        'line_owner_deleted' => 'The container ":container" was deleted by its owner, who deleted their account. You no longer have access to it, or to anything you added there.',
+        'line_account_inactive' => 'The container ":container" was deleted because the account that owned it had been inactive for 18 months. You no longer have access to it, or to anything you added there.',
+        'action' => 'Go to Mimers',
+    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',
@@ -56,6 +71,7 @@ return [
             'quota_warning' => 'storage quota warnings',
             'transfer_requested' => 'ownership transfer requests',
             'account_inactive' => 'inactive account warnings',
+            'container_deleted' => 'container deletion notices',
         ],
     ],
     /*

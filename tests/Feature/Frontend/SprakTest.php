@@ -601,8 +601,8 @@ it('hämtar formulärets och väljarens strängar ur ui.php', function () {
  *
  * **Inbjudningarna har ingen typmening, men klockans rad har en.** Sedan
  * issue 146 finns ingen notistyp för en inbjudan: `CreateInvitation` skickar
- * mejlet direkt med `InvitationNotification`, och klockan visar de sex typer
- * som faktiskt skrivs ur `notification`. Hennes inbjudningsrad kom med issue
+ * mejlet direkt med `InvitationNotification`, och klockan visar de typer som
+ * faktiskt skrivs ur `notification`. Hennes inbjudningsrad kom med issue
  * 131 och läses ur `invitation` i stället ([[M20 Kontot]] § 131), så nyckeln
  * `inbox.invitation.received` finns kvar och prövas sist i provet. Raden i
  * klockan skulle stå utan text om nyckeln glömdes, och det är vad den sista
@@ -619,7 +619,7 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    expect($typer)->toHaveCount(6);
+    expect($typer)->toHaveCount(7);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';

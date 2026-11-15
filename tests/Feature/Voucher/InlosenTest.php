@@ -187,7 +187,7 @@ it('ett raderat konto lämnar inlösen kvar med account_id null', function () {
 
     app(RedeemVoucher::class)->handle($voucher, $account, $user);
 
-    app(DeleteAccount::class)->handle($account);
+    app(DeleteAccount::class)->handle($account, DeleteAccount::REASON_OWNER_DELETED);
 
     // SET NULL, inte RESTRICT (ADR-0055 § 4): en raderad person eller ett
     // raderat konto ska inte hindras av en inlösen. Raden står kvar som

@@ -217,7 +217,7 @@ return [
      * egen, och en andra nyckel för aria-label hade varit samma ord på flera
      * ställen (samma grepp som `nav.favorites`).
      *
-     * **De sex typerna är nycklade med sin egen typsträng.** Typen är ett
+     * **Typerna är nycklade med sin egen typsträng.** Typen är ett
      * öppet namnrum ([[Notiser]] § notification), och `translate()` slår upp
      * punktnycklar rakt i den här arrayen — `task.due` blir alltså
      * `inbox.task.due`. Det finns därför ingen översättningstabell i
@@ -275,6 +275,12 @@ return [
 
         'account' => [
             'inactive' => 'Your account has been inactive for :months months — it closes :close_at',
+        ],
+
+        // Issue 1235: the container was deleted with the account that owned
+        // it. The clock has no page to link to, so the row is text.
+        'container' => [
+            'deleted' => ':container was deleted',
         ],
 
         /*
@@ -1608,6 +1614,12 @@ return [
                 'inactive' => [
                     'label' => 'Account closes from inactivity',
                     'description' => 'Before an account you are a member of closes because it has not been used.',
+                ],
+            ],
+            'container' => [
+                'deleted' => [
+                    'label' => 'Container is deleted',
+                    'description' => 'When a container you had access to is deleted together with the account that owned it.',
                 ],
             ],
         ],

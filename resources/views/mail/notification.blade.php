@@ -1,9 +1,10 @@
 <x-mail::message>
 @php($key = str_replace('.', '_', $type))
+@php($lineKey = isset($payload['reason']) ? "notiser.{$key}.line_{$payload['reason']}" : "notiser.{$key}.line")
 
 # {{ trans("notiser.{$key}.greeting") }}
 
-{{ trans("notiser.{$key}.line", $payload) }}
+{{ trans($lineKey, $payload) }}
 
 <x-mail::button :url="config('app.url')">
 {{ trans("notiser.{$key}.action") }}

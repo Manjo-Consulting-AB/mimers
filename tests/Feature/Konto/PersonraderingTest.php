@@ -845,7 +845,7 @@ it('ett fel mitt i raderingen lämnar ingenting halvt', function () {
 
     $trasig = new class(new PurgeContainer(new PurgeContent(new PurgeAttachment))) extends DeleteAccount
     {
-        public function handle(Account $account): void
+        public function handle(Account $account, string $reason): void
         {
             throw new RuntimeException('trasig kontoradering');
         }

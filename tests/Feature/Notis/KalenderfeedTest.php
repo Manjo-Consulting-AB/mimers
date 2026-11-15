@@ -322,7 +322,7 @@ it('ett raderat konto går att radera med feeder i containern', function () {
     $container = Container::factory()->for($account, 'account')->create();
     kalenderfeedRad($container, $user);
 
-    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($account);
+    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($account, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(DB::table('account')->where('id', $account->id)->exists())->toBeFalse();
     expect(DB::table('container')->where('id', $container->id)->exists())->toBeFalse();

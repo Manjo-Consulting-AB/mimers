@@ -223,7 +223,9 @@ class DeleteUser
             // sin egen transaktion, och efter den finns inga containers,
             // items eller bilagor kvar i dem.
             foreach ($toDelete as $account) {
-                $this->deleteAccount->handle($account);
+                // Skälet följer med till `container.deleted`-notiserna
+                // (issue 1235): det är personen själv som raderar.
+                $this->deleteAccount->handle($account, DeleteAccount::REASON_OWNER_DELETED);
             }
 
             // Steg 3. Medlemskapet i de konton som står kvar. Raderna för de

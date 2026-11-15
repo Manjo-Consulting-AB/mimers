@@ -4,16 +4,22 @@ namespace App\Actions\Account;
 
 use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Notification\CreateNotification;
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Usage\AdjustUsage;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\ContainerAccess;
+use App\Models\Notification as NotificationModel;
+use App\Models\User;
+use App\Support\Account\ActingAccount;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 
 /**
  * Raderar ett konto — sista steget i kontolivscykeln (issue 29b). Se
@@ -38,6 +44,10 @@ use Illuminate\Support\Facades\Storage;
  *    `rensaPersonbilagor()`),
  * 3. författarkolumnerna mot kontot nollställs (ADR-0045 § Beslut 2) — samma
  *    skäl: raden är någon annans innehåll och står kvar, utan avsändare,
+ * 3b. `container.deleted` till varje person som förlorar åtkomst genom en
+ *    giltig container_access — före gallringen i steg 4, eftersom både
+ *    åtkomsterna och containernamnen bara finns medan containern står kvar
+ *    ([[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14),
  * 4. varje container kontot äger, genom PurgeContainer — med withTrashed(),
  *    en mjukraderad container ska också bort — och exportraderna på dem med
  *    sina artefakter (issue 579, se raderaContainerExporter()),
@@ -70,16 +80,47 @@ use Illuminate\Support\Facades\Storage;
  * raderna ska leva vidare i tolv månader ([[ADR-0043 Tre loggar]]). Det är
  * också därför kontots sista rad skrivs här — `account.deleted`, i samma
  * transaktion och före commit, som ankaret issue 115 räknar från.
+ *
+ * **Skälet** (`owner_deleted` eller `account_inactive`, issue 1235) säger
+ * varför kontot raderas och följer med i `container.deleted`-notiserna till
+ * de personer som förlorar åtkomst. De två raderingsvägarna skickar var sitt:
+ * `DeleteUser` det första, `DeletesDormantAccounts` det andra. Det ändrar
+ * ingenting annat i raderingen — åtgärden är fortfarande verktyget, inte
+ * grinden.
  */
 class DeleteAccount
 {
+    /**
+     * Personen raderar sitt eget konto, eller ett konto där hon är enda
+     * medlem (App\Actions\User\DeleteUser).
+     */
+    public const REASON_OWNER_DELETED = 'owner_deleted';
+
+    /**
+     * Kontot har legat vilande i arton månader (App\Console\
+     * DeletesDormantAccounts).
+     */
+    public const REASON_ACCOUNT_INACTIVE = 'account_inactive';
+
+    /** @var list<string> */
+    private const REASONS = [self::REASON_OWNER_DELETED, self::REASON_ACCOUNT_INACTIVE];
+
     public function __construct(
         private readonly PurgeContainer $purgeContainer,
     ) {}
 
-    public function handle(Account $account): void
+    /**
+     * @param  string  $reason  Varför kontot raderas — en av REASONS.
+     *
+     * @throws InvalidArgumentException när skälet inte är ett av de två.
+     */
+    public function handle(Account $account, string $reason): void
     {
-        DB::transaction(function () use ($account): void {
+        if (! in_array($reason, self::REASONS, true)) {
+            throw new InvalidArgumentException("Okänt raderingsskäl: {$reason}");
+        }
+
+        DB::transaction(function () use ($account, $reason): void {
             $accountId = $account->getKey();
 
             // Webhook-leveranserna på kontots endpoints, issue 37b § Beslut
@@ -148,6 +189,15 @@ class DeleteAccount
             // (ADR-0045 § Beslut 2). Det är därför raden sitter här och inte
             // bland personens egna rader — den hör till containern.
             $this->raderaContainerExporter($containerIds);
+
+            // Steg 3b — notiserna till dem som förlorar åtkomsten. Före
+            // gallringen och i samma transaktion: åtkomsterna och
+            // containernamnen finns bara medan containern står kvar, och en
+            // notis som hör till en radering som rullas tillbaka ska rulla
+            // tillbaka med den. CreateNotification skickar ingenting — den
+            // skriver utboksraden — så det finns ingen mejlrisk inuti
+            // transaktionen.
+            $this->notifyContainerMembers($account, $containers, $reason);
 
             foreach ($containers as $container) {
                 $this->purgeContainer->handle($container);
@@ -229,6 +279,100 @@ class DeleteAccount
 
             DB::table('account')->where('id', $accountId)->delete();
         });
+    }
+
+    /**
+     * `container.deleted` till varje person som förlorar åtkomst när kontot
+     * och dess containrar raderas — [[ADR-0045 Radering av konto och person]]
+     * § Uppföljning 2026-11-14, se [[Notiser]] § notification.
+     *
+     * Mottagarna räknas per container ur GILTIGA `container_access` på
+     * container- eller itemnivå (`ContainerAccess::scopeValid`): en utgången
+     * eller återkallad åtkomst ger ingen notis, och en obesvarad inbjudan
+     * räknas inte alls. En grant till ett konto ger kontots samtliga
+     * personer. Personen vars konto raderas räknas aldrig, inte heller någon
+     * annan medlem i det kontot — de förlorar åtkomsten för att de själva
+     * raderar den.
+     *
+     * `container_id` är NULL: raden skulle annars peka på en container som
+     * gallras i samma transaktion. Payloaden bär containerns namn som
+     * ögonblicksbild, och skälet styr vilken mening mejlet renderar.
+     *
+     * @param  Collection<int, Container>  $containers
+     */
+    private function notifyContainerMembers(Account $account, Collection $containers, string $reason): void
+    {
+        $deletedMemberIds = DB::table('account_user')
+            ->where('account_id', $account->getKey())
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $actingAccount = new ActingAccount;
+
+        foreach ($containers as $container) {
+            foreach ($this->recipientsFor($container, $deletedMemberIds) as $recipient) {
+                app(CreateNotification::class)->handle(
+                    type: NotificationModel::TYPE_CONTAINER_DELETED,
+                    // Mottagarens personkonto, genom samma uppslag som
+                    // ActingAccount — aldrig kontot som raderas. Personen är
+                    // inte medlem i det (de uteslöts ovan), så uppslaget kan
+                    // inte landa där.
+                    account: $actingAccount->for($recipient, $container),
+                    user: $recipient,
+                    container: null,
+                    payload: [
+                        'container' => $container->name,
+                        'reason' => $reason,
+                    ],
+                    // Container-ULID:en och mottagarens ULID gör nyckeln unik
+                    // per container och person, så en omkörning inte skapar
+                    // en andra rad.
+                    dedupeKey: NotificationModel::TYPE_CONTAINER_DELETED.":{$container->ulid}:{$recipient->ulid}",
+                );
+            }
+        }
+    }
+
+    /**
+     * Personerna som når containern genom en giltig åtkomst, utom de som
+     * tillhör kontot som raderas.
+     *
+     * En person med flera åtkomster i samma container får en rad, inte en
+     * per åtkomst: `array_unique()` på person-id:na. En åtkomst på itemnivå
+     * bär samma `container_id` som en container-bred, så frågan täcker båda
+     * nivåerna utan en join mot `item`.
+     *
+     * @param  list<int>  $excludedUserIds
+     * @return Collection<int, User>
+     */
+    private function recipientsFor(Container $container, array $excludedUserIds): Collection
+    {
+        $accesses = ContainerAccess::query()
+            ->where('container_id', $container->getKey())
+            ->valid()
+            ->get(['grantee_type', 'grantee_id']);
+
+        /** @var list<int> $userIds */
+        $userIds = [];
+
+        foreach ($accesses as $access) {
+            if ($access->grantee_type === 'user') {
+                $userIds[] = (int) $access->grantee_id;
+
+                continue;
+            }
+
+            // En grant till ett konto gäller kontots personer — det är de
+            // som förlorar åtkomsten, inte kontot självt.
+            foreach (DB::table('account_user')->where('account_id', $access->grantee_id)->pluck('user_id') as $id) {
+                $userIds[] = (int) $id;
+            }
+        }
+
+        $userIds = array_values(array_diff(array_unique($userIds), $excludedUserIds));
+
+        return User::query()->whereIn('id', $userIds)->get();
     }
 
     /**

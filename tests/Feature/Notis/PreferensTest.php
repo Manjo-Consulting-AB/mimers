@@ -158,7 +158,7 @@ it('har ingen konstant och ingen preferensrad för inbjudningar', function () {
     // konstanternas ordning — sex typer, ingen för en inbjudan.
     $preferences = app(NotificationPreferences::class);
 
-    expect($preferences->types())->toHaveCount(6);
+    expect($preferences->types())->toHaveCount(7);
     expect($preferences->types())->not->toContain('invitation.received');
 });
 
