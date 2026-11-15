@@ -13,6 +13,7 @@ use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredApiTokens;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PrunesInAppNotifications;
 use App\Console\PrunesLogs;
 use App\Console\PrunesRegistrationIps;
 use App\Console\PurgesExpiredExports;
@@ -406,6 +407,26 @@ Schedule::call(fn () => app(PrunesLogs::class)->handle())
 Schedule::call(fn () => app(PrunesExpiredApiTokens::class)->handle())
     ->daily()
     ->name('prune-expired-api-tokens');
+
+/*
+ * Issue 383 · Gallringen av `in_app`-rader: listan i appen visar 90 dagar,
+ * lästa eller inte, och raderna tas bort här — se
+ * App\Console\PrunesInAppNotifications, [[ADR-0077 Notislistan i appen]] § 5
+ * och [[Notiser]] § notification_delivery. Notisraden står kvar om den har
+ * andra leveranser och tas bort när den inte har några. Logiken bor i en
+ * vanlig klass, testad direkt i tests/Feature/Notis/InAppKanalTest.php; det
+ * här är bara schemaläggningen. Kör i samma nattliga fönster som de andra
+ * gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön. Posten ligger före `drain-queue`, som ska fortsätta ligga
+ * sist i filen.
+ */
+Schedule::call(fn () => app(PrunesInAppNotifications::class)->handle())
+    ->daily()
+    ->name('prune-in-app-notifications');
 
 /*
  * Issue 237, omskriven i issue 347 · Köarbetaren: tömmer `jobs`-tabellen varje

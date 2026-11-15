@@ -509,7 +509,7 @@ it('förklarar att systemet aldrig mejlar låntagaren', function () {
     // notisgenerator i M5 och en plangräns, och proparna bär den inte.
     actingAs($anvandare)->get(utlaningsvyUrl($container, $item))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->missing('notifications')
+            ->missing('notificationList')
             ->missing('reminders')
     );
 });

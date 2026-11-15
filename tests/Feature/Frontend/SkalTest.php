@@ -491,7 +491,7 @@ it('ritar notisklockan i sidhuvudet för en inloggad och ingen för en gäst', f
         actingAs($anvandare)->get($sida)->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
                 ->where('unreadNotificationCount', 0)
-                ->missing('notifications')
+                ->missing('notificationList')
         );
     }
 });

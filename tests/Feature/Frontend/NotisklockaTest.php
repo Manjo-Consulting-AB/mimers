@@ -41,7 +41,8 @@ use function Pest\Laravel\withoutVite;
  * ingen preferens, ingen tysta-timmar-beräkning.
  *
  * **Två props med två kostnader.** Siffran (`unreadNotificationCount`) delas
- * med varje sida och kostar EN fråga; listan (`notifications`) är en optional
+ * med varje sida och kostar EN fråga; listan (`notificationList`, hette
+ * `notifications` före M60 · issue 383) är en optional
  * prop som en vanlig sidladdning aldrig rör. Båda prövas: den ena genom att
  * räkna frågor mot `notification`, den andra genom att en vanlig GET inte har
  * nyckeln alls.
@@ -127,7 +128,7 @@ function klockaListan(User $anvandare, string $url = '/dashboard'): array
         'X-Inertia' => 'true',
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
         'X-Inertia-Partial-Component' => 'Dashboard',
-        'X-Inertia-Partial-Data' => 'notifications',
+        'X-Inertia-Partial-Data' => 'notificationList',
     ]);
 
     $svar->assertOk();
@@ -152,7 +153,7 @@ function klockaPanelen(User $anvandare, string $url = '/dashboard'): array
         'X-Inertia' => 'true',
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
         'X-Inertia-Partial-Component' => 'Dashboard',
-        'X-Inertia-Partial-Data' => 'notifications,pendingInvitations',
+        'X-Inertia-Partial-Data' => 'notificationList,pendingInvitations',
     ]);
 
     $svar->assertOk();
@@ -186,7 +187,7 @@ it('listar användarens tjugo senaste notiser, nyast först', function () {
         klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinutes(25 - $minuter));
     }
 
-    $rader = klockaListan($anvandare)['notifications'];
+    $rader = klockaListan($anvandare)['notificationList'];
 
     expect($rader)->toHaveCount(20);
 
@@ -210,7 +211,7 @@ it('visar ingen annan användares notis', function () {
     klockaRad($anvandare, Notification::TYPE_TASK_DUE, now(), ['title' => 'Min uppgift']);
     klockaRad($annan, Notification::TYPE_TASK_DUE, now(), ['title' => 'Någon annans']);
 
-    $rader = klockaListan($anvandare)['notifications'];
+    $rader = klockaListan($anvandare)['notificationList'];
 
     expect($rader)->toHaveCount(1);
     expect($rader[0]['payload']['title'])->toBe('Min uppgift');
@@ -219,7 +220,7 @@ it('visar ingen annan användares notis', function () {
 it('svarar med en tom lista när användaren inte har några notiser', function () {
     $anvandare = klockaAnvandare();
 
-    expect(klockaListan($anvandare)['notifications'])->toBe([]);
+    expect(klockaListan($anvandare)['notificationList'])->toBe([]);
 });
 
 /*
@@ -294,7 +295,7 @@ it('hämtar inte listan på en vanlig sidladdning', function () {
 
     actingAs($anvandare)->get('/dashboard')->assertInertia(
         fn (AssertableInertia $page) => $page
-            ->missing('notifications')
+            ->missing('notificationList')
             ->where('unreadNotificationCount', 1)
     );
 });
@@ -330,24 +331,25 @@ it('skapar ingen leveransrad när klockan öppnas', function () {
 });
 
 /*
- * Siffran kostar EN fråga per sidladdning, och samma antal hur många rader
- * användaren än har — indexet `(user_id, created_at)` finns för den
- * ([[Notiser]] § notification).
+ * Siffrorna kostar ett FAST antal frågor per sidladdning, oavsett hur många
+ * rader användaren än har — indexet `(user_id, created_at)` finns för dem
+ * ([[Notiser]] § notification). Sedan M60 · issue 383 är de två: klockans
+ * gamla `unreadNotificationCount` och notislistans `notifications.unread`.
  */
-it('kostar en fråga per sidladdning, oavsett antalet rader', function () {
+it('kostar ett fast antal frågor per sidladdning, oavsett antalet rader', function () {
     // Frys tiden: UpdateLastActiveAt skriver `user.last_active_at`, och en
     // sekundgräns mellan mätningarna hade blivit en UPDATE extra (issue 477).
     Carbon::setTestNow(now());
 
     $anvandare = klockaAnvandare();
 
-    expect(klockaNotisfragor($anvandare))->toBe(1);
+    expect(klockaNotisfragor($anvandare))->toBe(2);
 
     foreach (range(1, 5) as $i) {
         klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinutes($i));
     }
 
-    expect(klockaNotisfragor($anvandare))->toBe(1);
+    expect(klockaNotisfragor($anvandare))->toBe(2);
 
     Carbon::setTestNow();
 });
@@ -404,7 +406,7 @@ it('länkar en uppgift och ett lån till sitt item, och ett ägarbyte till /tran
         'container' => $container->name,
     ]);
 
-    $rader = klockaListan($anvandare)['notifications'];
+    $rader = klockaListan($anvandare)['notificationList'];
 
     expect($rader[0]['type'])->toBe(Notification::TYPE_TRANSFER_REQUESTED);
     expect($rader[0]['url'])->toBe('/transfers');
@@ -427,7 +429,7 @@ it('länkar inte en kvotvarning eller en inaktivitetsvarning', function () {
         'months' => 12, 'close_at' => '2027-01-01',
     ]);
 
-    foreach (klockaListan($anvandare)['notifications'] as $rad) {
+    foreach (klockaListan($anvandare)['notificationList'] as $rad) {
         expect($rad['url'])->toBeNull();
     }
 });
@@ -452,7 +454,7 @@ it('gör ingen länk av en rad vars mål inte längre finns', function () {
 
     $item->delete();
 
-    expect(klockaListan($anvandare)['notifications'][0]['url'])->toBeNull();
+    expect(klockaListan($anvandare)['notificationList'][0]['url'])->toBeNull();
 });
 
 /*
@@ -478,7 +480,7 @@ it('gör ingen länk när schemat är mjukraderat men förekomsten lever kvar', 
     $schema->delete();
 
     expect($förekomst->fresh()->schedule)->toBeNull()
-        ->and(klockaListan($anvandare)['notifications'][0]['url'])->toBeNull();
+        ->and(klockaListan($anvandare)['notificationList'][0]['url'])->toBeNull();
 });
 
 /*
@@ -508,13 +510,13 @@ it('tömmer panelens lista vid Clear utan att radera någon notisrad', function 
     klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinute());
     klockaRad($anvandare, Notification::TYPE_TASK_DUE, now());
 
-    expect(klockaListan($anvandare)['notifications'])->toHaveCount(2);
+    expect(klockaListan($anvandare)['notificationList'])->toHaveCount(2);
 
     $fore = Notification::query()->count();
 
     actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
 
-    expect(klockaListan($anvandare)['notifications'])->toBe([])
+    expect(klockaListan($anvandare)['notificationList'])->toBe([])
         ->and(Notification::query()->count())->toBe($fore);
 });
 
@@ -551,11 +553,11 @@ it('visar en notis som skapats efter rensningen', function () {
 
     actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
 
-    expect(klockaListan($anvandare)['notifications'])->toBe([]);
+    expect(klockaListan($anvandare)['notificationList'])->toBe([]);
 
     klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->addMinute());
 
-    $rader = klockaListan($anvandare)['notifications'];
+    $rader = klockaListan($anvandare)['notificationList'];
 
     expect($rader)->toHaveCount(1)
         ->and($rader[0]['created_at'])->toBe(now()->addMinute()->toIso8601String());
@@ -578,14 +580,14 @@ it('låter inbjudningarna stå kvar efter rensningen', function () {
 
     $fore = klockaPanelen($mottagare);
 
-    expect($fore['notifications'])->toHaveCount(1)
+    expect($fore['notificationList'])->toHaveCount(1)
         ->and($fore['pendingInvitations'])->toHaveCount(1);
 
     actingAs($mottagare)->post('/notifications/clear')->assertRedirect();
 
     $efter = klockaPanelen($mottagare);
 
-    expect($efter['notifications'])->toBe([])
+    expect($efter['notificationList'])->toBe([])
         ->and($efter['pendingInvitations'])->toBe($fore['pendingInvitations']);
 });
 
@@ -598,8 +600,8 @@ it('rensar bara den egna listan', function () {
 
     actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
 
-    expect(klockaListan($anvandare)['notifications'])->toBe([])
-        ->and(klockaListan($annan)['notifications'])->toHaveCount(1);
+    expect(klockaListan($anvandare)['notificationList'])->toBe([])
+        ->and(klockaListan($annan)['notificationList'])->toHaveCount(1);
 });
 
 it('skickar en utloggad besökare från /notifications/clear till inloggningen', function () {

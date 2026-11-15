@@ -38,11 +38,13 @@ use Illuminate\Support\Facades\DB;
  * om och returneras — en `firstOrCreate` som inte fångar kastet vore samma
  * sak som ingen dedupe alls den dag två körningar överlappar.
  *
- * I den här issuen skapas en `pending`-e-postleverans per notis och kanal,
- * vald utifrån mottagarens preferenser (31a § Beslut 6). Unik
- * `(notification_id, channel)` är den ANDRA spärren mot dubbletter och gäller
- * även när `dedupe_key` är null: samma notis kan aldrig få två leveransrader
- * på samma kanal.
+ * I den här issuen skapas en leveransrad per notis och påslagen kanal, vald
+ * utifrån mottagarens preferenser (31a § Beslut 6). E-posten blir `pending`
+ * och plockas av kön; `in_app` blir `sent` direkt, med `sent_at` satt
+ * (issue 383 § 4). Unik `(notification_id, channel)` är den ANDRA spärren mot
+ * dubbletter och gäller även när `dedupe_key` är null: samma notis kan aldrig
+ * få två leveransrader på samma kanal. Dedupe-spärrarna gäller alltså
+ * oförändrat även för den nya kanalen.
  */
 class CreateNotification
 {
@@ -91,6 +93,14 @@ class CreateNotification
                 // notisraden ovan skapades ändå: outboxen är händelseloggen,
                 // och 35 (veckosammanfattningen) och 37b (webhookarna) läser
                 // `notification`, inte `notification_delivery`.
+                //
+                // `in_app` skrivs som `sent` redan här (issue 383 § 4):
+                // listan läser till deliveryraden och ingen kö behövs, så
+                // det finns ingenting att vänta på. Tysta timmar påverkar
+                // den inte ([[ADR-0077 Notislistan i appen]] § 6) — de
+                // skjuter `notification.available_at`, och listan läser
+                // `notification.created_at`. `attempts` står kvar på 0: det
+                // är inget leveransförsök, bara en direkt skrivning.
                 foreach ($this->preferences->channelsFor($user, $type) as $channel) {
                     $delivery = new NotificationDelivery;
                     $delivery->notification_id = $notification->getKey();
@@ -99,10 +109,14 @@ class CreateNotification
                     // fryses in här, från samma preferensuppslag som avgjorde
                     // `enabled` (35 § Beslut 2): en användare som ändrar sin
                     // inställning på tisdagen ska inte retroaktivt ändra hur
-                    // måndagens redan skapade notis levereras.
+                    // måndagens redan skapade notis levereras. För `in_app`
+                    // är svaret alltid falskt.
                     $delivery->digest = $this->preferences->digest($user, $type, $channel);
-                    $delivery->status = NotificationDelivery::STATUS_PENDING;
+                    $delivery->status = $channel === NotificationDelivery::CHANNEL_IN_APP
+                        ? NotificationDelivery::STATUS_SENT
+                        : NotificationDelivery::STATUS_PENDING;
                     $delivery->attempts = 0;
+                    $delivery->sent_at = $channel === NotificationDelivery::CHANNEL_IN_APP ? now() : null;
                     $delivery->save();
                 }
 

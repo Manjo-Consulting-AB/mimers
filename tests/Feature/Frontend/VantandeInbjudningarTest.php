@@ -105,7 +105,7 @@ function vantandeKlockan(User $anvandare): array
         'X-Inertia' => 'true',
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
         'X-Inertia-Partial-Component' => 'Dashboard',
-        'X-Inertia-Partial-Data' => 'notifications,pendingInvitations',
+        'X-Inertia-Partial-Data' => 'notificationList,pendingInvitations',
     ]);
 
     $svar->assertOk();
@@ -531,7 +531,7 @@ it('visar en rad per väntande inbjudan i klockan, med länk till /invitations',
             'url' => '/invitations',
         ])
         // Ingen notisrad finns, så listan är tom medan inbjudningarna syns.
-        ->and($props['notifications'])->toBe([]);
+        ->and($props['notificationList'])->toBe([]);
 });
 
 /*

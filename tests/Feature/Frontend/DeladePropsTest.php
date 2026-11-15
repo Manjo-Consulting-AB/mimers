@@ -247,10 +247,14 @@ it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter'
  *
  * **Issue 131 gav klockan en andra lista och siffran en andra del.**
  * `pendingInvitations` är en optional prop av exakt samma skäl som
- * `notifications` — raden per väntande inbjudan behövs bara när klockan är
- * öppen — och den kommer därför inte heller med av sig själv. Siffran räknar
- * båda, och det är därför den numera kan kosta två frågor; läsningen prövas i
- * tests/Feature/Frontend/VantandeInbjudningarTest.
+ * `notificationList` — raden per väntande inbjudan behövs bara när klockan
+ * är öppen — och den kommer därför inte heller med av sig själv. Siffran
+ * räknar båda, och det är därför den numera kan kosta två frågor; läsningen
+ * prövas i tests/Feature/Frontend/VantandeInbjudningarTest.
+ *
+ * **M60 · issue 383 delade notislistans märke som `notifications.unread`.**
+ * Nyckeln `notifications` togs av den källan, och klockans gamla lista bytte
+ * därför namn till `notificationList` — samma rader, samma optionala form.
  */
 it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', function () {
     withoutVite();
@@ -263,8 +267,8 @@ it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', functi
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
     get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('auth.user', null)
-        ->where('unreadNotificationCount', 0)
-        ->missing('notifications')
+        ->where('notifications.unread', 0)
+        ->missing('notificationList')
         ->missing('pendingInvitations')
         ->missing('recentVisits')
         ->missing('shellContainers')
@@ -275,7 +279,8 @@ it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', functi
 
     actingAs($anvandare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('unreadNotificationCount', 0)
-        ->missing('notifications')
+        ->where('notifications.unread', 0)
+        ->missing('notificationList')
         ->missing('pendingInvitations')
         ->missing('recentVisits')
         ->missing('shellContainers')
