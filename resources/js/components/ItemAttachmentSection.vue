@@ -1,9 +1,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import AttachmentRowActions from './AttachmentRowActions.vue';
 import AttachmentViewer from './AttachmentViewer.vue';
 import AttachmentUploadQueue from './AttachmentUploadQueue.vue';
+import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
 import InlineCreate from './InlineCreate.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
@@ -11,6 +12,7 @@ import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiIcon from './UiIcon.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
+import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -140,12 +142,41 @@ import { useTranslations } from '../composables/useTranslations.js';
  * 403 från grinden fångas av `onHttpException` — annars hade Inertia visat
  * sin egen ruta mitt över sidan. Samma väg som köns radfel: raden bär sin
  * egen mening, och resten av listan står kvar orörd.
+ *
+ * **Växeln *Include child items* och ättlingarnas dokument** (issue 1247 ·
+ * [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14 punkt 1,
+ * 2, 3 och 5). Växeln är `IncludeChildrenSwitch` och navigeringen
+ * `useIncludeChildren` — samma två filer som *Tasks* använder — så valet
+ * gäller per flik och `?children=0` rör bara den här fliken. Med växeln på
+ * bär servern proppen `descendantAttachments`: ättlingarnas levande bilagor,
+ * redan sorterade som itemets egna, var och en med `item: {ulid, name}`.
+ * Raderna ritas i SAMMA lista och med SAMMA rad — egna först, sedan
+ * ättlingarnas — och en ättlings rad visar itemets namn som en länk till
+ * itemets dokumentflik, på samma sätt som containerns *Documents* visar
+ * platsen.
+ *
+ * **Handlingarna på en ättlings rad går mot RADENS item** (ADR-0068
+ * § Uppföljning punkt 3). `Move…`, `Copy…`, *Back to Inbox*, *Delete* och
+ * nedladdningen bygger adressen ur radens `item.ulid`, och `can` är den
+ * radens flaggor — servern prövar samma grindar på nytt. Målväljaren
+ * utesluter radens eget item. Det som SKAPAR något — uppladdningen och
+ * formuläret — gäller alltid itemet man står på, och *Use as cover* står bara
+ * på itemets egna bilder: omslaget är itemets egenskap och inte ättlingens.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     itemUlid: { type: String, required: true },
     /* Bilagorna ur detaljvyns props, redan sorterade och formaterade. */
     attachments: { type: Array, required: true },
+    /*
+     * Ättlingarnas bilagor, ur detaljvyns props. Finns bara när fliken är
+     * aktiv och växeln är på — servern lämnar nyckeln helt annars. Varje rad
+     * bär `item: {ulid, name}` och den radens `can` (se
+     * ItemController::show()).
+     */
+    descendantAttachments: { type: Array, default: () => [] },
+    /* Växelns läge, ur `?children`. Förvalet är PÅ. */
+    includeChildren: { type: Boolean, default: true },
     /*
      * Bilagans ULID → de derivatvarianter som finns, ur detaljvyns props
      * (61b § Beslut 1). Byggd på servern bredvid resursen och eager-laddad,
@@ -186,6 +217,30 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
+ * Itemets namn till växelns hjälptext. Det läses ur `page.props.item`, samma
+ * väg som i ScheduleListSection: sektionen får sitt item som ULID, och namnet
+ * är sidans — den som ritar fliken har det redan.
+ */
+const page = usePage();
+const itemName = computed(() => page.props.item?.name ?? '');
+
+/*
+ * Växeln (issue 1247): läget, vänteläget och navigeringen ur den delade
+ * composablen. `switchPending` och inte `pending` — det senare är radens
+ * vänteläge i den här filen, och två flaggor med samma namn hade stängt
+ * listans rader när växeln väntade.
+ */
+const { onlyChildren, pending: switchPending, toggle: toggleChildren } = useIncludeChildren(
+    () => props.includeChildren,
+    () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=attachments`,
+);
+
+/*
+ * Växelns hjälptext — flikens ord, med itemets namn insatt.
+ */
+const childrenHelp = computed(() => t('item.attachment.children_help', { item: itemName.value }));
+
+/*
  * Itemets adress. Funktionen stod här innan kön bröts ut (issue 1166 ·
  * [AttachmentUploadQueue.vue]), och kön har sin egen kopia — den bygger
  * adressen ur sina egna props och ska kunna ladda upp till vilket item som
@@ -195,6 +250,18 @@ const { t } = useTranslations();
  */
 function itemUrl() {
     return `/containers/${props.containerUlid}/items/${props.itemUlid}`;
+}
+
+/*
+ * Radens adress (issue 1247 · ADR-0068 § Uppföljning punkt 3). En ättlings
+ * rad går mot RADENS item — det är där bilagan ligger, och det är den grind
+ * servern prövar — medan itemets egna rader går mot sidans item. Raden bär
+ * `item` bara när den kom ur `descendantAttachments`.
+ */
+function rowItemUrl(attachment) {
+    return attachment.item
+        ? `/containers/${props.containerUlid}/items/${attachment.item.ulid}`
+        : itemUrl();
 }
 
 /*
@@ -264,13 +331,27 @@ onBeforeUnmount(() => clearTimeout(highlightTimer));
  * Raderna: storleken formaterad och `kind` översatt till ett ord. Storleken
  * speglar serverns Number::fileSize() och är därför en-formaterad oavsett
  * sidans språk — se attachmentPresentation.js.
+ *
+ * **Itemets egna rader först, sedan ättlingarnas** (issue 1247) — i SAMMA
+ * lista och med SAMMA rad, och i den ordning servern gav dem (nyast först).
+ * `own` skiljer dem åt där ytan måste veta: *Use as cover* står bara på
+ * itemets egna bilder, för omslaget är itemets egenskap. `item` följer med
+ * ättlingens rad ur serverns svar och ritar platsen.
  */
-const rows = computed(() => props.attachments.map((attachment) => ({
-    ...attachment,
-    size: formatByteSize(attachment.byte_size),
-    kindLabel: t(`item.attachment.kind.${attachment.kind}`),
-    preview: attachmentPreview(attachment, props.variants, props.inlineEnabled),
-})));
+function row(attachment, own) {
+    return {
+        ...attachment,
+        own,
+        size: formatByteSize(attachment.byte_size),
+        kindLabel: t(`item.attachment.kind.${attachment.kind}`),
+        preview: attachmentPreview(attachment, props.variants, props.inlineEnabled),
+    };
+}
+
+const rows = computed(() => [
+    ...props.attachments.map((attachment) => row(attachment, true)),
+    ...props.descendantAttachments.map((attachment) => row(attachment, false)),
+]);
 
 /*
  * Bildvisaren (Beslut 3) bor i AttachmentViewer.vue (M57 · issue 372). Här
@@ -319,7 +400,7 @@ function cancelDestroy() {
 function destroy() {
     const attachment = destroying.value;
 
-    router.delete(`${itemUrl()}/attachments/${attachment.ulid}`, {
+    router.delete(`${rowItemUrl(attachment)}/attachments/${attachment.ulid}`, {
         preserveScroll: true,
         onStart: () => {
             pending.value = attachment.ulid;
@@ -372,6 +453,13 @@ function closePicker() {
 }
 
 /*
+ * Målväljaren utesluter RADENS eget item (issue 1247 · ADR-0068
+ * § Uppföljning punkt 3): att flytta något till sig självt är inget mål.
+ * Itemets egna rader pekar på sidans item, en ättlings rad på sitt eget.
+ */
+const pickerExclude = computed(() => picked.value?.attachment?.item?.ulid ?? props.itemUlid);
+
+/*
  * Valet ur väljaren. Målet postas som `target`, och svaret är `back()` med
  * färska props — listan speglar alltid serverns svar, samma regel som
  * uppladdningen (Beslut 6). `preserveScroll` håller raden kvar under
@@ -383,7 +471,7 @@ function chooseTarget(target) {
 
     // Verbet står i adressen: `move` och `copy` är två bokstavliga suffix, och
     // `picked` bär det ena.
-    const url = `${itemUrl()}/attachments/${attachment.ulid}${action === 'copy' ? '/copy' : '/move'}`;
+    const url = `${rowItemUrl(attachment)}/attachments/${attachment.ulid}${action === 'copy' ? '/copy' : '/move'}`;
 
     router.post(url, { target: target.ulid }, {
         preserveScroll: true,
@@ -448,7 +536,7 @@ function useAsCover(attachment) {
  * som flyttens. Kroppen är tom — målet står inte i den.
  */
 function toInbox(attachment) {
-    router.post(`${itemUrl()}/attachments/${attachment.ulid}/inbox`, {}, {
+    router.post(`${rowItemUrl(attachment)}/attachments/${attachment.ulid}/inbox`, {}, {
         preserveScroll: true,
         onStart: () => {
             pending.value = attachment.ulid;
@@ -473,6 +561,19 @@ function toInbox(attachment) {
 <template>
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.attachment.heading') }}</h2>
+
+        <!--
+            Växeln *Include child items* (issue 1247): överst på fliken, under
+            rubriken, med flikens egen hjälptext. Samma komponent och samma
+            composable som *Tasks* — valet gäller per flik, och flikradens
+            länkar bär aldrig `children`.
+        -->
+        <IncludeChildrenSwitch
+            :model-value="onlyChildren"
+            :pending="switchPending"
+            :help="childrenHelp"
+            @update:model-value="toggleChildren"
+        />
 
         <!--
             Uppladdningsytan i sin helhet bakom `can.create` (60 Beslut 3):
@@ -576,11 +677,27 @@ function toInbox(attachment) {
                     <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
 
                     <!--
+                        Platsen (issue 1247): en ättlings rad säger vilket item
+                        dokumentet ligger på, och länken går dit — samma grepp
+                        som containerns *Documents* visar platsen med. Itemets
+                        egna rader bär ingen plats: det är sidan man står på.
+                    -->
+                    <Link
+                        v-if="attachment.item"
+                        :href="`/containers/${containerUlid}/items/${attachment.item.ulid}?tab=attachments`"
+                        class="inline-flex min-h-11 items-center text-sm text-accent hover:underline"
+                    >
+                        {{ attachment.item.name }}
+                    </Link>
+
+                    <!--
                         *Use as cover* (issue 342): på varje bild utom den som
-                        redan är omslaget, och bara med `can.update`.
+                        redan är omslaget, och bara med `can.update`. Bara på
+                        itemets EGNA bilder (issue 1247): omslaget är itemets
+                        egenskap, inte ättlingens.
                     -->
                     <button
-                        v-if="can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid"
+                        v-if="attachment.own && can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid"
                         type="button"
                         :disabled="pending === attachment.ulid"
                         class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
@@ -597,8 +714,13 @@ function toInbox(attachment) {
                         samtidigt vägen vidare när webbläsaren inte kan visa
                         PDF:en.
                     -->
+                    <!--
+                        Radens `can` gäller RADENS item (issue 1247): en
+                        ättlings rad bär sitt eget svar ur servern, itemets
+                        egna bär sidans. Servern prövar samma grindar på nytt.
+                    -->
                     <AttachmentRowActions
-                        :attachment="{ ...attachment, can }"
+                        :attachment="{ ...attachment, can: attachment.can ?? can }"
                         :container-is-inbox="containerIsInbox"
                         :pending="pending === attachment.ulid"
                         @move="openPicker(attachment, 'move', $event)"
@@ -633,13 +755,13 @@ function toInbox(attachment) {
         <!--
             Målväljaren (issue 242 och 243). Ett mål per anrop: raden som
             öppnade den bär sin ULID och sitt verb, och valet postas till
-            radens egen rutt. `exclude-item` är itemet, så flytten aldrig
-            erbjuder ett mål som är källan.
+            radens egen rutt. `exclude-item` är RADENS item (issue 1247), så
+            flytten aldrig erbjuder ett mål som är källan.
         -->
         <ItemTargetPicker
             :open="pickerOpen"
             :trigger="pickerTrigger"
-            :exclude-item="itemUlid"
+            :exclude-item="pickerExclude"
             :heading="pickerHeading"
             @choose="chooseTarget"
             @close="closePicker"

@@ -420,8 +420,9 @@ it('visar listan för en read-mottagare men ingen skrivyta, och nekar posten', f
 
     expect($vy)->toContain('v-if="can.create"');
     // Issue 373: raderingen bor i radens meny (AttachmentRowActions.vue), som
-    // får `can` med sig och döljer *Delete* utan `can.delete`.
-    expect($vy)->toContain(':attachment="{ ...attachment, can }"');
+    // får `can` med sig och döljer *Delete* utan `can.delete`. Sedan issue
+    // 1247 gäller `can` RADENS item: en ättlings rad bär sitt eget svar.
+    expect($vy)->toContain(':attachment="{ ...attachment, can: attachment.can ?? can }"');
     expect(File::get(resource_path('js/components/AttachmentRowActions.vue')))
         ->toContain('v-if="canDelete"');
 });

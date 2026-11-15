@@ -272,7 +272,18 @@ it('sätter ett vänteläge runt varje router-anrop', function () {
             "{$sokvag} gör ett router-anrop utan vänteläge (onStart/onFinish eller await i try/finally)"
         );
         // `:pending=` räcker: UiButton stänger knappen själv när den är sann.
-        expect($kod)->toMatch('/:(disabled|pending)=/', "{$sokvag} gör ett router-anrop utan att inaktivera kontrollen (:disabled= eller :pending=)");
+        //
+        // En COMPOSABLE lämnar flaggan vidare i stället för att binda den:
+        // kontrollen som stängs ritas i en annan fil, så `:disabled=` kan
+        // inte stå här (issue 1247 · `useIncludeChildren.js`). Kravet är då
+        // att flaggan heter `pending` och RETURNERAS, så konsumenten kan
+        // binda den — `IncludeChildrenSwitch.vue` gör det med
+        // `:disabled="pending"`.
+        $vantelagetLamnasVidare = str_starts_with($sokvag, 'composables/')
+            && preg_match('/return \{[^}]*\bpending\b/', $kod) === 1;
+
+        expect($vantelagetLamnasVidare || preg_match('/:(disabled|pending)=/', $kod) === 1)
+            ->toBeTrue("{$sokvag} gör ett router-anrop utan att inaktivera kontrollen (:disabled= eller :pending=)");
     }
 
     expect($granskade)->toBeGreaterThan(10);

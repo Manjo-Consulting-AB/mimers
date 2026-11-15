@@ -47,10 +47,13 @@ defineOptions({
  * **Itemets egna fält, kategorin, taggarna, relationerna, utlåningen,
  * schemana, bilagorna och kostnaderna.** Bilagesektionen kom med issue 60 och
  * bor i resources/js/components/ItemAttachmentSection.vue; listan kommer med
- * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
- * gör detsamma — ScheduleListSection.vue, propen `itemTasks` (grupperna och de
- * avbockade förekomsterna) och reglaget `includeChildren`. Regellistan med
- * pausa, redigera och radera bor på schemats egen sida sedan issue 226.
+ * detaljvyns props och har ingen egen rutt. Sedan issue 1247 bär fliken också
+ * växeln *Include child items* och ättlingarnas dokument (`descendantAttachments`)
+ * — växeln och navigeringen delas med *Tasks* genom
+ * IncludeChildrenSwitch.vue och useIncludeChildren.js. Schemana kom med issue
+ * 63a och gör detsamma — ScheduleListSection.vue, propen `itemTasks` (grupperna
+ * och de avbockade förekomsterna) och reglaget `includeChildren`. Regellistan
+ * med pausa, redigera och radera bor på schemats egen sida sedan issue 226.
  * Utlåningen kom med issue 67a och gör detsamma —
  * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
  * och `today`. Kostnaderna kom med issue 168 och gör detsamma —
@@ -232,6 +235,16 @@ const props = defineProps({
      * samma lista och samma ordning som `/api` ger (issue 60 § Beslut 2).
      */
     attachments: { type: Array, required: true },
+    /*
+     * Ättlingarnas bilagor (issue 1247 · [[ADR-0068 Itemets sida och
+     * skapandet]] § Uppföljning 2026-11-14 punkt 1–3), ur
+     * AttachmentResource med `item: {ulid, name}` och radens `can`. Finns
+     * BARA när fliken *Documents* är aktiv och växeln är på — servern lämnar
+     * nyckeln helt annars (se ItemController::show()), och standarden är en
+     * tom lista: en tom lista är samma sak som "ingen hämtad" här, för
+     * sektionen ritas bara på fliken.
+     */
+    descendantAttachments: { type: Array, default: () => [] },
     /*
      * Bilagans ULID → de derivatvarianter som FINNS, byggd på servern bredvid
      * AttachmentResource (issue 61b § Beslut 1). Vyn gissar aldrig: en
@@ -1278,6 +1291,8 @@ function toggleFavorite() {
                 :container-ulid="container.ulid"
                 :item-ulid="item.ulid"
                 :attachments="attachments"
+                :descendant-attachments="descendantAttachments"
+                :include-children="includeChildren"
                 :variants="variants"
                 :inline-enabled="inlineEnabled"
                 :max-upload-bytes="maxUploadBytes"
