@@ -40,6 +40,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Siffran döljs vid noll och visar 9+ över nio.** En nolla i en bricka är
  * en siffra som säger "ingenting"; den tomma ytan säger det redan. Namnet för
  * en skärmläsare säger antalet, till exempel *Notifications, 3 unread*.
+ *
+ * **Inbjudningarna räknas i märket och ritas i panelen** (granskningen av
+ * #1315 · [[M20 Kontot]] § 131 och [[M22 Redo för testare]]). En inbjudan är
+ * ingen notis — den skrivs aldrig till `notification` och kommer därför inte
+ * med i `in_app` — men den väntar på ett svar och ska synas på klockan.
+ * `pendingInvitations` är en OPTIONAL propp (Inertia::optional), så en vanlig
+ * sidladdning bär den inte. Klockan äger därför en lokal kopia som överlever
+ * att proppen försvinner vid en full omladdning, och hämtar proppen med en
+ * partiell omladdning när den saknas: vid monteringen och vid varje
+ * navigering. Panelen får kopian som propp, så att den och märket alltid
+ * räknar samma rader.
+ *
+ * Summan är `notifications.unread + pendingInvitations.length`, och
+ * inbjudningarna skickas aldrig till `POST /notifications/read` — de
+ * försvinner först när de besvarats eller gått ut.
  */
 const props = defineProps({
     /*
@@ -61,7 +76,24 @@ const panelId = computed(() => (isTab.value ? 'notification-panel-tab' : 'notifi
 const { t } = useTranslations();
 const page = usePage();
 
-const unread = computed(() => page.props.notifications?.unread ?? 0);
+/*
+ * Inbjudningarna. Proppen är optional, så den lokala kopian är det som
+ * märket och panelen läser: en full omladdning tappar proppen, och kopian
+ * behåller då raderna till nästa partiella svar. `loadInvitations()` hämtar
+ * den när den saknas.
+ */
+const pendingInvitations = ref(page.props.pendingInvitations ?? []);
+
+watch(
+    () => page.props.pendingInvitations,
+    (value) => {
+        if (value !== undefined) {
+            pendingInvitations.value = value;
+        }
+    },
+);
+
+const unread = computed(() => (page.props.notifications?.unread ?? 0) + pendingInvitations.value.length);
 
 const badge = computed(() => (unread.value > 9 ? '9+' : String(unread.value)));
 
@@ -116,12 +148,31 @@ function onDocumentClick(event) {
     }
 }
 
-onMounted(() => document.addEventListener('click', onDocumentClick));
+/*
+ * Inbjudningarna är en optional propp och följer därför inte med en vanlig
+ * sidladdning. Klockan hämtar den med en partiell omladdning när den saknas —
+ * vid monteringen och efter en navigering — så att märket räknar dem på varje
+ * sida. Flikformen (under `md:`) äger ingen panel och hämtar ingenting: den
+ * länkar till sidan, och sidhuvudets klocka sitter i DOM:en även där.
+ */
+function loadInvitations() {
+    if (isTab.value || page.props.pendingInvitations !== undefined) {
+        return;
+    }
+
+    router.reload({ only: ['pendingInvitations'] });
+}
+
+onMounted(() => {
+    document.addEventListener('click', onDocumentClick);
+    loadInvitations();
+});
 onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick));
 
 /* Panelen stängs vid navigering, samma skäl och samma klocka som menyerna. */
 watch(() => page.url, () => {
     isOpen.value = false;
+    loadInvitations();
 });
 
 /*
@@ -213,6 +264,7 @@ function markShown(ulids) {
         <NotificationPanel
             v-if="! isTab && isOpen"
             :panel-id="panelId"
+            :pending-invitations="pendingInvitations"
             @shown="markShown"
         />
     </div>

@@ -177,6 +177,49 @@ it('länkar en rad bara när den har ett mål', function () {
 });
 
 /*
+ * Granskningen av #1315, fynd 1: inbjudningarna hör kvar i klockan.
+ *
+ * En inbjudan är ingen notis — den skrivs aldrig till `notification` och
+ * kommer därför inte med i `in_app` — men den väntar på ett svar och ska
+ * synas på klockan ([[M20 Kontot]] § 131 och [[M22 Redo för testare]]).
+ * Panelen och sidan ritar den delade proppen `pendingInvitations` med en rad
+ * per inbjudan och länk till `/invitations`, märket räknar
+ * `notifications.unread + pendingInvitations.length`, och inbjudningarna går
+ * aldrig till `POST /notifications/read` — de försvinner först när de
+ * besvarats eller gått ut.
+ */
+it('visar väntande inbjudningar och räknar dem i märket', function () {
+    $klocka = notisvyKod('components/NotificationBell.vue');
+    $panel = notisvyKod('components/NotificationPanel.vue');
+    $sida = notisvyKod('pages/Notifications/Index.vue');
+
+    // Märket: notiserna plus inbjudningarna, samma summa i namnet.
+    expect($klocka)->toContain('page.props.pendingInvitations')
+        ->and($klocka)->toContain('pendingInvitations.value.length')
+        ->and($klocka)->toContain('page.props.notifications?.unread')
+        ->and($klocka)->toContain(':pending-invitations="pendingInvitations"');
+
+    // Panelen: raden bär katalogens mening och länken dit svaret ges, och
+    // tomt läget kräver att båda listorna är tomma.
+    expect($panel)->toContain('pendingInvitations')
+        ->and($panel)->toContain("t('inbox.invitation.received'")
+        ->and($panel)->toContain(':href="invitation.url"')
+        ->and($panel)->toContain('props.pendingInvitations.length === 0');
+
+    // Sidan ritar samma rader överst: under `md:` är klockan bara en länk
+    // hit, så utan dem hade en inbjudan inte synts alls på mobilen.
+    expect($sida)->toContain('page.props.pendingInvitations')
+        ->and($sida)->toContain("t('inbox.invitation.received'")
+        ->and($sida)->toContain(':href="invitation.url"')
+        ->and($sida)->toContain('pendingInvitations.value.length === 0');
+
+    // Läsningen rör bara notisraderna: panelen bygger `shown` ur fetch-svaret
+    // och sidan postar sina `rows`, aldrig inbjudningarna.
+    expect($panel)->toContain('.map((row) => row.ulid)')
+        ->and($sida)->toContain('.filter((row) => row.read_at === null)');
+});
+
+/*
  * Klart när (punkt 3): sidan har *Load more* och *Mark all as read*, och
  * markeringen av de visade raderna postas när de visats.
  */

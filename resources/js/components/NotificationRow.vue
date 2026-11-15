@@ -23,8 +23,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Skälet väljer meningen för `container.deleted`.** Payloaden bär
  * `reason` (`owner_deleted` eller `account_inactive`), samma två skäl som
  * mejlet i lang/en/notiser.php skiljer på. Ett okänt skäl faller tillbaka på
- * `owner_deleted`: raden ska säga något sant om containern, inte visa en
- * nyckel.
+ * den neutrala reservtexten, samma svar som en okänd typ får: raden får
+ * aldrig påstå att ägaren raderade containern när payloaden inte säger det
+ * (granskningen av #1315).
  *
  * **Länken finns bara när målet finns.** `target` byggs på servern
  * (App\Support\Notification\NotificationTarget) och är `null` för
@@ -73,20 +74,26 @@ const unread = computed(() => props.notification.read_at === null);
 const time = computed(() => eventDate(props.notification.created_at).text);
 
 /*
+ * Skälen som `container.deleted` har en mening för. Payloaden bär
+ * `reason`, och ett värde utanför listan får reservtexten — inte
+ * `owner_deleted`, som hade påstått något om containern som payloaden inte
+ * säger.
+ */
+const DELETED_REASONS = ['owner_deleted', 'account_inactive'];
+
+/*
  * Meningen. `container.deleted` väljer skäl först, eftersom nyckeln då har en
- * nivå till. Övriga typer slås upp direkt på typnamnet, och ett uppslag som
- * inte gav en mening faller tillbaka på reservtexten — jämförelsen med
- * nyckeln är det som skiljer ett riktigt svar från translate.js svar på en
- * saknad nyckel.
+ * nivå till. Övriga typer — och ett okänt skäl — slås upp direkt på
+ * typnamnet, och ett uppslag som inte gav en mening faller tillbaka på
+ * reservtexten. Jämförelsen med nyckeln är det som skiljer ett riktigt svar
+ * från translate.js svar på en saknad nyckel.
  */
 const message = computed(() => {
     const row = props.notification;
     const payload = row.payload ?? {};
 
-    if (row.type === 'container.deleted') {
-        const reason = payload.reason === 'account_inactive' ? 'account_inactive' : 'owner_deleted';
-
-        return t(`notifications.list.type.container.deleted.${reason}`, {
+    if (row.type === 'container.deleted' && DELETED_REASONS.includes(payload.reason)) {
+        return t(`notifications.list.type.container.deleted.${payload.reason}`, {
             container: payload.container,
         });
     }
