@@ -548,7 +548,7 @@ it('räknar inbjudningarna i klockans siffra', function () {
     vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se');
 
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
-    get('/')->assertInertia(fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 0));
+    get('/about')->assertInertia(fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 0));
 
     actingAs($mottagare)->get('/dashboard')->assertInertia(
         fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 2)

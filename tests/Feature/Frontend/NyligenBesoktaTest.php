@@ -469,7 +469,7 @@ it('frågar inte efter listan på en vanlig sidladdning men svarar på en partie
 
     $motorn = nyligenListaItem($container, 'Motorn', $ägare);
 
-    get('/')->assertOk()->assertInertia(fn ($page) => $page
+    get('/about')->assertOk()->assertInertia(fn ($page) => $page
         ->where('auth.user', null)
         ->missing('recentVisits')
     );

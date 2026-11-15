@@ -1,9 +1,9 @@
 <?php
 
-use Inertia\Testing\AssertableInertia;
+use App\Models\User;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
-use function Pest\Laravel\withoutVite;
 
 /*
  * Pests globala hjälpfunktioner används i stället för $this->get(...).
@@ -12,18 +12,24 @@ use function Pest\Laravel\withoutVite;
  * utan en enda undertryckning. Se ADR-0022.
  */
 
-it('svarar på rotrutten med en Inertia-sida', function () {
-    withoutVite();
+/*
+ * Issue 1244 · Startsidan renderar inte längre en Inertia-sida, se
+ * routes/web.php och Tonys beslut 2026-11-14. Den omdirigerar TILLFÄLLIGT —
+ * tills landningssidan finns — och statusen är därför 302 och aldrig 301,
+ * som en webbläsare hade cachat.
+ */
+it('skickar en gäst från rotrutten till inloggningssidan', function () {
+    get('/')
+        ->assertStatus(302)
+        ->assertRedirect(route('login'));
+});
+
+it('skickar en inloggad från rotrutten direkt till dashboarden', function () {
+    actingAs(User::factory()->create());
 
     get('/')
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Welcome')
-            // `version` var skalets platshållare, se issue 51 § Beslut 11.
-            // Raden är den gamla assertionens sanna motsats: den faller på
-            // baskommiten, där rutten fortfarande skickar app()->version().
-            ->missing('version')
-        );
+        ->assertStatus(302)
+        ->assertRedirect(route('dashboard'));
 });
 
 it('har hälsokontrollen påslagen', function () {

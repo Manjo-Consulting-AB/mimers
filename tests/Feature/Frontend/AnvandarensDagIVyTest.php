@@ -52,7 +52,7 @@ it('delar användarens dag och tidszon med varje sida', function () {
 it('delar ingen dag och ingen tidszon med en gäst', function () {
     withoutVite();
 
-    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+    get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('today', null)
         ->where('timezone', null)
         ->where('auth.user', null)

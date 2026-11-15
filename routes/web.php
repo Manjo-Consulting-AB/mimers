@@ -305,7 +305,27 @@ Route::delete('/settings/overview-panels', [OverviewPanelController::class, 'des
     ->middleware('auth')
     ->name('settings.overview-panels.destroy');
 
-Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
+/*
+ * Issue 1244 · Tonys beslut 2026-11-14 — startsidan skickar besökaren vidare
+ * i stället för att rendera `Welcome`.
+ *
+ * **Omdirigeringen är TILLFÄLLIG och svarar 302, aldrig 301.** Det finns
+ * ännu ingen landningssida, och en 301 cachas av webbläsarna: när sidan
+ * kommer ska adressen kunna tas över utan att besökare sitter kvar på en
+ * cachad omdirigering. Docblocket är hela skälet till att rutten har en.
+ *
+ * **En gäst skickas till /login och en inloggad direkt till /dashboard.**
+ * Den inloggade går inte via /login, som `guest`-middlewaren ändå hade
+ * skickat vidare henne ifrån — ett hopp i onödan.
+ *
+ * **Ruttnamnet `welcome` står kvar.** `route('welcome')` används av
+ * utloggningen, verifieringsmejlet, inbjudningarnas svar och
+ * personraderingen, och en bokmärkt `/` ska fortsätta fungera.
+ *
+ * `resources/js/pages/Welcome.vue` lämnas orörd som förlaga för
+ * landningssidan.
+ */
+Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('welcome');
 
 /*
  * Issue 202 · Informationssidorna — /about, /privacy, /terms och /help. Inloggnings-

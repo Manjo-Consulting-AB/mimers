@@ -135,7 +135,10 @@ it('delar locale och översättningar på varje webbsida', function () {
         ->has('translations.auth.login')
     );
 
-    foreach (['/', '/dashboard'] as $url) {
+    // `/` omdirigerar sedan issue 1244 och renderar ingen Inertia-sida, så
+    // den inloggade halvan läser `/about` i stället — samma publika sida som
+    // gästen når.
+    foreach (['/about', '/dashboard'] as $url) {
         actingAs($anvandare)->get($url)->assertInertia(fn (AssertableInertia $page) => $page
             ->where('locale', 'en')
             ->has('translations.nav')
@@ -206,7 +209,7 @@ it('ger engelska för en användare utan egen locale i två konton', function ()
 it('renderar ett gästanrop på appens standardspråk', function () {
     withoutVite();
 
-    get('/')->assertInertia(fn (AssertableInertia $page) => $page
+    get('/about')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('locale', config('app.locale'))
         ->where('translations.nav.login', 'Log in')
     );

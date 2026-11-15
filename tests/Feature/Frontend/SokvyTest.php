@@ -610,7 +610,7 @@ it('ritar sökfältet i layouten för en inloggad användare och inte för en g�
         ->toContain('const user = computed(() => page.props.auth.user)');
 
     // Gästen har ingen användare, alltså ritas fältet inte.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
@@ -644,7 +644,7 @@ it('har en väg till sökningen i navigeringen för en inloggad och ingen för e
 
     // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
     // testet, och därefter är varje anrop inloggat.
-    get('/')->assertOk()->assertInertia(
+    get('/about')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
