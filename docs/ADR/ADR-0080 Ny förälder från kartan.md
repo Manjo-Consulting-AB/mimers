@@ -1,8 +1,8 @@
 # ADR-0080 Ny förälder från kartan
 
-**Status:** Föreslagen 2026-11-15 · Ändrar [[ADR-0048 Mobilen och plusknappen]] § 4 (grafens meny) · Bygger vidare på [[ADR-0059 Kartan med en mitt]] § 4, [[ADR-0063 Itemets karta i containerkartans form]] § 4, [[ADR-0028 Åtkomst på itemnivå]] och [[ADR-0069 Flytta ett item inom containern]] · [[ADR-index]]
+**Status:** Antagen 2026-11-15 · Ändrar [[ADR-0048 Mobilen och plusknappen]] § 4 (grafens meny) · Bygger vidare på [[ADR-0059 Kartan med en mitt]] § 4, [[ADR-0063 Itemets karta i containerkartans form]] § 4, [[ADR-0028 Åtkomst på itemnivå]] och [[ADR-0069 Flytta ett item inom containern]] · [[ADR-index]]
 
-Förslag från 2026-11-15 om att kunna skapa en ny förälder från kartan och plusmenyn. Det är inte beslutat. Tony ändrar statusen till *Antagen* när han bestämmer sig. Kodarbetet ligger i issue 1298.
+Tonys beslut 2026-11-15 om att kunna skapa en ny förälder från kartan och plusmenyn. Det skrevs in som förslag och antogs samma dag. Kodarbetet ligger i issue 1298.
 
 ## Kontext
 
