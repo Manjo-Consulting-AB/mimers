@@ -4,13 +4,10 @@ namespace App\Console;
 
 use App\Actions\Account\DeleteAccount;
 use App\Models\Account;
-use App\Models\Container;
-use App\Models\ContainerAccess;
 use App\Models\LegalHold;
 use App\Models\Subscription;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -28,18 +25,20 @@ use Throwable;
  * raderas aldrig. Formuleringen av inaktivitet återanvänder
  * Account::scopeInactiveSince() utan att skrivas om.
  *
- * Innan något raderas prövas de villkor ADR-0009 kräver (Beslut 2–4), igen
+ * Innan något raderas prövas det villkor ADR-0009 kräver (Beslut 2), igen
  * under radlås i samma transaktion som raderingen:
  *
  * - En prenumeration som bär sin plan undantar alltid (Beslut 2) — se
  *   App\Models\Subscription::isCurrent(). Ett utgånget Pro gör det inte
  *   (issue 265 § Beslut 1), och kontot raderas som vilket gratiskonto som
  *   helst.
- * - En ägd container med aktiva medlemmar — en giltig container_access eller
- *   en obesvarad, icke utgången inbjudan — blockerar hela kontot (Beslut
- *   3–4). Ägarskapet ska erbjudas dem först, och det är M6 issue 39; tills
- *   dess är det enda korrekta svaret att låta kontot vara. Delvis radering
- *   är förbjuden: inte heller de containers som saknar medlemmar rörs.
+ *
+ * Delade containrar spärrar INTE (issue 1237 · [[ADR-0045 Radering av konto
+ * och person]] § Uppföljning 2026-11-14). Ett inaktivt konto raderas med
+ * sina containrar oavsett medlemmar: används kontot inte av ägaren får vi
+ * inte behålla det hur länge som helst, enligt GDPR. Medlemmarna förlorar
+ * åtkomsten och får `container.deleted` med skälet `account_inactive`, som
+ * DeleteAccount skickar (issue 1235).
  *
  * Beslut 5 — bilagor kontot betalar för i andras containers — spärrade
  * tidigare också (29b). Den spärren är BORTTAGEN (issue 143 · [[ADR-0045
@@ -166,55 +165,9 @@ class DeletesDormantAccounts
                 return;
             }
 
-            // Beslut 3 och 4 — delade containers. Hoppas kontot över och
-            // loggas; ingenting raderas, inte heller de containers som saknar
-            // medlemmar.
-            $blockedContainers = $this->ownedContainersWithActiveMembers($row);
-
-            if ($blockedContainers->isNotEmpty()) {
-                Log::warning('account.deletion_blocked', [
-                    'account_ulid' => $row->ulid,
-                    'reason' => 'shared_container',
-                    'containers' => $blockedContainers->all(),
-                ]);
-
-                return;
-            }
-
             // Skälet följer med till `container.deleted`-notiserna
             // (issue 1235): kontot raderas för att det legat vilande.
             $this->deleteAccount->handle($row, DeleteAccount::REASON_ACCOUNT_INACTIVE);
         });
-    }
-
-    /**
-     * ULID:erna för de containers kontot äger som har aktiva medlemmar —
-     * minst en giltig container_access (ContainerAccess::scopeValid) eller en
-     * obesvarad, icke utgången inbjudan. Samma räkning som delningstaket i
-     * 27a § Beslut 5.
-     *
-     * Mjukraderade containers räknas också: en soft delete sätter bara
-     * `deleted_at` på container-raden och återkallar inte container_access —
-     * innehållet ligger kvar, oftast helt levande, tills gallringsjobbet tar
-     * det. En mjukraderad container med aktiva medlemmar ska därför blockera
-     * lika mycket som en levande: DeleteAccount tömmer den med withTrashed(),
-     * och radering utan att ägarskapet erbjudits är precis vad
-     * acceptanskriteriet förbjuder.
-     *
-     * @return Collection<int, string>
-     */
-    private function ownedContainersWithActiveMembers(Account $account): Collection
-    {
-        return Container::withTrashed()
-            ->where('account_id', $account->id)
-            ->where(function (Builder $query) {
-                $query->whereHas('accesses', function (Builder $query) {
-                    /** @var Builder<ContainerAccess> $query */
-                    $query->valid();
-                })->orWhereHas('invitations', function (Builder $query) {
-                    $query->where('status', 'pending')->where('expires_at', '>', now());
-                });
-            })
-            ->pluck('ulid');
     }
 }
