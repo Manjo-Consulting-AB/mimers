@@ -22,6 +22,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * användare, aldrig utelämnad: klienten ska kunna skilja "inte verifierad"
  * från "fältet finns inte".
  *
+ * **`avatar` är personens profilbild** ([[ADR-0076 Profilbilden]] § 2 och 6,
+ * issue 380): `null` när ingen bild är satt, annars bilagans `ulid` och
+ * `has_thumb`. Fältet finns alltid, som `email_verified_at` — vyn ska kunna
+ * skilja "ingen bild" från "fältet finns inte" och rita initialerna i det
+ * första fallet. `has_thumb` är samma läsning som
+ * App\Actions\Item\ResolveItemCover::thumbnails(): miniatyren ritas bara när
+ * varianten `thumb` finns (issue 61b § Beslut 1). En mjukraderad bilaga
+ * svarar `null`, eftersom relationen bär SoftDeletes-scopet.
+ *
  * @mixin User
  */
 class AuthUserResource extends JsonResource
@@ -31,6 +40,8 @@ class AuthUserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $avatar = $this->avatarAttachment;
+
         return [
             'ulid' => $this->ulid,
             'name' => $this->name,
@@ -39,6 +50,10 @@ class AuthUserResource extends JsonResource
             'locale' => $this->locale,
             'timezone' => $this->timezone,
             'unit_system' => $this->unit_system,
+            'avatar' => $avatar === null ? null : [
+                'ulid' => $avatar->ulid,
+                'has_thumb' => $avatar->storedFile->derivatives->contains('variant', 'thumb'),
+            ],
         ];
     }
 }

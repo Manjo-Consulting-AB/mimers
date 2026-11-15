@@ -52,6 +52,7 @@ use App\Http\Controllers\Settings\EmailChangeController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PlanController;
+use App\Http\Controllers\Settings\ProfileAvatarController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\StorageController;
@@ -658,6 +659,25 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/profile', [ProfileController::class, 'update'])
         ->name('settings.profile.update');
+
+    /*
+     * Issue 380 · Profilbilden, se App\Http\Controllers\Settings\
+     * ProfileAvatarController och [[ADR-0076 Profilbilden]] § 2, 3 och 6.
+     *
+     * Två skrivrutter och ingen sida: bilden kommer med personens egen prop
+     * ur App\Http\Resources\AuthUserResource (`avatar`), och en andra väg till
+     * samma läsning hade varit en andra sanning om vilken bild som är satt.
+     * Namnen följer `settings.profile.*`: sidan, sedan handlingen — samma
+     * form som `settings.profile.update`.
+     *
+     * Båda svarar `back()` med en flash-kod; `avatar-updated` och
+     * `avatar-removed` står i lang/en/ui.php.
+     */
+    Route::post('/settings/profile/avatar', [ProfileAvatarController::class, 'store'])
+        ->name('settings.profile.avatar.store');
+
+    Route::delete('/settings/profile/avatar', [ProfileAvatarController::class, 'destroy'])
+        ->name('settings.profile.avatar.destroy');
 
     /*
      * Issue 130 · E-postadressen går att byta, se

@@ -53,6 +53,8 @@ use Illuminate\Support\Facades\DB;
  * ingen kaskad som städar):
  *
  * 1. spärrarna prövas, under radlås på personen,
+ * 1b. personens profilbild rensas med RemoveUserAvatar — `attachment.user_id`
+ *    är ON DELETE RESTRICT och bilden är hennes egen (ADR-0076 § 5),
  * 2. varje konto där personen är enda medlem raderas med DeleteAccount,
  * 3. personen lämnar övriga konton,
  * 4. författarkolumnerna mot `user` nollställs (ADR-0045 § Beslut 2): item,
@@ -90,6 +92,7 @@ class DeleteUser
         private readonly RevokeInvitation $revokeInvitation,
         private readonly RevokeOwnershipTransfer $revokeOwnershipTransfer,
         private readonly PurgeContent $purgeContent,
+        private readonly RemoveUserAvatar $removeUserAvatar,
     ) {}
 
     /**
@@ -200,6 +203,16 @@ class DeleteUser
 
             $toDelete = $this->accountsWhereSoleMember($row);
             $userId = $row->getKey();
+
+            // Profilbilden först (ADR-0076 § 5, issue 380): bilagan är
+            // personens egen och följer aldrig med en container eller ett
+            // konto. RemoveUserAvatar nollställer pekaren och rensar bilagan
+            // — `attachment.user_id` är ON DELETE RESTRICT, så utan den här
+            // raden hade personraden fallit på sin egen bild. Steget ligger
+            // före kontona med flit: en person vars enda konto raderas hade
+            // annars fått bilden rensad av DeleteAccount i steg 2, men en
+            // person som lämnar ett kvarstående konto hade behållit den.
+            $this->removeUserAvatar->handle($row);
 
             // Antalen till loggen läses innan något raderas — efteråt finns
             // inget kvar att räkna (samma skäl som i DeleteAccount).

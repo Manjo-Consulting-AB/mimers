@@ -23,9 +23,9 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Sparar en uppladdad fil och kopplar den till ett item eller en container,
- * med dedupen från issue 16a § Beslut 10 — en instansklass med handle(),
- * injicerad i kontrollermetoden, se [[ADR-0024 Tunna controllers och
+ * Sparar en uppladdad fil och kopplar den till ett item, en container eller
+ * en person, med dedupen från issue 16a § Beslut 10 — en instansklass med
+ * handle(), injicerad i kontrollermetoden, se [[ADR-0024 Tunna controllers och
  * actions]].
  *
  * Flödet, i ordning: hash och sniffning UTANFÖR transaktionen (dyrt, rör
@@ -69,9 +69,10 @@ use Throwable;
  *
  * `uploaded_by_user_id` kommer från token (§ Beslut 14), `billed_account_id`
  * från kroppens `account` efter medlemskapskontrollen (§ Beslut 2). Båda,
- * liksom `item_id`/`container_id` och `stored_file_id`, sätts explicit —
- * aldrig via massildelning. Ägaren kommer från `handle()` (ett item) eller
- * `handleForContainer()` (en container, issue 158).
+ * liksom `item_id`/`container_id`/`user_id` och `stored_file_id`, sätts
+ * explicit — aldrig via massildelning. Ägaren kommer från `handle()` (ett
+ * item), `handleForContainer()` (en container, issue 158) eller
+ * `handleForUser()` (en person, issue 380).
  *
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
@@ -119,7 +120,37 @@ class StoreAttachment
         return $this->store($container, $file, $user, $account, requiredKind: 'image');
     }
 
-    private function store(Item|Container $owner, UploadedFile $file, User $user, Account $account, ?string $requiredKind = null): Attachment
+    /**
+     * Samma flöde, men bilagan hamnar på en PERSON i stället för på ett item
+     * eller en container — profilbilden ([[ADR-0076 Profilbilden]] § 2, issue
+     * 380).
+     *
+     * Egen ingång av samma skäl som handleForContainer(): den befintliga
+     * `handle()` tar ett `Item` och anropas med namngivna argument från två
+     * kontroller utanför den här issuen. Alla tre ingångarna leder till SAMMA
+     * privata flöde — dedup, kvot, referensräkning och derivat är identiska;
+     * det enda som skiljer är vilken kolumn som sätts.
+     *
+     * `kind = image` är ett krav, som för containerns bild: en profilbild är
+     * alltid en bild (ADR-0076 § 2). Kravet ställs på den SNIFFADE typen och
+     * prövas före varje skrivning, i den privata store().
+     *
+     * `$user` är både ägaren (`attachment.user_id`) och uppladdaren
+     * (`uploaded_by_user_id`): det finns ingen annan som kan ladda upp någons
+     * profilbild.
+     *
+     * **Ingen händelselogg för en personbilaga.** `attachment.created`-meningen
+     * säger ":user added a file to :item", och en profilbild har varken item
+     * eller container — raden hade blivit en trasig mening i historiken. Den
+     * personliga bilden är dessutom en preferens och inte innehåll, och
+     * PurgeAttachment skriver ingen loggrad när den rensas (ADR-0076 § 2).
+     */
+    public function handleForUser(User $user, UploadedFile $file, Account $account): Attachment
+    {
+        return $this->store($user, $file, $user, $account, requiredKind: 'image');
+    }
+
+    private function store(Item|Container|User $owner, UploadedFile $file, User $user, Account $account, ?string $requiredKind = null): Attachment
     {
         // Hashen beräknas alltid på servern, ur den mottagna temporära
         // filen (Beslut 3); MIME-typen sniffas ur innehållet, aldrig ur
@@ -248,13 +279,15 @@ class StoreAttachment
 
                 $attachment = new Attachment;
 
-                // Exakt en av de två kolumnerna sätts — CHECK-villkoret i
-                // 2026_09_27_020000 upprätthåller det, och den här grenen är den
-                // enda som skriver dem.
+                // Exakt en av de tre kolumnerna sätts — CHECK-villkoret i
+                // 2026_11_14_000000 upprätthåller det, och den här grenen är
+                // den enda som skriver dem.
                 if ($owner instanceof Container) {
                     $attachment->container_id = $owner->id;
-                } else {
+                } elseif ($owner instanceof Item) {
                     $attachment->item_id = $owner->id;
+                } else {
+                    $attachment->user_id = $owner->id;
                 }
 
                 $attachment->stored_file_id = $storedFile->id;
@@ -284,20 +317,26 @@ class StoreAttachment
                 // raden när historiken visas (issue 116).
                 // Containern raden hör till, oavsett slag: itemets för en
                 // itembilaga, ägarcontainern för en containerbilaga.
-                $container = $owner instanceof Container ? $owner : $owner->container;
+                //
+                // En personbilaga skriver INGEN loggrad: `attachment.created`
+                // bär `:item`, och en profilbild har varken item eller
+                // container — se handleForUser().
+                if (! $owner instanceof User) {
+                    $container = $owner instanceof Container ? $owner : $owner->container;
 
-                $this->recordAuditEvent->handle(
-                    action: AuditLog::ACTION_ATTACHMENT_CREATED,
-                    account: $container->account,
-                    user: $user,
-                    container: $container,
-                    // Null för en containerbilaga: händelsen hör till containern
-                    // och inte till något item (issue 107, item_id är nullbar).
-                    item: $owner instanceof Item ? $owner : null,
-                    subjectType: 'attachment',
-                    subjectUlid: $attachment->ulid,
-                    meta: ['kind' => $attachment->kind],
-                );
+                    $this->recordAuditEvent->handle(
+                        action: AuditLog::ACTION_ATTACHMENT_CREATED,
+                        account: $container->account,
+                        user: $user,
+                        container: $container,
+                        // Null för en containerbilaga: händelsen hör till containern
+                        // och inte till något item (issue 107, item_id är nullbar).
+                        item: $owner instanceof Item ? $owner : null,
+                        subjectType: 'attachment',
+                        subjectUlid: $attachment->ulid,
+                        meta: ['kind' => $attachment->kind],
+                    );
+                }
 
                 // Resursen läser storedFile/billedAccount genom relationerna —
                 // sätt dem direkt så inget oplanerat lazy-load sker.
