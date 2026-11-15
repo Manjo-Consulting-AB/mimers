@@ -59,6 +59,7 @@ jobs:
           MAILGUN_ENDPOINT: ${{ secrets.MAILGUN_ENDPOINT }}
           MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
           SENTRY_LARAVEL_DSN: ${{ secrets.SENTRY_LARAVEL_DSN }}
+          SENTRY_JS_DSN: ${{ secrets.SENTRY_JS_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -109,6 +110,7 @@ jobs:
             "MAILGUN_ENDPOINT=$MAILGUN_ENDPOINT" \
             "MAILGUN_WEBHOOK_SIGNING_KEY=$MAILGUN_WEBHOOK_SIGNING_KEY" \
             "SENTRY_LARAVEL_DSN=$SENTRY_LARAVEL_DSN" \
+            "SENTRY_JS_DSN=$SENTRY_JS_DSN" \
             "SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT" \
           | ssh -p "$PORT" "$USER@$HOST" "umask 077; cat > $PATH_REMOTE/shared/.env.inkommande"
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE" < deploy/env-uppdatera.sh

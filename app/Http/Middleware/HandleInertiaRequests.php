@@ -195,6 +195,27 @@ use Inertia\Middleware;
  */
 class HandleInertiaRequests extends Middleware
 {
+    /**
+     * @return array{dsn: string, environment: string, release: string, user: ?string}|null
+     */
+    private function sentry(Request $request): ?array
+    {
+        $dsn = config('sentry.tracing.js_dsn');
+
+        if (! is_string($dsn) || $dsn === '') {
+            return null;
+        }
+
+        $ulid = $request->user()?->ulid;
+
+        return [
+            'dsn' => $dsn,
+            'environment' => (string) config('sentry.environment'),
+            'release' => (string) config('app.version'),
+            'user' => is_string($ulid) && $ulid !== '' ? ScrubSentryEvent::pseudonym($ulid) : null,
+        ];
+    }
+
     /** Klockan visar de tjugo senaste — se klassens docblock (issue 127). */
     private const INBOX_LIMIT = 20;
 
@@ -302,6 +323,11 @@ class HandleInertiaRequests extends Middleware
             // vanlig sidladdning ska inte bära den — se klassens docblock.
             'currencies' => Inertia::optional(fn (): array => Currencies::options(App::getLocale())),
             'locale' => fn (): string => App::getLocale(),
+            // Webbläsarens Sentry (issue 388): DSN, miljö och release kommer
+            // från servern, inte från bygget, eftersom samma artefakt rullas
+            // ut i staging och produktion. `null` utan DSN. DSN:en är offentlig
+            // av design. `user` är samma pseudonym som serverns (ScrubSentryEvent).
+            'sentry' => fn (): ?array => $this->sentry($request),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
                 'status' => fn (): ?string => $request->session()->get('status'),

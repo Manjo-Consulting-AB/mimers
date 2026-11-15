@@ -32,6 +32,9 @@ use function Pest\Laravel\withoutVite;
  * användaren och är en del av produkten, inte ett utvecklingsverktyg. Det är
  * det enda undantaget från den tomma listan, och det står utskrivet här så att
  * en tredje ny rad fortfarande fäller provet.
+ *
+ * `@sentry/vue` och `@sentry/vite-plugin` kom med issue 388 och står i
+ * `devDependencies` av samma skäl som `uqr`: paketet buntas in i bundeln.
  */
 it('har uqr och inget annat nytt paket', function () {
     $paket = json_decode(File::get(base_path('package.json')), true);
@@ -46,6 +49,8 @@ it('har uqr och inget annat nytt paket', function () {
 
     expect($utvecklingsberoenden)->toBe([
         '@inertiajs/vue3',
+        '@sentry/vite-plugin',
+        '@sentry/vue',
         '@tailwindcss/vite',
         '@vitejs/plugin-vue',
         'laravel-vite-plugin',

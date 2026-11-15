@@ -9,6 +9,8 @@
     },
     "devDependencies": {
         "@inertiajs/vue3": "^3.11.0",
+        "@sentry/vite-plugin": "^11.12.0",
+        "@sentry/vue": "^11.12.0",
         "@tailwindcss/vite": "^4.3.5",
         "@vitejs/plugin-vue": "^6.0.8",
         "laravel-vite-plugin": "^3.1",
