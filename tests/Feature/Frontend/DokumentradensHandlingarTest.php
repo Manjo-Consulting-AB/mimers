@@ -201,7 +201,9 @@ it('frågar med UiConfirmDialog innan Delete raderar på bilagefliken', function
     }
 
     // Bekräftelsen raderar på samma rutt som förut; bara dialogens bekräftelse når destroy().
-    expect($flik)->toMatch('/function destroy\(\) \{.*?router\.delete\(`\$\{itemUrl\(\)\}\/attachments\/\$\{attachment\.ulid\}`/s');
+    // Adressen byggs ur RADENS item sedan issue 1247, så en ättlings rad
+    // postar till sitt eget item och inte till sidans.
+    expect($flik)->toMatch('/function destroy\(\) \{.*?router\.delete\(`\$\{rowItemUrl\(attachment\)\}\/attachments\/\$\{attachment\.ulid\}`/s');
     expect($flik)->not->toContain('@destroy="destroy(');
 
     // Avbrott raderar inget, och fokus går tillbaka till More via triggern.

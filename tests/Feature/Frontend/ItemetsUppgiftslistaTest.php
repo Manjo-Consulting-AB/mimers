@@ -545,7 +545,7 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
 
 /*
  * Klart när: `ScheduleListSection.vue` innehåller `<TodoRow`,
- * `item.schedule.include_children` och `children`, och inte `router.delete`,
+ * `<IncludeChildrenSwitch` och `children`, och inte `router.delete`,
  * `is_active: !` eller `<OpenOccurrence`.
  */
 it('fliken ritar grupperna och reglaget men inga regelknappar', function () {
@@ -558,14 +558,16 @@ it('fliken ritar grupperna och reglaget men inga regelknappar', function () {
     expect($sektionen)->not->toContain('<OpenOccurrence');
 
     expect($sektionen)->toContain('<TodoRow')
-        ->toContain("t('item.schedule.include_children')")
+        ->toContain('<IncludeChildrenSwitch')
         ->toContain('children')
         ->toContain('v-for="(entries, group) in groups"')
         ->toContain('v-if="entries.length > 0"')
         ->toContain('t(`todo.group.${group}`)')
         ->toContain("t('item.schedule.empty')");
 
-    // Nycklarna finns i katalogen.
+    // Etiketten delas med *Documents* sedan issue 1247 och står i den
+    // utbrutna växeln; den gamla nyckeln finns kvar i katalogen.
+    expect(Lang::get('ui.item.attachment.include_children', [], 'en'))->toBe('Include child items');
     expect(Lang::get('ui.item.schedule.include_children', [], 'en'))->toBe('Include child items');
 });
 

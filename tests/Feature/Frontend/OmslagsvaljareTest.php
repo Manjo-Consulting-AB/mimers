@@ -153,7 +153,9 @@ it('ritar Use as cover på bilder utom omslaget och bara med can.update', functi
     $sektion = omslagsvaljareKalla('js/components/ItemAttachmentSection.vue');
     $vy = omslagsvaljareKalla('js/pages/Containers/Items/Show.vue');
 
-    expect($sektion)->toContain("v-if=\"can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid\"")
+    // Sedan issue 1247 står raden bara på itemets EGNA bilder: en ättlings
+    // rad kan inte sätta ett omslag på sidans item.
+    expect($sektion)->toContain("v-if=\"attachment.own && can.update && attachment.kind === 'image' && attachment.ulid !== coverUlid\"")
         ->toContain("t('item.attachment.use_as_cover')");
     expect($vy)->toContain(':cover-ulid="cover?.ulid ?? null"');
 });

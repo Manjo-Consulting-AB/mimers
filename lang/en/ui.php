@@ -3714,6 +3714,14 @@ return [
             'move_heading' => 'Move to item',
             'copy_heading' => 'Copy to item',
 
+            // Issue 1247 · [[ADR-0068 Itemets sida och skapandet]]
+            // § Uppföljning 2026-11-14 punkt 1: the *Include child items*
+            // switch on the documents tab. The label is the same words as on
+            // *Tasks* and is shared through IncludeChildrenSwitch.vue; the
+            // help line names the item the user stands on.
+            'include_children' => 'Include child items',
+            'children_help' => 'Shows documents from :item and its child items.',
+
             // Issue 61b decision 7: the four strings of the inline view. `alt`
             // is not among them — it is the filename and comes from the data.
             //

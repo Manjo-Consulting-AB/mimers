@@ -1,12 +1,14 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { router, usePage } from '@inertiajs/vue3';
+import { usePage } from '@inertiajs/vue3';
 import ContainerTaskQuickCreate from './ContainerTaskQuickCreate.vue';
+import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import UiCard from './UiCard.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiIcon from './UiIcon.vue';
+import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -38,12 +40,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * sidan ligger på, med `children=0` när den är av och utan parametern när den
  * är på — så ett avgränsat läge är en adress man kan spara, dela och backa ur
  * (issue 59a § Beslut 1). Servern äger svaret, och `props.includeChildren`
- * speglas med `watch` så att växeln följer servern efter en bakåtknapp eller en
+ * speglas i växeln så att den följer servern efter en bakåtknapp eller en
  * omladdning. Vänteläget stänger kontrollen medan svaret är på väg (issue 68a
- * § Beslut 4). Samma konstruktion som underhållsfiltret i
- * resources/js/pages/Containers/Tasks.vue, och samma form som
- * `UpcomingTasksToggle`: `role="switch"` med `aria-checked`, och etiketten
- * ligger i knappen och blir därför dess namn.
+ * § Beslut 4).
+ *
+ * **Knappen och navigeringen bor i två delade filer** (issue 1247 ·
+ * [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14 punkt 1):
+ * `IncludeChildrenSwitch.vue` ritar knappen och hjälptexten, och
+ * `useIncludeChildren.js` äger läget, vänteläget och `router.get`-anropet.
+ * *Documents* — och sedan *Costs* och *Loans* — använder samma två, så
+ * flikarna inte kan svara olika på samma val. Formen är densamma som förut:
+ * `role="switch"` med `aria-checked`, och etiketten ligger i knappen och blir
+ * därför dess namn.
  *
  * **En tom grupp ritas inte** (Beslut 4) — varken rubrik eller lista, och det
  * gäller också *Done*. Är allt tomt ritas `item.schedule.empty` i stället: en
@@ -121,17 +129,15 @@ watch(
     },
 );
 
-/* Växelns läge, speglat ur proppen — se docblocken ovan. */
-const onlyChildren = ref(props.includeChildren);
-
-/* Vänteläget för reglaget: en enda kontroll, en enda flagga (issue 68a). */
-const pending = ref(false);
-
-watch(
+/*
+ * Växeln: läget, vänteläget och navigeringen ur `useIncludeChildren`, så att
+ * *Documents* och de andra flikarna gör exakt samma sak (issue 1247). Adressen
+ * är flikens egen — `router.get` lägger parametern ovanpå querysträngen, så
+ * `tab=schedules` står kvar och `children=0` läggs till eller utelämnas.
+ */
+const { onlyChildren, pending, toggle: toggleChildren } = useIncludeChildren(
     () => props.includeChildren,
-    (value) => {
-        onlyChildren.value = value;
-    },
+    () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=schedules`,
 );
 
 /*
@@ -142,34 +148,6 @@ watch(
 const hasAnyTask = computed(
     () => props.completed.length > 0 || Object.values(props.groups).some((entries) => entries.length > 0),
 );
-
-/*
- * Flikens egen adress. `router.get` lägger parametern ovanpå querysträngen, så
- * `tab=schedules` står kvar och `children=0` läggs till eller utelämnas.
- */
-const tabUrl = () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=schedules`;
-
-/*
- * Växlingen vrider läget och skickar det — två steg, som kryssrutan före den
- * gjorde med `v-model` och `@change`. Knappen är avstängd medan svaret är på
- * väg, så ett dubbelklick kan inte vrida läget två gånger.
- */
-function toggleChildren() {
-    onlyChildren.value = ! onlyChildren.value;
-
-    apply();
-}
-
-function apply() {
-    const params = onlyChildren.value ? {} : { children: 0 };
-
-    router.get(tabUrl(), params, {
-        preserveState: true,
-        preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
-    });
-}
 
 /*
  * Snabbraden (M58 · issue 1210, ADR-0074 tillägg 2026-11-13). *New task*-
@@ -234,38 +212,17 @@ function onCreated(ulids) {
         </UiCard>
 
         <!--
-            Reglaget (Beslut 2 och 3). En växel och ingen kryssruta: läget är
-            ett värde i adressen, och svaret ritar servern. Etiketten ligger i
-            knappen, `aria-checked` säger läget, och `:disabled` stänger
-            kontrollen medan svaret är på väg (issue 68a § Beslut 4).
+            Reglaget (Beslut 2 och 3). Knappen och hjälptexten ritas av
+            IncludeChildrenSwitch (issue 1247), och läget, vänteläget och
+            navigeringen kommer ur useIncludeChildren — samma två filer som
+            *Documents* använder, så flikarna inte kan glida isär.
         -->
-        <button
-            type="button"
-            role="switch"
-            :aria-checked="onlyChildren ? 'true' : 'false'"
-            :disabled="pending"
-            class="mt-4 inline-flex min-h-11 w-fit items-center gap-2 text-meta font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-            @click="toggleChildren"
-        >
-            <span
-                aria-hidden="true"
-                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
-                :class="onlyChildren ? 'bg-accent' : 'bg-border'"
-            >
-                <span
-                    class="inline-block size-3.5 rounded-full bg-surface transition-transform"
-                    :class="onlyChildren ? 'translate-x-[1.25rem]' : 'translate-x-1'"
-                />
-            </span>
-
-            <span>{{ t('item.schedule.include_children') }}</span>
-        </button>
-
-        <!-- Hjälptexten står under etiketten och i linje med den: spåret är
-             36 px och gapet 8, alltså `pl-11`. -->
-        <p class="mt-1 pl-11 text-meta text-ink-muted">
-            {{ t('item.schedule.children_help', { item: itemName }) }}
-        </p>
+        <IncludeChildrenSwitch
+            :model-value="onlyChildren"
+            :pending="pending"
+            :help="t('item.schedule.children_help', { item: itemName })"
+            @update:model-value="toggleChildren"
+        />
 
         <!-- Snabbraden: rad noll, före det tomma läget och grupperna
              (ADR-0074 § 2). Utan platsknapp, platsen är itemet. -->

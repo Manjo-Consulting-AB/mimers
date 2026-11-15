@@ -82,18 +82,30 @@ it('rubrikkortet har ingen new task-knapp', function () {
 
 /*
  * Klart när: `role="switch"` och `item.schedule.children_help`.
+ *
+ * Sedan issue 1247 bor knappen i den delade `IncludeChildrenSwitch.vue` —
+ * *Documents* bär samma växel — medan flikens hjälptext och itemets namn
+ * står kvar i sektionen. Provet läser båda filerna, så utbrytningen inte kan
+ * tappa vare sig formen eller meningen.
  */
 it('reglaget är en växel med hjälptext', function () {
     $sektionen = itemuppgiftsflikKod('components/ScheduleListSection.vue');
+    $vaxeln = itemuppgiftsflikKod('components/IncludeChildrenSwitch.vue');
 
-    expect($sektionen)->toContain('role="switch"')
+    expect($vaxeln)->toContain('role="switch"')
         ->toContain(':aria-checked=')
-        ->toContain("t('item.schedule.include_children')")
+        ->toContain(':disabled="pending"')
+        ->toContain('{{ help }}')
+        ->toContain("t('item.attachment.include_children')");
+
+    // Sektionen använder växeln och äger sin egen mening.
+    expect($sektionen)->toContain('<IncludeChildrenSwitch')
         ->toContain("t('item.schedule.children_help', { item: itemName })");
 
     // Kryssrutan är borta: en växel och en kryssruta för samma val hade varit
     // två kontroller för ett tillstånd.
     expect($sektionen)->not->toContain('type="checkbox"');
+    expect($vaxeln)->not->toContain('type="checkbox"');
 
     // Hjälptexten namnger itemet man står på, och namnet är sidans — sektionen
     // frågar `page.props` i stället för att få det skickat till sig.
@@ -105,19 +117,23 @@ it('reglaget är en växel med hjälptext', function () {
 
 /*
  * Klart när: `children=0` står kvar.
+ *
+ * Navigeringen flyttade till `useIncludeChildren.js` i issue 1247; formen är
+ * densamma — samma rutt, samma parameter och samma vänteläge — och sektionen
+ * pekar fortfarande på sin egen flik.
  */
 it('reglaget navigerar som förut', function () {
     $sektionen = itemuppgiftsflikKod('components/ScheduleListSection.vue');
+    $composable = itemuppgiftsflikKod('composables/useIncludeChildren.js');
 
-    // Samma rutt, samma parameter och samma vänteläge som kryssrutan hade:
-    // valet är ett värde i adressen, och svaret ritar servern (issue 59a
-    // § Beslut 1, issue 68a § Beslut 4).
     expect($sektionen)->toContain('?tab=schedules')
-        ->toContain('children: 0')
-        ->toContain('router.get(tabUrl(), params')
+        ->toContain('@update:model-value="toggleChildren"');
+
+    expect($composable)->toContain('children: 0')
+        ->toContain('router.get(tabUrl()')
         ->toContain('preserveState: true')
         ->toContain('preserveScroll: true')
-        ->toContain(':disabled="pending"')
-        ->toContain('pending.value = true')
-        ->toContain('@click="toggleChildren"');
+        ->toContain('pending.value = true');
+
+    expect(itemuppgiftsflikKod('components/IncludeChildrenSwitch.vue'))->toContain(':disabled="pending"');
 });

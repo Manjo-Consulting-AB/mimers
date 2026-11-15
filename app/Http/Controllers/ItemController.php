@@ -17,6 +17,7 @@ use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Actions\Item\ResolveItemTreeRows;
+use App\Actions\Item\ResolveVisibleDescendants;
 use App\Actions\Item\UpdateItem;
 use App\Actions\Item\UpdateItemNotes;
 use App\Actions\Schedule\ListItemTasks;
@@ -661,7 +662,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap, RenderItemNotes $renderItemNotes): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap, RenderItemNotes $renderItemNotes, ResolveVisibleDescendants $resolveVisibleDescendants): Response
     {
         Gate::authorize('view', $item);
 
@@ -673,6 +674,20 @@ class ItemController extends Controller
         $item->loadMissing(['category', 'createdByAccount', 'tags']);
 
         $user = $request->user();
+
+        // Växeln *Include child items* (M24 · issue 227, Beslut 3; issue 1247
+        // · [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14
+        // punkt 1): förvalet är PÅ, och bara `?children=0` stänger av det.
+        // Läsningen bor här och inte i vyn — servern äger svaret — och den
+        // görs EN gång: flikarna *Documents*, *Tasks*, *Costs* och *Loans*
+        // delar svaret, och en flik som läser parametern själv hade kunnat
+        // svara något annat än proppen den fick.
+        //
+        // **Växeln gäller per flik.** `?children=0` rör bara den AKTIVA
+        // fliken, och flikradens `?tab=`-länkar bär aldrig parametern (se
+        // `tabs` i resources/js/pages/Containers/Items/Show.vue), så att
+        // stänga av på *Documents* inte påverkar *Costs*.
+        $includeChildren = $request->boolean('children', true);
 
         // Besöket skrivs EFTER grinden (issue 160 · [[ADR-0049 Nyligen
         // besökta]] § Beslut). Det är hela skillnaden mellan en visning och
@@ -753,10 +768,37 @@ class ItemController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        // Ättlingarnas bilagor (issue 1247 · [[ADR-0068 Itemets sida och
+        // skapandet]] § Uppföljning 2026-11-14 punkt 2 och 3). Bara när
+        // *Documents* är den aktiva fliken OCH växeln är på — de kostar en
+        // fråga var, och den som öppnar itemet för att se sina egna dokument
+        // ska inte betala för ättlingarnas.
+        //
+        // Mängden är App\Actions\Item\ResolveVisibleDescendants svar: id:n
+        // för de ättlingar anroparen når, med ett konstant antal frågor. Ett
+        // item läsaren inte får `view` på ritas aldrig, precis som i
+        // `ListItemTasks` (#696 Beslut 3).
+        //
+        // Sorteringen, relationerna och formen är `attachments` egna — nyast
+        // först, `created_at` fallande med `id` fallande — så en ättlings rad
+        // står i samma ordning som en egen hade gjort. `item` laddas eager
+        // därför att raden bär sitt items namn och ULID; containern hängs på
+        // för hand nedan, så `can`-grindarna inte slår upp den per rad.
+        $descendantAttachments = $request->query('tab') === 'attachments' && $includeChildren
+            ? Attachment::query()
+                ->whereIn('item_id', $resolveVisibleDescendants->handle($user, $item)->all())
+                ->with(['storedFile.derivatives', 'billedAccount', 'item'])
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get()
+            : new EloquentCollection;
+
         // Bilagans ULID → de varianter som faktiskt finns (issue 61b
         // § Beslut 1). Räknas EN gång och bärs av både `variants` och
-        // `cover` nedan.
-        $variants = $this->variants($attachments);
+        // `cover` nedan. Ättlingarnas bilagor räknas med (issue 1247):
+        // miniatyrerna på deras rader läses ur samma uppslag, och en
+        // `?variant=thumb` mot en bilaga utan derivat är 404.
+        $variants = $this->variants($attachments->concat($descendantAttachments));
 
         // Översiktens omslagsbild (issue 307 · [[M35 Itemets ikon och
         // kartans kort]] § 307). Upplösningen är samma Action som listan
@@ -857,12 +899,6 @@ class ItemController extends Controller
         // Relationerna i sitt resursformat, EN gång: `links`-proppen grupperar
         // de här raderna, och `counterparts` bygger urvalet ur samma lista.
         $linkRows = ItemLinkResource::collection($links)->resolve($request);
-
-        // Reglaget *Include child items* (M24 · issue 227, Beslut 3): förvalet
-        // är PÅ, och bara `?children=0` stänger av det (se proppen `itemTasks`
-        // nedan). Läsningen bor här och inte i vyn: servern äger svaret, och
-        // `itemTasks` byggs ur samma värde som proppen bär.
-        $includeChildren = $request->boolean('children', true);
 
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -1103,20 +1139,63 @@ class ItemController extends Controller
             // `/api`:s format och har inte bett om fältet.
             ...($auditRows === null ? [] : ['history' => $auditRows]),
 
+            // **Reglaget *Include child items* står i querysträngen** (M24 ·
+            // issue 227 Beslut 3; issue 1247 · [[ADR-0068 Itemets sida och
+            // skapandet]] § Uppföljning 2026-11-14 punkt 1): `?children=0`
+            // stänger av det, och förvalet är PÅ — det testarna bad om i #696
+            // får inte försvinna av ett utelämnat fält. `includeChildren`
+            // följer med som en egen prop, så vyn ritar sin kontroll ur
+            // serverns svar och inte ur ett klienttillstånd som kan gå isär
+            // från adressen efter en bakåtknapp.
+            //
+            // Proppen delas av flikarna som BÄR växeln — *Documents*,
+            // *Tasks*, *Costs* och *Loans* — och av ingen annan. *Tasks* äger
+            // sedan tidigare `itemTasks`; *Costs* och *Loans* får proppen här
+            // men ritar växeln först i sina egna issues (#1248, #1249).
+            ...(in_array($request->query('tab'), ['attachments', 'schedules', 'costs', 'loans'], true)
+                ? ['includeChildren' => $includeChildren]
+                : []),
+
+            // Ättlingarnas dokument (issue 1247): bara på *Documents* och
+            // bara med växeln på. Proppen finns då alltid — en tom lista är
+            // ett svar servern HAR gett (itemet saknar ättlingar med
+            // bilagor), medan en utelämnad nyckel betyder att frågan aldrig
+            // ställdes.
+            //
+            // Varje rad är `AttachmentResource` plus `item: {ulid, name}` och
+            // radens `can`. `item` ritar platsen och bygger radens adress —
+            // *Move…*, `Copy…`, *Back to Inbox* och *Delete* går mot radens
+            // item (ADR-0068 § Uppföljning punkt 3) — och `can` är RADENS
+            // flaggor, prövade med samma policyer som rutterna. Servern
+            // hängde containern på itemet ovan, så grindarna kostar inga
+            // frågor per rad.
+            ...($request->query('tab') === 'attachments' && $includeChildren
+                ? [
+                    'descendantAttachments' => $descendantAttachments
+                        ->map(function (Attachment $attachment) use ($user, $container, $request): array {
+                            $rowItem = $attachment->item;
+                            $rowItem->setRelation('container', $container);
+
+                            return [
+                                ...(new AttachmentResource($attachment))->resolve($request),
+                                'item' => ['ulid' => $rowItem->ulid, 'name' => $rowItem->name],
+                                'can' => [
+                                    'update' => Gate::forUser($user)->allows('update', $rowItem),
+                                    'delete' => Gate::forUser($user)->allows('delete', $rowItem),
+                                ],
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ]
+                : []),
+
             // Itemets uppgiftsflik (M24 · issue 227, Tonys beslut 2026-10-04).
             // Förekomsterna på itemet och — när reglaget är på — ättlingarna,
             // i samma grupper och med samma rad som containerns flik:
             // *Overdue → Today → This week → Upcoming → Done*. Frågan är
             // App\Actions\Schedule\ListItemTasks, och regellistan med pausa,
             // redigera och radera bor på schemats egen sida sedan issue 226.
-            //
-            // **Reglaget *Include child items* står i querysträngen** (Beslut
-            // 3): `?tab=schedules&children=0` stänger av det, och förvalet är
-            // PÅ — det testarna bad om i #696 får inte försvinna av ett
-            // utelämnat fält. `includeChildren` följer med som en egen prop, så
-            // vyn ritar sin kontroll ur serverns svar och inte ur ett
-            // klienttillstånd som kan gå isär från adressen efter en
-            // bakåtknapp.
             //
             // Proppen finns BARA när fliken är aktiv, samma konstruktion som
             // `history` ovan: ättlingarnas förekomster kostar egna frågor, och
@@ -1125,10 +1204,7 @@ class ItemController extends Controller
             // som `schedules`: `ItemResource` är
             // `/api`:s format och har inte bett om fältet.
             ...($request->query('tab') === 'schedules'
-                ? [
-                    'itemTasks' => $listItemTasks->handle($user, $request, $container, $item, $includeChildren),
-                    'includeChildren' => $includeChildren,
-                ]
+                ? ['itemTasks' => $listItemTasks->handle($user, $request, $container, $item, $includeChildren)]
                 : []),
 
             // Översiktens händelsepanel (issue 213 · [[ADR-0050
