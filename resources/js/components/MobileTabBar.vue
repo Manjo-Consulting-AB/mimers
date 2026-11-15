@@ -20,9 +20,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * de fyra andra flyttar sig inte för att en sida inte får skapa något.
  *
  * **Notiserna är klockan själv** (issue 127), inte en avskrift av den:
- * `NotificationBell` ritas i sin flikform, så taltutan, siffran och panelen är
- * desamma här som i sidhuvudet. Att bygga en andra klocka hade gett två
- * ställen att hålla i takt, och de två hade glidit isär inom samma milstolpe.
+ * `NotificationBell` ritas i sin flikform, så siffran och ikonen är desamma
+ * här som i sidhuvudet. Sedan M60 · issue 385 är flikformen en LÄNK till
+ * `/notifications` i stället för en panel — panelen är för bred för en
+ * telefon, och sidan bär historiken ([[ADR-0077 Notislistan i appen]] § 2).
+ * Att bygga en andra klocka hade gett två ställen att hålla i takt, och de
+ * två hade glidit isär inom samma milstolpe.
  *
  * **Träffytan är `min-h-11`** — 44 px ur issue 68a § Beslut 3. En flik i en
  * rad man träffar med tummen är hela skälet till att raden finns.

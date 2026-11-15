@@ -1693,6 +1693,53 @@ return [
 
             'submit' => 'Save quiet hours',
         ],
+
+        /*
+         * Notislistan i appen, see M60 · issue 385 and
+         * [[ADR-0077 Notislistan i appen]] § 2, 3 and 7. The words belong to
+         * the same `notifications` branch as the settings above, but the
+         * settings already own `notifications.type.<type>.label` and
+         * `.description`. The row messages therefore live under `list`, so
+         * the two surfaces can never shadow each other: a type is a dot name
+         * (`container.deleted`), and the lookup nests on the same dot.
+         *
+         * The three types with a message are the first ones that carry the
+         * `in_app` channel (§ 4). A type with no message gets the neutral
+         * `fallback`, never its own key (resources/js/i18n/translate.js).
+         */
+        'list' => [
+            'title' => 'Notifications',
+            'heading' => 'Notifications',
+
+            // The bell's accessible name: the count when there is one, and
+            // the bare name when there is nothing to count.
+            'bell' => 'Notifications',
+            'bell_unread' => 'Notifications, :count unread',
+
+            'see_all' => 'See all',
+            'mark_all_read' => 'Mark all as read',
+            'load_more' => 'Load more',
+            'empty' => 'You have no notifications.',
+            'fallback' => 'You have a new notification.',
+
+            // One sentence per type. `container.deleted` carries the reason in
+            // its payload, and the two sentences say the same as the email in
+            // lang/en/notiser.php: who deleted the container, and why.
+            'type' => [
+                'container' => [
+                    'deleted' => [
+                        'owner_deleted' => 'The container ":container" was deleted by its owner, who deleted their account. You no longer have access to it, or to anything you added there.',
+                        'account_inactive' => 'The container ":container" was deleted because the account that owned it had been inactive for 18 months. You no longer have access to it, or to anything you added there.',
+                    ],
+                ],
+                'transfer' => [
+                    'requested' => 'A transfer request is waiting for the container ":container".',
+                ],
+                'quota' => [
+                    'warning' => 'You have used :percent % of your storage space.',
+                ],
+            ],
+        ],
     ],
 
     // The container's calendar link, see issue 65b decisions 2 and 4 and

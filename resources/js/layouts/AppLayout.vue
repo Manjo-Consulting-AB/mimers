@@ -111,11 +111,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * på varje sida man faktiskt arbetar i. Den ritas bara för en inloggad
  * användare — samma villkor och samma skäl som sökfältet.
  *
- * Klockan äger sin egen form och sin egen läsning
- * (resources/js/components/NotificationBell.vue): den kostar en delad siffra
- * per sidladdning och hämtar sin lista först när den öppnas. Skalet skickar
+ * **Klockan läser notislistan sedan M60 · issue 385.** Den gamla klockan
+ * läste `notification` direkt; den här får antalet ur den delade proppen
+ * `notifications.unread` och öppnar en panel som hämtar `GET
+ * /notifications/panel` ([[ADR-0077 Notislistan i appen]] § 2, 3 och 7).
+ * Klockan äger fortfarande sin egen form, sin egen läsning och sin egen
+ * stängning (resources/js/components/NotificationBell.vue); skalet skickar
  * ingenting till den och håller inget av dess tillstånd — utom i flikraden,
- * där den ritas i sin flikform (issue 151).
+ * där den ritas i sin flikform och är en länk till `/notifications`
+ * (issue 151).
  *
  * **Plusknappen kom med issue 152** · [[ADR-0048 Mobilen och plusknappen]] § 2.
  * Den ritas i flikradens mitt på mobilen och i sidhuvudet över `md:`, och den
