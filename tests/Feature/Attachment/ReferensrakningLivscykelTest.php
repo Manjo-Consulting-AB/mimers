@@ -325,7 +325,7 @@ it('R5 · kontoraderingen lämnar räknaren rätt för bytes som ett annat konto
         'billed_account_id' => $aKonto->id,
     ]);
 
-    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($aKonto);
+    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($aKonto, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(Account::query()->whereKey($aKonto->id)->exists())->toBeFalse();
     expect(Container::withTrashed()->whereKey($aContainer->id)->exists())->toBeFalse();

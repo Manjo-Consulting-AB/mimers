@@ -302,7 +302,7 @@ it('ett raderat konto tar med sig sina notiser', function () {
 
     // Container-notiserna tas av PurgeContainer inuti DeleteAccount;
     // konto-notisen av raderingen efter containrarna (Beslut 8).
-    expect(fn () => $deleteAccount->handle($account))->not->toThrow(Throwable::class);
+    expect(fn () => $deleteAccount->handle($account, DeleteAccount::REASON_OWNER_DELETED))->not->toThrow(Throwable::class);
 
     expect(DB::table('notification')->where('account_id', $account->id)->exists())->toBeFalse();
     expect(DB::table('notification_delivery')->where('notification_id', $containerNotis->id)->exists())->toBeFalse();

@@ -54,8 +54,8 @@ it('listan bär varje typ med förvalet ifyllt', function () {
 
     $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
 
-    // Sex typer, alla med is_default true — inga rader finns, allt är förval.
-    expect($karta)->toHaveCount(6);
+    // Sju typer, alla med is_default true — inga rader finns, allt är förval.
+    expect($karta)->toHaveCount(7);
     foreach ($karta as $typ => $rad) {
         expect($typ)->toBeString();
         expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
@@ -76,7 +76,7 @@ it('listan bär inte kanalen webhook', function () {
 
     // Precis en rad per typ, alla för kanalen email — ingen webhook-rad som
     // inte gör något (31a § Beslut 4).
-    expect($karta)->toHaveCount(6);
+    expect($karta)->toHaveCount(7);
     foreach ($karta as $rad) {
         expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
     }
@@ -140,7 +140,7 @@ it('en uppdatering ändrar bara de typer som nämns', function () {
         'is_default' => false,
     ]);
 
-    // De sex onämnda typerna har fortfarande inga rader — förvalet gäller.
+    // De övriga typerna har fortfarande inga rader — förvalet gäller.
     foreach ($karta as $typ => $rad) {
         if ($typ !== Notification::TYPE_TASK_DUE) {
             expect($rad['is_default'])->toBeTrue();

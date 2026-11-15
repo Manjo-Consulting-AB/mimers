@@ -44,6 +44,12 @@ final class NotificationPreferences
         Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
         Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_ACCOUNT_INACTIVE => ['enabled' => true, 'digest' => false],
+        // `container.deleted` är på och levereras direkt, som
+        // `transfer.requested` (issue 1235). Typen borde inte gå att stänga
+        // av — den säger att åtkomsten redan är borta — men
+        // preferensmodellen har inget "obligatorisk"-läge, så den ligger här
+        // och kan stängas av som de andra. Se PR:ens Frågor och antaganden.
+        Notification::TYPE_CONTAINER_DELETED => ['enabled' => true, 'digest' => false],
     ];
 
     /**

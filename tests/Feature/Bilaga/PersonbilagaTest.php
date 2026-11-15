@@ -524,7 +524,7 @@ it('rensar personbilagan när kontot raderas, utan att falla på nyckeln', funct
 
     $stored = $bilaga->storedFile;
 
-    app(DeleteAccount::class)->handle($konto);
+    app(DeleteAccount::class)->handle($konto, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
     expect($stored->refresh()->reference_count)->toBe(0);

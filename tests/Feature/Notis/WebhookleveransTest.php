@@ -519,7 +519,7 @@ it('ett raderat konto tar med sig leveranser och endpoints', function () {
     expect(WebhookDelivery::query()->count())->toBe(2);
     expect($containerNotis->id)->not->toBe($kontoNotis->id);
 
-    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($account);
+    (new DeleteAccount(new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle($account, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(DB::table('account')->where('id', $account->id)->exists())->toBeFalse();
     expect(DB::table('webhook_endpoint')->count())->toBe(0);

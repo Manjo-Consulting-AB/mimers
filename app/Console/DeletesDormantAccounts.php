@@ -181,7 +181,9 @@ class DeletesDormantAccounts
                 return;
             }
 
-            $this->deleteAccount->handle($row);
+            // Skälet följer med till `container.deleted`-notiserna
+            // (issue 1235): kontot raderas för att det legat vilande.
+            $this->deleteAccount->handle($row, DeleteAccount::REASON_ACCOUNT_INACTIVE);
         });
     }
 

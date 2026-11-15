@@ -60,6 +60,8 @@ class Notification extends Model
 
     public const TYPE_ACCOUNT_INACTIVE = 'account.inactive';
 
+    public const TYPE_CONTAINER_DELETED = 'container.deleted';
+
     /**
      * Get the attributes that should be cast.
      *

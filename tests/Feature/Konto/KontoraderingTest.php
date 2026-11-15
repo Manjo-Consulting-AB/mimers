@@ -772,13 +772,13 @@ it('ett fallerande konto stoppar inte körningen', function () {
 
     $deleteAccount = new class(new PurgeContainer(new PurgeContent(new PurgeAttachment))) extends DeleteAccount
     {
-        public function handle(Account $account): void
+        public function handle(Account $account, string $reason): void
         {
             if ($account->name === 'Trasig') {
                 throw new RuntimeException('trasig konto');
             }
 
-            parent::handle($account);
+            parent::handle($account, $reason);
         }
     };
 

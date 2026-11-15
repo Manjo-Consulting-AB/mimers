@@ -462,7 +462,7 @@ it('raderna raderas när kontot raderas', function () {
     // ingen egen rad för `attachment_open`. Provet står här för att hålla
     // det påståendet: faller kedjan någonstans fastnar hela raderingen på
     // RESTRICT-nyckeln och transaktionen rullas tillbaka.
-    app(DeleteAccount::class)->handle($konto);
+    app(DeleteAccount::class)->handle($konto, DeleteAccount::REASON_OWNER_DELETED);
 
     expect(senastAntalRader())->toBe(0)
         ->and(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
