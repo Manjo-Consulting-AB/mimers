@@ -229,9 +229,12 @@ function removeIcon() {
 // osparad. Ingen *Save* hör hit — valet är en väljare, inte text.
 //
 // Urvalet läses ur `container.allowed_currencies` (ContainerResource).
-// Standardvalutan står alltid med som chip när ett urval finns, och har
-// ingen *Remove*: den är alltid tillåten utan att stå i urvalet (ADR-0078
-// § 4). Ett tomt urval betyder alla valutor och ritas som en mening.
+// Standardvalutan står alltid med som chip när ett urval finns — den är
+// alltid tillåten utan att stå i urvalet (ADR-0078 § 4). *Remove* hänger på
+// om koden står i det sparade urvalet, inte på om den är standardvaluta:
+// annars gick urvalet inte att tömma när standardvalutan också valts, eller
+// efter ett byte av containerns valuta. Ett tomt urval betyder alla valutor
+// och ritas som en mening.
 const page = usePage();
 
 const defaultCurrency = computed(() => props.currency ?? props.accountCurrency);
@@ -565,8 +568,10 @@ async function destroy() {
         Valutor för kostnader (issue 1254 · [[ADR-0078 Valutor ur ISO 4217]]
         § 4 och 5). Eget avsnitt efter ikonen och bilden, och varje ändring
         sparas direkt med en PUT av hela listan — ingen *Save* (Tonys regel
-        2026-11-14, #1245). Standardvalutan står alltid med och kan inte tas
-        bort: den är tillåten utan att stå i urvalet. Ett tomt urval betyder
+        2026-11-14, #1245). Standardvalutan står alltid med som chip; den är
+        tillåten utan att stå i urvalet. *Remove* visas på varje chip som
+        står i det sparade urvalet, även standardvalutan: ett urval som bara
+        innehåller standardvalutan måste gå att tömma. Ett tomt urval betyder
         alla valutor och sägs med en mening.
     -->
     <section v-if="can.update" class="mt-12 border-t border-border pt-6">
@@ -586,11 +591,11 @@ async function destroy() {
             >
                 <span class="text-body text-ink">{{ currencyLabel(code) }}</span>
 
-                <!-- Standardvalutan har ingen *Remove*: den är alltid tillåten
-                     och kan bara försvinna genom att containerns egen valuta
-                     ändras i formuläret ovan. -->
+                <!-- *Remove* hänger på om koden står i det sparade urvalet.
+                     En standardvaluta som saknas i urvalet ritas bara som
+                     chip: den är alltid tillåten och har inget att ta bort. -->
                 <button
-                    v-if="code !== defaultCurrency"
+                    v-if="selectedCurrencies.includes(code)"
                     type="button"
                     :disabled="currenciesPending"
                     class="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"

@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\File;
  *
  * **Källkodsprov, som grannfilerna.** Det som går att avgöra på serversidan
  * är formen: att avsnittet sparar direkt i stället för med en *Save*, att
- * standardvalutan saknar *Remove*, och att kostnadsformuläret väljer mellan
- * en enkel väljare och sökrutan på urvalets längd. Det som kräver en
- * webbläsare — att chipset ritas, att ett klick verkligen sparar, att
- * fokusordningen håller — står i PR:ns handprov.
+ * *Remove* följer det sparade urvalet (även för standardvalutan), och att
+ * kostnadsformuläret väljer mellan en enkel väljare och sökrutan på urvalets
+ * längd. Det som kräver en webbläsare — att chipset ritas, att ett klick
+ * verkligen sparar, att fokusordningen håller — står i PR:ns handprov.
  *
  * Kommentarer rensas före varje kontroll, som i GenomgangTest och SprakTest:
  * filerna är fulla av svenska docblock, och en regel som letar efter
@@ -73,17 +73,23 @@ it('sparar valutarändringen direkt med en PUT och hela listan', function () {
         ->and($avsnitt)->not->toContain('type="submit"');
 });
 
-it('låter standardvalutan stå med utan Remove', function () {
+it('ger Remove åt varje chip som står i urvalet, även standardvalutan', function () {
     $kod = tillatnavyKod('pages/Containers/Edit.vue');
     $avsnitt = tillatnavyAvsnitt();
 
-    // Standardvalutan läggs till i chipset och får ingen Remove-knapp.
+    // Standardvalutan läggs till i chipset när den saknas i urvalet ...
     expect($kod)->toContain('new Set([...selectedCurrencies.value, defaultCurrency.value])');
 
-    expect($avsnitt)->toContain('v-if="code !== defaultCurrency"')
+    // ... men *Remove* hänger på om koden står i det sparade urvalet, inte på
+    // om den är standardvaluta. Annars gick urvalet inte att tömma när
+    // standardvalutan också fanns i det — vare sig den valdes direkt eller
+    // blev standard efter ett byte av containerns valuta.
+    expect($avsnitt)->toContain('v-if="selectedCurrencies.includes(code)"')
         ->toContain("t('container.edit.currencies_standard'");
 
-    // Och ett tomt urval betyder alla — meningen står i avsnittet.
+    expect($avsnitt)->not->toContain('v-if="code !== defaultCurrency"');
+
+    // Ett tomt urval betyder alla — meningen står i avsnittet.
     expect($avsnitt)->toContain("t('container.edit.currencies_all')");
 });
 
