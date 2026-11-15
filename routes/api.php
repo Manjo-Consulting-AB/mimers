@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\ItemMoveController;
 use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MailgunWebhookController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\OccurrenceDependencyController;
 use App\Http\Controllers\Api\OwnershipTransferController;
@@ -613,6 +614,18 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/me/notification-preferences', [NotificationPreferenceController::class, 'index']);
     Route::put('/me/notification-preferences', [NotificationPreferenceController::class, 'update']);
     Route::patch('/me/quiet-hours', [QuietHoursController::class, 'update']);
+
+    // M60 · issue 384 · Notislistan i appen i `/api`, se
+    // App\Http\Controllers\Api\NotificationController och [[ADR-0077
+    // Notislistan i appen]] § 2 och 8. TOPPNIVÅrutter av samma skäl som
+    // preferensytan ovan: listan är anroparens EGEN, och den enda
+    // identifieraren är notisens ULID — den prövas mot `notification.user_id`
+    // så en annans rad ger 404, inte en tom markering. Samma tre actions som
+    // webben använder. `read-all` står före `{ulid}/read` därför att de två
+    // skiljer sig i antal segment och läsaren ska se samlingen först.
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll']);
+    Route::post('/notifications/{ulid}/read', [NotificationController::class, 'read']);
 
     // Issue 380 · Profilbilden, se App\Http\Controllers\Api\AvatarController
     // och [[ADR-0076 Profilbilden]] § 2, 3 och 6. Två toppnivårutter under

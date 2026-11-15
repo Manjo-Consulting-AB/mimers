@@ -40,6 +40,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
 use App\Http\Controllers\OverviewPanelController;
@@ -479,29 +480,55 @@ Route::middleware('auth')->group(function () {
         ->name('search');
 
     /*
-     * Issue 127 · Notisklockan, och issue 647 · dess Clear, se
-     * App\Http\Controllers\NotificationInboxController.
+     * M60 · issue 384 · Notislistan i appen på webben — sidan, panelens
+     * hämtning och de två markeringarna, se
+     * App\Http\Controllers\NotificationController och [[ADR-0077
+     * Notislistan i appen]] § 2, 3 och 8.
      *
-     * **TVÅ rutter och ingen sida.** Klockan sitter i sidhuvudet
-     * (resources/js/layouts/AppLayout.vue) på varje sida, och både listan och
-     * siffran kommer ur de delade propsen — listan som en optional prop som
-     * en partiell omladdning hämtar. Här finns alltså bara det klockan
-     * SKRIVER: att den öppnades, och att den rensades.
+     * **Sidan och panelen är två svar på samma fråga.** `/notifications` ritar
+     * listan med första sidan och en markör; `/notifications/panel` svarar
+     * JSON med de tio senaste och antalet olästa, eftersom panelen hämtas
+     * först när klockan öppnas (385) och listan inte ska bäras på varje
+     * sidladdning.
      *
-     * **Sökvägarna är `/notifications/read` och `/notifications/clear`, inte
-     * `/notifications`.** En POST mot samlingen hade lästs som "skapa en
-     * notis", och klockan skapar ingenting — den läser och rensar. `read` och
-     * `clear` är handlingarna.
+     * **Markeringen är en POST mot handlingen, inte mot samlingen.**
+     * `/notifications/read` bär `ulids[]` och rör bara anroparens egna rader;
+     * `/notifications/read-all` markerar alla. Ingen `throttle`: skrivningarna
+     * rör personens egen rad och kostar ingenting någon annan kan råka ut
+     * för — att hamra dem är att sätta sina egna rader till lästa, om och om
+     * igen.
      *
-     * Ingen `throttle`: skrivningarna rör användarens egen rad och kostar
-     * ingenting någon annan kan råka ut för. Att hamra dem är att sätta sina
-     * egna tidsstämplar till nu, om och om igen.
+     * **`read` behåller klockans gamla skrivning när kroppen saknar
+     * `ulids`.** Issue 127/647:s klocka
+     * (resources/js/components/NotificationBell.vue) postar samma rutt utan
+     * kropp, och den grenen ligger i kontrollern tills 385 ersätter klockan.
+     * `/notifications/clear` stannar hos
+     * App\Http\Controllers\NotificationInboxController — den hör till den
+     * gamla panelen och försvinner med den.
      *
-     * Ingen FormRequest: rutterna har ingen kropp att validera. Användaren
-     * kommer ur sessionen och tidsstämpeln ur serverns klocka.
+     * **Alla fyra bär `verified`, enligt § 3.** Issuen säger att allt kräver
+     * inloggning och verifierad adress, och det gäller även klockans gamla
+     * anrop (`read` utan `ulids`): en overifierad adress skickas till
+     * `/email/verify` när klockan öppnas. Den gamla klockan
+     * (resources/js/components/NotificationBell.vue) ersätts i 385, och
+     * `verified` gäller tills dess. API:ets tre rutter (§ 2) bär det inte —
+     * kravet står i § 3, som är webbens avsnitt.
      */
-    Route::post('/notifications/read', [NotificationInboxController::class, 'store'])
+    Route::get('/notifications', [NotificationController::class, 'index'])
+        ->middleware('verified')
+        ->name('notifications.index');
+
+    Route::get('/notifications/panel', [NotificationController::class, 'panel'])
+        ->middleware('verified')
+        ->name('notifications.panel');
+
+    Route::post('/notifications/read', [NotificationController::class, 'read'])
+        ->middleware('verified')
         ->name('notifications.read');
+
+    Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
+        ->middleware('verified')
+        ->name('notifications.read-all');
 
     Route::post('/notifications/clear', [NotificationInboxController::class, 'clear'])
         ->name('notifications.clear');
@@ -511,8 +538,9 @@ Route::middleware('auth')->group(function () {
      * fritt valt: Laravels `verified`-middleware skickar en overifierad
      * användare till just route('verification.notice'), och utan den här
      * rutten kraschar ramverket den dag någon sätter `verified` på en rutt.
-     * Ingen rutt har `verified` i den här issuen — kravet gäller att ta emot
-     * delning, inte att använda appen (routes/api.php).
+     * Notisrutterna ovan är den enda ytan som bär `verified` (M60 · issue
+     * 384 § 3); i övrigt gäller kravet att ta emot delning, inte att använda
+     * appen (routes/api.php).
      */
     Route::get('/email/verify', [VerifyEmailController::class, 'create'])
         ->name('verification.notice');
