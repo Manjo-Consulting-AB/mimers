@@ -211,6 +211,7 @@ it('in_app är påslagen som förval för de tre första typerna och avslagen f�
     expect($preferences->isEnabled($user, Notification::TYPE_TASK_DUE, NotificationDelivery::CHANNEL_EMAIL))->toBeTrue();
 });
 
+// vakt: e-posten ska komma ändå även när in_app slås på som förval; grönt på basen med flit.
 it('en avslagen in_app ger ingen rad men e-posten kommer ändå', function () {
     [$account, $user] = preferensKontext();
     NotificationPreference::factory()->create([
