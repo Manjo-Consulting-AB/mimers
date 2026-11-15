@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Cost;
 
+use App\Rules\IsoCurrency;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -26,7 +27,8 @@ use Illuminate\Foundation\Http\FormRequest;
  * det visar containerns valuta som förval. Ett värde som SKICKAS vinner
  * alltid och sparas ordagrant (versalnormaliserat) — arvet är ett förslag,
  * aldrig ett tvång. Ett tomt värde och en saknad nyckel betyder samma sak;
- * `alpha|size:3` gäller så fort ett värde är där.
+ * App\Rules\IsoCurrency gäller så fort ett värde är där, så bara en aktiv
+ * ISO 4217-kod kan lagras ([[ADR-0078 Valutor ur ISO 4217]] § 1).
  *
  * `item_id`, `container_id` och `created_by_*` accepteras ALDRIG här — de
  * sätts av kontrollern (§ Beslut 2 och 3). `currency` normaliseras till
@@ -75,10 +77,10 @@ class StoreCostEntryRequest extends FormRequest
             'amount' => ['present', 'string'],
             // `nullable` och inte `sometimes|required`: ett tomt värde och en
             // saknad nyckel betyder samma sak — "föreslå containerns" — och
-            // valet ligger i kontrollern. Formen prövas så fort ett värde är
-            // där, så en rad kan aldrig lagras med något annat än tre
-            // bokstäver.
-            'currency' => ['nullable', 'string', 'alpha', 'size:3'],
+            // valet ligger i kontrollern. Listan prövas så fort ett värde är
+            // där, så en rad kan aldrig lagras med en kod utanför ISO 4217
+            // ([[ADR-0078 Valutor ur ISO 4217]] § 1).
+            'currency' => ['nullable', 'string', new IsoCurrency],
             'description' => ['required', 'string', 'max:255'],
             'supplier' => ['nullable', 'string', 'max:255'],
             // Returadressen (issue 369 · M56). Formen prövas inte här: den

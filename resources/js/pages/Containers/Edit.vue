@@ -6,6 +6,7 @@ import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
+import CurrencyField from '../../components/CurrencyField.vue';
 import FormField from '../../components/FormField.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
 import ItemIconPicker from '../../components/ItemIconPicker.vue';
@@ -331,24 +332,17 @@ async function destroy() {
             <!-- Containerns egen valuta, se issue 85 · [[ADR-0037 Valutans
                  arv]]. Fältet är FÖRIFYLLT och ändringsbart, aldrig dolt:
                  rutan visar vad containern står på och vad en ny
-                 kostnadsrad föreslås i. Tre bokstäver, versaler —
-                 servern normaliserar till versaler, så `sek` och `SEK` är
-                 samma valuta. En tom ruta är svaret "ärv kontots", och
-                 därför står kontots valuta i hjälptexten och inte bara
-                 "kontots". Ingen lista att välja ur: en valuta är ingen
-                 uppräkning, och en lista i koden vore domänen inbyggd i
-                 den ([[ADR-0033 Produktens omfång]]). -->
-            <input
+                 kostnadsrad föreslås i. Sedan issue 1253 är det en sökruta
+                 över de aktiva ISO 4217-koderna ([[ADR-0078 Valutor ur ISO
+                 4217]] § 2), och en tom ruta är fortfarande svaret "ärv
+                 kontots" — därför `allow-empty`, och därför står kontots
+                 valuta i hjälptexten. -->
+            <CurrencyField
                 id="currency"
                 v-model="form.currency"
-                :aria-describedby="describedBy"
-                type="text"
-                name="currency"
-                maxlength="3"
-                autocomplete="off"
-                class="w-24 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
-                :placeholder="accountCurrency"
-            >
+                :described-by="describedBy"
+                allow-empty
+            />
         </FormField>
 
         <p class="-mt-2 text-sm text-slate-600">

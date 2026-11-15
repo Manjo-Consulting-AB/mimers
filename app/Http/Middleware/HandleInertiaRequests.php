@@ -20,6 +20,7 @@ use App\Models\Notification;
 use App\Models\RecentVisit;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Cost\Currencies;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Invitation\PendingInvitation;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,7 +37,7 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Sexton nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Arton nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -145,6 +146,15 @@ use Inertia\Middleware;
  * sidladdning bär den aldrig. Innehållet skiljer sig från `shellContainers`
  * ovan: den listar containrar som mål, den här listar ITEMS, och en container
  * utan valbara items utelämnas.
+ *
+ * **`currencies` kom med issue 1253** — de aktiva ISO 4217-koderna med namn
+ * på användarens språk, ur App\Support\Cost\Currencies
+ * ([[ADR-0078 Valutor ur ISO 4217]] § 1 och 2). Proppen är den SJÄTTE
+ * optionala och följer de fem andras mönster: listan behövs bara när ett
+ * valutafält får fokus, och sökrutan hämtar den med en partiell omladdning av
+ * just den här nyckeln. En vanlig sidladdning bär den aldrig — de tre
+ * formulären som använder fältet ritas på sidor där få fält öppnas, och
+ * `ResourceBundle`-uppslaget per kod är inte gratis.
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
@@ -261,6 +271,10 @@ class HandleInertiaRequests extends Middleware
             // mållistan behövs bara när målväljaren öppnas, och en vanlig
             // sidladdning ska inte bära den — se klassens docblock.
             'itemTargets' => Inertia::optional(fn (): array => $this->itemTargets($request)),
+            // Den sjätte optionala proppen, av samma skäl som de fem andra:
+            // valutalistan behövs bara när ett valutafält får fokus, och en
+            // vanlig sidladdning ska inte bära den — se klassens docblock.
+            'currencies' => Inertia::optional(fn (): array => Currencies::options(App::getLocale())),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
