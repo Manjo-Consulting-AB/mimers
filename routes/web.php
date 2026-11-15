@@ -506,25 +506,28 @@ Route::middleware('auth')->group(function () {
      * App\Http\Controllers\NotificationInboxController — den hör till den
      * gamla panelen och försvinner med den.
      *
-     * **Ingen `verified`, som de andra apprutterna.** Verifieringskravet i
-     * den här appen gäller att ta emot delning, inte att använda appen (se
-     * `verification.notice` nedan och routes/api.php). Ingen annan rutt bär
-     * `verified`, och API:ets tre rutter gör det inte heller — webben och
-     * API:et svarar lika. På `read` hade kravet dessutom brutit klockan:
-     * resources/js/components/NotificationBell.vue postar dit, och en
-     * overifierad användare hade skickats till `/email/verify` i stället för
-     * att få siffran nollställd.
+     * **Alla fyra bär `verified`, enligt § 3.** Issuen säger att allt kräver
+     * inloggning och verifierad adress, och det gäller även klockans gamla
+     * anrop (`read` utan `ulids`): en overifierad adress skickas till
+     * `/email/verify` när klockan öppnas. Den gamla klockan
+     * (resources/js/components/NotificationBell.vue) ersätts i 385, och
+     * `verified` gäller tills dess. API:ets tre rutter (§ 2) bär det inte —
+     * kravet står i § 3, som är webbens avsnitt.
      */
     Route::get('/notifications', [NotificationController::class, 'index'])
+        ->middleware('verified')
         ->name('notifications.index');
 
     Route::get('/notifications/panel', [NotificationController::class, 'panel'])
+        ->middleware('verified')
         ->name('notifications.panel');
 
     Route::post('/notifications/read', [NotificationController::class, 'read'])
+        ->middleware('verified')
         ->name('notifications.read');
 
     Route::post('/notifications/read-all', [NotificationController::class, 'readAll'])
+        ->middleware('verified')
         ->name('notifications.read-all');
 
     Route::post('/notifications/clear', [NotificationInboxController::class, 'clear'])
@@ -535,8 +538,9 @@ Route::middleware('auth')->group(function () {
      * fritt valt: Laravels `verified`-middleware skickar en overifierad
      * användare till just route('verification.notice'), och utan den här
      * rutten kraschar ramverket den dag någon sätter `verified` på en rutt.
-     * Ingen rutt har `verified` i den här issuen — kravet gäller att ta emot
-     * delning, inte att använda appen (routes/api.php).
+     * Notisrutterna ovan är den enda ytan som bär `verified` (M60 · issue
+     * 384 § 3); i övrigt gäller kravet att ta emot delning, inte att använda
+     * appen (routes/api.php).
      */
     Route::get('/email/verify', [VerifyEmailController::class, 'create'])
         ->name('verification.notice');
