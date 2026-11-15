@@ -1,6 +1,6 @@
 # ADR-0045 Radering av konto och person
 
-**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · Uppföljning 2026-09-28 om länken som bär sig själv · Uppföljning 2026-11-14 om att delade containrar inte spärrar (§ 3 och Konsekvenser justerade 2026-11-14) · [[ADR-index]]
+**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · Uppföljning 2026-09-28 om länken som bär sig själv · Uppföljning 2026-11-14 om att delade containrar inte spärrar (§ 3 och Konsekvenser justerade 2026-11-14) · Uppföljning 2026-11-15 om att räknade rader följer samma flytt som bilagor · [[ADR-index]]
 
 Tonys beslut 2026-09-26, vid planeringen av [[M22 Redo för testare]].
 
@@ -162,3 +162,7 @@ En upplysning är ingen spärr. Säkerhetssidan ritar dem i två olika rutor, oc
 
 - Koden ändras i #1235 (notisen), #1236 (personraderingen) och #1237 (livscykeln).
 - Beslut 3 ovan står kvar i övrigt: ensam ägare och rättslig spärr spärrar som förut, och en aktiv prenumeration spärrar fortfarande inte.
+
+## Uppföljning 2026-11-15
+
+Regeln i § Beslut 1, att främmande bilagor flyttar till containerns ägarkonto, gäller nu också de rader som räknas mot kvoten (items, kategorier, taggar, scheman, kostnadsrader, utlåningar och anteckningar på förekomster). Den gäller inte bara vid kontoradering utan också vid nedgradering och när ett konto förlorar sin sista giltiga åtkomst till containern. Flytten sker utan kvotprövning, som förut. Se [[ADR-0081 All lagrad data räknas mot kvoten]] § 4.
