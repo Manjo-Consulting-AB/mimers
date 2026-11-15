@@ -93,6 +93,19 @@ watch(src, () => {
     natural.value = { width: 0, height: 0 };
 });
 
+/*
+ * En annan bild börjar om från början, även med `medium`.
+ *
+ * `src`-vakten ovan nollställer felet och måtten, men `fallbackToThumb` är
+ * ett minne om just den här bilden: har ett `medium` en gång saknats ska
+ * MINIATYREN begäras för den bilden — inte för varje bild resten av
+ * sessionen. Utan nollställningen hade en 320 px-miniatyr ritats uppskalad i
+ * redigeraren efter ett byte.
+ */
+watch(() => avatar.value?.ulid, () => {
+    fallbackToThumb.value = false;
+});
+
 const focus = computed(() => avatar.value?.focus ?? { x: 50, y: 50 });
 const zoom = computed(() => avatar.value?.zoom ?? 100);
 
@@ -109,11 +122,19 @@ const crop = computed(() => avatarCrop({
     zoom: zoom.value,
 }));
 
+/*
+ * Bildens mått och plats. Tills `natural` är känt ritas den DOLD: `crop`
+ * svarar en kvadrat medan måtten är noll, och en synlig bild hade då
+ * sträckts ut till rutan en kort blink — vid varje byte av bild eller
+ * variant, som fallbacken till miniatyren. `visibility` och inte `display`:
+ * elementet ska behålla sin plats så `load` fortfarande landar.
+ */
 const imageStyle = computed(() => ({
     width: `${crop.value.width}px`,
     height: `${crop.value.height}px`,
     left: `${crop.value.left}px`,
     top: `${crop.value.top}px`,
+    visibility: natural.value.width > 0 ? 'visible' : 'hidden',
 }));
 
 const initials = computed(() => {

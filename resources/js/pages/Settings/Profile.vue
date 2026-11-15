@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, useId } from 'vue';
+import { computed, ref, useId, watch } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
@@ -7,7 +7,7 @@ import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
 import UiSheet from '../../components/UiSheet.vue';
 import UserAvatar from '../../components/UserAvatar.vue';
-import { avatarCrop } from '../../composables/useAvatarCrop.js';
+import { avatarDragFocus, avatarFocusRange, avatarNudgeFocus } from '../../composables/useAvatarCrop.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -158,11 +158,16 @@ function removeAvatar() {
  * avataren, så det man ser i masken är exakt vad avataren visar — och masken
  * ovanpå mörklägger hörnen utanför cirkeln.
  *
- * **Punkten flyttas med pekaren och med piltangenterna.** Dragningen mäts i
- * bildpunkter mot bildens RITADE bredd (ur `avatarCrop`), inte mot rutan:
- * vid zoom är bilden bredare än rutan, och en fast procent per pixel hade
- * gjort draget olika känsligt vid olika zoom. Piltangenterna flyttar 2
- * procent, 10 med Shift.
+ * **Punkten flyttas med pekaren och med piltangenterna.** Båda utgår från den
+ * EFFEKTIVA punkten — den som faktiskt syns — och klamras till det intervall
+ * som går att nå vid aktuell zoom (useAvatarCrop.js § avatarFocusRange). Utan
+ * det hade ett sparat värde nära kanten först ätit upp ett dött område där
+ * bilden står stilla medan talet rör sig, och nästa zoom hade hoppat till en
+ * punkt personen aldrig såg. Dragningen mäts i bildpunkter mot bildens RITADE
+ * bredd, inte mot rutan: vid zoom är bilden bredare än rutan, och en fast
+ * procent per pixel hade gjort draget olika känsligt vid olika zoom.
+ * Piltangenterna flyttar 2 procent, 10 med Shift; zoomen klamrar om punkten
+ * när den ändras, så utkastet alltid är nåbart.
  *
  * **Allt är lokalt till dess att Save trycks.** Reset sätter mitten och
  * 100 %, Cancel stänger utan att skriva — arket öppnas alltid med de sparade
@@ -193,14 +198,8 @@ const editorUser = computed(() => ({
         },
 }));
 
-const editorCrop = computed(() => avatarCrop({
-    imageWidth: editorNatural.value.width,
-    imageHeight: editorNatural.value.height,
-    box: EDITOR_SIZE,
-    focusX: editorFocus.value.x,
-    focusY: editorFocus.value.y,
-    zoom: editorZoom.value,
-}));
+/* Bilden har laddats: först då går det att dra i den. */
+const editorReady = computed(() => editorNatural.value.width > 0 && editorNatural.value.height > 0);
 
 /*
  * Maskens stil: en cirkel i mitten lämnas genomskinlig, resten av ytan bär
@@ -230,22 +229,53 @@ function onEditorImageLoad(matt) {
     editorNatural.value = matt;
 }
 
+/*
+ * Zoomen ändras: punkten klamras om till det intervall som går att nå vid
+ * den nya zoomen. Utan det kunde utkastet peka på en punkt som bilden inte
+ * längre kan visa, och nästa drag hade börjat i ett dött område. Steget är
+ * noll — samma räkning som pilarna, bara utan rörelse.
+ */
+watch(editorZoom, () => {
+    if (!editorReady.value) {
+        return;
+    }
+
+    editorFocus.value = avatarNudgeFocus({
+        imageWidth: editorNatural.value.width,
+        imageHeight: editorNatural.value.height,
+        box: EDITOR_SIZE,
+        focusX: editorFocus.value.x,
+        focusY: editorFocus.value.y,
+        zoom: editorZoom.value,
+    });
+});
+
 const dragging = ref(false);
 const dragStart = ref(null);
 
 function startDrag(event) {
-    if (!(editorCrop.value.width > 0)) {
+    if (!editorReady.value) {
         return;
     }
 
     event.preventDefault();
 
+    // Utgångsläget är den punkt som SYNS, inte det sparade talet.
+    const bounds = avatarFocusRange({
+        imageWidth: editorNatural.value.width,
+        imageHeight: editorNatural.value.height,
+        box: EDITOR_SIZE,
+        focusX: editorFocus.value.x,
+        focusY: editorFocus.value.y,
+        zoom: editorZoom.value,
+    });
+
     dragging.value = true;
     dragStart.value = {
         x: event.clientX,
         y: event.clientY,
-        focusX: editorFocus.value.x,
-        focusY: editorFocus.value.y,
+        focusX: bounds.focusX,
+        focusY: bounds.focusY,
     };
 
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -257,17 +287,17 @@ function dragMove(event) {
     }
 
     const start = dragStart.value;
-    const crop = editorCrop.value;
 
-    // Bilden följer fingret: dras den åt höger hamnar en punkt längre till
-    // vänster i rutans mitt, alltså minskar fokus-x.
-    const x = start.focusX - (event.clientX - start.x) * 100 / crop.width;
-    const y = start.focusY - (event.clientY - start.y) * 100 / crop.height;
-
-    editorFocus.value = {
-        x: Math.round(Math.min(100, Math.max(0, x))),
-        y: Math.round(Math.min(100, Math.max(0, y))),
-    };
+    editorFocus.value = avatarDragFocus({
+        imageWidth: editorNatural.value.width,
+        imageHeight: editorNatural.value.height,
+        box: EDITOR_SIZE,
+        focusX: start.focusX,
+        focusY: start.focusY,
+        zoom: editorZoom.value,
+        deltaX: event.clientX - start.x,
+        deltaY: event.clientY - start.y,
+    });
 }
 
 function endDrag(event) {
@@ -285,27 +315,33 @@ function endDrag(event) {
 
 function onEditorKeydown(event) {
     const step = event.shiftKey ? 10 : 2;
-    let x = editorFocus.value.x;
-    let y = editorFocus.value.y;
+    let stepX = 0;
+    let stepY = 0;
 
     if (event.key === 'ArrowLeft') {
-        x -= step;
+        stepX = -step;
     } else if (event.key === 'ArrowRight') {
-        x += step;
+        stepX = step;
     } else if (event.key === 'ArrowUp') {
-        y -= step;
+        stepY = -step;
     } else if (event.key === 'ArrowDown') {
-        y += step;
+        stepY = step;
     } else {
         return;
     }
 
     event.preventDefault();
 
-    editorFocus.value = {
-        x: Math.min(100, Math.max(0, x)),
-        y: Math.min(100, Math.max(0, y)),
-    };
+    editorFocus.value = avatarNudgeFocus({
+        imageWidth: editorNatural.value.width,
+        imageHeight: editorNatural.value.height,
+        box: EDITOR_SIZE,
+        focusX: editorFocus.value.x,
+        focusY: editorFocus.value.y,
+        zoom: editorZoom.value,
+        stepX,
+        stepY,
+    });
 }
 
 function resetCrop() {

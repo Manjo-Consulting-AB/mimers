@@ -14,10 +14,13 @@ use Illuminate\Support\Facades\Lang;
  * ritar `UserAvatar`, att redigeraren PATCH:ar rätt adress, att reglaget har
  * gränserna 100 och 300, och att katalogen har nycklarna.
  *
- * **Räkningen prövas på riktigt.** `avatarCrop` i
+ * **Räkningen prövas på riktigt.** `avatarCrop`, `avatarFocusRange`,
+ * `avatarDragFocus` och `avatarNudgeFocus` i
  * resources/js/composables/useAvatarCrop.js körs i node med kända fall, samma
  * grepp som DatumregelTest använder för useRelativeDate.js. En andra upplaga
- * av formeln i provet hade kunnat vara grön medan ytan ritade fel.
+ * av formeln i provet hade kunnat vara grön medan ytan ritade fel — och
+ * redigerarens drag och piltangenter hade kunnat räkna på ett värde som
+ * ritningen klamrar.
  *
  * Kommentarerna rensas före varje kontroll, som i GenomgangTest: docblocken
  * förklarar `?variant=thumb` och initialerna, och en regel som letar efter dem
@@ -217,4 +220,107 @@ it('räknar utsnittet med kända fall', function () {
     expect($zoom['visibleX'])->toBe(0.5)
         ->and($zoom['visibleY'])->toBe(0.5)
         ->and($zoom['width'])->toBe(200);
+});
+
+/*
+ * Klart när: redigeraren flyttar punkten med drag och piltangenter.
+ *
+ * `avatarFocusRange` ger den punkt som FAKTISKT syns och intervallet som går
+ * att nå. Utan den började ett drag i det sparade talet, och en punkt nära
+ * kanten hade först ätit upp ett dött område — bilden står stilla medan
+ * talet rör sig, och nästa zoom hoppar till en punkt personen aldrig såg.
+ *
+ * Kända fall, alla i en 100-ruta med en 200×100-bild vid 100 %:
+ * 1. **Sparad punkt 0 ritas som 25.** Överflödet är 100 px, alltså klamras
+ *    förskjutningen till 50 px, och 50 av 200 px är 25 %.
+ * 2. **Intervallet är 25–75 i x och en enda punkt i y**, där höjden redan
+ *    täcker rutan.
+ * 3. **Ett drag börjar i 25**, inte i 0: 50 px åt vänster ger 50. Ett drag
+ *    för långt åt höger stannar på 25 i stället för att lämna bilden.
+ * 4. **Piltangenterna börjar också i 25**: +2 ger 27, och ett stort steg
+ *    stannar vid 75.
+ * 5. **En kvadratisk bild vid 100 % kan inte flyttas alls** — intervallet är
+ *    50–50, så ett drag ändrar ingenting och ett sparande kan inte hoppa vid
+ *    nästa zoom.
+ */
+it('räknar drag och piltangenter ur den effektiva punkten', function () {
+    $bred = ['imageWidth' => 200, 'imageHeight' => 100, 'box' => 100, 'zoom' => 100];
+
+    $omrade = utsnittvyKör('m.avatarFocusRange('.json_encode(
+        $bred + ['focusX' => 0, 'focusY' => 0],
+    ).')');
+
+    expect($omrade['focusX'])->toBe(25)
+        ->and($omrade['focusY'])->toBe(50)
+        ->and($omrade['minX'])->toBe(25)
+        ->and($omrade['maxX'])->toBe(75)
+        ->and($omrade['minY'])->toBe(50)
+        ->and($omrade['maxY'])->toBe(50);
+
+    $vanster = utsnittvyKör('m.avatarDragFocus('.json_encode(
+        $bred + ['focusX' => 0, 'focusY' => 0, 'deltaX' => -50],
+    ).')');
+
+    expect($vanster)->toBe(['x' => 50, 'y' => 50]);
+
+    $forlangt = utsnittvyKör('m.avatarDragFocus('.json_encode(
+        $bred + ['focusX' => 0, 'focusY' => 0, 'deltaX' => 200],
+    ).')');
+
+    expect($forlangt)->toBe(['x' => 25, 'y' => 50]);
+
+    $steg = utsnittvyKör('m.avatarNudgeFocus('.json_encode(
+        $bred + ['focusX' => 0, 'focusY' => 0, 'stepX' => 2],
+    ).')');
+
+    expect($steg)->toBe(['x' => 27, 'y' => 50]);
+
+    $bort = utsnittvyKör('m.avatarNudgeFocus('.json_encode(
+        $bred + ['focusX' => 50, 'focusY' => 50, 'stepX' => 50],
+    ).')');
+
+    expect($bort)->toBe(['x' => 75, 'y' => 50]);
+
+    $kvadrat = utsnittvyKör('m.avatarDragFocus('.json_encode(
+        ['imageWidth' => 100, 'imageHeight' => 100, 'box' => 100, 'zoom' => 100,
+            'focusX' => 0, 'focusY' => 0, 'deltaX' => 50, 'deltaY' => 50],
+    ).')');
+
+    expect($kvadrat)->toBe(['x' => 50, 'y' => 50]);
+});
+
+/*
+ * Klart när: återställer och avbryter.
+ *
+ * Reset sätter mitten och 100 % — inget annat — och Cancel stänger arket utan
+ * att skriva. Källprovet fäller en Reset som glömmer zoomen, och en Cancel
+ * som anropar något annat än `closeEditor` (till exempel `saveCrop`, som
+ * hade sparat ett utkast personen valde bort).
+ *
+ * Ytan frågar SAMMA rena funktioner som provet ovan: ett källprov som bara
+ * letade efter `router.patch` hade varit grönt även om drag och piltangenter
+ * räknade på det sparade talet i stället för den effektiva punkten.
+ */
+it('återställer utsnittet med Reset och stänger med Cancel utan att spara', function () {
+    $profil = utsnittvyKod('pages/Settings/Profile.vue');
+
+    preg_match('/function resetCrop\(\)\s*\{(.*?)\n\}/s', $profil, $reset);
+
+    expect($reset)->toHaveCount(2, 'resetCrop finns inte i Profile.vue');
+
+    expect($reset[1])->toContain('editorFocus.value = { x: 50, y: 50 }')
+        ->toContain('editorZoom.value = 100');
+
+    preg_match(
+        '/@click="([^"]+)"[^>]*>\s*\{\{\s*t\(\'settings\.profile\.avatar\.cancel\'\)\s*\}\}/s',
+        $profil,
+        $cancel,
+    );
+
+    expect($cancel)->toHaveCount(2, 'Cancel-knappen finns inte i Profile.vue');
+    expect($cancel[1])->toBe('closeEditor');
+
+    expect($profil)->toContain('avatarFocusRange(')
+        ->toContain('avatarDragFocus(')
+        ->toContain('avatarNudgeFocus(');
 });
