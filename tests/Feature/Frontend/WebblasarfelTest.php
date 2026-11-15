@@ -87,6 +87,9 @@ it('laddar upp källkartor bara med SENTRY_AUTH_TOKEN och tar bort dem ur artefa
         ->and($vite)->toContain('uploadSourcemaps && sentryVitePlugin(')
         ->and($yml)->toContain("find public/build -name '*.map' -delete");
 
+    // npm ci körs i ett eget steg före det som har token.
+    expect(strpos($yml, 'npm ci'))->toBeLessThan(strpos($yml, 'SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}'));
+
     // Borttagningen kommer efter bygget och före paketeringen.
     expect(strpos($yml, 'npm run build'))->toBeLessThan(strpos($yml, "-name '*.map' -delete"))
         ->and(strpos($yml, "-name '*.map' -delete"))->toBeLessThan(strpos($yml, 'tar -czf'));
