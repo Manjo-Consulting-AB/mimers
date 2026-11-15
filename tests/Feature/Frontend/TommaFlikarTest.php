@@ -42,7 +42,7 @@ function tommaFlikarFlikar(): array
     return [
         'Relations' => ['components/ItemLinkSection.vue', '<UiEmptyState v-else', 'item.links.empty', 'item.show.add_relation', 'can.update && counterparts.length > 0', 'item'],
         'Documents' => ['components/ItemAttachmentSection.vue', '<UiEmptyState v-if="rows.length === 0"', 'item.attachment.empty', 'item.show.add_document', 'can.create', 'attachment-file'],
-        'Costs' => ['components/ItemCostSection.vue', '<UiEmptyState v-if="costs.length === 0"', 'item.cost.empty', 'item.show.add_cost', 'can.create', 'cost-incurred-on'],
+        'Costs' => ['components/ItemCostSection.vue', '<UiEmptyState v-if="visibleCosts.length === 0"', 'item.cost.empty', 'item.show.add_cost', 'can.create', 'cost-incurred-on'],
         'Loans' => ['components/ItemLoanSection.vue', '<UiEmptyState v-else', 'item.loan.not_lent', 'item.loan.form_heading', 'can.create', 'borrower_name'],
     ];
 }

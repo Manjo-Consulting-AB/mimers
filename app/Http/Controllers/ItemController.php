@@ -38,6 +38,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Loan;
@@ -855,6 +856,55 @@ class ItemController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        // Ättlingarnas kostnadsrader (issue 1248 · [[ADR-0068 Itemets sida
+        // och skapandet]] § Uppföljning 2026-11-14 punkt 2 och 4). Bara när
+        // *Costs* är den aktiva fliken OCH växeln är på — raderna kostar en
+        // fråga, och den som öppnar itemet för att se sina egna kostnader ska
+        // inte betala för ättlingarnas.
+        //
+        // Mängden är App\Actions\Item\ResolveVisibleDescendants svar, samma
+        // som *Documents* använder: id:n för de ättlingar anroparen NÅR. Ett
+        // item läsaren inte får `view` på ritas aldrig — och räknas därför
+        // heller aldrig i summorna nedan, eftersom de byggs ur samma rader.
+        //
+        // Sorteringen, relationerna och formen är `costs` egna —
+        // `incurred_on` fallande med `id` fallande — så en ättlings rad står
+        // i samma ordning som en egen hade gjort. `item` laddas eager därför
+        // att raden bär sitt items namn och ULID; containern hängs på för
+        // hand nedan, så `can`-grindarna inte slår upp den per rad.
+        $descendantCosts = $request->query('tab') === 'costs' && $includeChildren
+            ? CostEntry::query()
+                ->whereIn('item_id', $resolveVisibleDescendants->handle($user, $item)->all())
+                ->with(['createdByAccount', 'item'])
+                ->orderByDesc('incurred_on')
+                ->orderByDesc('id')
+                ->get()
+            : new EloquentCollection;
+
+        // Summorna på *Costs* räknar det som VISAS (issue 1248 ·
+        // [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14
+        // punkt 4): itemets egna rader, och ättlingarnas när växeln är på.
+        // Formen och regeln är App\Support\Cost\CostReport::totals() —
+        // `{currency, amount, count}` grupperat per valuta, aldrig en summa
+        // över två — så talet här och talet på containerns kostnadsflik
+        // räknas på samma sätt. `amount` är heltalet i minsta enhet, som
+        // CostEntryResource bär det.
+        //
+        // Summan räknas ur SAMMA rader som propparna delar, aldrig ur en
+        // egen fråga: en summa som inte stämmer med listan under sig är
+        // precis den andra sanning [[ADR-0040 Underträdets summor]]
+        // § Konsekvenser förbjuder.
+        $costTotals = $costs->concat($descendantCosts)
+            ->groupBy('currency')
+            ->map(fn (Collection $rows, string $currency): array => [
+                'currency' => $currency,
+                'amount' => (int) $rows->sum('amount'),
+                'count' => $rows->count(),
+            ])
+            ->sortKeys()
+            ->values()
+            ->all();
+
         // Historikfliken (issue 116 · [[ADR-0043 Tre loggar]]
         // § Händelseloggen). Raderna läses genom App\Actions\Audit\
         // ListAuditEvents — samma läsregel som containerns historiksida och
@@ -1012,6 +1062,49 @@ class ItemController extends Controller
             // `Api\CostEntryController::index()` svarar med, byggd ur samma
             // fråga som listan ovan.
             'costs' => CostEntryResource::collection($costs)->resolve($request),
+
+            // Ättlingarnas kostnadsrader (issue 1248): bara på *Costs* och
+            // bara med växeln på. Proppen finns då alltid — en tom lista är
+            // ett svar servern HAR gett (itemet saknar ättlingar med
+            // kostnader), medan en utelämnad nyckel betyder att frågan aldrig
+            // ställdes.
+            //
+            // Varje rad är CostEntryResource plus `item: {ulid, name}` och
+            // radens `can`. `item` ritar platsen och bygger radens adress —
+            // *Change* och *Remove the row* går mot radens item (ADR-0068
+            // § Uppföljning punkt 3) — och `can` är RADENS flaggor, prövade
+            // med samma policyer som rutterna. Servern hängde containern på
+            // itemet ovan, så grindarna kostar inga frågor per rad.
+            ...($request->query('tab') === 'costs' && $includeChildren
+                ? [
+                    'descendantCosts' => $descendantCosts
+                        ->map(function (CostEntry $cost) use ($user, $container, $request): array {
+                            $rowItem = $cost->item;
+                            $rowItem->setRelation('container', $container);
+
+                            return [
+                                ...(new CostEntryResource($cost))->resolve($request),
+                                'item' => ['ulid' => $rowItem->ulid, 'name' => $rowItem->name],
+                                'can' => [
+                                    'update' => Gate::forUser($user)->allows('update', $rowItem),
+                                    'delete' => Gate::forUser($user)->allows('delete', $rowItem),
+                                ],
+                            ];
+                        })
+                        ->values()
+                        ->all(),
+                ]
+                : []),
+
+            // Summorna på *Costs* (issue 1248 · ADR-0068 § Uppföljning
+            // punkt 4): en post per valuta över exakt de rader fliken ritar —
+            // egna alltid, ättlingarnas med växeln på. Formen är
+            // CostReport::totals() och räknas i `$costTotals` ovan; vyn
+            // summerar aldrig själv. Bara på *Costs*: ingen annan flik ritar
+            // dem.
+            ...($request->query('tab') === 'costs'
+                ? ['costTotals' => $costTotals]
+                : []),
 
             // Formulärets förval: containerns valuta enligt arvet
             // ([[ADR-0037 Valutans arv]]). Fältet är förifyllt och
