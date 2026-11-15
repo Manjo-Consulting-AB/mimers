@@ -514,6 +514,40 @@ it('hämtar skalets strängar ur ui.php', function () {
 });
 
 /*
+ * Delningssidans strängar — den enda listan, raden och nivåfältet, issue
+ * 1250. Samma form som proven ovanför: nycklarna läses ur källkoden, så en
+ * mening som läggs till i vyn och glöms i katalogen faller, och en nyckel
+ * som byter namn följer med utan att provet skrivs om.
+ *
+ * De dynamiska uppslagen — `sharing.role.${participant.role}`,
+ * `sharing.kind.${access.kind}` och `sharing.level.${level}.label` — fångas
+ * inte av mönstret; de byggs ur värden servern äger och prövas där de
+ * används.
+ */
+it('hämtar delningssidans strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/pages/Containers/Sharing.vue',
+        'js/components/ContainerAccessRow.vue',
+        'js/components/AccessLevelField.vue',
+        'js/components/accessPresentation.js',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    expect($nycklar)->toContain('sharing.accesses.people_heading')
+        ->toContain('sharing.accesses.updated')
+        ->toContain('sharing.accesses.remove');
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * Formulärets och föräldraväljarens strängar (issue 153), samma form som
  * skalets prov ovanför: nycklarna läses ur källkoden i stället för att räknas
  * upp här, så en mening som läggs till i formuläret och glöms i katalogen

@@ -581,11 +581,16 @@ it('redovisar en inbjudan till ett mjukraderat item med sitt namn', function () 
 });
 
 /*
- * Beslut 5: formuläret är sidan från 55a:s tredje sektion, med samma grind som
- * Åtkomster, och det ritas bara för den som får skriva. Nivåfältet är 55a:s
- * AccessLevelField, oförändrat — fyra nivåer, två synliga.
+ * Beslut 5: formuläret är delningssidans inbjudningssektion, med samma grind
+ * som åtkomsterna, och det ritas bara för den som får skriva. Nivåfältet är
+ * 55a:s AccessLevelField, oförändrat — fyra nivåer, två synliga.
+ *
+ * Sedan issue 1250 står sektionen direkt efter den enda listan, *People with
+ * access*, och historiken ligger sist i ett hopfällt avsnitt. Det som prövas
+ * här är innehållet och grinden, inte ordningen — den ägs av
+ * DelningsvyTest.
  */
-it('har inbjudningsformuläret som tredje sektion på delningssidan', function () {
+it('har inbjudningsformuläret som egen sektion på delningssidan', function () {
     $sida = File::get(resource_path('js/pages/Containers/Sharing.vue'));
     $formular = File::get(resource_path('js/components/InvitationForm.vue'));
 

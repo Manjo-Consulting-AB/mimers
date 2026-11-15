@@ -4608,11 +4608,6 @@ return [
         'title' => 'Sharing',
         'heading' => 'Sharing',
 
-        'participants' => [
-            'heading' => 'Participants',
-            'description' => 'Everyone with access to the container right now. An account counts as one participant, never as its members.',
-        ],
-
         'role' => [
             'owner' => 'Owner',
             'member' => 'Member',
@@ -4621,17 +4616,21 @@ return [
         ],
 
         'accesses' => [
-            'heading' => 'Accesses',
-            'description' => 'Everything shared from the container, and the history of what has been revoked or expired.',
+            /*
+             * Issue 1250: ONE list, *People with access*. The participants
+             * list and the access list said the same thing twice, and the
+             * level selector — the thing the owner came here to use — was at
+             * the bottom in small rows. The owner account is the first row
+             * and carries no controls; every valid access has its own row
+             * with the name in body size and the scope underneath.
+             */
+            'people_heading' => 'People with access',
 
             // No level may delete the container, manage accesses or start a
             // transfer of ownership. Stated once on the page, not per row.
             'limits' => 'No access grants the right to delete the container, manage accesses or start a transfer of ownership. That is always the owner account.',
 
             'level' => 'Level',
-            'grantee' => 'Recipient',
-            'granted_by' => 'Granted by',
-            'expires' => 'Expires :date',
 
             // The recipient and the granter are shown by NAME, never by ULID.
             // Neither `User` nor `Account` uses SoftDeletes, so a row can in
@@ -4649,11 +4648,17 @@ return [
             'expires_at' => 'Valid until',
             'expires_fixed' => 'The expiry can be moved forward but not removed. A guest that should become permanent is revoked and invited again as a member.',
 
-            'save' => 'Save level',
-            'revoke' => 'Revoke',
+            // Issue 1250: a selector saves at once, text is saved with a
+            // button. The row says what happened instead of showing a *Save*
+            // it does not have.
+            'updated' => 'Access updated',
+            'remove' => 'Remove access',
+            'remove_heading' => 'Remove this access?',
+            'remove_body' => 'The person loses access immediately. Access can be granted again only through a new invitation.',
         ],
 
-        // The third section, see issue 55b decision 5. The list shows the
+        // The invitations section, see issue 55b decision 5, and since issue
+        // 1250 the section directly after the one list. The list shows the
         // address — that is the whole difference from the access list above,
         // and it is the sender's own list of what she has sent. The gate is
         // the same (`viewAccesses()`), and `invitations` is `null` for anyone
@@ -4686,7 +4691,11 @@ return [
         ],
 
         'history' => [
-            'heading' => 'History',
+            // Issue 1250 § 3: the section moved last and folds, and its
+            // heading says what is in it rather than just *History* — the
+            // page has a second history-shaped idea (the invitations), and
+            // the old word could have meant either.
+            'heading' => 'Revoked and expired access',
             'revoked' => 'Revoked :date',
             'expired' => 'Expired :date',
         ],

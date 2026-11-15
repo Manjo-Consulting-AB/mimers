@@ -1,65 +1,89 @@
 <script setup>
-import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { router } from '@inertiajs/vue3';
 import AccessLevelField from './AccessLevelField.vue';
-import { accessKindLabel, accessScopeLabel, formatDate, grantedByLabel, granteeLabel } from './accessPresentation.js';
+import UiConfirmDialog from './UiConfirmDialog.vue';
+import { accessScopeLabel, granteeLabel } from './accessPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * En giltig åtkomstrad i förvaltningsvyn, se issue 55a § Beslut 5, 6 och 9.
+ * En personrad i delningssidans enda lista, se issue 1250.
  *
- * Egen komponent och inte en v-for i Sharing.vue: varje rad har sitt EGET
- * formulär och sin EGEN PATCH — annars färgar ett valideringsfel på en rad
- * alla andra röda, och ett `form.processing` hade låst varje spara-knapp på
- * sidan. Samma konstruktion och samma skäl som 53c:s AccountSettingsForm.
+ * **Ett val sparas direkt, text sparas med *Save*** — Tonys regel från
+ * Containers/Edit.vue (issue 1245). Raden har därför ingen *Save*: nivån
+ * skickas i sin egen PATCH så fort den ändras, och gästens utgångsdatum i sin
+ * egen. `preserveState` håller sidan kvar, så statusraden står kvar på raden
+ * och listan inte hoppar.
  *
- * **Mottagaren och beviljaren visas med namn, aldrig med sin ULID.**
- * `ContainerAccessResource` bär ULID:er — `/api` har inte bett om namn — och
- * uppslagen kommer som egna propar ur kontrollern. Formuleringen bor i
+ * **Egen komponent och inte en v-for i Sharing.vue.** Varje rad har sin egen
+ * skrivning och sitt eget vänteläge — annars låser ett nivåval varje annan
+ * rad på sidan, och ett fältfel på en rad hade blivit ett fel på alla.
+ * Samma konstruktion och samma skäl som 53c:s AccountSettingsForm.
+ *
+ * **Mottagaren visas med namn, aldrig med sin ULID.** `ContainerAccessResource`
+ * bär ULID:er — `/api` har inte bett om namn — och uppslaget kommer som egen
+ * prop ur kontrollern. Formuleringen bor i
  * resources/js/components/accessPresentation.js, som historiklistan i
  * Sharing.vue anropar på samma sätt.
  *
  * **`kind` går inte att ändra.** Den är `prohibited` i
  * UpdateContainerAccessRequest, och att byta form på en relation är att
- * avsluta den och börja en ny — därför visas den som en mening och aldrig som
- * en väljare (Beslut 5). Inte heller `item` eller mottagaren går att ändra.
+ * avsluta den och börja en ny. Inte heller `item` eller mottagaren går att
+ * ändra.
  *
- * **Omfånget och `reach` är hela poängen med raden** (Beslut 6): en rad med
- * `item` och `reach: 4` ska läsas som "motorn — och tre saker till". Talet
- * kommer färdigt ur resursen och räknas inte om här; se
+ * **Omfånget och `reach` är hela poängen med raden**: en rad med `item` och
+ * `reach: 4` ska läsas som "motorn — och tre saker till". Talet kommer
+ * färdigt ur resursen och räknas inte om här; se
  * resources/js/components/accessPresentation.js.
  *
- * **Utgången är ett smalt fält** (arkitektsvaret § 3). Det renderas bara på
- * en rad som REDAN har ett `expires_at` — i praktiken en `guest`. Att ge en
- * permanent relation ett slutdatum är ett annat beslut, och ingen har bett
- * om det. `min` är i morgon och inte i dag, för `after:now` tolkar dagens
- * datum som midnatt bakåt och avvisar det.
+ * **Utgången är ett smalt fält.** Det renderas bara på en rad som REDAN har
+ * ett `expires_at` — i praktiken en `guest`. Att ge en permanent relation ett
+ * slutdatum är ett annat beslut, och ingen har bett om det. `min` är i morgon
+ * och inte i dag, för `after:now` tolkar dagens datum som midnatt bakåt och
+ * avvisar det. Fältet skickas ENSAMT i sin PATCH: `sometimes` i den delade
+ * FormRequesten lämnar då nivån orörd, och tvärtom.
  *
- * **Ingen väg att tömma utgången.** Formuläret bär `expires_at` bara när
- * raden har ett, så nyckeln skickas aldrig som `null` — den delade
- * UpdateContainerAccessRequest tillåter det, men webbytan erbjuder det inte:
- * en `guest` utan utgång motsäger § Beslut 5, och vägen från gäst till
- * permanent går genom `kind`, som är `prohibited` med flit. Raden under
- * fältet säger det, i stället för att ägaren ska leta efter en knapp som
- * inte finns.
+ * **Ingen väg att tömma utgången.** Nyckeln skickas bara när raden har ett
+ * datum, alltså aldrig som `null` — den delade UpdateContainerAccessRequest
+ * tillåter det, men webbytan erbjuder det inte: en `guest` utan utgång
+ * motsäger § Beslut 5, och vägen från gäst till permanent går genom `kind`,
+ * som är `prohibited` med flit. Att tömma `type="date"` ger `''` och inte
+ * `null`, så `saveExpiry` fångar det tomma värdet FÖRE anropet och ställer
+ * tillbaka fältet: annars hade servern gjort `''` till `null` och rensat
+ * utgången. Raden under fältet säger det, i stället för att ägaren ska leta
+ * efter en knapp som inte finns.
  *
- * **Återkalla är en <Link method="delete">**, inte ett eget formulär: rutten
- * är en DELETE och Inertia skickar CSRF-tokenet åt oss, samma mönster som
- * utloggningsknappen i AppLayout. Ingen knapp döljs eller stängs av här —
- * behörighetskontroller görs i policies, aldrig genom att gömma en knapp
- * ([[M10 Webbfrontend]]), och ett fryst ägarkonto som får 403 på PATCH får
- * den förklaringen i en rad på sidan i stället.
+ * **Borttagningen går genom UiConfirmDialog.** Dialogen är appens egen fråga
+ * (issue 330), och fokusfällan är webbläsarens `<dialog>`; `trigger` lämnar
+ * tillbaka fokus till knappen som öppnade den. `pending` håller dialogen kvar
+ * medan DELETE-anropet är i luften, så den inte försvinner mitt i en
+ * radering. Ingen egen Inertia-länk med metod delete och ingen
+ * webbläsardialog: frågan ska se ut som resten av produkten.
+ *
+ * **Ett misslyckat anrop ställer tillbaka det visade värdet.** `onError`
+ * anropas bara för ett valideringssvar (422). Ett fryst ägarkonto får 403 på
+ * PATCH, och ett nätfel eller ett avbrutet anrop ger inget svar alls — ingen
+ * av dem når `onError`. Utfallet avgörs därför i `onFinish`, där propen bär
+ * serverns värde: sparades ingenting ställs väljaren och datumfältet tillbaka
+ * i stället för att visa ett värde ägaren tror gäller. Samma mekanism bär
+ * borttagningens besked: raden säger att det inte gick, i stället för att
+ * dialogen stängs som om åtkomsten var borta.
+ *
+ * **Ingen knapp döljs eller stängs av efter behörighet.** Behörighetskontroller
+ * görs i policies, aldrig genom att gömma en knapp ([[M10 Webbfrontend]]),
+ * och ett fryst ägarkonto som får 403 på PATCH får den förklaringen i en rad
+ * på sidan i stället — se `sharing.frozen` i Sharing.vue. `:disabled` här
+ * betyder "ett anrop pågår", inte "du får inte".
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     access: { type: Object, required: true },
     itemNames: { type: Object, required: true },
     granteeNames: { type: Object, required: true },
-    grantedByNames: { type: Object, required: true },
     levels: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
-const page = usePage();
 
 /* Fältets id måste vara unikt på sidan — varje rad har samma fältnamn. */
 const field = (name) => `access-${props.access.ulid}-${name}`;
@@ -82,96 +106,246 @@ const tomorrow = (() => {
     return dateInput(date);
 })();
 
-/*
- * `expires_at` finns i formuläret bara när raden har ett värde. Utan det
- * villkoret hade nyckeln gått med som `null` på varje medlemsrad, och
- * `nullable` i den delade FormRequesten hade tolkat det som en tömning.
- */
-const form = useForm(
-    hasExpiry
-        ? { level: props.access.level, expires_at: dateInput(props.access.expires_at) }
-        : { level: props.access.level },
-);
+const url = `/containers/${props.containerUlid}/accesses/${props.access.ulid}`;
 
-function submit() {
-    // `preserveScroll`: sidan visar en lista, och ett hopp till toppen efter
-    // en sparad nivå tappar läsarens plats.
-    form.patch(`/containers/${props.containerUlid}/accesses/${props.access.ulid}`, { preserveScroll: true });
+/*
+ * Radens visade värden. Serverns svar skriver över dem genom propen — Inertia
+ * behåller komponenten mellan två anrop (`preserveState`), och en lokal
+ * kopia som inte nollställs hade då kunnat visa ett värde servern nekat.
+ * Därför sätts den tillbaka uttryckligen vid fel.
+ */
+const level = ref(props.access.level);
+const expiresAt = ref(hasExpiry ? dateInput(props.access.expires_at) : null);
+
+/* Ett anrop pågår: väljaren, datumfältet och borttagningsknappen är stängda. */
+const pending = ref(false);
+const levelError = ref(null);
+const expiryError = ref(null);
+const status = ref(null);
+
+/* Bekräftelsedialogen och elementet fokus går tillbaka till. */
+const confirming = ref(false);
+const removeTrigger = ref(null);
+const revoking = ref(false);
+const removeError = ref(null);
+
+/*
+ * Nivån, sparad direkt. Kroppen bär bara `level`: `sometimes` i den delade
+ * FormRequesten lämnar `expires_at` orörd, så ett nivåval flyttar aldrig ett
+ * gästkontos utgång.
+ *
+ * Utfallet avgörs i `onFinish` och inte i `onError`: bara ett
+ * valideringssvar (422) når `onError`, medan ett fryst konto (403) och ett
+ * nätfel går förbi den. Propen är serverns värde, så när den inte bär det
+ * valda värdet efter anropet har ingenting sparats — och då ställs väljaren
+ * tillbaka.
+ */
+function saveLevel(value) {
+    if (value === props.access.level) {
+        return;
+    }
+
+    let saved = false;
+
+    level.value = value;
+    levelError.value = null;
+    status.value = null;
+
+    router.patch(url, { level: value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            pending.value = true;
+        },
+        onFinish: () => {
+            pending.value = false;
+
+            if (! saved) {
+                level.value = props.access.level;
+            }
+        },
+        onSuccess: () => {
+            saved = true;
+            status.value = 'updated';
+        },
+        onError: (errors) => {
+            levelError.value = errors.level ?? errors.expires_at ?? null;
+        },
+        onCancel: () => {
+            level.value = props.access.level;
+        },
+    });
+}
+
+/* Utgången, sparad direkt och i sin egen PATCH av samma skäl som nivån.
+ * Samma utfallskontroll som `saveLevel`: ett 403 eller ett nätfel anropar
+ * aldrig `onError`, så fältet ställs tillbaka i `onFinish` när propen inte
+ * bär det nya datumet.
+ */
+function saveExpiry() {
+    const saved = hasExpiry ? dateInput(props.access.expires_at) : null;
+
+    /*
+     * Ett tömt `<input type="date">` ger `''`, inte `null` (backspace eller
+     * Rensa). Servern gör `''` till `null`, och `nullable` hade då rensat
+     * gästens utgång — en gest hade räckt. Ett tomt värde är därför inget att
+     * spara: fältet ställs tillbaka innan anropet.
+     */
+    if (! expiresAt.value) {
+        expiresAt.value = saved;
+
+        return;
+    }
+
+    if (expiresAt.value === saved) {
+        return;
+    }
+
+    let stored = false;
+
+    expiryError.value = null;
+    status.value = null;
+
+    router.patch(url, { expires_at: expiresAt.value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            pending.value = true;
+        },
+        onFinish: () => {
+            pending.value = false;
+
+            if (! stored) {
+                expiresAt.value = hasExpiry ? dateInput(props.access.expires_at) : null;
+            }
+        },
+        onSuccess: () => {
+            stored = true;
+            status.value = 'updated';
+        },
+        onError: (errors) => {
+            expiryError.value = errors.expires_at ?? errors.level ?? null;
+        },
+        onCancel: () => {
+            expiresAt.value = hasExpiry ? dateInput(props.access.expires_at) : null;
+        },
+    });
+}
+
+function openRemove(element) {
+    removeTrigger.value = element;
+    confirming.value = true;
+}
+
+/*
+ * Borttagningen, med besked när den inte gick igenom. Dialogen stängs i
+ * `onFinish` — också efter ett 403 eller ett nätfel — och då säger raden att
+ * anropet misslyckades i stället för att tyst se ut som att åtkomsten är
+ * borta. Samma utfallskontroll som `saveLevel`, av samma skäl.
+ */
+function remove() {
+    let removed = false;
+
+    removeError.value = null;
+
+    router.delete(url, {
+        preserveScroll: true,
+        onStart: () => {
+            revoking.value = true;
+        },
+        onFinish: () => {
+            revoking.value = false;
+            confirming.value = false;
+
+            if (! removed) {
+                removeError.value = t('error.generic');
+            }
+        },
+        onSuccess: () => {
+            removed = true;
+        },
+    });
 }
 </script>
 
 <template>
-    <li class="flex flex-col gap-3 rounded border border-slate-300 bg-white p-4">
-        <p class="text-sm text-slate-800">{{ accessKindLabel(t, access) }}</p>
+    <li class="flex flex-col gap-3 rounded-card border border-border bg-surface p-4">
+        <!-- Namnet är radens titel och står först; omfånget under det. En
+             person med två åtkomster får två rader med samma namn, och det
+             är meningen — det är två olika omfång, inte två personer. -->
+        <div class="flex flex-col gap-1">
+            <span class="text-body font-medium text-ink">{{ granteeLabel(t, granteeNames, access) }}</span>
+            <span class="text-meta text-ink-muted">{{ accessScopeLabel(t, itemNames, access) }}</span>
+        </div>
 
-        <dl class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
-            <div class="flex gap-1">
-                <dt>{{ t('sharing.accesses.grantee') }}</dt>
-                <dd>{{ granteeLabel(t, granteeNames, access) }}</dd>
-            </div>
-            <div class="flex gap-1">
-                <dt>{{ t('sharing.accesses.granted_by') }}</dt>
-                <dd>{{ grantedByLabel(t, grantedByNames, access) }}</dd>
-            </div>
-        </dl>
+        <AccessLevelField
+            :id="field('level')"
+            :model-value="level"
+            :levels="levels"
+            :error="levelError"
+            :disabled="pending"
+            @update:model-value="saveLevel"
+        />
 
-        <p v-if="access.expires_at" class="text-xs text-slate-600">
-            {{ t('sharing.accesses.expires', { date: formatDate(access.expires_at, page.props.locale) }) }}
+        <div v-if="hasExpiry" class="flex flex-col gap-1">
+            <label :for="field('expires_at')" class="text-meta font-medium text-ink">
+                {{ t('sharing.accesses.expires_at') }}
+            </label>
+
+            <input
+                :id="field('expires_at')"
+                v-model="expiresAt"
+                :disabled="pending"
+                :aria-describedby="expiryError ? `${field('expires_at')}-error` : undefined"
+                type="date"
+                :min="tomorrow"
+                class="min-h-11 self-start rounded-control border border-border bg-surface px-2 text-body text-ink disabled:opacity-50"
+                @change="saveExpiry"
+            >
+
+            <p class="text-meta text-ink-muted">{{ t('sharing.accesses.expires_fixed') }}</p>
+
+            <p
+                v-if="expiryError"
+                :id="`${field('expires_at')}-error`"
+                role="alert"
+                class="text-body text-danger"
+            >
+                {{ expiryError }}
+            </p>
+        </div>
+
+        <!-- Statusraden: valet sparades, och här står vad som hände. Beskedet
+             bär `role="status"`; fältfelen bär `role="alert"` där de hör. -->
+        <p v-if="status" role="status" class="text-meta text-ink-subtle">
+            {{ t('sharing.accesses.updated') }}
         </p>
 
-        <p class="text-sm font-medium text-slate-800">{{ accessScopeLabel(t, itemNames, access) }}</p>
+        <!-- Borttagningen gick inte igenom. Felet bär `role="alert"` och står
+             på raden, dit blicken redan är — dialogen är stängd. -->
+        <p v-if="removeError" role="alert" class="text-body text-danger">
+            {{ removeError }}
+        </p>
 
-        <form class="flex flex-col gap-3" @submit.prevent="submit">
-            <AccessLevelField
-                v-model="form.level"
-                :id="field('level')"
-                :levels="levels"
-                :error="form.errors.level"
-            />
-
-            <div v-if="hasExpiry" class="flex flex-col gap-1">
-                <label :for="field('expires_at')" class="text-sm font-medium text-slate-800">
-                    {{ t('sharing.accesses.expires_at') }}
-                </label>
-
-                <input
-                    :id="field('expires_at')"
-                    v-model="form.expires_at"
-                    :aria-describedby="form.errors.expires_at ? `${field('expires_at')}-error` : undefined"
-                    type="date"
-                    :min="tomorrow"
-                    class="self-start rounded border border-slate-300 px-2 py-1"
-                >
-
-                <p class="text-xs text-slate-600">{{ t('sharing.accesses.expires_fixed') }}</p>
-
-                <p
-                    v-if="form.errors.expires_at"
-                    :id="`${field('expires_at')}-error`"
-                    role="alert"
-                    class="text-sm text-red-700"
-                >
-                    {{ form.errors.expires_at }}
-                </p>
-            </div>
-
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('sharing.accesses.save') }}
-            </button>
-        </form>
-
-        <Link
-            :href="`/containers/${containerUlid}/accesses/${access.ulid}`"
-            method="delete"
-            as="button"
-            preserve-scroll
-            class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
+        <button
+            type="button"
+            :disabled="revoking"
+            class="inline-flex min-h-11 items-center self-start rounded-control border border-danger px-3 text-body font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+            @click="openRemove($event.currentTarget)"
         >
-            {{ t('sharing.accesses.revoke') }}
-        </Link>
+            {{ t('sharing.accesses.remove') }}
+        </button>
+
+        <UiConfirmDialog
+            :open="confirming"
+            :heading="t('sharing.accesses.remove_heading')"
+            :body="t('sharing.accesses.remove_body')"
+            :confirm-label="t('sharing.accesses.remove')"
+            tone="danger"
+            :pending="revoking"
+            :trigger="removeTrigger"
+            @confirm="remove"
+            @cancel="confirming = false"
+        />
     </li>
 </template>
