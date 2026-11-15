@@ -34,6 +34,18 @@ use Illuminate\Support\Facades\DB;
  *
  * Utan träffar skriver kommandot "All currency codes are valid." — meningen
  * är engelsk med flit, den är rapportens fasta svar och inte prosa.
+ *
+ * Grupperingen sker BINÄRT, inte enligt kolumnens kollation. Kolumnerna är
+ * `char(3)` och kopplingens kollation är `utf8mb4_unicode_ci`
+ * (config/database.php), alltså skiftlägesokänslig: `GROUP BY currency` slår
+ * annars ihop `sek` och `SEK` till en grupp och MariaDB returnerar ett
+ * godtyckligt värde ur den. Blir det `SEK` filtreras gruppen bort som giltig
+ * och de små bokstäverna syns aldrig i rapporten — fast den nuvarande
+ * valideringen (`alpha|size:3`) tillåter dem, så raderna kan finnas.
+ * `BINARY currency` gör jämförelsen tecken för tecken och räcker också mot
+ * `PAD SPACE`-kollationer, där `'AB '` annars jämställs med `'AB'`.
+ * SQLite jämför redan skiftlägeskänsligt, så uttrycket lämnas orört där;
+ * drivrutinsglappet är dokumenterat i provet.
  */
 class ReportInvalidCurrencies extends Command
 {
@@ -78,6 +90,23 @@ class ReportInvalidCurrencies extends Command
     }
 
     /**
+     * Uttrycket som grupperar och sorterar valutakoden binärt.
+     *
+     * MySQL och MariaDB ärver kollationen `utf8mb4_unicode_ci` och måste säga
+     * `BINARY currency` för att `sek` och `SEK` ska bli två grupper. SQLite
+     * jämför strängar skiftlägeskänsligt redan som det är och känner inte
+     * igen `BINARY` som operator, så där står kolumnen orörd. Jämförelsen mot
+     * Currencies::codes() sker sedan i PHP med `in_array(..., true)` och är
+     * binär på alla drivrutiner.
+     */
+    private function binaryCurrencyExpression(): string
+    {
+        return in_array(DB::connection()->getDriverName(), ['mysql', 'mariadb'], true)
+            ? 'BINARY currency'
+            : 'currency';
+    }
+
+    /**
      * Ogiltiga koder i `cost_entry`, med antal, mjukraderade och summa i
      * minsta enhet. Frågan går via DB::table och inte CostEntry::query(),
      * eftersom modellens SoftDeletes-scope annars hade tystat de
@@ -88,10 +117,12 @@ class ReportInvalidCurrencies extends Command
      */
     private function invalidCostEntries(array $valid): array
     {
+        $currency = $this->binaryCurrencyExpression();
+
         $rows = DB::table('cost_entry')
-            ->selectRaw('currency, COUNT(*) as row_count, SUM(CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) as deleted_count, SUM(amount) as amount_sum')
-            ->groupBy('currency')
-            ->orderBy('currency')
+            ->selectRaw($currency.' as currency, COUNT(*) as row_count, SUM(CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) as deleted_count, SUM(amount) as amount_sum')
+            ->groupByRaw($currency)
+            ->orderByRaw($currency)
             ->get();
 
         $result = [];
@@ -121,11 +152,13 @@ class ReportInvalidCurrencies extends Command
      */
     private function invalidContainers(array $valid): array
     {
+        $currency = $this->binaryCurrencyExpression();
+
         $rows = DB::table('container')
             ->whereNotNull('currency')
-            ->selectRaw('currency, COUNT(*) as row_count, SUM(CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) as deleted_count')
-            ->groupBy('currency')
-            ->orderBy('currency')
+            ->selectRaw($currency.' as currency, COUNT(*) as row_count, SUM(CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) as deleted_count')
+            ->groupByRaw($currency)
+            ->orderByRaw($currency)
             ->get();
 
         $result = [];
@@ -154,10 +187,12 @@ class ReportInvalidCurrencies extends Command
      */
     private function invalidAccounts(array $valid): array
     {
+        $currency = $this->binaryCurrencyExpression();
+
         $rows = DB::table('account')
-            ->selectRaw('currency, COUNT(*) as row_count')
-            ->groupBy('currency')
-            ->orderBy('currency')
+            ->selectRaw($currency.' as currency, COUNT(*) as row_count')
+            ->groupByRaw($currency)
+            ->orderByRaw($currency)
             ->get();
 
         $result = [];

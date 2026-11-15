@@ -134,3 +134,39 @@ it('skriver att alla koder är giltiga när inget är ogiltigt', function () {
         ->doesntExpectOutputToContain('account.currency')
         ->assertSuccessful();
 });
+
+/*
+ * Små bokstäver är en egen kod, inte en variant av den giltiga versalen.
+ *
+ * Provet fångar två saker samtidigt. Dels PHP-jämförelsen mot
+ * Currencies::codes(), som är skiftlägeskänslig på alla drivrutiner. Dels
+ * grupperingen: på SQLite, där sviten kör, jämförs strängar binärt redan som
+ * det är, så `sek` och `SEK` hamnar i var sin grupp oavsett kommandots SQL.
+ * På MariaDB är kolumnens kollation `utf8mb4_unicode_ci` skiftlägesokänslig,
+ * och där är det kommandots `BINARY currency` som håller isär grupperna —
+ * utan den slås de ihop och `sek` riskerar att försvinna bakom `SEK`.
+ * Kollationsglappet syns alltså bara på MariaDB; det här provet bevisar
+ * PHP-jämförelsen och att grupperingen inte kastar bort koden på SQLite.
+ */
+it('listar små bokstäver som en ogiltig kod med egen rad', function () {
+    Account::factory()->create(['currency' => 'SEK']);
+    $owner = Account::factory()->create(['currency' => 'sek']);
+
+    $container = Container::factory()->for($owner, 'account')->create(['currency' => 'sek']);
+
+    ogiltigValutaKostnad($container, 'sek', 400);
+
+    expect(Artisan::call('costs:report-invalid-currencies'))->toBe(0);
+
+    $output = Artisan::output();
+
+    // cost_entry.currency: kod, rader, mjukraderade, summa.
+    expect($output)->toMatch('/^\|\s*sek\s*\|\s*1\s*\|\s*0\s*\|\s*400\s*\|$/m');
+
+    // container.currency och account.currency: kod, rader, mjukraderade.
+    expect($output)->toMatch('/^\|\s*sek\s*\|\s*1\s*\|\s*0\s*\|$/m');
+
+    // Den giltiga versalen står aldrig i rapporten.
+    expect($output)->not->toContain('SEK');
+    expect($output)->not->toContain('All currency codes are valid.');
+});
