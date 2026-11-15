@@ -104,24 +104,37 @@ it('rapporterar ett RuntimeException med release och environment', function () {
 });
 
 it('tar environment ur SENTRY_ENVIRONMENT och reserverar APP_ENV', function () {
-    $config = fn (array $env) => (function () use ($env) {
+    $laes = function (array $env) {
+        // Spara och återställ exakt: phpunit.xml sätter APP_ENV i $_ENV/$_SERVER
+        // och en kvarglömd ändring skulle ändra varje senare prov.
+        $forr = [];
         foreach ($env as $k => $v) {
-            $_ENV[$k] = $v;
-            $_SERVER[$k] = $v;
+            $forr[$k] = [$_ENV[$k] ?? null, $_SERVER[$k] ?? null, getenv($k)];
+            $_ENV[$k] = $_SERVER[$k] = $v;
             putenv("{$k}={$v}");
         }
+
         try {
             return require base_path('config/sentry.php');
         } finally {
-            foreach (array_keys($env) as $k) {
-                unset($_ENV[$k], $_SERVER[$k]);
-                putenv($k);
+            foreach ($forr as $k => [$e, $s, $g]) {
+                if ($e === null) {
+                    unset($_ENV[$k]);
+                } else {
+                    $_ENV[$k] = $e;
+                }
+                if ($s === null) {
+                    unset($_SERVER[$k]);
+                } else {
+                    $_SERVER[$k] = $s;
+                }
+                $g === false ? putenv($k) : putenv("{$k}={$g}");
             }
         }
-    })();
+    };
 
-    expect($config(['SENTRY_ENVIRONMENT' => 'production', 'APP_ENV' => 'staging'])['environment'])->toBe('production')
-        ->and($config(['SENTRY_ENVIRONMENT' => '', 'APP_ENV' => 'staging'])['environment'])->toBe('staging');
+    expect($laes(['SENTRY_ENVIRONMENT' => 'production', 'APP_ENV' => 'staging'])['environment'])->toBe('production')
+        ->and($laes(['SENTRY_ENVIRONMENT' => '', 'APP_ENV' => 'staging'])['environment'])->toBe('staging');
 });
 
 it('rapporterar inte validering, 404, 403, 419 eller ApiException under 500', function (string $uri) {
