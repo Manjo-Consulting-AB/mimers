@@ -141,7 +141,7 @@ class SummarizesPerformance
             return $n % 2 === 1 ? $sorted[$mid] : ($sorted[$mid - 1] + $sorted[$mid]) / 2;
         }
 
-        return $sorted[max(0, (int) ceil($percent / 100 * $n) - 1)];
+        return $sorted[max(0, intdiv($percent * $n + 99, 100) - 1)];
     }
 
     /**
@@ -157,13 +157,27 @@ class SummarizesPerformance
                 continue;
             }
 
-            foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $handle = fopen($file, 'r');
+
+            if ($handle === false) {
+                continue;
+            }
+
+            while (($line = fgets($handle)) !== false) {
+                $line = trim($line);
+
+                if ($line === '') {
+                    continue;
+                }
+
                 $record = json_decode($line, true);
 
                 if (is_array($record) && Carbon::parse($record['datetime'] ?? 'now')->gte($since)) {
                     yield $record;
                 }
             }
+
+            fclose($handle);
         }
     }
 }

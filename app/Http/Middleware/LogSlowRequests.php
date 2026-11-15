@@ -30,15 +30,20 @@ class LogSlowRequests
         $ms = (microtime(true) - $start) * 1000;
 
         if ($ms > (int) config('monitoring.slow_request_ms')) {
-            Log::channel('performance')->info('request', [
-                'type' => 'request',
-                'route' => $request->route()?->getName() ?? 'unnamed',
-                'method' => $request->method(),
-                'status' => $response->getStatusCode(),
-                'ms' => (int) round($ms),
-                'queries' => $this->queries->count,
-                'query_ms' => (int) round($this->queries->totalMs),
-            ]);
+            // Övervakningen får aldrig fälla det den övervakar.
+            try {
+                Log::channel('performance')->info('request', [
+                    'type' => 'request',
+                    'route' => $request->route()?->getName() ?? 'unnamed',
+                    'method' => $request->method(),
+                    'status' => $response->getStatusCode(),
+                    'ms' => (int) round($ms),
+                    'queries' => $this->queries->count,
+                    'query_ms' => (int) round($this->queries->totalMs),
+                ]);
+            } catch (\Throwable) {
+                // Loggen går inte att skriva; svaret ska ändå gå ut.
+            }
         }
 
         return $response;

@@ -14,7 +14,7 @@
 ## {{ trans('prestanda.queries_heading', [], 'en') }}
 
 @forelse ($queries as $row)
-- {{ trans('prestanda.query_line', ['count' => $row['count'], 'max' => round($row['max']), 'sql' => $row['sql']], 'en') }}
+- {{ trans('prestanda.query_line', ['count' => $row['count'], 'max' => round($row['max']), 'sql' => str_replace('`', '', $row['sql'])], 'en') }}
 @empty
 {{ trans('prestanda.none', [], 'en') }}
 @endforelse

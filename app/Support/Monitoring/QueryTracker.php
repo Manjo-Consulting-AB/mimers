@@ -44,11 +44,16 @@ class QueryTracker
 
         $route = app()->bound('request') ? request()->route() : null;
 
-        Log::channel('performance')->info('query', [
-            'type' => 'query',
-            'sql' => mb_substr($query->sql, 0, 2000),
-            'ms' => round($query->time, 1),
-            'route' => is_object($route) ? $route->getName() : null,
-        ]);
+        // Övervakningen får aldrig fälla det den övervakar.
+        try {
+            Log::channel('performance')->info('query', [
+                'type' => 'query',
+                'sql' => mb_substr($query->sql, 0, 2000),
+                'ms' => round($query->time, 1),
+                'route' => is_object($route) ? $route->getName() : null,
+            ]);
+        } catch (\Throwable) {
+            // Loggen går inte att skriva; förfrågan ska ändå gå igenom.
+        }
     }
 }

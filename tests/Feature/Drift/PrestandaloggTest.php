@@ -131,3 +131,23 @@ it('räknar inga frågor i testmiljön om provet inte ber om det', function () {
     expect(collect($rader)->where('context.type', 'query')->count())->toBe(0)
         ->and($rader[0]['context']['queries'])->toBe(0);
 });
+
+it('ger 200 även när loggen inte går att skriva', function () {
+    $fil = prestandakatalog().'/ingen-katalog';
+    file_put_contents($fil, 'x');
+    config([
+        'logging.channels.performance.path' => $fil.'/performance.log',
+        'monitoring.slow_request_ms' => 0,
+        'monitoring.slow_query_ms' => 0,
+        'monitoring.track_queries_in_tests' => true,
+    ]);
+    Log::forgetChannel('performance');
+
+    Route::middleware('web')->get('/_prestanda/skrivfel', function () {
+        DB::select('select 1');
+
+        return 'ok';
+    })->name('prestanda.skrivfel');
+
+    get('/_prestanda/skrivfel')->assertOk();
+});

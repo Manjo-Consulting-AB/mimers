@@ -115,3 +115,20 @@ function artisan_boot_for_schedule(): void
 {
     Pest\Laravel\artisan('inspire');
 }
+
+it('låter backticks i SQL-texten inte bryta kodspannet i mejlet', function () {
+    $mail = new PerformanceSummaryMail(
+        routes: [],
+        queries: [['sql' => 'select * from `items` where `id` = ?', 'count' => 1, 'max' => 250.0]],
+        requestsThisWeek: 0,
+        requestsPreviousWeek: 0,
+    );
+
+    expect($mail->render())->toContain('select * from items where id = ?');
+});
+
+it('väljer rätt element som 95:e percentil för heltalsgränserna', function () {
+    $lista = array_map('floatval', range(1, 20));
+
+    expect(SummarizesPerformance::percentile($lista, 95))->toBe(19.0);
+});
