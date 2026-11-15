@@ -877,6 +877,42 @@ def call_claude_direct(model, prompt, cwd):
         )
 
 
+# Byggaren väljs per issue med en etikett: `model:sonnet` eller `model:opus`.
+# Utan etikett bygger DeepSeek som förut. Kön kör en issue i taget oavsett
+# modell - samma princip för alla byggare, så ingen session behöver starta
+# egna parallella agenter för att få Sonnet eller Opus att bygga (2026-11-15:
+# parallella subagenter tömde VPS:ens 2 GB och earlyoom dödade sessionerna).
+# Sätts av _process_in_worktree(); --resume-pr och arkitektsvaren bygger
+# vidare med DeepSeek eftersom de inte läser issuens etiketter.
+BYGGARE = "deepseek"
+BYGGARE_NAMN = {"deepseek": "DeepSeek", "sonnet": "Sonnet", "opus": "Opus"}
+ESKALERING = {"deepseek": "sonnet", "sonnet": "opus", "opus": None}
+
+
+def valj_byggare(labels):
+    """Opus före Sonnet före DeepSeek. Ren funktion av etikettlistan."""
+    if "model:opus" in labels:
+        return "opus"
+    if "model:sonnet" in labels:
+        return "sonnet"
+    return "deepseek"
+
+
+def atgardsvarv_for(byggare):
+    """Tre varv med byggaren, sedan ett med nästa modell uppåt om det finns."""
+    varv = [(BYGGARE_NAMN[byggare], byggare)] * 3
+    nasta = ESKALERING[byggare]
+    if nasta:
+        varv.append((BYGGARE_NAMN[nasta], nasta))
+    return varv
+
+
+def anropa_byggare(byggare, prompt, cwd):
+    if byggare == "deepseek":
+        return call_deepseek(prompt, cwd)
+    return call_claude_direct(byggare, prompt, cwd)
+
+
 # Två fel hos modell-API:et säger själva att de går över, och båda blev
 # `needs-human` med en stillastående kö: sessionsgränsen under issue 139 (#517,
 # tre timmar och fyrtiosju minuter till Tony såg det) och `529 Overloaded` under
@@ -1235,13 +1271,8 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
     Returnerar (resolved: bool, findings: str) - findings är den senaste
     avvisningstexten om inte löst, annars oförändrad.
     """
-    varv = [
-        ("DeepSeek", call_deepseek),
-        ("DeepSeek", call_deepseek),
-        ("DeepSeek", call_deepseek),
-        ("Sonnet", lambda prompt, cwd: call_claude_direct("sonnet", prompt, cwd)),
-    ]
-    for round_num, (agent_namn, fixare) in enumerate(varv, start=1):
+    varv = atgardsvarv_for(BYGGARE)
+    for round_num, (agent_namn, modell) in enumerate(varv, start=1):
         print(f" -> Åtgärdsvarv {round_num}/{len(varv)} ({agent_namn})...")
         fix_prompt = (
             f"Åtgärda följande fynd från en kodgranskning av din egen lösning på detta issue:\n\n"
@@ -1251,7 +1282,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             f"bara det som listas."
         )
         head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
-        fixare(fix_prompt, worktree_path)
+        anropa_byggare(modell, fix_prompt, worktree_path)
 
         # Agenten kan svara utan att röra en enda fil (missförstod fyndet,
         # eller trodde felaktigt att det redan var löst). `git commit` kraschar
@@ -2673,7 +2704,7 @@ def process_next_issue(issue_number=None):
     print(f" Påbörjar arbete med Issue #{issue_num}: {issue_title} (risk_class: {risk_class})")
     print(f"==================================================\n")
 
-    send_pushover(f"🚀 Påbörjar Issue #{issue_num}: '{issue_title}' med DeepSeek V4 Flash.")
+    send_pushover(f"🚀 Påbörjar Issue #{issue_num}: '{issue_title}' med {BYGGARE_NAMN[valj_byggare(labels)]}.")
     run_cmd(["gh", "issue", "edit", issue_num, "--add-label", "in-progress"], cwd=REPO_ROOT)
 
     worktree_path = setup_worktree(branch_name)
@@ -2800,8 +2831,11 @@ def ar_tomt_forsok(status, head_efter, bas):
 
 
 def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class, branch_name, worktree_path):
+    global BYGGARE
+    BYGGARE = valj_byggare(labels)
+    namn = BYGGARE_NAMN[BYGGARE]
     # -----------------------------------------------------------------
-    # STEG 2: DEEPSEEK V4 FLASH (MAX 3 FÖRSÖK)
+    # STEG 2: BYGGAREN (MAX 3 FÖRSÖK) - DeepSeek om issuen inte säger annat
     # -----------------------------------------------------------------
     deepseek_success = False
     last_error_output = ""
@@ -2838,9 +2872,9 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     # nollställer till.
     bas = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
 
-    print("[FAS 1] Kodgenerering med DeepSeek V4 Flash (Max 3 försök)...")
+    print(f"[FAS 1] Kodgenerering med {namn} (Max 3 försök)...")
     for attempt in range(1, 4):
-        print(f" -> DeepSeek Försök {attempt}/3...")
+        print(f" -> {namn} Försök {attempt}/3...")
 
         prompt = f"Lös följande issue för vårt projekt:\n\n{issue_body}{omfangsnotis}{summary_instruction}"
         if error_history:
@@ -2850,7 +2884,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"Analysera felet och korrigera projektkoden."
             )
 
-        agent_summary = call_deepseek(prompt, cwd=worktree_path)
+        agent_summary = anropa_byggare(BYGGARE, prompt, cwd=worktree_path)
         print(f"  Agentens sammanfattning (försök {attempt}):\n{agent_summary}")
 
         # Görs innan run_local_tests(): en agent som inte rörde en fil ger en
@@ -2898,8 +2932,8 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
             if rod:
                 stanna_pa_rod_bas(issue_num, worktree_path, branch_name, bas_sha, bas_utskrift)
         if passed:
-            print("  ✓ Tester GRÖNA med DeepSeek!")
-            send_pushover(f"🧩 Issue #{issue_num}: DeepSeek löste testerna på försök {attempt}/3. Skapar PR...")
+            print(f"  ✓ Tester GRÖNA med {namn}!")
+            send_pushover(f"🧩 Issue #{issue_num}: {namn} löste testerna på försök {attempt}/3. Skapar PR...")
             deepseek_success = True
             break
         else:
@@ -2908,56 +2942,63 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
             error_history += f"\n--- Försök {attempt} felutskrift ---\n{kapa_felutskrift(test_output, 3000)}\n"
 
     # -----------------------------------------------------------------
-    # STEG 3: SONNET ESKALERING (EXAKT 1 FÖRSÖK)
+    # STEG 3: ESKALERING ETT STEG UPPÅT (EXAKT 1 FÖRSÖK)
+    # DeepSeek -> Sonnet -> Opus. Opus har inget över sig: misslyckas Opus
+    # stannar kön direkt.
     # -----------------------------------------------------------------
     if not deepseek_success:
-        print("\n[FAS 2] DeepSeek misslyckades 3 gånger. Eskalerar till Sonnet...")
-        send_pushover(f"⚠️ DeepSeek misslyckades efter 3 försök på Issue #{issue_num}. Eskalerar till Sonnet.")
+        nasta = ESKALERING[BYGGARE]
+        passed, test_output = False, last_error_output
+        if nasta:
+            nasta_namn = BYGGARE_NAMN[nasta]
+            print(f"\n[FAS 2] {namn} misslyckades 3 gånger. Eskalerar till {nasta_namn}...")
+            send_pushover(f"⚠️ {namn} misslyckades efter 3 försök på Issue #{issue_num}. Eskalerar till {nasta_namn}.")
 
-        run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "model:deepseek", "--add-label", "model:sonnet"], cwd=REPO_ROOT)
+            run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", f"model:{BYGGARE}", "--add-label", f"model:{nasta}"], cwd=REPO_ROOT)
 
-        # Tillbaka till basen, inte till HEAD. DeepSeek kör med
-        # bypassPermissions och committar ibland själv (PR #163, issue #172) -
-        # `reset --hard HEAD` tog bara bort det ocommittade och lät Sonnet börja
-        # ovanpå tre underkända försök.
-        bas = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
-        run_cmd(["git", "reset", "--hard", bas], cwd=worktree_path)
-        run_cmd(["git", "clean", "-fd"], cwd=worktree_path)
+            # Tillbaka till basen, inte till HEAD. Byggaren kör med
+            # bypassPermissions och committar ibland själv (PR #163, issue #172) -
+            # `reset --hard HEAD` tog bara bort det ocommittade och lät
+            # eskaleringen börja ovanpå tre underkända försök.
+            bas = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
+            run_cmd(["git", "reset", "--hard", bas], cwd=worktree_path)
+            run_cmd(["git", "clean", "-fd"], cwd=worktree_path)
 
-        sonnet_prompt = (
-            f"Lös följande issue:\n{issue_body}{omfangsnotis}\n\n"
-            f"DeepSeek misslyckades tidigare med detta testfel:\n```\n{last_error_output}\n```\n\n"
-            f"Analysera problemet och genomför lösningen.{summary_instruction}"
-        )
+            eskaleringsprompt = (
+                f"Lös följande issue:\n{issue_body}{omfangsnotis}\n\n"
+                f"{namn} misslyckades tidigare med detta testfel:\n```\n{last_error_output}\n```\n\n"
+                f"Analysera problemet och genomför lösningen.{summary_instruction}"
+            )
 
-        agent_summary = call_claude_direct("sonnet", sonnet_prompt, cwd=worktree_path)
-        passed, test_output, _ = run_local_tests(cwd=worktree_path)
+            agent_summary = call_claude_direct(nasta, eskaleringsprompt, cwd=worktree_path)
+            passed, test_output, _ = run_local_tests(cwd=worktree_path)
 
-        if passed:
-            send_pushover(f"🧩 Issue #{issue_num}: Sonnet löste testerna efter DeepSeeks 3 försök. Skapar PR...")
+            if passed:
+                send_pushover(f"🧩 Issue #{issue_num}: {nasta_namn} löste testerna efter {namn}s 3 försök. Skapar PR...")
 
         if not passed:
-            print("\n[FAS 3] Tester RÖDA även med Sonnet. Stoppar hela kön!")
+            print("\n[FAS 3] Tester fortfarande RÖDA. Stoppar hela kön!")
 
             cleanup_worktree(worktree_path, branch_name)
 
             comment_body = (
                 f"⚠️ **Processen avbruten - Mänsklig granskning krävs**\n\n"
-                f"- **DeepSeek V4 Flash:** Misslyckades efter 3 försök.\n"
-                f"- **Sonnet:** Misslyckades på försök 1.\n\n"
+                f"- **{namn}:** Misslyckades efter 3 försök.\n"
+                + (f"- **{BYGGARE_NAMN[nasta]}:** Misslyckades på försök 1.\n" if nasta else "")
+                + f"\n"
                 f"**Sista testfelet:**\n```\n{kapa_felutskrift(test_output, 3000)}\n```"
             )
             run_cmd(["gh", "issue", "comment", issue_num, "--body", comment_body], cwd=REPO_ROOT)
             run_cmd([
                 "gh", "issue", "edit", issue_num,
                 "--remove-label", "in-progress",
-                "--remove-label", "model:sonnet",
+                "--remove-label", f"model:{nasta or BYGGARE}",
                 "--add-label", "needs-human",
             ], cwd=REPO_ROOT)
 
             send_pushover(
                 f"🚨 PIPELINE STOPPAD!\n"
-                f"Issue #{issue_num} ('{issue_title}') misslyckades med både DeepSeek och Sonnet.\n"
+                f"Issue #{issue_num} ('{issue_title}') misslyckades med {namn}" + (f" och {BYGGARE_NAMN[nasta]}" if nasta else "") + ".\n"
                 f"Mänsklig granskning krävs. Kön är nu låst."
             )
             sys.exit(1)
@@ -3152,7 +3193,7 @@ def granska_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
 
     godkand_direkt = godkand
     if not godkand:
-        print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (3 varv DeepSeek, sedan 1 varv Sonnet)...")
+        print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop ({', '.join(n for n, _ in atgardsvarv_for(BYGGARE))})...")
         send_pushover(f"🔁 Issue #{issue_num}: {modellnamn} hittade fynd på PR #{pr_number}, startar åtgärdsloop.")
         godkand, granskning = run_findings_fix_loop(
             issue_body, pr_number, branch_name, worktree_path, granskning, fragor=fragor

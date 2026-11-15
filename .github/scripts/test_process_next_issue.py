@@ -1597,6 +1597,21 @@ def test_misslyckat_bygge_ger_rott_byggled_och_hoppar_over_sviten():
         assert ["composer", "test"] not in [a[:2] for a in anrop]
 
 
+def test_byggaren_ar_deepseek_utan_etikett():
+    assert p.valj_byggare(["Build", "risk:low"]) == "deepseek"
+
+
+def test_byggaren_valjs_med_etikett_opus_fore_sonnet():
+    assert p.valj_byggare(["model:sonnet"]) == "sonnet"
+    assert p.valj_byggare(["model:sonnet", "model:opus"]) == "opus"
+
+
+def test_atgardsvarven_eskalerar_ett_steg_uppat():
+    assert p.atgardsvarv_for("deepseek") == [("DeepSeek", "deepseek")] * 3 + [("Sonnet", "sonnet")]
+    assert p.atgardsvarv_for("sonnet") == [("Sonnet", "sonnet")] * 3 + [("Opus", "opus")]
+    assert p.atgardsvarv_for("opus") == [("Opus", "opus")] * 3
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
