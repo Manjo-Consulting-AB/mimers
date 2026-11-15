@@ -898,6 +898,11 @@ def valj_byggare(labels):
     return "deepseek"
 
 
+def vantar_pa_peak(labels, peak):
+    """Sant när issuen byggs med DeepSeek och det är peak hours. Ren funktion."""
+    return peak and valj_byggare(labels) == "deepseek"
+
+
 def atgardsvarv_for(byggare):
     """Tre varv med byggaren, sedan ett med nästa modell uppåt om det finns."""
     varv = [(BYGGARE_NAMN[byggare], byggare)] * 3
@@ -2668,6 +2673,14 @@ def process_next_issue(issue_number=None):
     risk_class = extract_risk_class(issue_body)
     branch_name = f"feature/issue-{issue_num}"
 
+    # Peak hours begränsar bara DeepSeek. En issue märkt model:sonnet/opus
+    # byggs, åtgärdas och omfångsprövas av Claude hela vägen och kör dygnet
+    # runt. Kön är strikt FIFO: står en DeepSeek-issue först väntar kön på
+    # den, i stället för att en Sonnet-issue längre bak går förbi.
+    if vantar_pa_peak(labels, is_peak_hour()):
+        print("Hoppar över körning: Peak hours pågår (UTC) och issuen byggs med DeepSeek.")
+        sys.exit(0)
+
     if "needs-human" in labels:
         print(f"🛑 KÖN ÄR BLOCKERAD: Issue #{issue_num} kräver mänsklig granskning ('needs-human').")
         sys.exit(0)
@@ -2778,7 +2791,7 @@ def kor_omfangslint(issue_num, issue_body, worktree_path):
     if fraga:
         head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         try:
-            svar = call_deepseek(fraga, cwd=worktree_path)
+            svar = anropa_byggare(BYGGARE, fraga, cwd=worktree_path)
             modellfynd = omfangslint.fynd_ur_modellsvar(
                 svar, innanfor, worktree_path,
                 utanfor=omfangslint.o.globbar(omfangslint.o.avsnitt(issue_body, "Out of scope")))
@@ -3519,7 +3532,7 @@ if __name__ == "__main__":
             avbryt_vid_peak()
             resume_question(sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--issue":
-            avbryt_vid_peak()
+            # Peak-vakten sitter i process_next_issue(): den beror på issuens byggare.
             process_next_issue(issue_number=sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--arkitekt":
             besvara_arkitektfragor(sys.argv[2])
@@ -3530,10 +3543,12 @@ if __name__ == "__main__":
             # Arkitektfrågor först, och utan peak-vakt: de kör Opus, inte
             # DeepSeek, och ska besvaras inom tio minuter oavsett klockslag.
             besvara_arkitektfragor()
+            # Arkitektsvaren åtgärdas med DeepSeek och väntar ut peak hours.
+            # Issue-kön prövar själv: en Sonnet- eller Opus-issue kör ändå.
             if is_peak_hour():
                 peak_besked_atgarda()
-            avbryt_vid_peak()
-            atgarda_arkitektsvar_alla()
+            else:
+                atgarda_arkitektsvar_alla()
             process_next_issue()
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
