@@ -154,7 +154,10 @@ it('ger containerns flik costDefaults, optional costSuppliers och createdCost', 
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $sida) => $sida
             ->component('Containers/Costs')
-            ->where('costDefaults', ['currency' => 'NOK'])
+            // `allowed_currencies` kom med issue 1254 — containerns urval,
+            // tomt när alla valutor är tillåtna ([[ADR-0078 Valutor ur ISO
+            // 4217]] § 4 och 5).
+            ->where('costDefaults', ['currency' => 'NOK', 'allowed_currencies' => []])
             ->where('createdCost', null)
             ->missing('costSuppliers'));
 });

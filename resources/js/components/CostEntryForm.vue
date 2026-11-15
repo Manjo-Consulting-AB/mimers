@@ -46,8 +46,55 @@ const page = usePage();
 
 const suppliers = computed(() => page.props.costSuppliers ?? []);
 
+/*
+ * Containerns urval av valutor för kostnader — issue 1254 · [[ADR-0078
+ * Valutor ur ISO 4217]] § 4 och 5.
+ *
+ * **En tom lista betyder alla valutor**, och då är fältet den vanliga
+ * sökrutan. **Högst sex markerade valutor ger en enkel väljare**; fler ger
+ * sökrutan igen, begränsad till urvalet. Tröskeln räknas på det MARKERADE
+ * urvalet, inte på valen i väljaren — standardvalutan läggs till i listan
+ * nedanför utan att räknas in, eftersom den alltid är tillåten utan att stå
+ * i urvalet.
+ */
+const allowedCodes = computed(() => props.costDefaults.allowed_currencies ?? []);
+
+const simpleCurrencySelect = computed(
+    () => allowedCodes.value.length > 0 && allowedCodes.value.length <= 6,
+);
+
+/* Namnen ur den delade, LATA `currencies`-proppen. Saknas den blir koden
+   etiketten — fältet fungerar utan namn och hämtar dem inte i onödan. */
+const currencyNames = computed(() => Object.fromEntries(
+    (page.props.currencies ?? []).map((option) => [option.code, option.name]),
+));
+
+function currencyLabel(code) {
+    const name = currencyNames.value[code];
+
+    return name && name !== code ? `${code} · ${name}` : code;
+}
+
+/* Väljarens val: standardvalutan PLUS urvalet, utan dubbletter — standard-
+   valutan är förvald genom formulärets värde och får aldrig saknas i listan. */
+const currencyChoices = computed(() => [
+    ...new Set([props.costDefaults.currency, ...allowedCodes.value]),
+].sort());
+
+/* CurrencyField vill ha `{code, name}`; namnet faller tillbaka på koden. */
+const currencyChoicesWithNames = computed(() => currencyChoices.value.map((code) => ({
+    code,
+    name: currencyNames.value[code] ?? code,
+})));
+
 function loadSuppliers() {
-    router.reload({ only: ['costSuppliers'] });
+    // Namnen på valutorna behövs bara när containern har ett urval; utan
+    // urval visar CurrencyField hela listan och hämtar den själv vid fokus.
+    router.reload({
+        only: allowedCodes.value.length > 0
+            ? ['costSuppliers', 'currencies']
+            : ['costSuppliers'],
+    });
 }
 
 onMounted(loadSuppliers);
@@ -138,10 +185,13 @@ function submit() {
         <!--
             Valutan är förifylld ur containerns arv
             ([[ADR-0037 Valutans arv]]) och går att ändra: arvet är ett
-            förslag, aldrig ett tvång. Fältet är en sökruta över de aktiva
-            ISO 4217-koderna ([[ADR-0078 Valutor ur ISO 4217]] § 2), synligt
-            och inte dolt — ett värde som ändå står i datan ska stå framme för
-            den som skriver raden.
+            förslag, aldrig ett tvång.
+
+            Med ett urval på högst sex valutor är fältet en ENKEL VÄLJARE
+            (issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 5) med urvalet
+            och standardvalutan; annars är det sökrutan över samma mängd.
+            Sökrutan är synlig och inte dold — ett värde som ändå står i
+            datan ska stå framme för den som skriver raden.
         -->
         <FormField
             v-slot="{ describedBy }"
@@ -149,10 +199,24 @@ function submit() {
             id="cost-currency"
             :error="form.errors.currency"
         >
+            <select
+                v-if="simpleCurrencySelect"
+                id="cost-currency"
+                v-model="form.currency"
+                :aria-describedby="describedBy"
+                class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <option v-for="code in currencyChoices" :key="code" :value="code">
+                    {{ currencyLabel(code) }}
+                </option>
+            </select>
+
             <CurrencyField
+                v-else
                 id="cost-currency"
                 v-model="form.currency"
                 :described-by="describedBy"
+                :options="allowedCodes.length === 0 ? null : currencyChoicesWithNames"
             />
         </FormField>
 

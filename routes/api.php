@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\CalendarFeedController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
+use App\Http\Controllers\Api\ContainerCurrencyController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
@@ -122,6 +123,14 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}', [ContainerController::class, 'show']);
     Route::patch('/containers/{container}', [ContainerController::class, 'update']);
     Route::delete('/containers/{container}', [ContainerController::class, 'destroy']);
+
+    // Issue 1254 · Containerns valutor för kostnader, se
+    // App\Http\Controllers\Api\ContainerCurrencyController och [[ADR-0078
+    // Valutor ur ISO 4217]] § 4. Kroppen är `{"currencies": [...]}`, en tom
+    // lista betyder alla, och svaret är containern med den nya listan.
+    // Grinden är `ContainerPolicy::update` och upprätthålls av servern —
+    // urvalet är ingen önskan i formuläret.
+    Route::put('/containers/{container}/currencies', [ContainerCurrencyController::class, 'update']);
 
     // Issue 9b · Åtkomstytan — bevilja, lista och återkalla delegerade
     // åtkomster till en container, se

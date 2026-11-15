@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Exceptions\Api\ApiException;
 use App\Models\Concerns\HasUlid;
 use Database\Factories\ContainerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -183,6 +184,121 @@ class Container extends Model
     public function effectiveCurrency(): string
     {
         return $this->currency ?? $this->account->currency;
+    }
+
+    /**
+     * Containerns urval av valutor för kostnader — issue 1254 ·
+     * [[ADR-0078 Valutor ur ISO 4217]] § 4.
+     *
+     * Relationen bär de valutor ägaren har MARKERAT, och ingenting mer.
+     * Ett tomt urval betyder ALLA valutor, och standardvalutan är alltid
+     * tillåten utan att stå här — se permitsCurrency() och
+     * permittedCurrencyCodes() nedan. Läs inte den här relationen som
+     * svaret på "vilka valutor får användas"; det svaret bor i de två
+     * metoderna.
+     *
+     * @return HasMany<ContainerAllowedCurrency, $this>
+     */
+    public function allowedCurrencies(): HasMany
+    {
+        return $this->hasMany(ContainerAllowedCurrency::class);
+    }
+
+    /**
+     * Det MARKERADE urvalet, sorterat — eller en TOM lista när alla valutor
+     * är tillåtna.
+     *
+     * Det här är inställningen som ägaren ser och redigerar, och den enda
+     * formen som skrivs till tabellen. Standardvalutan läggs INTE till här;
+     * den är alltid tillåten ändå, och att blanda in den hade gjort ett tomt
+     * urval till en lista med ett element. Formuläret lägger till den när
+     * det ritar valen — se permittedCurrencyCodes() för den mängden.
+     *
+     * @return list<string>
+     */
+    public function allowedCurrencyCodes(): array
+    {
+        return $this->allowedCurrencies->pluck('currency')->sort()->values()->all();
+    }
+
+    /**
+     * Får en kostnadsrad i den här containern använda $code? — issue 1254 ·
+     * [[ADR-0078 Valutor ur ISO 4217]] § 4.
+     *
+     * Sant i tre fall, och regeln formuleras bara här:
+     *
+     * 1. urvalet är TOMT — ingen markering betyder alla, inte "inga";
+     * 2. koden står i urvalet;
+     * 3. koden är containerns standardvaluta (`effectiveCurrency()`, alltså
+     *    containerns egen eller kontots enligt [[ADR-0037 Valutans arv]]).
+     *    Standardvalutan ingår alltid, utan att stå i urvalet.
+     *
+     * Koden normaliseras till versaler, samma regel som valideringen i
+     * App\Rules\IsoCurrency: anroparen ska inte behöva känna till
+     * skiftläget.
+     */
+    public function permitsCurrency(string $code): bool
+    {
+        $code = mb_strtoupper($code);
+
+        if ($code === $this->effectiveCurrency()) {
+            return true;
+        }
+
+        $allowed = $this->allowedCurrencies->pluck('currency')->all();
+
+        return $allowed === [] || in_array($code, $allowed, true);
+    }
+
+    /**
+     * De valutor en kostnadsrad i containern kan välja mellan, sorterade —
+     * eller en TOM lista när alla är tillåtna.
+     *
+     * Urvalet PLUS standardvalutan: det är den mängd formuläret ritar och
+     * den lista ett avvisat val hänvisar till. Att lägga standardvalutan
+     * här i stället för att spara den i tabellen är poängen med
+     * [[ADR-0078 Valutor ur ISO 4217]] § 4 — ett byte av containerns
+     * standardvaluta ändrar inget i urvalet, eftersom standardvalutan
+     * alltid ingår.
+     *
+     * @return list<string>
+     */
+    public function permittedCurrencyCodes(): array
+    {
+        $codes = $this->allowedCurrencyCodes();
+
+        if ($codes === []) {
+            return [];
+        }
+
+        $codes[] = $this->effectiveCurrency();
+        $codes = array_values(array_unique($codes));
+        sort($codes);
+
+        return $codes;
+    }
+
+    /**
+     * Kastar `currency.not_allowed` när containern inte tillåter $code —
+     * issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4.
+     *
+     * Kontrollen bor här därför att BÅDA skrivvägarna (skapa och ändra en
+     * kostnadsrad) behöver exakt samma svar, och en avskrift i varje action
+     * hade varit två sanningar om vilka valutor som är tillåtna. `data`
+     * bär valutan och den lista klienten kan välja ur, så webbsidan kan
+     * formulera meningen och API-klienten kan rita rätt fält
+     * (AGENTS.md § Felformat i API:et).
+     */
+    public function ensurePermitsCurrency(string $code): void
+    {
+        if ($this->permitsCurrency($code)) {
+            return;
+        }
+
+        throw ApiException::make('currency.not_allowed', [
+            'currency' => mb_strtoupper($code),
+            'allowed' => implode(', ', $this->permittedCurrencyCodes()),
+        ]);
     }
 
     /**

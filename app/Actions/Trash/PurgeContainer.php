@@ -132,6 +132,14 @@ class PurgeContainer
             DB::table('invitation')->where('container_id', $container->id)->delete();
             DB::table('calendar_feed')->where('container_id', $container->id)->delete();
 
+            // Containerns urval av valutor för kostnader (issue 1254 ·
+            // [[ADR-0078 Valutor ur ISO 4217]] § 4). Raderna är en inställning
+            // och har ingen mening utan containern; `container_id` är ON DELETE
+            // RESTRICT, så utan städningen faller `forceDelete()` nedan på ett
+            // främmandenyckelfel varje natt — samma grupp som `container_access`
+            // och `calendar_feed` ovan.
+            DB::table('container_allowed_currency')->where('container_id', $container->id)->delete();
+
             // Ägarbytena på containern (ADR-0045 § Beslut 3). Raden är
             // historik och dras tillbaka med `status = 'revoked'` — den
             // "raderas aldrig" — men den har ingen mening utan sin container,

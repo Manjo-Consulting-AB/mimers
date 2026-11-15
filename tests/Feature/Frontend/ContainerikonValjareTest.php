@@ -302,8 +302,10 @@ it('ritar ikonsektionen bredvid bilden och bara med rätten att uppdatera', func
     expect(strpos($vy, "t('item.form.icon')"))
         ->toBeLessThan((int) strpos($vy, "t('container.cover.heading')"));
 
-    // Bilden har kvar sin egen gren; ikonen ärver samma regel.
-    expect(substr_count($vy, '<section v-if="can.update"'))->toBe(2);
+    // Bilden har kvar sin egen gren; ikonen ärver samma regel. Sedan issue
+    // 1254 finns en tredje gren — *Currencies for costs* — och den ritas av
+    // samma `can.update` som de två andra.
+    expect(substr_count($vy, '<section v-if="can.update"'))->toBe(3);
 });
 
 /*

@@ -158,7 +158,7 @@ class ContainerController extends Controller
             // containerns bild för varje rad — utan eager loading blir listan
             // N+1, samma resonemang som API-kontrollerns index(). Bilden
             // kostar två led: bilagan och dess derivat (issue 159).
-            ->with(['account', 'coverAttachment.storedFile.derivatives'])
+            ->with(['account', 'coverAttachment.storedFile.derivatives', 'allowedCurrencies'])
             ->orderBy('name')
             ->get();
 

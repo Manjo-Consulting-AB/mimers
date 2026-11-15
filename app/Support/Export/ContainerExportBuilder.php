@@ -351,6 +351,11 @@ class ContainerExportBuilder
                 // null, som itemets `icon`/`icon_color` i buildItems().
                 'icon' => $container->icon,
                 'icon_color' => $container->icon_color,
+                // Containerns urval av valutor för kostnader (issue 1254 ·
+                // [[ADR-0078 Valutor ur ISO 4217]] § 4). Tom lista betyder
+                // alla valutor — samma regel som i ContainerResource — och
+                // standardvalutan står inte med om den inte är markerad.
+                'allowed_currencies' => $container->allowedCurrencyCodes(),
             ],
             'categories' => $categories->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,

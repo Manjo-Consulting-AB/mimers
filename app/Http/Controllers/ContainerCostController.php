@@ -208,7 +208,14 @@ class ContainerCostController extends Controller
             // samma förval som itemets (valutan ur containerns arv) och
             // leverantörerna som en OPTIONAL prop, samma konstruktion som i
             // ItemController::show().
-            'costDefaults' => ['currency' => $container->effectiveCurrency()],
+            //
+            // `allowed_currencies` kom med issue 1254 · [[ADR-0078 Valutor ur
+            // ISO 4217]] § 4 och 5 — samma propp och samma form som på
+            // itemets kostnadsflik.
+            'costDefaults' => [
+                'currency' => $container->effectiveCurrency(),
+                'allowed_currencies' => $container->allowedCurrencyCodes(),
+            ],
             'costSuppliers' => Inertia::optional(
                 fn (): array => $listCostSuppliers->handle($user, $container)
             ),

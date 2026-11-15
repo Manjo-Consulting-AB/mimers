@@ -1179,7 +1179,16 @@ class ItemController extends Controller
             // samma tomrum i App\Actions\Cost\CreateCostEntry när klienten
             // inte skickar någon valuta, så förvalet och arvet är ETT värde
             // och inte två.
-            'costDefaults' => ['currency' => $container->effectiveCurrency()],
+            //
+            // `allowed_currencies` kom med issue 1254 · [[ADR-0078 Valutor ur
+            // ISO 4217]] § 4 och 5: containerns MARKERADE urval, tomt när
+            // alla är tillåtna. Formuläret väljer väljare eller sökruta ur
+            // listans längd, och lägger själv till standardvalutan — den är
+            // alltid tillåten utan att stå i urvalet.
+            'costDefaults' => [
+                'currency' => $container->effectiveCurrency(),
+                'allowed_currencies' => $container->allowedCurrencyCodes(),
+            ],
 
             // Leverantörslistan är en OPTIONAL prop (issue 168 § Beslut 3):
             // den ritas först när kostnadsformuläret öppnas, och en vanlig

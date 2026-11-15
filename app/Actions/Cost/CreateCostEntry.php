@@ -63,6 +63,14 @@ class CreateCostEntry
         // StoreCostEntryRequest.
         $data['currency'] ??= $container->effectiveCurrency();
 
+        // Containerns urval av valutor (issue 1254 · [[ADR-0078 Valutor ur
+        // ISO 4217]] § 4). Valutan som ÄRVS ovan är standardvalutan och
+        // alltid tillåten; bara ett värde klienten SKICKAR kan falla här.
+        // Kontrollen ligger före MinorUnits::parse(), som behöver valutan för
+        // att veta antalet decimaler — ett avvisat val ska inte kosta en
+        // tolkning av beloppet.
+        $container->ensurePermitsCurrency($data['currency']);
+
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
         unset($data['amount']);
 

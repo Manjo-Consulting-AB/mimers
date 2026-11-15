@@ -246,6 +246,13 @@ class AuditLog extends Model
 
     public const ACTION_CONTAINER_RESTORED = 'container.restored';
 
+    /**
+     * Containerns urval av valutor för kostnader ändrades — issue 1254 ·
+     * [[ADR-0078 Valutor ur ISO 4217]] § 4. `meta.values.allowed_currencies`
+     * bär gamla och nya listan; en PUT som inte ändrar något loggas inte.
+     */
+    public const ACTION_CONTAINER_CURRENCIES_UPDATED = 'container.currencies_updated';
+
     public const ACTION_CATEGORY_CREATED = 'category.created';
 
     public const ACTION_CATEGORY_UPDATED = 'category.updated';

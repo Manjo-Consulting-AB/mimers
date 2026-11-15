@@ -179,6 +179,40 @@ const childrenHelp = computed(() => t('item.cost.children_help', { item: itemNam
 const suppliers = computed(() => page.props.costSuppliers ?? []);
 
 /*
+ * Containerns urval av valutor för kostnader — issue 1254 · [[ADR-0078
+ * Valutor ur ISO 4217]] § 4. Redigeringen av en rad använder samma urval som
+ * det nya formuläret, MEN en rad vars valuta inte längre finns i urvalet
+ * behåller sin valuta i valen för just den raden: historiken ska inte låsas,
+ * och en rad i en utgången valuta måste gå att rätta (ADR-0078 § 4).
+ *
+ * Namnen kommer ur den delade, LATA `currencies`-proppen; saknas den blir
+ * koden etiketten, och CurrencyField fungerar ändå.
+ */
+const allowedCurrencyCodes = computed(() => props.costDefaults.allowed_currencies ?? []);
+
+const currencyNames = computed(() => Object.fromEntries(
+    (page.props.currencies ?? []).map((option) => [option.code, option.name]),
+));
+
+/* Valen för EN rad: urvalet, standardvalutan och radens egen valuta. */
+function editCurrencyOptions(cost) {
+    if (allowedCurrencyCodes.value.length === 0) {
+        return null;
+    }
+
+    const codes = new Set([
+        props.costDefaults.currency,
+        ...allowedCurrencyCodes.value,
+        cost.currency,
+    ]);
+
+    return [...codes].sort().map((code) => ({
+        code,
+        name: currencyNames.value[code] ?? code,
+    }));
+}
+
+/*
  * Uppslaget. Frågan ställs när formuläret ritas och om efter varje skrivning —
  * se docblocken: en skrivning är en vanlig besökning, och den tappar proppen.
  * Anropas därför ur både `onMounted` och skrivningarnas `onSuccess`/`onError`.
@@ -191,7 +225,11 @@ function loadSuppliers() {
         return;
     }
 
-    router.reload({ only: ['costSuppliers'] });
+    router.reload({
+        only: allowedCurrencyCodes.value.length > 0
+            ? ['costSuppliers', 'currencies']
+            : ['costSuppliers'],
+    });
 }
 
 onMounted(loadSuppliers);
@@ -695,6 +733,7 @@ function destroy(cost) {
                             id="cost-edit-currency"
                             v-model="editForm.currency"
                             :described-by="describedBy"
+                            :options="editCurrencyOptions(cost)"
                         />
                     </FormField>
 

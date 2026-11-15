@@ -73,7 +73,7 @@ class ContainerController extends Controller
             // raden hade varje container MED bild kostat två frågor till.
             // Containrar utan bild kostar ingenting — en nullbar främmande
             // nyckel slår inte upp något.
-            ->with(['account', 'coverAttachment.storedFile.derivatives'])
+            ->with(['account', 'coverAttachment.storedFile.derivatives', 'allowedCurrencies'])
             ->orderBy('name')
             ->get();
 

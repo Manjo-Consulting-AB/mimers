@@ -17,6 +17,7 @@ use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerCostController;
 use App\Http\Controllers\ContainerCoverController;
+use App\Http\Controllers\ContainerCurrencyController;
 use App\Http\Controllers\ContainerDocumentController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
@@ -1521,6 +1522,24 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/containers/{container}', [ContainerController::class, 'update'])
         ->name('containers.update');
+
+    /*
+     * Issue 1254 · Containerns valutor för kostnader, se
+     * App\Http\Controllers\ContainerCurrencyController och [[ADR-0078
+     * Valutor ur ISO 4217]] § 4.
+     *
+     * **Egen rutt och inte ett fält i PATCH ovan**, därför att valet sparas
+     * DIREKT (Tonys regel 2026-11-14, #1245): varje chip som läggs till
+     * eller tas bort skickar hela listan, och formulärets osparade text
+     * ligger kvar orörd. En `PUT` på en egen sökväg gör de två skrivningarna
+     * åtskilda, precis som ikonens egen `PATCH` (issue 315).
+     *
+     * Grinden är `ContainerPolicy::update`, samma pinne som namnet och
+     * ikonen. `back()` med statuskoden `container-currencies-updated` —
+     * ytan ligger i inställningarna, och svaret ska landa där läsaren står.
+     */
+    Route::put('/containers/{container}/currencies', [ContainerCurrencyController::class, 'update'])
+        ->name('containers.currencies.update');
 
     /*
      * Issue 62b § Beslut 4 · Raderingen. Mjuk, utan kaskad (issue 8), och bär

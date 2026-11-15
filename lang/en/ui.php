@@ -709,6 +709,11 @@ return [
         'quiet-hours-updated' => 'The quiet hours have been saved.',
         'container-created' => 'The container has been created.',
         'container-updated' => 'The container has been saved.',
+        // Issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4. The currency
+        // selection saves on every change (#1245), so its own status line in
+        // the section says what happened — this is the flash for a redirect
+        // that lands anywhere else.
+        'container-currencies-updated' => 'The currencies for costs have been saved.',
         'access-updated' => 'The access has been saved.',
         'access-revoked' => 'The access has been revoked.',
         'invitation-sent' => 'The invitation has been sent.',
@@ -1047,6 +1052,16 @@ return [
         'cost' => [
             'amount_invalid' => 'The amount is not a number. Write it as 1200.50 or 1200,50.',
             'amount_decimals' => 'The amount has too many decimals for :currency, which has at most :max_decimals.',
+        ],
+
+        // The container's currency selection, see issue 1254 · [[ADR-0078
+        // Valutor ur ISO 4217]] § 4. The code is `currency.not_allowed` and
+        // `:allowed` is the list the container accepts, standard currency
+        // included. The sentence is the field error the web form shows on
+        // `currency`; `/api` keeps the code and the data, as always
+        // ([[ADR-0013 Språk och i18n]]).
+        'currency' => [
+            'not_allowed' => 'This container doesn\'t use :currency. Choose one of: :allowed.',
         ],
 
         // The export's only domain error on the web, see issue 67c decision 4.
@@ -2226,6 +2241,23 @@ return [
             'currency' => 'Currency',
             'currency_hint' => 'Leave the field empty and the container uses the account\'s currency (:currency).',
 
+            // Issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4 och 5. The
+            // section under the icon and the image: the currencies a cost in
+            // this container may use. Each change saves at once (#1245), so
+            // nothing here is a *Save*.
+            //
+            // `currencies_standard` names the currency that always stays:
+            // it is not in the selection, but it is always allowed — saying
+            // so is the difference between a rule the owner can see and one
+            // she discovers when a cost is refused.
+            'currencies' => 'Currencies for costs',
+            'currencies_description' => 'Choose the currencies a cost in this container may use.',
+            'currencies_all' => 'All currencies can be used.',
+            'currencies_standard' => 'The container\'s default currency (:currency) is always allowed.',
+            'currencies_add' => 'Add a currency',
+            'currencies_remove' => 'Remove',
+            'currencies_saved' => 'The currencies for costs have been saved.',
+
             // Issue 101: the seven sections that did not fit in the tab row are
             // gathered here — categories, tags, sharing, the calendar link, the
             // export, the trash and the ownership transfer. The heading is the
@@ -2906,6 +2938,11 @@ return [
             'container' => [
                 'created' => ':user created the container',
                 'updated' => ':user changed :fields on the container',
+                // Issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4. Its own
+                // action and not a field on `container.updated`: the currency
+                // selection is a list, written by its own route, and
+                // `meta.values.allowed_currencies` carries both lists.
+                'currencies_updated' => ':user changed the currencies for costs on the container',
                 'deleted' => ':user moved the container to the trash',
                 'restored' => ':user restored the container from the trash',
                 'transferred' => ':user transferred the container to another account',
@@ -3025,6 +3062,7 @@ return [
          * the supplier.
          */
         'field' => [
+            'allowed_currencies' => 'the currencies for costs',
             'amount' => 'the amount',
             'anchor_date' => 'the start date',
             'borrower_email' => 'the borrower\'s email address',
