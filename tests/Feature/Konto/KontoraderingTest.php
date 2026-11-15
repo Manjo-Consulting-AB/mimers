@@ -14,6 +14,7 @@ use App\Models\ContainerAccess;
 use App\Models\CostEntry;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\Notification as NotificationModel;
 use App\Models\Plan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -22,6 +23,7 @@ use App\Models\Subscription;
 use App\Models\UsageCounter;
 use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule as ConsoleSchedule;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -37,10 +39,12 @@ use function Pest\Laravel\artisan;
  *
  * 29a byggde aktivitetsdefinitionen, påminnelsen och stängningen; det här
  * testet täcker raderingen och — det som är själva poängen — de villkor som
- * måste kontrolleras innan något raderas: delade containers med aktiva
- * medlemmar (Beslut 3–4) och aktiv prenumeration (Beslut 2). Innehåll i
- * främmande containers spärrar inte längre (issue 143) — det flyttas eller
- * nollställs i stället, se avsnittet längre ned.
+ * avgör om ett konto får raderas: aktiv prenumeration (Beslut 2) och den
+ * rättsliga spärren. Innehåll i främmande containers spärrar inte (issue
+ * 143), och sedan issue 1237 spärrar inte heller delade containrar: kontot
+ * raderas oavsett medlemmar, och medlemmarna får `container.deleted` med
+ * skälet `account_inactive` ([[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-11-14).
  *
  * Jobbets `handle()` anropas direkt, precis som AdvancesAccountLifecycle
  * testas i LivscykelTest. Tiden styrs med Carbon::setTestNow() — gränserna
@@ -133,52 +137,100 @@ function kontoraderingKör(?DeleteAccount $deleteAccount = null): void
     (new DeletesDormantAccounts($deleteAccount))->handle();
 }
 
-it('ett konto med en delad container som har aktiva medlemmar raderas inte', function () {
-    [$konto, $medlem] = kontoraderingVilande();
-    $container = kontoraderingContainer($konto);
-    $annatKonto = Account::factory()->create();
+/**
+ * En person med ett eget personkonto — mottagaren av `container.deleted` när
+ * ett konto hon har åtkomst till raderas. Personkontot behövs för att
+ * notisraden ska bära mottagarens `account_id`, inte det raderade kontots:
+ * uppslaget är App\Support\Account\ActingAccount:s, samma som i
+ * ContainerRaderadNotisTest.
+ *
+ * @return array{0: User, 1: Account}
+ */
+function kontoraderingMottagare(): array
+{
+    $person = User::factory()->create();
+    $personkonto = Account::factory()->create(['type' => 'personal']);
+    $personkonto->users()->attach($person, ['role' => 'owner']);
 
-    ContainerAccess::factory()->for($container, 'container')->create([
-        'grantee_type' => 'account',
-        'grantee_id' => $annatKonto->id,
-        'level' => 'write',
-        'kind' => 'managed',
-        'granted_by_user_id' => $medlem->id,
-    ]);
+    return [$person, $personkonto];
+}
+
+/**
+ * @return Collection<int, NotificationModel>
+ */
+function kontoraderingNotiser(): Collection
+{
+    return NotificationModel::query()
+        ->where('type', NotificationModel::TYPE_CONTAINER_DELETED)
+        ->orderBy('id')
+        ->get();
+}
+
+it('ett konto med en delad container raderas efter arton månader', function () {
+    [$konto] = kontoraderingVilande();
+    $container = kontoraderingContainer($konto);
+
+    [$mottagare, $personkonto] = kontoraderingMottagare();
+    beviljaAccess($container, $mottagare, 'read', 'member');
 
     Carbon::setTestNow('2026-09-04 12:00:00');
     kontoraderingKör();
 
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    expect(Container::query()->whereKey($container->id)->exists())->toBeTrue();
+    // Delade containrar spärrar inte längre (ADR-0045 § Uppföljning
+    // 2026-11-14): kontot och containern raderas, och medlemmen förlorar
+    // åtkomsten.
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+    expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
+    expect(ContainerAccess::query()->where('container_id', $container->id)->exists())->toBeFalse();
 });
 
-it('blockeringen loggas med skäl och container', function () {
-    [$konto, $medlem] = kontoraderingVilande();
+it('medlemmen får container.deleted med skälet account_inactive', function () {
+    [$konto] = kontoraderingVilande();
     $container = kontoraderingContainer($konto);
-    $annatKonto = Account::factory()->create();
 
-    ContainerAccess::factory()->for($container, 'container')->create([
-        'grantee_type' => 'account',
-        'grantee_id' => $annatKonto->id,
-        'level' => 'write',
-        'kind' => 'managed',
-        'granted_by_user_id' => $medlem->id,
-    ]);
+    [$mottagare, $personkonto] = kontoraderingMottagare();
+    beviljaAccess($container, $mottagare, 'read', 'member');
 
     Carbon::setTestNow('2026-09-04 12:00:00');
-    $logg = Log::spy();
     kontoraderingKör();
 
-    $logg->shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'account.deletion_blocked'
-            && ($kontext['account_ulid'] ?? null) === $konto->ulid
-            && ($kontext['reason'] ?? null) === 'shared_container'
-            && ($kontext['containers'] ?? null) === [$container->ulid],
-    );
+    $notis = kontoraderingNotiser()->sole();
+
+    expect($notis->user_id)->toBe($mottagare->id)
+        ->and($notis->account_id)->toBe($personkonto->id)
+        ->and($notis->container_id)->toBeNull()
+        ->and($notis->payload)->toBe([
+            'container' => $container->name,
+            'reason' => DeleteAccount::REASON_ACCOUNT_INACTIVE,
+        ]);
 });
 
-it('ingen del av ett blockerat konto raderas', function () {
+it('ingen blockering loggas för ett konto med delade containrar', function () {
+    [$konto] = kontoraderingVilande();
+    $container = kontoraderingContainer($konto);
+
+    [$mottagare] = kontoraderingMottagare();
+    beviljaAccess($container, $mottagare, 'read', 'member');
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+
+    /** @var list<string> $meddelanden */
+    $meddelanden = [];
+    Log::listen(function ($händelse) use (&$meddelanden): void {
+        if ($händelse->level === 'warning') {
+            $meddelanden[] = $händelse->message;
+        }
+    });
+
+    kontoraderingKör();
+
+    // Loggraden `shared_container` är borta (issue 1237). En körning som
+    // raderar kontot loggar `account.deleted` och aldrig en blockering.
+    expect($meddelanden)->toContain('account.deleted');
+    expect($meddelanden)->not->toContain('account.deletion_blocked');
+});
+
+it('ett konto med en delad container raderas med alla sina containers', function () {
     [$konto, $medlem] = kontoraderingVilande();
     $delad = kontoraderingContainer($konto);
     $annatKonto = Account::factory()->create();
@@ -191,7 +243,8 @@ it('ingen del av ett blockerat konto raderas', function () {
         'granted_by_user_id' => $medlem->id,
     ]);
 
-    // En container utan medlemmar — den får inte heller raderas (Beslut 4).
+    // En container utan medlemmar — den raderas också (ADR-0045
+    // § Uppföljning 2026-11-14: hela kontot följer med).
     $ensam = kontoraderingContainer($konto);
     $item = kontoraderingItem($ensam, $konto, $medlem);
     $bilaga = kontoraderingBilaga($item, $konto, $medlem);
@@ -199,14 +252,14 @@ it('ingen del av ett blockerat konto raderas', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     kontoraderingKör();
 
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    expect(Container::query()->whereKey($delad->id)->exists())->toBeTrue();
-    expect(Container::query()->whereKey($ensam->id)->exists())->toBeTrue();
-    expect(Item::query()->whereKey($item->id)->exists())->toBeTrue();
-    expect(Attachment::query()->whereKey($bilaga->id)->exists())->toBeTrue();
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+    expect(Container::withTrashed()->whereKey($delad->id)->exists())->toBeFalse();
+    expect(Container::withTrashed()->whereKey($ensam->id)->exists())->toBeFalse();
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
 });
 
-it('en obesvarad inbjudan räknas som en aktiv medlem', function () {
+it('en obesvarad inbjudan hindrar inte raderingen', function () {
     [$konto, $medlem] = kontoraderingVilande();
     $container = kontoraderingContainer($konto);
 
@@ -219,11 +272,14 @@ it('en obesvarad inbjudan räknas som en aktiv medlem', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     kontoraderingKör();
 
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    expect(Invitation::query()->where('container_id', $container->id)->exists())->toBeTrue();
+    // Inbjudan har ingen mottagare med konto och ger ingen notis — den
+    // försvinner med containern.
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+    expect(Invitation::query()->where('container_id', $container->id)->exists())->toBeFalse();
+    expect(kontoraderingNotiser())->toHaveCount(0);
 });
 
-it('en återkallad åtkomst räknas inte', function () {
+it('en återkallad åtkomst hindrar inte raderingen', function () {
     [$konto, $medlem] = kontoraderingVilande();
     $container = kontoraderingContainer($konto);
     $annatKonto = Account::factory()->create();
@@ -242,32 +298,33 @@ it('en återkallad åtkomst räknas inte', function () {
 
     expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
     expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
+
+    // En återkallad åtkomst ger ingen notis: mottagaren räknas ur GILTIGA
+    // åtkomster.
+    expect(kontoraderingNotiser())->toHaveCount(0);
 });
 
-it('en mjukraderad container med aktiva medlemmar blockerar raderingen', function () {
-    [$konto, $medlem] = kontoraderingVilande();
+it('en mjukraderad container raderas också, och medlemmen får notis', function () {
+    [$konto] = kontoraderingVilande();
     $container = kontoraderingContainer($konto);
-    $annatKonto = Account::factory()->create();
 
-    ContainerAccess::factory()->for($container, 'container')->create([
-        'grantee_type' => 'account',
-        'grantee_id' => $annatKonto->id,
-        'level' => 'write',
-        'kind' => 'managed',
-        'granted_by_user_id' => $medlem->id,
-    ]);
+    [$mottagare] = kontoraderingMottagare();
+    beviljaAccess($container, $mottagare, 'read', 'member');
 
     // En soft delete återkallar inte container_access — den sätter bara
-    // `deleted_at` på container-raden och innehållet ligger kvar tills
-    // gallringsjobbet tar det. Medlemmarna är alltså fortfarande aktiva när
-    // raderingsjobbet kör, och ägarskapet har inte erbjudits.
+    // `deleted_at` på container-raden. Containern gallras med withTrashed()
+    // och medlemmen förlorar åtkomsten, precis som för en levande container.
     $container->delete();
 
     Carbon::setTestNow('2026-09-04 12:00:00');
     kontoraderingKör();
 
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeTrue();
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+    expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
+
+    $notis = kontoraderingNotiser()->sole();
+    expect($notis->user_id)->toBe($mottagare->id)
+        ->and($notis->payload['reason'])->toBe(DeleteAccount::REASON_ACCOUNT_INACTIVE);
 });
 
 it('ett konto med aktiv prenumeration raderas aldrig', function () {
