@@ -58,6 +58,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * när ingen ikon är vald, aldrig utelämnade, samma regel som `kind` och
  * `description`. Klienten ritar då rollen `container` (ADR-0064 § 4).
  *
+ * **`allowed_currencies` kom med issue 1254 · [[ADR-0078 Valutor ur ISO
+ * 4217]] § 4.** Det är containerns urval av valutor för kostnader, och det
+ * står ALLTID med som en lista — en tom lista betyder alla valutor. Läsaren
+ * ska inte behöva skilja "saknas" från "tomt": samma regel som `kind` och
+ * `description` ovan. Relationen `allowedCurrencies` eager-loadas av
+ * listningarna (App\Http\Controllers\ContainerController::index() och
+ * App\Http\Controllers\Api\ContainerController::index()); en enkelradsväg
+ * betalar högst en fråga.
+ *
  * @mixin Container
  */
 class ContainerResource extends JsonResource
@@ -132,6 +141,12 @@ class ContainerResource extends JsonResource
             // `null`, som `kind` och `description` ovan.
             'icon' => $this->icon,
             'icon_color' => $this->icon_color,
+            // Containerns urval av valutor för kostnader (issue 1254 ·
+            // [[ADR-0078 Valutor ur ISO 4217]] § 4). ALLTID med, som en lista:
+            // en TOM lista betyder alla valutor, aldrig "inga". Standardvalutan
+            // står bara med när ägaren har markerat den — den är ändå alltid
+            // tillåten, se App\Models\Container::permitsCurrency().
+            'allowed_currencies' => $container->allowedCurrencyCodes(),
             'account' => $this->account->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),

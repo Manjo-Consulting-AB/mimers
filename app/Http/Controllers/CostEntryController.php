@@ -79,11 +79,8 @@ class CostEntryController extends Controller
         try {
             $cost = $createCostEntry->handle($container, $item, Arr::except($request->validated(), 'return'), $request->user());
         } catch (ApiException $e) {
-            // Felet gäller beloppet, och det är fältet användaren skrev i.
-            // Meningen kommer ur `lang/` och koden når aldrig en webbläsare
-            // ([[ADR-0013 Språk och i18n]]).
             throw ValidationException::withMessages([
-                'amount' => $translator->message($e),
+                $this->fieldFor($e) => $translator->message($e),
             ]);
         }
 
@@ -136,7 +133,7 @@ class CostEntryController extends Controller
             $updateCostEntry->handle($item, $cost, $request->validated(), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
-                'amount' => $translator->message($e),
+                $this->fieldFor($e) => $translator->message($e),
             ]);
         }
 
@@ -168,5 +165,21 @@ class CostEntryController extends Controller
         return redirect()
             ->route('containers.items.show', [$container, $item, 'tab' => 'costs'])
             ->with('status', 'cost-deleted');
+    }
+
+    /**
+     * Fältet ett domänfel hör till — issue 1254 · [[ADR-0078 Valutor ur ISO
+     * 4217]] § 4.
+     *
+     * `currency.not_allowed` gäller valutan, och felet ska markera
+     * valutafältet och inte beloppet. Alla andra domänfel här gäller
+     * beloppet (`cost.amount_invalid`, `cost.amount_decimals`), som förut.
+     * Att välja fält i kontrollern och inte i actionen håller
+     * App\Actions\Cost fri från webbens fältnamn: `/api` svarar med koden,
+     * webben med ett fältfel.
+     */
+    private function fieldFor(ApiException $e): string
+    {
+        return $e->errorCode() === 'currency.not_allowed' ? 'currency' : 'amount';
     }
 }

@@ -51,6 +51,13 @@ const props = defineProps({
     options: { type: Array, default: null },
     /* Sant där tomt är ett svar — containerns "ärv kontot". */
     allowEmpty: { type: Boolean, default: false },
+    /*
+     * Avstängt fält, t.ex. medan ett val sparas i inställningarna (issue
+     * 1254). Fältet öppnar ingen lista och tar ingen text medan det är
+     * avstängt — ett andra val innan det första svarat hade blivit två
+     * skrivningar i rad.
+     */
+    disabled: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -84,6 +91,22 @@ function optionFor(code) {
 }
 
 /*
+ * Etiketten `EUR · Euro`, eller bara koden när namnet saknas eller är koden
+ * själv. Sedan issue 1254 kan `options` komma från containerns urval innan
+ * den delade listan hämtats; då bär raden bara koden, och `EUR · EUR` vore
+ * en upprepning som ser ut som ett fel.
+ */
+function labelFor(option) {
+    if (option === null) {
+        return '';
+    }
+
+    return option.name && option.name !== option.code
+        ? `${option.code} · ${option.name}`
+        : option.code;
+}
+
+/*
  * Det valda värdet som det skrivs i rutan. Koden är reserven: en rad med en
  * kod utanför listan ([[ADR-0078 Valutor ur ISO 4217]] § 3) visas som förut,
  * och en tom ruta är tom.
@@ -95,7 +118,7 @@ const display = computed(() => {
 
     const hit = optionFor(props.modelValue);
 
-    return hit === null ? props.modelValue : `${hit.code} · ${hit.name}`;
+    return hit === null ? props.modelValue : labelFor(hit);
 });
 
 /* Utanför listan är rutan alltid det valda värdet — aldrig det man skrev. */
@@ -154,6 +177,10 @@ function loadOptions() {
 }
 
 async function onFocus(event) {
+    if (props.disabled) {
+        return;
+    }
+
     loadOptions();
 
     open.value = true;
@@ -168,6 +195,10 @@ async function onFocus(event) {
 }
 
 function onInput(event) {
+    if (props.disabled) {
+        return;
+    }
+
     text.value = event.target.value;
     query.value = event.target.value;
     open.value = true;
@@ -182,7 +213,7 @@ function onInput(event) {
 function selectOption(option) {
     emit('update:modelValue', option.code);
 
-    text.value = option.code === '' ? '' : `${option.code} · ${option.name}`;
+    text.value = option.code === '' ? '' : labelFor(option);
     open.value = false;
     query.value = '';
     active.value = 0;
@@ -200,7 +231,7 @@ function onBlur() {
             emit('update:modelValue', match.code);
         }
 
-        text.value = `${match.code} · ${match.name}`;
+        text.value = labelFor(match);
     } else {
         text.value = display.value;
     }
@@ -275,7 +306,8 @@ function onKeydown(event) {
             type="text"
             autocomplete="off"
             spellcheck="false"
-            class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            :disabled="disabled"
+            class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
             @input="onInput"
             @focus="onFocus"
             @blur="onBlur"
@@ -308,7 +340,7 @@ function onKeydown(event) {
                     <span v-if="option.code === ''">{{ option.name }}</span>
                     <template v-else>
                         <span class="font-medium">{{ option.code }}</span>
-                        <span class="text-ink-muted">{{ option.name }}</span>
+                        <span v-if="option.name && option.name !== option.code" class="text-ink-muted">{{ option.name }}</span>
                     </template>
                 </button>
             </li>

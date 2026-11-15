@@ -56,6 +56,16 @@ class UpdateCostEntry
      */
     public function handle(Item $item, CostEntry $cost, array $data, User $actor): CostEntry
     {
+        // Containerns urval av valutor (issue 1254 · [[ADR-0078 Valutor ur
+        // ISO 4217]] § 4). **Undantaget:** en redigering som BEHÅLLER radens
+        // nuvarande valuta godtas även om valutan tagits bort ur urvalet —
+        // historiken ska inte låsas, och en rad i en utgången valuta ska
+        // fortfarande gå att rätta på andra fält. Bara ett BYTE till en
+        // annan valuta prövas.
+        if (array_key_exists('currency', $data) && $data['currency'] !== $cost->currency) {
+            $item->container->ensurePermitsCurrency($data['currency']);
+        }
+
         if (array_key_exists('amount', $data)) {
             $amount = MinorUnits::parse($data['amount'], $data['currency']);
             unset($data['amount']);

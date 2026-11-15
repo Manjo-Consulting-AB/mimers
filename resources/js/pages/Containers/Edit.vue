@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { computed, onMounted, ref, watch } from 'vue';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
@@ -219,6 +219,109 @@ function removeIcon() {
             iconError.value = errors.icon ?? errors.icon_color ?? null;
         },
     });
+}
+
+// --- Valutor för kostnader (issue 1254 · ADR-0078 § 4 och 5) ---------------
+//
+// Avsnittet ligger efter ikonen och bilden, och varje ändring sparas DIREKT
+// (Tonys regel 2026-11-14, #1245): ett chip som läggs till eller tas bort
+// skickar hela den nya listan med PUT, och formulärets text ligger kvar
+// osparad. Ingen *Save* hör hit — valet är en väljare, inte text.
+//
+// Urvalet läses ur `container.allowed_currencies` (ContainerResource).
+// Standardvalutan står alltid med som chip när ett urval finns, och har
+// ingen *Remove*: den är alltid tillåten utan att stå i urvalet (ADR-0078
+// § 4). Ett tomt urval betyder alla valutor och ritas som en mening.
+const page = usePage();
+
+const defaultCurrency = computed(() => props.currency ?? props.accountCurrency);
+
+const selectedCurrencies = computed(() => props.container.allowed_currencies ?? []);
+
+/* Namnen ur den delade, LATA `currencies`-proppen — samma som CurrencyField
+   använder. Saknas den visas bara koden, och avsnittet fungerar ändå. */
+const currencyNames = computed(() => Object.fromEntries(
+    (page.props.currencies ?? []).map((option) => [option.code, option.name]),
+));
+
+function currencyLabel(code) {
+    const name = currencyNames.value[code];
+
+    return name && name !== code ? `${code} · ${name}` : code;
+}
+
+/* Chipsen: urvalet PLUS standardvalutan, utan dubbletter. */
+const shownCurrencies = computed(() => (selectedCurrencies.value.length === 0
+    ? []
+    : [...new Set([...selectedCurrencies.value, defaultCurrency.value])].sort()));
+
+/*
+ * Namnen hämtas bara när det finns ett urval att sätta namn på. Utan urval
+ * ritar avsnittet meningen *All currencies can be used* och behöver dem inte;
+ * CurrencyField hämtar listan själv när den får fokus.
+ */
+function loadCurrencyNames() {
+    if (selectedCurrencies.value.length > 0 && page.props.currencies === undefined) {
+        router.reload({ only: ['currencies'] });
+    }
+}
+
+onMounted(loadCurrencyNames);
+
+const currencyToAdd = ref('');
+const currenciesPending = ref(false);
+const currenciesStatus = ref(null);
+const currenciesError = ref(null);
+
+/*
+ * Hela listan skickas varje gång — servern ersätter urvalet och svarar med
+ * containern. `preserveState` håller formulärets osparade text kvar, precis
+ * som ikonvalet gör (issue 315), och statusraden säger vad som hände.
+ */
+function saveCurrencies(codes) {
+    currenciesStatus.value = null;
+    currenciesError.value = null;
+
+    router.put(`/containers/${props.container.ulid}/currencies`, { currencies: codes }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            currenciesPending.value = true;
+        },
+        onFinish: () => {
+            currenciesPending.value = false;
+        },
+        onSuccess: () => {
+            currenciesStatus.value = 'saved';
+            currencyToAdd.value = '';
+            loadCurrencyNames();
+        },
+        onError: (errors) => {
+            currenciesError.value = errors.currencies ?? errors['currencies.0'] ?? null;
+            currencyToAdd.value = '';
+        },
+    });
+}
+
+/* Ett val i CurrencyField sparas direkt. Standardvalutan läggs aldrig till i
+   urvalet — den är alltid tillåten och står redan som chip — och samma valuta
+   två gånger är inget nytt urval. Inget av dem skickar något. */
+watch(currencyToAdd, (code) => {
+    if (code === '' || currenciesPending.value) {
+        return;
+    }
+
+    if (code === defaultCurrency.value || selectedCurrencies.value.includes(code)) {
+        currencyToAdd.value = '';
+
+        return;
+    }
+
+    saveCurrencies([...selectedCurrencies.value, code]);
+});
+
+function removeCurrency(code) {
+    saveCurrencies(selectedCurrencies.value.filter((currency) => currency !== code));
 }
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
@@ -456,6 +559,69 @@ async function destroy() {
                 </button>
             </ContainerCoverSheet>
         </div>
+    </section>
+
+    <!--
+        Valutor för kostnader (issue 1254 · [[ADR-0078 Valutor ur ISO 4217]]
+        § 4 och 5). Eget avsnitt efter ikonen och bilden, och varje ändring
+        sparas direkt med en PUT av hela listan — ingen *Save* (Tonys regel
+        2026-11-14, #1245). Standardvalutan står alltid med och kan inte tas
+        bort: den är tillåten utan att stå i urvalet. Ett tomt urval betyder
+        alla valutor och sägs med en mening.
+    -->
+    <section v-if="can.update" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('container.edit.currencies') }}</h2>
+
+        <p class="mt-1 text-sm text-ink-subtle">{{ t('container.edit.currencies_description') }}</p>
+
+        <p v-if="selectedCurrencies.length === 0" class="mt-4 text-body text-ink">
+            {{ t('container.edit.currencies_all') }}
+        </p>
+
+        <ul v-else class="mt-4 flex flex-wrap gap-2">
+            <li
+                v-for="code in shownCurrencies"
+                :key="code"
+                class="flex items-center gap-2 rounded-control border border-border bg-surface px-3 py-2"
+            >
+                <span class="text-body text-ink">{{ currencyLabel(code) }}</span>
+
+                <!-- Standardvalutan har ingen *Remove*: den är alltid tillåten
+                     och kan bara försvinna genom att containerns egen valuta
+                     ändras i formuläret ovan. -->
+                <button
+                    v-if="code !== defaultCurrency"
+                    type="button"
+                    :disabled="currenciesPending"
+                    class="inline-flex min-h-11 items-center rounded-control px-2 text-sm font-medium text-ink-muted hover:bg-surface-muted hover:text-ink disabled:opacity-50"
+                    @click="removeCurrency(code)"
+                >
+                    {{ t('container.edit.currencies_remove') }}
+                </button>
+            </li>
+        </ul>
+
+        <p v-if="selectedCurrencies.length > 0" class="mt-2 text-sm text-ink-subtle">
+            {{ t('container.edit.currencies_standard', { currency: defaultCurrency }) }}
+        </p>
+
+        <div class="mt-4 max-w-sm">
+            <label class="text-sm font-medium" for="container-currency-add">
+                {{ t('container.edit.currencies_add') }}
+            </label>
+
+            <CurrencyField
+                id="container-currency-add"
+                v-model="currencyToAdd"
+                :disabled="currenciesPending"
+            />
+        </div>
+
+        <p v-if="currenciesError" role="alert" class="mt-2 text-sm text-danger">{{ currenciesError }}</p>
+
+        <p v-else-if="currenciesStatus" role="status" class="mt-2 text-sm text-ink-subtle">
+            {{ t('container.edit.currencies_saved') }}
+        </p>
     </section>
 
     <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
