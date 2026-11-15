@@ -1,0 +1,86 @@
+<?php
+
+namespace App\Support\Notification;
+
+use App\Models\Container;
+use App\Models\Item;
+use App\Models\Loan;
+use App\Models\Notification;
+use App\Models\ScheduleOccurrence;
+
+/**
+ * Adressen en notisrad pekar på, eller `null` när det inte finns någon sida.
+ *
+ * **Ett enda uppslag.** Klassen flyttades hit ur HandleInertiaRequests i
+ * issue 383 ([[ADR-0077 Notislistan i appen]] § 3): klockans lista och
+ * `in_app`-listan ska peka på samma ställe, och två kopior av `match`-satsen
+ * hade glidit isär den dag en typ fick ett mål. HandleInertiaRequests och
+ * App\Actions\Notification\ListInAppNotifications använder båda den här
+ * klassen; ingen av dem stavar en rutt själv.
+ *
+ * **Bara de tre typer som har ett mål länkar** (issue 127 § Beslut). En
+ * kvotvarning, en inaktivitetsvarning och ett raderat containerbesked gäller
+ * KONTOT eller något som inte finns kvar, och ritas som text. Adressen byggs
+ * här och inte i JavaScript: den bär två ULID:n som bara servern känner
+ * (issue 51 § Beslut 7).
+ *
+ * Klassen är en injicerbar stödklass, samma form som
+ * App\Support\Notification\NotificationPreferences.
+ */
+final class NotificationTarget
+{
+    /**
+     * Adressen en rad pekar på, eller `null` när det inte finns någon sida.
+     */
+    public function for(Notification $notification): ?string
+    {
+        return match ($notification->type) {
+            Notification::TYPE_TASK_DUE, Notification::TYPE_TASK_OVERDUE => $this->taskTarget($notification),
+            Notification::TYPE_LOAN_DUE => $this->loanTarget($notification),
+            Notification::TYPE_TRANSFER_REQUESTED => route('transfers.index', [], false),
+            default => null,
+        };
+    }
+
+    /**
+     * Uppgiften till sitt item: förekomsten är radens subject, och vägen går
+     * genom schemat.
+     */
+    private function taskTarget(Notification $notification): ?string
+    {
+        $occurrence = $notification->subject;
+
+        return $occurrence instanceof ScheduleOccurrence
+            ? $this->itemTarget($occurrence->schedule?->item, $notification->container)
+            : null;
+    }
+
+    /**
+     * Lånet till sitt item: lånet är radens subject (issue 127 § Beslut).
+     */
+    private function loanTarget(Notification $notification): ?string
+    {
+        $loan = $notification->subject;
+
+        return $loan instanceof Loan
+            ? $this->itemTarget($loan->item, $notification->container)
+            : null;
+    }
+
+    /**
+     * En itemväg, eller `null` när målet inte längre finns.
+     *
+     * Ett mjukraderat item — eller en container i papperskorgen — faller bort
+     * genom SoftDeletes' globala scope och ger `null`: raden blir en text i
+     * stället för en länk till en 404. Samma svar som händelseloggen ger en
+     * gallrad rad, och av samma skäl.
+     */
+    private function itemTarget(?Item $item, ?Container $container): ?string
+    {
+        if ($item === null || $container === null) {
+            return null;
+        }
+
+        return route('containers.items.show', [$container, $item], false);
+    }
+}

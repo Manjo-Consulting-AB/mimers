@@ -19,7 +19,7 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  *
  * **Siffran och listan kommer olika vägar, och det är hela konstruktionen.**
  * `unreadNotificationCount` är en delad prop som följer med varje sida och
- * kostar EN fråga (App\Http\Middleware\HandleInertiaRequests); `notifications`
+ * kostar EN fråga (App\Http\Middleware\HandleInertiaRequests); `notificationList`
  * är en OPTIONAL prop, och en vanlig sidladdning rör den aldrig. Listan
  * hämtas först när klockan öppnas, med `router.reload({ only: [...] })` — en
  * partiell omladdning av just den nyckeln, som är precis vad en optional prop
@@ -122,7 +122,7 @@ const unread = computed(() => page.props.unreadNotificationCount ?? 0);
  * medan notiserna var på väg hade sagt "inget nytt" om en lista den ännu inte
  * fått.
  */
-const rows = computed(() => page.props.notifications);
+const rows = computed(() => page.props.notificationList);
 
 const invitations = computed(() => page.props.pendingInvitations);
 
@@ -158,7 +158,7 @@ function toggle() {
     loaded.value = true;
 
     if (unread.value === 0) {
-        router.reload({ only: ['notifications', 'pendingInvitations'] });
+        router.reload({ only: ['notificationList', 'pendingInvitations'] });
 
         return;
     }
@@ -173,7 +173,7 @@ function toggle() {
         // listorna, så de hämtas en gång till — annars hade panelen tömts i
         // samma stund som siffran nollställdes. Inbjudningarna hade fallit
         // bort med dem, fast de inte nollställs av skrivningen.
-        onSuccess: () => router.reload({ only: ['notifications', 'pendingInvitations'] }),
+        onSuccess: () => router.reload({ only: ['notificationList', 'pendingInvitations'] }),
     });
 }
 
@@ -190,7 +190,7 @@ function clear() {
     router.post('/notifications/clear', {}, {
         preserveScroll: true,
         preserveState: true,
-        onSuccess: () => router.reload({ only: ['notifications', 'pendingInvitations'] }),
+        onSuccess: () => router.reload({ only: ['notificationList', 'pendingInvitations'] }),
     });
 }
 </script>

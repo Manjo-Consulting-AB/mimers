@@ -18,9 +18,15 @@ use App\Models\User;
  * App\Support\Plan\Entitlements och de actions [[ADR-0024 Tunna controllers
  * och actions]] beskriver.
  *
- * Preferenserna styr kanalen `email`, aldrig `webhook` (Beslut 4): en webhook
- * är en integration ett KONTO registrerat, med sina egna `event_types` — den
- * frågar aldrig den här tabellen. 37b lägger webhookraderna på sin egen grund.
+ * Preferenserna styr kanalerna `email` och `in_app`, aldrig `webhook`
+ * (Beslut 4): en webhook är en integration ett KONTO registrerat, med sina
+ * egna `event_types` — den frågar aldrig den här tabellen. 37b lägger
+ * webhookraderna på sin egen grund.
+ *
+ * **`in_app` kom med issue 383** ([[ADR-0077 Notislistan i appen]] § 4).
+ * Kanalen har ett eget förval per typ, avslaget för alla i den här issuen;
+ * 386 slår på det för de första typerna. `digest` är alltid falsk för
+ * `in_app` — en rad i listan är ingen sammanfattning.
  */
 final class NotificationPreferences
 {
@@ -76,17 +82,29 @@ final class NotificationPreferences
 
     /**
      * Kanalerna en notis av den här typen ska levereras på, för den här
-     * mottagaren. I den här issuen är e-post den enda kanal som frågar
-     * preferenserna (Beslut 4, Beslut 6) — webhooken läggs av 37b på sin egen
-     * grund.
+     * mottagaren. Varje PÅSLAGEN kanal returneras — `email` och `in_app` —
+     * i den ordningen, så anroparen aldrig behöver känna till kanalerna
+     * själv (issue 383). `digest` påverkar inte valet här: e-postens
+     * sammanfattningsflagga sätts på leveransraden av CreateNotification.
+     *
+     * `$user = null` (ren kontonotis) får aldrig `in_app`: det finns ingen
+     * person att visa raden för. E-posten följer förvalet som förut.
      *
      * @return list<string>
      */
     public function channelsFor(?User $user, string $type): array
     {
-        return $this->isEnabled($user, $type, NotificationDelivery::CHANNEL_EMAIL)
-            ? [NotificationDelivery::CHANNEL_EMAIL]
-            : [];
+        $channels = [];
+
+        if ($this->isEnabled($user, $type, NotificationDelivery::CHANNEL_EMAIL)) {
+            $channels[] = NotificationDelivery::CHANNEL_EMAIL;
+        }
+
+        if ($user !== null && $this->isEnabled($user, $type, NotificationDelivery::CHANNEL_IN_APP)) {
+            $channels[] = NotificationDelivery::CHANNEL_IN_APP;
+        }
+
+        return $channels;
     }
 
     /**
@@ -102,9 +120,18 @@ final class NotificationPreferences
      * Ska notiser av den här typen samlas i veckosammanfattningen i stället
      * för att levereras direkt? Läses av 35; i den här issuen skapar
      * `digest = true` en leveransrad precis som allt annat (Beslut 7).
+     *
+     * **Alltid falskt för `in_app`** ([[ADR-0077 Notislistan i appen]] § 4):
+     * listan är ett flöde av enskilda rader, inte en sammanfattning. Värdet
+     * läses från förvalet eller raden bara för e-post, så en rad som någon
+     * skrivit med `digest = true` på kanalen kan aldrig få genomslag.
      */
     public function digest(?User $user, string $type, string $channel): bool
     {
+        if ($channel === NotificationDelivery::CHANNEL_IN_APP) {
+            return false;
+        }
+
         return $this->resolve($user, $type, $channel)['digest'];
     }
 
@@ -139,6 +166,15 @@ final class NotificationPreferences
     {
         if ($channel === NotificationDelivery::CHANNEL_EMAIL && isset(self::EMAIL_DEFAULTS[$type])) {
             return self::EMAIL_DEFAULTS[$type];
+        }
+
+        if ($channel === NotificationDelivery::CHANNEL_IN_APP) {
+            // Avslagen för VARJE typ i issue 383 — kanalen finns, men ingen
+            // typ har den påslagen förrän 386 lägger till de första tre
+            // ([[ADR-0077 Notislistan i appen]] § 4). Ett "på" här hade
+            // fyllt listan med rader ingen bett om, och okända typer ska
+            // aldrig få kanalen av misstag.
+            return ['enabled' => false, 'digest' => false];
         }
 
         return self::UNKNOWN_DEFAULT;

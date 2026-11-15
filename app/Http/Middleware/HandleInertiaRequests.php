@@ -7,6 +7,7 @@ use App\Actions\Item\ListCreatableItems;
 use App\Actions\Item\ListFavorites;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
+use App\Actions\Notification\CountUnreadInAppNotifications;
 use App\Actions\Schedule\ListTodo;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
@@ -23,6 +24,7 @@ use App\Models\User;
 use App\Support\Cost\Currencies;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Invitation\PendingInvitation;
+use App\Support\Notification\NotificationTarget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -37,7 +39,7 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Arton nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Nitton nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -79,7 +81,7 @@ use Inertia\Middleware;
  * annat: den ritas i sidhuvudet på varje sida, och den kostar EN fråga för
  * notiserna — indexet `(user_id, created_at)` finns för den. Sedan 131
  * tillkommer en fråga för de väntande inbjudningarna, se nedan.
- * `notifications` är LISTAN, och den är `Inertia::optional()`: den hämtas
+ * `notificationList` är LISTAN, och den är `Inertia::optional()`: den hämtas
  * först när klockan öppnas, genom en partiell omladdning av just den nyckeln,
  * och en vanlig sidladdning rör den aldrig. Skillnaden är hela poängen —
  * siffran är billig och behövs överallt, raderna är dyra och behövs sällan.
@@ -92,6 +94,17 @@ use Inertia\Middleware;
  * preferenserna eller de tysta timmarna — den som öppnar klockan har redan
  * fått sina mejl. De sex typer som faktiskt skrivs är de klockan visar ur
  * `notification` (issue 127 § Beslut).
+ *
+ * **`notifications` kom med M60 · issue 383, och den gamla listan bytte
+ * namn.** Den nya notislistan ([[ADR-0077 Notislistan i appen]] § 7) läser
+ * antalet olästa `in_app`-rader ur `notifications.unread` — en liten karta
+ * som delas på varje sida och räknas i App\Actions\Notification\
+ * CountUnreadInAppNotifications. Klockans gamla lista låg också på
+ * `notifications`; två props med samma nyckel går inte, och att kapsla in
+ * listan under märket hade gjort varje partiell omladdning av siffran till en
+ * hämtning av tjugo rader. Listan heter därför `notificationList` tills ytan
+ * i 385 ersätter den. Det är en namnändring utan beteendeändring — raderna är
+ * desamma.
  *
  * **Inbjudningarna kom med issue 131, och de läses ur `invitation`.** En
  * väntande inbjudan är ingen notisrad — en inbjudan har ingen notistyp alls
@@ -196,12 +209,14 @@ class HandleInertiaRequests extends Middleware
 
     public function __construct(
         private readonly ActiveContainer $activeContainer,
+        private readonly CountUnreadInAppNotifications $countUnreadInAppNotifications,
         private readonly ListCreatableItems $listCreatableItems,
         private readonly ListFavorites $listFavorites,
         private readonly ListItems $listItems,
         private readonly ListRecentVisits $listRecentVisits,
         private readonly ListShellContainers $listShellContainers,
         private readonly ListTodo $listTodo,
+        private readonly NotificationTarget $notificationTarget,
         private readonly PendingInvitation $pendingInvitation,
     ) {}
 
@@ -247,13 +262,24 @@ class HandleInertiaRequests extends Middleware
             'favorites' => fn (): array => $this->favorites($request),
             'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
                 + $this->pendingInvitationCount($request),
+            // Notislistans märke (M60 · issue 383): antalet olästa
+            // `in_app`-rader. En liten karta och inte ett heltal, eftersom
+            // ytan (385) läser `notifications.unread` — samma plats som
+            // klockan får sin siffra ur. Gästen får noll utan en fråga.
+            'notifications' => fn (): array => $this->notificationsSummary($request),
             // Inboxens tal (M27 · issue 245) — se inboxCount() om varför det är
             // en delad prop och varför det räknas utan ResolveInbox.
             'inboxCount' => fn (): int => $this->inboxCount($request),
             // Ingen closure runt OptionalProp: den är redan lat, och en
             // kapslad closure hade fått resolvern att packa upp den i två
             // steg i stället för att filtrera den som den prop den är.
-            'notifications' => Inertia::optional(fn (): array => $this->notifications($request)),
+            //
+            // Klockans lista heter `notificationList` sedan M60 · issue 383:
+            // `notifications` togs av notislistans märke, och de två är olika
+            // saker med olika kostnad. Namnet byttes i stället för att
+            // kapslas in under märket, så att en partiell omladdning av
+            // `notifications` (385) bara hämtar siffran — inte tjugo rader.
+            'notificationList' => Inertia::optional(fn (): array => $this->notifications($request)),
             // Den andra optionala proppen, av samma skäl som den första: en
             // rad per väntande inbjudan behövs bara när klockan är öppen, och
             // en vanlig sidladdning rör den aldri — se klassens docblock.
@@ -541,6 +567,31 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
+     * Notislistans märke: antalet olästa `in_app`-rader för en inloggad
+     * person, annars 0 — se App\Actions\Notification\
+     * CountUnreadInAppNotifications och [[ADR-0077 Notislistan i appen]] § 7.
+     *
+     * **En fråga, och ingen alls för en gäst.** Siffran behövs i toppraden på
+     * varje sida, precis som `unreadNotificationCount`, och frågan går på
+     * `notification (user_id, created_at)` med leveranssidan filtrerad genom
+     * kanal- och läsindexet. Gästen har ingen att fråga för och får samma
+     * nolla som en inloggad utan olästa — klockan behöver aldrig två
+     * avpackningsvägar.
+     *
+     * @return array{unread: int}
+     */
+    private function notificationsSummary(Request $request): array
+    {
+        $user = $request->user();
+
+        return [
+            'unread' => $user instanceof User
+                ? $this->countUnreadInAppNotifications->handle($user)
+                : 0,
+        ];
+    }
+
+    /**
      * Antalet i användarens inbox — uppgifterna plus bilagorna — eller 0 utan
      * en inbox. M27 · issue 245, se [[ADR-0054 Inboxen]] § 7.
      *
@@ -657,7 +708,7 @@ class HandleInertiaRequests extends Middleware
                 'ulid' => $notification->ulid,
                 'type' => $notification->type,
                 'payload' => $notification->payload,
-                'url' => $this->notificationUrl($notification),
+                'url' => $this->notificationTarget->for($notification),
                 'created_at' => $notification->created_at->toIso8601String(),
             ])
             ->values()
@@ -762,66 +813,5 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         return $user instanceof User && $user->hasVerifiedEmail() ? $user : null;
-    }
-
-    /**
-     * Adressen en rad pekar på, eller `null` när det inte finns någon sida.
-     *
-     * **Bara de tre typer som har ett mål länkar.** En kvotvarning och en
-     * inaktivitetsvarning gäller KONTOT, och kontosidan finns inte i M19 — en
-     * rad utan mål ritas därför som text (issue 127 § Beslut). Adressen
-     * byggs här och inte i JavaScript: den bär två ULID:n som bara servern
-     * känner (issue 51 § Beslut 7).
-     */
-    private function notificationUrl(Notification $notification): ?string
-    {
-        return match ($notification->type) {
-            Notification::TYPE_TASK_DUE, Notification::TYPE_TASK_OVERDUE => $this->taskUrl($notification),
-            Notification::TYPE_LOAN_DUE => $this->loanUrl($notification),
-            Notification::TYPE_TRANSFER_REQUESTED => route('transfers.index', [], false),
-            default => null,
-        };
-    }
-
-    /**
-     * Uppgiften till sitt item: förekomsten är radens subject, och vägen går
-     * genom schemat.
-     */
-    private function taskUrl(Notification $notification): ?string
-    {
-        $occurrence = $notification->subject;
-
-        return $occurrence instanceof ScheduleOccurrence
-            ? $this->itemUrl($occurrence->schedule?->item, $notification->container)
-            : null;
-    }
-
-    /**
-     * Lånet till sitt item: lånet är radens subject (issue 127 § Beslut).
-     */
-    private function loanUrl(Notification $notification): ?string
-    {
-        $loan = $notification->subject;
-
-        return $loan instanceof Loan
-            ? $this->itemUrl($loan->item, $notification->container)
-            : null;
-    }
-
-    /**
-     * En itemväg, eller `null` när målet inte längre finns.
-     *
-     * Ett mjukraderat item — eller en container i papperskorgen — faller bort
-     * genom SoftDeletes' globala scope och ger `null`: raden blir en text i
-     * stället för en länk till en 404. Samma svar som händelseloggen ger en
-     * gallrad rad, och av samma skäl.
-     */
-    private function itemUrl(?Item $item, ?Container $container): ?string
-    {
-        if ($item === null || $container === null) {
-            return null;
-        }
-
-        return route('containers.items.show', [$container, $item], false);
     }
 }
