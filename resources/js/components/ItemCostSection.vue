@@ -1,15 +1,18 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { router, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import CostEntryForm from './CostEntryForm.vue';
 import FormField from './FormField.vue';
+import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
 import InlineCreate from './InlineCreate.vue';
 import UiButton from './UiButton.vue';
 import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
+import UiStat from './UiStat.vue';
 import { formatAmount } from './CostDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
+import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -25,9 +28,26 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * domänfel kommer tillbaka som ett fältfel.
  *
  * **Listan sorteras av servern** (`incurred_on` fallande med `id` fallande)
- * och ritas i den ordningen. Vyn sorterar aldrig om något — samma regel som
- * utlåningssektionen följer, och samma skäl: en andra sortering är en andra
- * sanning om vad "nyast först" betyder.
+ * och ritas i den ordningen. Sedan issue 1248 ritar fliken också ättlingarnas
+ * rader med växeln *Include child items* på ([[ADR-0068 Itemets sida och
+ * skapandet]] § Uppföljning 2026-11-14 punkt 1–3): servern sorterar VAR grupp
+ * för sig, och `visibleCosts` lägger dem i datumordning över båda — den enda
+ * ordning vyn rör, och skälet är att två grupper inte kan bli datumordnade
+ * utan att interfolieras. Sorteringen jämför bara `incurred_on` och är stabil,
+ * så varje grupps egen ordning (och `id`-andrasorteringen) står kvar vid
+ * samma datum.
+ *
+ * **Summorna räknar det som visas** (punkt 4). `costTotals` kommer
+ * färdigsummerad ur ItemController::show() — en post per valuta, samma form
+ * som App\Support\Cost\CostReport::totals() — och vyn ritar den utan att lägga
+ * ihop något själv. En summa som räknades i vyn hade kunnat gå isär från
+ * listan under sig, och två valutor summeras aldrig över.
+ *
+ * **En ättlings rad går mot radens eget item.** `url()` bygger adressen ur
+ * radens `item` när den finns, och `rowCan()` läser radens `can` — servern
+ * prövar samma grindar på nytt i CostEntryController. Formuläret för en NY
+ * kostnad gäller alltid itemet man står på (`props.itemUlid`): det som skapar
+ * något nytt hör till platsen, det som ändrar en rad hör till raden.
  *
  * **Beloppet är heltalet i minsta enhet** ([[ADR-0016 Kostnadsregistrering]]
  * § Konsekvenser) och formateras först här, av `formatAmount` ur
@@ -85,6 +105,25 @@ const props = defineProps({
     /* Itemets rader ur App\Http\Resources\CostEntryResource, nyast först. */
     costs: { type: Array, required: true },
     /*
+     * Ättlingarnas kostnadsrader (issue 1248 · [[ADR-0068 Itemets sida och
+     * skapandet]] § Uppföljning 2026-11-14 punkt 2). Finns bara när fliken är
+     * aktiv och växeln är på — servern lämnar nyckeln helt annars. Varje rad
+     * bär `item: {ulid, name}` och den radens `can` (se ItemController::show()).
+     */
+    descendantCosts: { type: Array, default: () => [] },
+    /*
+     * Växelns läge, ur `?children`. Förvalet är PÅ, som på *Tasks* och
+     * *Documents*.
+     */
+    includeChildren: { type: Boolean, default: true },
+    /*
+     * Summorna per valuta över de rader fliken ritar (issue 1248 ·
+     * ADR-0068 § Uppföljning punkt 4): `[{currency, amount, count}]` ur
+     * ItemController::show(), samma form som CostReport::totals(). Vyn
+     * summerar aldrig själv — samma regel som containerns kostnadsflik.
+     */
+    costTotals: { type: Array, required: true },
+    /*
      * Formulärets förval: `{currency}` ur containerns arv
      * ([[ADR-0037 Valutans arv]]). Fältet är förifyllt och ändringsbart —
      * ett värde som ändå står i datan får inte vara osynligt för den som
@@ -105,6 +144,31 @@ const { focusFirstError } = useErrorFocus();
 const page = usePage();
 
 const locale = computed(() => page.props.locale);
+
+/*
+ * Växeln *Include child items* (issue 1248 · [[ADR-0068 Itemets sida och
+ * skapandet]] § Uppföljning 2026-11-14 punkt 1). Samma komponent och samma
+ * composable som *Tasks* och *Documents* använder — valet gäller per flik,
+ * och flikradens länkar bär aldrig `children`, så att stänga av på *Documents*
+ * inte påverkar *Costs*.
+ *
+ * `switchPending` och inte `pending`: det senare är radens vänteläge i den här
+ * filen, och två flaggor med samma namn hade stängt listans rader när växeln
+ * väntade.
+ */
+const { onlyChildren, pending: switchPending, toggle: toggleChildren } = useIncludeChildren(
+    () => props.includeChildren,
+    () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=costs`,
+);
+
+/*
+ * Itemets namn till växelns hjälptext. Det läses ur `page.props.item`, samma
+ * väg som i ItemAttachmentSection och ScheduleListSection: sektionen får sitt
+ * item som ULID, och namnet är sidans — den som ritar fliken har det redan.
+ */
+const itemName = computed(() => page.props.item?.name ?? '');
+
+const childrenHelp = computed(() => t('item.cost.children_help', { item: itemName.value }));
 
 /*
  * Leverantörslistan: `undefined` till dess att svaret är här, `[]` när det
@@ -227,10 +291,49 @@ watch(() => props.costs, (costs) => {
 onBeforeUnmount(() => clearTimeout(highlightTimer));
 
 function url(cost) {
-    const bas = `/containers/${props.containerUlid}/items/${props.itemUlid}/costs`;
+    /*
+     * Radens adress går mot RADENS item (issue 1248 · ADR-0068 § Uppföljning
+     * punkt 3). En ättlings rad bär `item` ur servern, och PATCH/DELETE mot
+     * sidans item hade 404:at — routen binder `{cost}` genom itemets
+     * `costs()`-relation. Itemets egna rader bär inget `item` och går mot
+     * sidan man står på.
+     */
+    const item = cost?.item?.ulid ?? props.itemUlid;
+    const bas = `/containers/${props.containerUlid}/items/${item}/costs`;
 
     return cost === undefined ? bas : `${bas}/${cost.ulid}`;
 }
+
+/*
+ * Radens `can`: en ättlings rad bär sitt eget svar ur servern, itemets egna
+ * bär sidans. Servern prövar samma grindar på nytt i varje skrivning — de här
+ * flaggorna ritar bara ytan.
+ */
+function rowCan(cost) {
+    return cost.can ?? props.can;
+}
+
+/*
+ * Raderna som ritas: itemets egna ALLTID, ättlingarnas när växeln är på
+ * (issue 1248 · ADR-0068 § Uppföljning punkt 2 och 4). Servern sorterar var
+ * grupp för sig — `incurred_on` fallande med `id` fallande — och vyn lägger
+ * dem i datumordning över BÅDA grupperna: sorteringen jämför bara
+ * `incurred_on`, och eftersom den är stabil står varje grupps egen ordning
+ * kvar vid samma datum (itemets rader först). Det är enda stället vyn rör
+ * ordningen, och skälet är att en lista med två grupper inte kan vara
+ * datumordnad utan att interfoliera dem.
+ */
+const visibleCosts = computed(() => {
+    const rader = [...props.costs, ...props.descendantCosts];
+
+    return rader.sort((a, b) => {
+        if (a.incurred_on === b.incurred_on) {
+            return 0;
+        }
+
+        return a.incurred_on < b.incurred_on ? 1 : -1;
+    });
+});
 
 /*
  * Radens belopp i formuläret: heltalet i minsta enhet → strängen i
@@ -403,6 +506,19 @@ function destroy(cost) {
         <div>
             <h2 class="text-heading font-semibold text-ink">{{ t('item.cost.heading') }}</h2>
             <p class="mt-1 text-body text-ink-muted">{{ t('item.cost.description') }}</p>
+
+            <!--
+                Växeln *Include child items* (issue 1248): överst under
+                rubriken, med flikens egen hjälptext. Samma komponent och samma
+                composable som *Tasks* och *Documents* — valet gäller per flik,
+                och flikradens länkar bär aldrig `children`.
+            -->
+            <IncludeChildrenSwitch
+                :model-value="onlyChildren"
+                :pending="switchPending"
+                :help="childrenHelp"
+                @update:model-value="toggleChildren"
+            />
         </div>
 
         <!--
@@ -432,10 +548,28 @@ function destroy(cost) {
         </div>
 
         <!--
-            Listan. Serverns ordning, aldrig vyns: `incurred_on` fallande med
-            `id` fallande, så den senaste kostnaden står först.
+            Summorna (issue 1248 · ADR-0068 § Uppföljning punkt 4): en taltuta
+            per valuta över de rader listan ritar — egna alltid, ättlingarnas
+            med växeln på. Talen kommer färdigsummerade ur servern, i samma
+            form som containerns kostnadsflik, så vyn aldrig räknar en summa
+            som kan gå isär från listan under sig.
         -->
-        <UiEmptyState v-if="costs.length === 0">
+        <div v-if="costTotals.length > 0" class="flex flex-wrap gap-4">
+            <UiStat
+                v-for="total in costTotals"
+                :key="`total-${total.currency}`"
+                :value="formatAmount(total.amount, total.currency)"
+                :label="t('container.costs.total')"
+            />
+        </div>
+
+        <!--
+            Listan. Itemets egna rader och — med växeln på — ättlingarnas, i
+            SAMMA lista och i datumordning; se `visibleCosts`. Servern sorterar
+            var grupp för sig, så den senaste kostnaden står först också när
+            raden kommer från ett annat item.
+        -->
+        <UiEmptyState v-if="visibleCosts.length === 0">
             {{ t('item.cost.empty') }}
 
             <template v-if="can.create" #action>
@@ -445,13 +579,28 @@ function destroy(cost) {
 
         <ul v-else class="flex flex-col gap-2">
             <li
-                v-for="cost in costs"
+                v-for="cost in visibleCosts"
                 :key="cost.ulid"
                 class="flex flex-col gap-3 rounded-card border border-border bg-surface px-4 py-3"
                 :class="{ 'bg-accent-soft': highlight.includes(cost.ulid) }"
             >
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span class="text-title text-ink">{{ cost.description }}</span>
+
+                    <!--
+                        Platsen (issue 1248 · ADR-0068 § Uppföljning punkt 3):
+                        en ättlings rad säger vilket item kostnaden ligger på,
+                        och länken går dit — samma grepp som *Documents* rad
+                        använder. Itemets egna rader bär ingen plats: det är
+                        sidan man står på.
+                    -->
+                    <Link
+                        v-if="cost.item"
+                        :href="`/containers/${containerUlid}/items/${cost.item.ulid}?tab=costs`"
+                        class="inline-flex min-h-11 items-center text-meta text-accent hover:underline"
+                    >
+                        {{ cost.item.name }}
+                    </Link>
 
                     <span class="text-meta text-ink-muted">
                         {{ formatDateOnly(cost.incurred_on, locale) }}
@@ -464,14 +613,14 @@ function destroy(cost) {
                     </span>
                 </div>
 
-                <div v-if="can.update || can.delete" class="flex flex-wrap items-center gap-3">
+                <div v-if="rowCan(cost).update || rowCan(cost).delete" class="flex flex-wrap items-center gap-3">
                     <!--
                         En rå `<button>` och inte en UiButton: knappen bär en
                         `@click`, och GenomgangTest tillåter bara webbläsarens
                         egna element som klickbar yta. Klassen är sekundärens.
                     -->
                     <button
-                        v-if="can.update"
+                        v-if="rowCan(cost).update"
                         type="button"
                         class="inline-flex min-h-11 items-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         @click="startEdit(cost)"
@@ -480,7 +629,7 @@ function destroy(cost) {
                     </button>
 
                     <button
-                        v-if="can.delete"
+                        v-if="rowCan(cost).delete"
                         type="button"
                         :disabled="pending === cost.ulid"
                         class="inline-flex min-h-11 items-center rounded-control px-3 text-meta font-medium text-danger outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"

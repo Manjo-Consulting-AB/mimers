@@ -554,8 +554,8 @@ it('visar raderna för en läsare men nekar alla tre skrivningarna', function ()
     $vy = kostnadsvyKomponent();
 
     expect($vy)->toContain('v-if="can.create"')
-        ->toContain('v-if="can.update"')
-        ->toContain('v-if="can.delete"');
+        ->toContain('v-if="rowCan(cost).update"')
+        ->toContain('v-if="rowCan(cost).delete"');
 });
 
 it('ger 404 för en kostnad på ett annat item', function () {
@@ -598,7 +598,7 @@ it('ritar registreringen före listan', function () {
     // står (Beslut 1); radens eget redigeringsformulär ligger kvar i raden.
     $rubrik = strpos($vy, "t('item.cost.heading')");
     $formular = strpos($vy, '<InlineCreate');
-    $lista = strpos($vy, 'v-for="cost in costs"');
+    $lista = strpos($vy, 'v-for="cost in visibleCosts"');
 
     expect($rubrik)->not->toBeFalse();
     expect($formular)->not->toBeFalse();

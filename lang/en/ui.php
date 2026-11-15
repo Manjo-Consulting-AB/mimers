@@ -3794,6 +3794,14 @@ return [
             'heading' => 'Costs',
             'description' => 'What the item has cost.',
 
+            // Issue 1248 · [[ADR-0068 Itemets sida och skapandet]]
+            // § Uppföljning 2026-11-14 punkt 1: the help line under the
+            // *Include child items* switch on the costs tab. The switch label
+            // itself is shared through IncludeChildrenSwitch.vue
+            // (`item.attachment.include_children`); only the sentence naming
+            // the item is this tab's own.
+            'children_help' => 'Shows costs from :item and its child items.',
+
             'empty' => 'The item has no costs registered.',
             'edit' => 'Change',
             'cancel' => 'Cancel',

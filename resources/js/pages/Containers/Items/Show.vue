@@ -58,7 +58,10 @@ defineOptions({
  * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
  * och `today`. Kostnaderna kom med issue 168 och gör detsamma —
  * ItemCostSection.vue, proparna `costs` och `costDefaults`, och
- * leverantörslistan som en optional `costSuppliers`.
+ * leverantörslistan som en optional `costSuppliers`. Sedan issue 1248 bär
+ * kostnadsfliken också växeln *Include child items* och ättlingarnas
+ * kostnadsrader (`descendantCosts`) samt summorna per valuta över det som
+ * visas (`costTotals`) — samma växel och samma composable som *Documents*.
  * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
  * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
  * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
@@ -326,6 +329,21 @@ const props = defineProps({
      * samma format som `Api\CostEntryController::index()` svarar med.
      */
     costs: { type: Array, required: true },
+    /*
+     * Ättlingarnas kostnadsrader (issue 1248 · [[ADR-0068 Itemets sida och
+     * skapandet]] § Uppföljning 2026-11-14 punkt 2), ur CostEntryResource med
+     * `item: {ulid, name}` och radens `can`. Finns BARA när fliken *Costs* är
+     * aktiv och växeln är på — servern lämnar nyckeln helt annars (se
+     * ItemController::show()), och standarden är en tom lista: sektionen ritas
+     * bara på fliken.
+     */
+    descendantCosts: { type: Array, default: () => [] },
+    /*
+     * Summorna per valuta över de rader kostnadsfliken ritar (issue 1248 ·
+     * ADR-0068 § Uppföljning punkt 4): `[{currency, amount, count}]` ur
+     * ItemController::show(). Finns bara på *Costs*-fliken.
+     */
+    costTotals: { type: Array, default: () => [] },
     /*
      * Formulärets förval på kostnadsfliken: `{currency}` ur containerns arv
      * ([[ADR-0037 Valutans arv]]). Servern fyller samma tomrum när klienten
@@ -1361,6 +1379,9 @@ function toggleFavorite() {
                 :container-ulid="container.ulid"
                 :item-ulid="item.ulid"
                 :costs="costs"
+                :descendant-costs="descendantCosts"
+                :include-children="includeChildren"
+                :cost-totals="costTotals"
                 :cost-defaults="costDefaults"
                 :can="can"
             />
