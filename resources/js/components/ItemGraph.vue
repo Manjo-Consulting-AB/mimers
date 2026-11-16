@@ -330,6 +330,11 @@ function onKeydown(event) {
 
 function go(event, href) {
     // Ett drag som slutar på en nod är en panorering och ingen navigering.
+    // Ett klick från tangentbordet (detail === 0) följer aldrig på ett drag.
+    if (event.detail === 0) {
+        dragged = false;
+    }
+
     if (dragged) {
         event.preventDefault();
         dragged = false;
