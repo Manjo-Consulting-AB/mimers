@@ -2071,6 +2071,8 @@ return [
         // the template.
         'row' => [
             'location' => ':container — :item',
+            // A container attachment (the container's picture) has no item.
+            'location_container' => ':container',
             // An attachment whose item or container is in the trash still counts
             // against the account and must be visible (decision 3).
             'trashed' => 'The container or the item is in the trash. The attachment still counts against the account.',

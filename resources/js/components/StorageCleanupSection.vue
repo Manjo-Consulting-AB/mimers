@@ -164,7 +164,12 @@ function submit() {
                                 <span class="font-medium text-slate-900">{{ row.filename }}</span>
                                 <span v-if="row.size" class="text-sm text-slate-600">{{ row.size }}</span>
                                 <span class="text-sm text-slate-600">
-                                    {{ t('storage.row.location', { container: row.container.name, item: row.item.name }) }}
+                                    <template v-if="row.item">
+                                        {{ t('storage.row.location', { container: row.container.name, item: row.item.name }) }}
+                                    </template>
+                                    <template v-else>
+                                        {{ t('storage.row.location_container', { container: row.container.name }) }}
+                                    </template>
                                 </span>
                             </span>
 
