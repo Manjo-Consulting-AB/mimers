@@ -86,6 +86,15 @@ import UiBadge from './UiBadge.vue';
  * kontrollerna: en flik man klickar på behöver ingen ring, en man tabbar till
  * behöver den.
  *
+ * **Raden ritas som mappflikar** (issue 1310). Aktiv flik: `bg-surface`, ram
+ * på ovansidan och sidorna men ingen nedtill, och en accentlist överst; övriga
+ * ligger på `bg-surface-sunken`. Radens underkant är en bakgrundsgradient med
+ * hårda stopp på `<ul>` och inte en `border-b` eller `shadow-[…]` (den senare
+ * fäller YtornaTest): den aktiva fliken täcker linjen genom att nå radens
+ * botten och behöver inte gå utanför raden med `-mb-px`, vilket hade klippts
+ * av `overflow-x-auto` under `md:`. `<li>` är `flex` så att fliken fyller hela
+ * radhöjden. Det förutsätter att sidan under raden är `surface`.
+ *
  * Träffytan är `min-h-11` — 44 px ur issue 68a § Beslut 3.
  *
  * **Raden skrollar i sidled på en telefon och bryter över `md:`** (issue 151).
@@ -183,6 +192,18 @@ const activeIndex = computed(() => props.tabs.findIndex((tab) => tab.key === act
 const isActive = (tab) => tab.key === activeKey.value;
 
 /*
+ * Räknaren har ett tak: 1–9 visas som de är, från 10 visas `9+`. Regeln bor
+ * här och inte hos anroparen, så den gäller varje flikrad. Den synliga brickan
+ * göms för skärmläsaren när talet är kapat, och det exakta talet står i en
+ * `sr-only`-span bredvid.
+ */
+const COUNT_CAP = 9;
+
+const isCapped = (tab) => tab.count > COUNT_CAP;
+
+const countLabel = (tab) => (isCapped(tab) ? `${COUNT_CAP}+` : tab.count);
+
+/*
  * Bara EN flik är tabbbar. Saknar adressen en träff — en sida under en flik
  * som ännu inte finns — är den första tabbbar i stället: annars hade hela
  * raden varit onåbar med tangentbord, och en navigation ingen når är samma
@@ -238,9 +259,9 @@ function onKeydown(event, index) {
     <ul
         role="tablist"
         :aria-label="label"
-        class="flex flex-nowrap gap-x-1 overflow-x-auto border-b border-border md:flex-wrap md:overflow-x-visible"
+        class="flex flex-nowrap gap-x-1 overflow-x-auto bg-linear-to-t from-border from-[1px] to-transparent to-[1px] md:flex-wrap md:overflow-x-visible"
     >
-        <li v-for="(tab, index) in tabs" :key="tab.key" role="presentation">
+        <li v-for="(tab, index) in tabs" :key="tab.key" class="flex" role="presentation">
             <Link
                 :ref="(element) => setTabElement(element, index)"
                 :href="tab.href"
@@ -248,17 +269,20 @@ function onKeydown(event, index) {
                 role="tab"
                 :aria-selected="isActive(tab) ? 'true' : 'false'"
                 :tabindex="isTabbable(index) ? 0 : -1"
-                class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-md border border-b-0 border-t-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="
                     isActive(tab)
-                        ? 'border-accent font-medium text-accent'
-                        : 'border-transparent text-ink-muted hover:bg-surface-sunken'
+                        ? 'border-border border-t-accent bg-surface font-medium text-ink'
+                        : 'border-transparent bg-surface-sunken text-ink-muted hover:bg-surface-muted hover:text-ink'
                 "
                 @keydown="onKeydown($event, index)"
             >
                 {{ tab.label }}
 
-                <UiBadge v-if="tab.count !== null && tab.count !== undefined">{{ tab.count }}</UiBadge>
+                <template v-if="tab.count !== null && tab.count !== undefined">
+                    <UiBadge :aria-hidden="isCapped(tab) ? 'true' : null">{{ countLabel(tab) }}</UiBadge>
+                    <span v-if="isCapped(tab)" class="sr-only">{{ tab.count }}</span>
+                </template>
             </Link>
         </li>
     </ul>
