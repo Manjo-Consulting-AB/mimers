@@ -793,6 +793,8 @@ Tony har gjort det här för hand:
 
 Att göra om något av det måste göras om: kollarna och larmreglerna ligger bara i Sentry och finns inte i repot.
 
+**Källkartorna löses bara upp om den uppladdade filen är byte för byte den som levereras** (issue 1371, MIMERS-JS-1). Sentry matchar på debug-id, men slår sedan upp rad och kolumn i den uppladdade kopian av bundlen. Pluginens CLI lägger in en egen debug-id-snutt överst i kopian, på en ny rad, om den inte känner igen den som redan finns. Rolldowns minifierare skriver snuttens strängar med baktick, och det känner CLI:n inte igen. Kartan skjuts då en rad i kopian men inte i filen vi levererar, och varje ram i appens bundle får `js_invalid_sourcemap_location`. `vite.config.js` har därför en liten plugin (`debugIdCitattecken`) som byter tillbaka de två strängarna till vanliga citattecken efter minifieringen. Tecknen är lika många, så kolumnerna stämmer. Kontrollen om det börjar gå fel igen: ladda ner artefaktpaketet (`sentry api "projects/mimers/mimers-js/artifact-lookup/?release=<tagg>&debug_id=<id>"`, sedan `?download=`-länken) och jämför radantalet i `.js` med bundlen på `https://mimers.app/build/assets/`. Skiljer de sig åt har CLI:n injicerat en gång till.
+
 ### Prestandaloggen
 
 Förfrågningar över 1000 ms och databasfrågor över 200 ms skrivs till loggkanalen `performance` (`daily`, JSON, en rad per händelse). På servern ligger den i `shared/storage/logs/` (en fil per dag, `performance-ÅÅÅÅ-MM-DD.log`, via symlänken `storage/` i releasen) och sparas i **30 dagar**, sedan tar Laravel bort de äldre filerna. Loggen bär ruttnamn, tid och antal frågor, men ingen användare, IP eller URL med parametrar. Veckosammanställningen mejlas måndagar 06:00 till `OPS_EMAIL`.
