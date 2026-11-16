@@ -373,7 +373,8 @@ const pixelUnits = ref(1);
 let resizeObserver = null;
 
 function measureUnits() {
-    pixelUnits.value = svg.value ? unitsPerPixel() : 1;
+    const u = svg.value ? unitsPerPixel() : 1;
+    pixelUnits.value = Number.isFinite(u) && u > 0 ? u : 1;
 }
 
 watch(svg, (element) => {
