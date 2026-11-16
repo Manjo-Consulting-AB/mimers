@@ -34,18 +34,19 @@ it('ritar växeln och grafen bara från md:', function () {
         ->and($grafen)->toContain('class="hidden h-[32rem] w-full rounded-card border border-border bg-surface md:block"');
 
     // Under `md:` är kartan Focus: den ritas, grafen inte, och växeln saknas.
-    expect($sidan)->toContain("showGraph ? 'md:hidden' : ''")
+    expect($sidan)->toContain("showGraph || showWhole ? 'md:hidden' : ''")
         ->toContain('<ItemMapDepthSwitch')
         ->toContain('<ItemGraph')
         ->toContain("props.map?.center.kind === 'item'")
-        ->toContain("'neighbourhood' : 'focus'");
+        ->toContain("showGraph.value ? 'neighbourhood' : 'focus'");
 });
 
 it('lägger nivån i adressen och bara Focus utan depth', function () {
     $sidan = kartanszoomKod('pages/Containers/Items/Index.vue');
 
     expect($sidan)->toContain('?view=map${focus}${tail}`')
-        ->toContain('?view=map${focus}&depth=2${tail}`');
+        ->toContain('?view=map${focus}&depth=2${tail}`')
+        ->toContain('?view=map${focus}&depth=all${tail}`');
 
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
@@ -79,7 +80,7 @@ it('har d3-force och inget annat nytt paket', function () {
 it('ritar grafen utan pilspetsar', function () {
     $grafen = File::get(resource_path('js/components/ItemGraph.vue'));
 
-    foreach (['<marker', '<defs', 'marker-start', 'marker-end', 'markerEnd', 'arrow'] as $spar) {
+    foreach (['<marker', '<defs', 'marker-start', 'marker-end', 'markerEnd', 'arrowhead'] as $spar) {
         expect(strtolower($grafen))->not->toContain(strtolower($spar));
     }
 });
@@ -123,4 +124,62 @@ it('hämtar växelns och grafens ord ur ui.php', function () {
     }
 
     expect($grafen)->toContain("t('item.graph.label'");
+});
+
+it('lägger Whole container i växeln, med och utan mitt (issue 394)', function () {
+    $sidan = kartanszoomKod('pages/Containers/Items/Index.vue');
+
+    expect($sidan)->toContain("t('item.depth.all')")
+        ->toContain('props.graph !== null')
+        ->toContain('mode="container"')
+        ->toContain(':query="filter.q"');
+
+    expect($sidan)->not->toContain('v-if="map.center.kind === \'item\'"\n                    :levels');
+
+    expect(Lang::get('ui.item.depth.all', [], 'en'))->toBe('Whole container');
+});
+
+it('ritar hela containern med panorering, zoom, namn först inzoomat och sökträffar', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    // Mus, nyp, knappar och tangentbord.
+    expect($grafen)->toContain('@wheel.prevent')
+        ->toContain('@pointerdown')
+        ->toContain('@pointermove')
+        ->toContain('pinchDistance')
+        ->toContain('zoomButton(1.25)')
+        ->toContain('zoomButton(1 / 1.25)')
+        ->toContain('@keydown')
+        ->toContain('ArrowLeft')
+        ->toContain(':tabindex="whole ? 0 : undefined"');
+
+    // Namnen först över en zoomnivå; noderna färgas efter status.
+    expect($grafen)->toContain('const showNames = computed(() => view.value.k >= LABEL_ZOOM)')
+        ->toContain("node.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-accent)'");
+
+    // Vyn börjar centrerad på `focus`, och sökningen tonar ned i stället för att gömma.
+    expect($grafen)->toContain('layout.value[props.center]')
+        ->toContain('props.query')
+        ->toContain('data-hit');
+
+    expect($grafen)->not->toContain('v-if="node.hit"');
+
+    // Ett klick går till Focus, utan depth; ingen redigering och ingen plusmeny.
+    expect($grafen)->toContain('?view=map&focus=${node.ulid}`');
+
+    expect($grafen)->not->toContain('CreateTarget')
+        ->and($grafen)->not->toContain('UiMenu');
+});
+
+it('ritar en mening vid truncated och nämner inget antal', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->toContain('v-if="whole && truncated"')
+        ->toContain("t('item.graph.truncated')");
+
+    $mening = Lang::get('ui.item.graph.truncated', [], 'en');
+
+    expect($mening)->not->toBe('ui.item.graph.truncated')
+        ->and($mening)->not->toMatch('/\d/')
+        ->and($mening)->not->toContain(':');
 });

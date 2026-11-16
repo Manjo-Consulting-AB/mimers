@@ -3477,11 +3477,12 @@ return [
         ],
 
         // The zoom levels of the full map (issue 393 · [[ADR-0082 Kartan är
-        // relationernas yta]] § 4 and 5). *Whole container* arrives in 394.
+        // relationernas yta]] § 4 and 5). *Whole container* is issue 394.
         'depth' => [
             'label' => 'Map zoom level',
             'focus' => 'Focus',
             'neighbourhood' => 'Neighbourhood',
+            'all' => 'Whole container',
         ],
 
         // The neighbourhood graph (issue 393). The status words are the two
@@ -3489,6 +3490,12 @@ return [
         'graph' => [
             'label' => 'Items within two steps of :name',
             'center' => 'centre',
+            // The whole-container level (issue 394). `truncated` names no
+            // count: nothing in the answer says how many items there are.
+            'label_all' => 'Every item in this container and the relations between them',
+            'zoom_in' => 'Zoom in',
+            'zoom_out' => 'Zoom out',
+            'truncated' => 'This container is too large to draw as one map. Use Focus or Neighbourhood, or the tree.',
             'status' => [
                 'ok' => 'On track',
                 'overdue' => 'Overdue',

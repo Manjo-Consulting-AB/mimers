@@ -12,6 +12,7 @@ use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\RecordRecentVisit;
 use App\Actions\Item\RenderItemNotes;
+use App\Actions\Item\ResolveContainerGraph;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemNeighbourhood;
@@ -274,6 +275,7 @@ class ItemController extends Controller
         ResolveItemMap $resolveItemMap,
         ListItemLinks $listItemLinks,
         ResolveItemNeighbourhood $resolveItemNeighbourhood,
+        ResolveContainerGraph $resolveContainerGraph,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -325,6 +327,14 @@ class ItemController extends Controller
         // (mitten blev containern) ger ingen proppe heller.
         $neighbourhood = $view === 'map' && $map['centerItem'] !== null && $request->query('depth') === '2'
             ? $resolveItemNeighbourhood->handle($user, $container, $map['centerItem']->ulid)
+            : null;
+
+        // Hela containern (issue 394 · [[ADR-0082 Kartan är relationernas yta]]
+        // § 6 och 8): bara i kartläget och med `depth=all`, med eller utan
+        // `focus`. `{nodes, edges, truncated}`; andra `depth`-värden kostar
+        // ingenting.
+        $graph = $view === 'map' && $request->query('depth') === 'all'
+            ? $resolveContainerGraph->handle($user, $container)
             : null;
 
         // Statusen hör till det som RITAS ([[ADR-0040 Underträdets summor]]
@@ -584,6 +594,10 @@ class ItemController extends Controller
             // Grannskapet som `{nodes, edges}`, eller `null` i alla andra lägen
             // (issue 393). Klienten ritar det bara från `md:`.
             'neighbourhood' => $neighbourhood,
+
+            // Hela containern som `{nodes, edges, truncated}`, eller `null`
+            // (issue 394). Klienten ritar den bara från `md:`.
+            'graph' => $graph,
 
             // Relationerna i den fulla kartan (issue 1339 · [[ADR-0082 Kartan
             // är relationernas yta]] § 3). `expanded` är gruppen *+N till*
