@@ -31,7 +31,7 @@ it('ritar växeln och grafen bara från md:', function () {
     $sidan = kartanszoomKod('pages/Containers/Items/Index.vue');
 
     expect($vaxeln)->toContain('class="hidden md:block"')
-        ->and($grafen)->toContain('class="hidden h-[32rem] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"');
+        ->and($grafen)->toContain('class="hidden h-[clamp(32rem,calc(100dvh-14rem),56rem)] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"');
 
     // Under `md:` är kartan Focus: den ritas, grafen inte, och växeln saknas.
     expect($sidan)->toContain("showGraph || showWhole ? 'md:hidden' : ''")
@@ -304,8 +304,24 @@ it('ritar Whole container med samma nod som Neighbourhood (issue 397)', function
         ->and($grafen)->not->toContain("node.status === 'overdue' ? 'var(--color-danger)'");
 
     // Namnet: fast skärmstorlek, kontur i surface bakom, ellips.
-    expect($grafen)->toContain(':font-size="12 / view.k"')
-        ->toContain(':stroke-width="4 / view.k"')
+    expect($grafen)->toContain(':font-size="layerUnits(NAME_PX)"')
+        ->toContain(':font-size="layerUnits(HOVER_NAME_PX)"')
+        ->toContain(':font-size="layerUnits(HOVER_STATUS_PX)"')
+        ->toContain('const layerUnits = (px) => (px * pixelUnits.value) / view.value.k;')
+        ->toContain('new ResizeObserver(measureUnits)')
+        ->toContain('const NAME_PX = 14;')
+        ->toContain('const HOVER_NAME_PX = 16;')
+        ->toContain('const HOVER_STATUS_PX = 14;')
+        ->toContain('const OUTLINE_PX = 4;')
+        ->toContain('const LABEL_GAP = 4;')
+        ->toContain(':y="node.y + (node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) + LABEL_GAP + layerUnits(NAME_PX) * 0.8"')
+        ->toContain(':y="activeNode.y - (activeNode.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) - LABEL_GAP - layerUnits(HOVER_STATUS_PX) * 1.3"')
+        ->toContain(':y="activeNode.y - (activeNode.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) - LABEL_GAP"')
+        ->and($grafen)->not->toContain(':y="node.y + 32"')
+        ->and($grafen)->not->toContain(':y="activeNode.y - 36"')
+        ->and($grafen)->not->toContain(':y="activeNode.y - 20"')
+        ->toContain('Number.isFinite(u) && u > 0 ? u : 1')
+        ->toContain(':stroke-width="layerUnits(OUTLINE_PX)"')
         ->toContain('paint-order="stroke"')
         ->toContain('font-weight="600"')
         ->toContain('shortName(node.name)');

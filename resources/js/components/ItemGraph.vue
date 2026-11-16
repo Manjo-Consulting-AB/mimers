@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, shallowReactive, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowReactive, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -361,6 +361,45 @@ const DRAG_SLOP = 5;
 
 const svg = ref(null);
 
+/* Skärmstorlekar i pixlar (ADR-0084 § 3): oavsett zoom och antal ringar. */
+const NAME_PX = 14;
+const HOVER_NAME_PX = 16;
+const HOVER_STATUS_PX = 14;
+const OUTLINE_PX = 4;
+const LABEL_GAP = 4;
+
+/* viewBox-enheter per skärmpixel, reaktivt. */
+const pixelUnits = ref(1);
+let resizeObserver = null;
+
+function measureUnits() {
+    const u = svg.value ? unitsPerPixel() : 1;
+    pixelUnits.value = Number.isFinite(u) && u > 0 ? u : 1;
+}
+
+watch(svg, (element) => {
+    resizeObserver?.disconnect();
+    resizeObserver = null;
+
+    if (!element) {
+        return;
+    }
+
+    measureUnits();
+
+    if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(measureUnits);
+        resizeObserver.observe(element);
+    }
+}, { flush: 'post' });
+
+watch(() => viewBox.value, () => measureUnits(), { flush: 'post' });
+
+onBeforeUnmount(() => resizeObserver?.disconnect());
+
+/* Pixlar → enheter i lagret (som skalas med zoomen). */
+const layerUnits = (px) => (px * pixelUnits.value) / view.value.k;
+
 const viewCenter = computed(() => {
     const [x, y, w, h] = viewBox.value.split(' ').map(Number);
 
@@ -550,7 +589,7 @@ function go(event, href) {
                 role="group"
                 :aria-label="whole ? t('item.graph.label_all') : t('item.graph.label', { name: centerName })"
                 data-item-graph
-                class="hidden h-[32rem] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"
+                class="hidden h-[clamp(32rem,calc(100dvh-14rem),56rem)] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"
                 preserveAspectRatio="xMidYMid meet"
                 :tabindex="0"
                 @wheel="onWheel($event)"
@@ -643,13 +682,13 @@ function go(event, href) {
                             <text
                                 v-if="(showNames || node.hit || node.isCenter) && node.ulid !== active"
                                 :x="node.x"
-                                :y="node.y + (node.isCenter ? 36 : 32)"
+                                :y="node.y + (node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) + LABEL_GAP + layerUnits(NAME_PX) * 0.8"
                                 text-anchor="middle"
                                 fill="var(--color-ink)"
                                 stroke="var(--color-surface)"
-                                :stroke-width="4 / view.k"
+                                :stroke-width="layerUnits(OUTLINE_PX)"
                                 paint-order="stroke"
-                                :font-size="12 / view.k"
+                                :font-size="layerUnits(NAME_PX)"
                                 font-weight="600"
                                 :opacity="needle !== '' && !node.hit ? 0.25 : undefined"
                             >{{ node.short }}</text>
@@ -659,24 +698,24 @@ function go(event, href) {
                     <g v-if="activeNode" aria-hidden="true" class="pointer-events-none">
                         <text
                             :x="activeNode.x"
-                            :y="activeNode.y - 36"
+                            :y="activeNode.y - (activeNode.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) - LABEL_GAP - layerUnits(HOVER_STATUS_PX) * 1.3"
                             text-anchor="middle"
                             fill="var(--color-ink)"
                             stroke="var(--color-surface)"
-                            stroke-width="4"
+                            :stroke-width="layerUnits(OUTLINE_PX)"
                             paint-order="stroke"
-                            font-size="14"
+                            :font-size="layerUnits(HOVER_NAME_PX)"
                             font-weight="600"
                         >{{ activeNode.name }}</text>
                         <text
                             :x="activeNode.x"
-                            :y="activeNode.y - 20"
+                            :y="activeNode.y - (activeNode.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) - LABEL_GAP"
                             text-anchor="middle"
                             fill="var(--color-ink-muted)"
                             stroke="var(--color-surface)"
-                            stroke-width="4"
+                            :stroke-width="layerUnits(OUTLINE_PX)"
                             paint-order="stroke"
-                            font-size="12"
+                            :font-size="layerUnits(HOVER_STATUS_PX)"
                         >{{ activeNode.statusLabel }}</text>
                     </g>
                 </g>
