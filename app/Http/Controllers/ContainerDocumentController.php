@@ -552,7 +552,7 @@ class ContainerDocumentController extends Controller
      * `percent` är förbrukningen i hela procent, klippt till 100 — ett
      * överskridet tak ritar en full stapel och aldrig en som sticker utanför.
      *
-     * @return array{account: array{ulid: string, name: string}, usedBytes: int, fileBytes: int, textBytes: int, limitBytes: int|null, percent: int|null}|null
+     * @return array{account: array{ulid: string, name: string}, usedBytes: int, limitBytes: int|null, percent: int|null}|null
      */
     private function storage(User $user, Container $container): ?array
     {
@@ -564,12 +564,7 @@ class ContainerDocumentController extends Controller
             return null;
         }
 
-        $row = UsageCounter::query()
-            ->where('account_id', $account->id)
-            ->first(['storage_bytes', 'metadata_bytes']);
-        $fileBytes = $row === null ? 0 : (int) $row->storage_bytes;
-        $textBytes = $row === null ? 0 : (int) $row->metadata_bytes;
-        $used = $fileBytes + $textBytes;
+        $used = UsageCounter::usedBytes($account->id);
 
         // `planLimit()` svarar `int|bool|null`, och för storage_bytes är `null`
         // det obegränsade taket (App\Support\Plan\Entitlements § docblock).
@@ -582,8 +577,6 @@ class ContainerDocumentController extends Controller
                 'name' => (string) $account->name,
             ],
             'usedBytes' => $used,
-            'fileBytes' => $fileBytes,
-            'textBytes' => $textBytes,
             'limitBytes' => $limitBytes,
             'percent' => $limitBytes === null
                 ? null

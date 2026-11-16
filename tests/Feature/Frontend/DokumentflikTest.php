@@ -1227,27 +1227,3 @@ it('ger ingen visbar förhandsvisning utan filorigin', function () {
     // falsk, så namnet ritas som text.
     expect($proppar['inlineEnabled'])->toBeFalse();
 });
-
-/*
- * Fördelningen (ADR-0081 § 1): StorageBar får `fileBytes` och `textBytes`
- * bredvid `usedBytes`, annars ritas dess fördelningsrad aldrig.
- */
-it('skickar fileBytes och textBytes till lagringsstapeln', function () {
-    withoutVite();
-
-    [$konto, $ägare, $container] = dokumentflikKontext();
-
-    UsageCounter::factory()->create([
-        'account_id' => $konto->id,
-        'storage_bytes' => 4000,
-        'metadata_bytes' => 250,
-    ]);
-
-    $lagring = dokumentflikProps(
-        actingAs($ägare)->get(dokumentflikUrl($container))->assertOk(),
-    )['storage'];
-
-    expect($lagring['fileBytes'])->toBe(4000)
-        ->and($lagring['textBytes'])->toBe(250)
-        ->and($lagring['usedBytes'])->toBe(4250);
-});
