@@ -45,6 +45,10 @@ return [
         'sql_queries' => false,
         'sql_bindings' => false,
         'logs' => true,
+        // ADR-0070: command_info gör kommandoraden till text med (string) $input,
+        // och Symfony anropar då escapeshellarg(), som inleed har i disable_functions.
+        // Taggen `command` sätts ändå.
+        'command_info' => false,
     ],
 
     // Loggbrödsmulor på warning och uppåt.
