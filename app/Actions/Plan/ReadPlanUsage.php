@@ -96,12 +96,16 @@ class ReadPlanUsage
         // inga containers (issue 26a § Beslut 1). Två frågor och inte en, för
         // att formuleringen ska vara Entitlements' och inte en egen.
         // Filer och text tillsammans (ADR-0081 § 1): UsageCounter::usedBytes().
-        $usedBytes = UsageCounter::usedBytes($account->id);
-        // Fördelningen (ADR-0081 § 1): filerna är `storage_bytes`, texten är
-        // resten av summan — så de två fälten alltid ger `usedBytes`.
-        $fileBytes = min($usedBytes, (int) UsageCounter::query()->where('account_id', $account->id)->value('storage_bytes'));
-        $textBytes = $usedBytes - $fileBytes;
-        $usedContainers = (int) UsageCounter::query()->where('account_id', $account->id)->value('container_count');
+        // Raden läses en gång, så att filer, text, summa och containrar hör
+        // ihop även vid en samtidig skrivning. Summan är samma som
+        // UsageCounter::usedBytes() ger: `storage_bytes + metadata_bytes`.
+        $row = UsageCounter::query()
+            ->where('account_id', $account->id)
+            ->first(['storage_bytes', 'metadata_bytes', 'container_count']);
+        $fileBytes = $row === null ? 0 : (int) $row->storage_bytes;
+        $textBytes = $row === null ? 0 : (int) $row->metadata_bytes;
+        $usedBytes = $fileBytes + $textBytes;
+        $usedContainers = $row === null ? 0 : (int) $row->container_count;
 
         $containerLimit = $this->intLimit('containers', $plan->planLimit('containers'));
         $storageLimit = $this->intLimit('storage_bytes', $plan->planLimit('storage_bytes'));
