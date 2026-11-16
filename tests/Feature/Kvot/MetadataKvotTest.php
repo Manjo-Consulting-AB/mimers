@@ -256,3 +256,61 @@ it('ett ägarbyte nekas när mottagaren inte rymmer bilagorna och raderna tillsa
     expect($container->fresh()->account_id)->toBe($säljare->id);
     expect(DB::table('ownership_transfer')->where('id', $överföring->id)->value('status'))->toBe('pending');
 });
+
+it('på webben blir kvotfelet ett fältfel även när ett item ändras', function () {
+    [$konto, $användare, , $container] = textKvotKonto(100000);
+    $item = textKvotItem($container, $konto, $användare, 'Motor');
+    sättPlangräns('free', 'storage_bytes', UsageCounter::usedBytes($konto->id));
+
+    actingAs($användare)
+        ->patch("/containers/{$container->ulid}/items/{$item->ulid}", ['name' => 'Motorn'])
+        ->assertSessionHasErrors('name');
+
+    expect(Item::query()->find($item->id)->name)->toBe('Motor');
+});
+
+it('på webben blir kvotfelet ett fältfel när en tagg skapas', function () {
+    [, $användare, , $container] = textKvotKonto(10);
+
+    actingAs($användare)
+        ->post("/containers/{$container->ulid}/tags", ['name' => 'Verkstad'])
+        ->assertSessionHasErrors('name');
+
+    expect(DB::table('tag')->count())->toBe(0);
+});
+
+it('på webben blir kvotfelet ett fältfel när ett lån skapas', function () {
+    [$konto, $användare, , $container] = textKvotKonto(100000);
+    $item = textKvotItem($container, $konto, $användare, 'Motor');
+    sättPlangräns('free', 'storage_bytes', UsageCounter::usedBytes($konto->id));
+
+    actingAs($användare)
+        ->post("/containers/{$container->ulid}/items/{$item->ulid}/loans", ['borrower_name' => 'Kalle', 'lent_at' => '2026-11-01'])
+        ->assertSessionHasErrors('borrower_name');
+
+    expect(DB::table('loan')->count())->toBe(0);
+});
+
+it('att återställa en bilaga går igenom när kontot ligger över', function () {
+    [$konto, $användare, , $container] = textKvotKonto(1000, filer: 600, text: 600);
+    $item = Item::factory()->for($container, 'container')->create();
+    $lagrad = StoredFile::factory()->create(['byte_size' => 100]);
+    $bilaga = Attachment::factory()->for($item, 'item')->create([
+        'stored_file_id' => $lagrad->id,
+        'billed_account_id' => $konto->id,
+        'deleted_at' => now(),
+    ]);
+
+    app(RestoreContent::class)->handle('attachment', Attachment::withTrashed()->find($bilaga->id), $användare);
+
+    expect(Attachment::query()->find($bilaga->id))->not->toBeNull();
+});
+
+it('nedgraderingsförhandsvisningen räknar med summan av filer och text', function () {
+    [$konto] = textKvotKonto(1000, filer: 400, text: 800);
+
+    $användning = app(ReadPlanUsage::class)->handle($konto);
+
+    // Filerna ensamma (400) ryms; filer och text (1200) gör det inte.
+    expect($användning['downgrade']['overBytes'])->toBe(200);
+});

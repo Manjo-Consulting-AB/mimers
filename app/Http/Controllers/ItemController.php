@@ -1888,7 +1888,7 @@ class ItemController extends Controller
      * båda ytorna använder — och som loggar vilka fält som ändrades, eller
      * ingenting alls när formuläret skickades oförändrat.
      */
-    public function update(UpdateItemRequest $request, Container $container, Item $item, ResolveItemCover $resolveItemCover, UpdateItem $updateItem): RedirectResponse
+    public function update(UpdateItemRequest $request, Container $container, Item $item, ResolveItemCover $resolveItemCover, UpdateItem $updateItem, ApiErrorTranslator $translator): RedirectResponse
     {
         Gate::authorize('update', $item);
 
@@ -1920,12 +1920,17 @@ class ItemController extends Controller
         // betyder "töm", ett utelämnat `tags` betyder "rör inte".
         // Actionen skriver itemet, taggarna och loggraderna i EN transaktion
         // (issue 13b § Beslut 7, issue 109).
-        $updateItem->handle(
-            $item,
-            $request->user(),
-            $request->has('tags'),
-            Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
-        );
+        try {
+            $updateItem->handle(
+                $item,
+                $request->user(),
+                $request->has('tags'),
+                Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
+            );
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages(['name' => $translator->message($e)]);
+        }
 
         return redirect()
             ->route('containers.items.show', [$container, $item])

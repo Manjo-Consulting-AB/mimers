@@ -207,6 +207,7 @@ class InboxController extends Controller
         StoreInboxTaskRequest $request,
         ResolveInbox $resolveInbox,
         CreateSchedule $createSchedule,
+        ApiErrorTranslator $translator,
     ): RedirectResponse {
         $user = $request->user();
         $inbox = $resolveInbox->handle($user);
@@ -215,12 +216,17 @@ class InboxController extends Controller
         $data['recurrence_type'] ??= 'none';
         $data['is_active'] = true;
 
-        $createSchedule->handle(
-            $inbox,
-            $user,
-            new Schedule($data),
-            null,
-        );
+        try {
+            $createSchedule->handle(
+                $inbox,
+                $user,
+                new Schedule($data),
+                null,
+            );
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till titelfältet.
+            throw ValidationException::withMessages(['title' => $translator->message($e)]);
+        }
 
         app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Usage\AdjustUsage;
 use Database\Factories\UsageCounterFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -63,6 +64,12 @@ class UsageCounter extends Model
         $query = self::query()->where('account_id', $accountId);
 
         if ($lock) {
+            // Raden ska finnas innan den låses: ett FOR UPDATE på en saknad
+            // rad tar ett gaplås, och två första skrivningar på ett nytt konto
+            // kan då dödlåsa mot varandras INSERT. AdjustUsage utan delta
+            // skapar raden race-fritt (upsert) och ändrar inget.
+            (new AdjustUsage)->handle($accountId);
+
             $query->lockForUpdate();
         }
 

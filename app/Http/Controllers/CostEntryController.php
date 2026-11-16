@@ -184,6 +184,11 @@ class CostEntryController extends Controller
      */
     private function fieldFor(ApiException $e): string
     {
-        return $e->errorCode() === 'currency.not_allowed' ? 'currency' : 'amount';
+        return match ($e->errorCode()) {
+            'currency.not_allowed' => 'currency',
+            // Textkvoten (issue 1303) hör till beskrivningen.
+            'quota.storage_exceeded' => 'description',
+            default => 'amount',
+        };
     }
 }

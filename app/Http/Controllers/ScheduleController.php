@@ -184,7 +184,7 @@ class ScheduleController extends Controller
      * (§ Att se upp med). Sedan issue 110 skriver actionen också loggraden,
      * så att webben och `/api` skriver exakt samma rad.
      */
-    public function store(StoreScheduleRequest $request, Container $container, Item $item, CreateSchedule $createSchedule): RedirectResponse
+    public function store(StoreScheduleRequest $request, Container $container, Item $item, CreateSchedule $createSchedule, ApiErrorTranslator $translator): RedirectResponse
     {
         Gate::authorize('create', $item);
 
@@ -192,12 +192,17 @@ class ScheduleController extends Controller
         // (ADR-0052 § 2, M26 · issue 235 § Beslut 4). Fältet hör till
         // FÖREKOMSTEN och inte till schemat, så det kan inte följa med i
         // `new Schedule(...)` — det skickas som eget argument till actionen.
-        $createSchedule->handle(
-            $item,
-            $request->user(),
-            new Schedule($request->validated()),
-            $request->validated('gtd_list'),
-        );
+        try {
+            $createSchedule->handle(
+                $item,
+                $request->user(),
+                new Schedule($request->validated()),
+                $request->validated('gtd_list'),
+            );
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till titelfältet.
+            throw ValidationException::withMessages(['title' => $translator->message($e)]);
+        }
 
         app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
@@ -319,6 +324,7 @@ class ScheduleController extends Controller
         Item $item,
         Schedule $schedule,
         UpdateSchedule $updateSchedule,
+        ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('update', $item);
 
@@ -331,7 +337,12 @@ class ScheduleController extends Controller
             $schedule->interval_count = null;
         }
 
-        $updateSchedule->handle($schedule, $request->user());
+        try {
+            $updateSchedule->handle($schedule, $request->user());
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till titelfältet.
+            throw ValidationException::withMessages(['title' => $translator->message($e)]);
+        }
 
         $reactivated = $schedule->is_active && ! $wasActive;
 
