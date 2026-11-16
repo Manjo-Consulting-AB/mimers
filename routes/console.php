@@ -23,6 +23,7 @@ use App\Console\ReconcilesUsageCounters;
 use App\Console\ReportsAbuseSignals;
 use App\Console\SendsWeeklyDigest;
 use App\Console\SummarizesPerformance;
+use App\Console\TransfersOrphanedBilling;
 use App\Console\WatchesDeliveryQueues;
 use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
@@ -129,6 +130,16 @@ Schedule::call(fn () => app(PurgesExpiredExports::class)->handle())
 Schedule::call(fn () => app(PrunesRegistrationIps::class)->handle())
     ->daily()
     ->name('prune-registration-ips');
+
+/*
+ * Issue 1305 · Betalarbytet för utgångna åtkomster — se
+ * App\Console\TransfersOrphanedBilling och [[ADR-0081 All lagrad data räknas
+ * mot kvoten]] § 4. Före avstämningen, så att den inte rapporterar en drift
+ * som flytten ändå rättar. `Schedule::call`, aldrig `Schedule::command`.
+ */
+Schedule::call(fn () => app(TransfersOrphanedBilling::class)->handle())
+    ->daily()
+    ->name('transfer-orphaned-billing');
 
 /*
  * Issue 26b · Den nattliga avstämningen av usage_counter: räknar om
