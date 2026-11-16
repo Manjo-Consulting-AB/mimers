@@ -920,6 +920,9 @@ return [
             // throws away `data` is worse than the error code it replaced.
             'max_file_size_exceeded' => 'The file is too large. The limit is :limit_bytes, and this one is :file_bytes.',
             'storage_exceeded' => 'The storage is full. The account has :used_bytes of :limit_bytes, and the file is :file_bytes.',
+            // Issue 1303: the same code when text is written (data carries
+            // `added_bytes`, not `file_bytes`).
+            'storage_exceeded_text' => 'The storage is full. The account has :used_bytes of :limit_bytes, and this change adds :added_bytes.',
         ],
 
         // Issue 55a decision 9: PATCH on a revoked or expired row answers

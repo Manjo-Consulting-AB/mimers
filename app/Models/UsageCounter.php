@@ -50,6 +50,34 @@ class UsageCounter extends Model
     }
 
     /**
+     * Förbrukningen som planens `storage_bytes` gäller: filer och text
+     * tillsammans ([[ADR-0081 All lagrad data räknas mot kvoten]] § 1). Det
+     * enda stället som lägger ihop de två kolumnerna — varje jämförelse med
+     * planens gräns går hit. Saknas räknarraden är förbrukningen noll.
+     *
+     * `$lock` ger en låsande current read; anropas bara inne i en
+     * transaktion när läsningen ska serialisera samtidiga skrivare.
+     */
+    public static function usedBytes(int $accountId, bool $lock = false): int
+    {
+        $query = self::query()->where('account_id', $accountId);
+
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+
+        $row = $query->first(['storage_bytes', 'metadata_bytes']);
+
+        return $row === null ? 0 : (int) $row->storage_bytes + (int) $row->metadata_bytes;
+    }
+
+    /**
+     * Samma summa som SQL-uttryck, för frågor som joinar `usage_counter`
+     * (kvotvarningarna). Formuleringen hör ihop med usedBytes() ovan.
+     */
+    public const USED_BYTES_SQL = 'COALESCE(usage_counter.storage_bytes, 0) + COALESCE(usage_counter.metadata_bytes, 0)';
+
+    /**
      * Sanningen som `storage_bytes` cachar: summan av bytena för kontots
      * bilagor — levande och slängda, tills raden raderats fysiskt — mätt som LOGISK storlek. Två bilagor på samma
      * stored_file räknas båda — dedupen sänker bara den faktiska

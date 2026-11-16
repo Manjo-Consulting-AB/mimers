@@ -3,8 +3,10 @@
 namespace App\Exceptions\Api;
 
 use App\Support\Api\ApiError;
+use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use RuntimeException;
 
 /**
@@ -25,6 +27,15 @@ use RuntimeException;
 final class ApiException extends RuntimeException implements Responsable
 {
     /**
+     * Textfälten som kan bära ett kvotfel, i den ordning formulären visar dem.
+     */
+    private const TEXT_FIELDS = [
+        'name', 'title', 'description', 'notes', 'completion_note', 'note',
+        'borrower_name', 'borrower_email', 'supplier', 'manufacturer', 'model',
+        'serial_number', 'position_note',
+    ];
+
+    /**
      * @param  array<string, mixed>  $data
      */
     public function __construct(
@@ -43,8 +54,25 @@ final class ApiException extends RuntimeException implements Responsable
         return new self($code, $data, $status);
     }
 
-    public function toResponse($request): JsonResponse
+    public function toResponse($request): JsonResponse|RedirectResponse
     {
+        // Textkvoten på webben (issue 1303): ett skrivande formulär ska få
+        // meningen som ett fältfel, även där kontrollern inte själv fångar
+        // undantaget. Fältet är det första textfält formuläret skickade.
+        if (
+            $this->errorCode === 'quota.storage_exceeded'
+            && ! array_key_exists('file_bytes', $this->data)
+            && ! $request->is('api/*')
+            && ! $request->expectsJson()
+        ) {
+            $field = collect(array_keys($request->all()))
+                ->first(fn (string $key): bool => in_array($key, self::TEXT_FIELDS, true)) ?? 'quota';
+
+            return redirect()->back()
+                ->withErrors([$field => app(ApiErrorTranslator::class)->message($this)])
+                ->withInput();
+        }
+
         return ApiError::response($this->errorCode, $this->data, $this->status);
     }
 

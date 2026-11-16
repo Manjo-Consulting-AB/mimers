@@ -1747,8 +1747,9 @@ class ItemController extends Controller
         try {
             $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child);
         } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet; cykelfelet till `child`.
             throw ValidationException::withMessages([
-                'child' => $translator->message($e),
+                ($e->errorCode() === 'quota.storage_exceeded' ? 'name' : 'child') => $translator->message($e),
             ]);
         }
 

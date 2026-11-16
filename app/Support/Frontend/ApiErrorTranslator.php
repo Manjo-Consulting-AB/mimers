@@ -59,6 +59,15 @@ final class ApiErrorTranslator
     {
         $key = self::PREFIX.$exception->errorCode();
 
+        // Textkvoten (issue 1303) har samma kod som filkvoten men bär
+        // `added_bytes` i stället för `file_bytes`; meningen väljs efter data.
+        if (
+            $exception->errorCode() === 'quota.storage_exceeded'
+            && ! array_key_exists('file_bytes', $exception->data())
+        ) {
+            $key .= '_text';
+        }
+
         if (! Lang::has($key)) {
             return (string) trans(self::PREFIX.'generic');
         }

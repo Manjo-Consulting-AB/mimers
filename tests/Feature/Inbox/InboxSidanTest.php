@@ -144,7 +144,10 @@ it('nekar hela satsen när kvoten inte räcker för summan och skriver ingen fil
     // Summan prövas FÖRE den första skrivningen, så ingenting hamnar i
     // inboxen — utan den prövningen hade fil 1 skrivits och fil 2 fällt
     // satsen, och användaren mötts av ett fel och en halvfylld inbox.
-    sättPlangräns('free', 'storage_bytes', 250);
+    // Inboxens egen rad väger text (ADR-0081, issue 1303) och skapas först, så
+    // att kvoten är förbrukningen den ger plus 250.
+    app(ResolveInbox::class)->handle($person);
+    sättPlangräns('free', 'storage_bytes', UsageCounter::usedBytes($konto->id) + 250);
 
     $första = UploadedFile::fake()->createWithContent('ett.pdf', str_repeat('a', 100));
     $andra = UploadedFile::fake()->createWithContent('två.pdf', str_repeat('b', 200));

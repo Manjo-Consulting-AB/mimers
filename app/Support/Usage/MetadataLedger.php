@@ -3,6 +3,8 @@
 namespace App\Support\Usage;
 
 use App\Actions\Usage\AdjustUsage;
+use App\Models\Account;
+use App\Support\Plan\Entitlements;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
@@ -57,6 +59,12 @@ final class MetadataLedger
 
         if ($oldPayer === $newPayer) {
             if ($newPayer !== null && $newBytes !== $oldBytes) {
+                // Bara en växande skrivning prövas (ADR-0081 § 5); krymper den
+                // går den alltid igenom. Kastet rullar tillbaka transaktionen.
+                if ($newBytes > $oldBytes) {
+                    self::assertFits($newPayer, $newBytes - $oldBytes);
+                }
+
                 (new AdjustUsage)->handle($newPayer, metadataDelta: $newBytes - $oldBytes);
             }
 
@@ -68,8 +76,17 @@ final class MetadataLedger
         }
 
         if ($newPayer !== null && $newBytes > 0) {
+            self::assertFits($newPayer, $newBytes);
             (new AdjustUsage)->handle($newPayer, metadataDelta: $newBytes);
         }
+    }
+
+    /**
+     * Prövar att betalaren rymmer `$addedBytes` till (issue 1303).
+     */
+    private static function assertFits(int $payer, int $addedBytes): void
+    {
+        (new Entitlements)->assertMetadataWithinLimit(Account::query()->findOrFail($payer), $addedBytes);
     }
 
     /**

@@ -564,9 +564,7 @@ class ContainerDocumentController extends Controller
             return null;
         }
 
-        $used = (int) UsageCounter::query()
-            ->where('account_id', $account->id)
-            ->value('storage_bytes');
+        $used = UsageCounter::usedBytes($account->id);
 
         // `planLimit()` svarar `int|bool|null`, och för storage_bytes är `null`
         // det obegränsade taket (App\Support\Plan\Entitlements § docblock).

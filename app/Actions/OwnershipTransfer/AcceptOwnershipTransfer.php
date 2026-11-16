@@ -22,6 +22,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
 use App\Support\Usage\CountedRows;
+use App\Support\Usage\MetadataSize;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -134,7 +135,8 @@ class AcceptOwnershipTransfer
             // hela transaktionen tillbaka och ägarbytet står kvar som pending.
             $entitlements = new Entitlements;
             $entitlements->assertCanCreateContainer($toAccount);
-            $entitlements->assertStorageWithinLimit($toAccount, $bytesSomFlyttas);
+            // ADR-0081 § 1: mottagaren ska rymma både bilagorna och raderna.
+            $entitlements->assertStorageWithinLimit($toAccount, $bytesSomFlyttas + $this->radbytesAttFlytta($container, $fromAccount));
 
             // Beslut 6: containern flyttas. Ingen annan kolumn rörs — namn,
             // `kind` och `created_at` följer med containern.
@@ -240,6 +242,34 @@ class AcceptOwnershipTransfer
             ->where('attachment.billed_account_id', $fromAccount->id)
             ->whereNull('attachment.deleted_at')
             ->sum('stored_file.byte_size');
+    }
+
+    /**
+     * Vikten av textraderna som flyttar till köparen: containerraden och de
+     * rader i containern som säljaren betalar för (samma urval som
+     * CountedRows::moveContainerPayer()). Läses före flytten, så kvoten kan
+     * prövas innan något ändras.
+     */
+    private function radbytesAttFlytta(Container $container, Account $fromAccount): int
+    {
+        $bytes = CountedRows::containerBytes($container->id);
+
+        foreach (array_keys(MetadataSize::COLUMNS) as $table) {
+            if ($table === 'container') {
+                continue;
+            }
+
+            CountedRows::query($table)
+                ->where('container.id', $container->id)
+                ->where("{$table}.billed_account_id", $fromAccount->id)
+                ->chunkById(500, function ($rows) use ($table, &$bytes): void {
+                    foreach ($rows as $row) {
+                        $bytes += MetadataSize::ofAttributes($table, (array) $row);
+                    }
+                }, "{$table}.id", 'id');
+        }
+
+        return $bytes;
     }
 
     /**

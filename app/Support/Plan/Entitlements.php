@@ -254,10 +254,8 @@ final class Entitlements
             return;
         }
 
-        $used = (int) UsageCounter::query()
-            ->where('account_id', $account->id)
-            ->lockForUpdate()
-            ->value('storage_bytes');
+        // Förbrukningen är filer och text tillsammans (ADR-0081 § 1).
+        $used = UsageCounter::usedBytes($account->id, lock: true);
 
         // used + file > limit nekar; en fil som exakt fyller kvoten, eller en
         // första fil på ett tomt konto, ska gå igenom.
@@ -266,6 +264,35 @@ final class Entitlements
                 'limit_bytes' => $limit,
                 'used_bytes' => $used,
                 'file_bytes' => $byteSize,
+            ], 403);
+        }
+    }
+
+    /**
+     * Kvotprövning när text skrivs ([[ADR-0081 All lagrad data räknas mot
+     * kvoten]] § 5, issue 1303): samma lås och samma regel som
+     * assertStorageWithinLimit() — `used + added > limit` nekar, `null` är
+     * obegränsat. Betalaren prövas, inte containerns ägare.
+     *
+     * Anropas i samma transaktion som räknaren ändras
+     * (App\Support\Usage\MetadataLedger), bara när en räknad rad skapas eller
+     * växer. Att krympa, slänga, återställa och radera prövas aldrig.
+     */
+    public function assertMetadataWithinLimit(Account $payer, int $addedBytes): void
+    {
+        $limit = $payer->planLimit('storage_bytes');
+
+        if ($limit === null) {
+            return;
+        }
+
+        $used = UsageCounter::usedBytes($payer->id, lock: true);
+
+        if ($used + $addedBytes > $limit) {
+            throw ApiException::make('quota.storage_exceeded', [
+                'limit_bytes' => $limit,
+                'used_bytes' => $used,
+                'added_bytes' => $addedBytes,
             ], 403);
         }
     }
