@@ -6,7 +6,7 @@ use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Notification\CreateNotification;
 use App\Actions\Trash\PurgeContainer;
-use App\Actions\Usage\AdjustUsage;
+use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
@@ -15,7 +15,6 @@ use App\Models\ContainerAccess;
 use App\Models\Notification as NotificationModel;
 use App\Models\User;
 use App\Support\Account\ActingAccount;
-use App\Support\Usage\CountedRows;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -145,10 +144,11 @@ class DeleteAccount
 
             // Steg 2 och 3 — innehållet i ANDRAS containers. Före
             // containergallringen nedan, som bara rör kontots egna.
-            $this->flyttaFrammandeBilagor($account);
-            // Samma regel för räknade rader (ADR-0081 § 4): en kvarlämnad
-            // `billed_account_id` stoppar kontoraderingen på RESTRICT-nyckeln.
-            CountedRows::moveToContainerOwner($accountId);
+            // Bilagor och räknade rader (ADR-0081 § 4) byter betalare genom
+            // den delade actionen, som nedgraderingens steg 4 också använder:
+            // en kvarlämnad `billed_account_id` stoppar kontoraderingen på
+            // RESTRICT-nyckeln.
+            (new TransferBilling)->handle($account);
             $this->nollstallFattarkolumner($accountId);
 
             // Personbilagorna har ingen container att följa (ADR-0076
@@ -435,84 +435,11 @@ class DeleteAccount
     }
 
     /**
-     * ADR-0045 § Beslut 1: en bilaga kontot betalar för i en container det
-     * inte äger får containerns ÄGARKONTO som `billed_account_id`. Bytena
-     * flyttar mellan kontonas `usage_counter` i samma transaktion, och
-     * förlagan är App\Actions\OwnershipTransfer\AcceptOwnershipTransfer —
-     * samma två steg, samma enda väg in i räknaren (AdjustUsage).
-     *
-     * KONTOT SOM RADERAS TAR INGEN FRÅGA OM KVOTEN. Ägarkontot har inte valt
-     * bilagorna och ska inte förlora dem för att en gäst försvann; hamnar det
-     * över sin gräns gäller samma regel som för en vanlig överskriden kvot —
-     * nya uppladdningar nekas med `quota.storage_exceeded`, ingen
-     * nedgradering startar (ADR-0045 § Beslut 1). Därför anropas
-     * Entitlements inte här.
-     *
-     * **Containerns bild följer containern** (issue 158 · [[ADR-0047
-     * Containerns bild]] § Beslut, "Livscykeln följer containern"). Den är
-     * en bilaga som vilken som helst och flyttas på samma villkor; det som
-     * skiljer är att dess container hittas i bilagans EGEN kolumn i stället
-     * för genom itemet.
-     *
-     * Ingen soft-delete-scope på någon av sidorna: en mjukraderad bilaga, ett
-     * mjukraderat item eller en mjukraderad container är fortfarande rader
-     * med RESTRICT-nycklar, och en kvarlämnad `billed_account_id` blockerar
-     * account-raderingen precis som en levande. ALLA BILAGOR
-     * flyttar sina bytes — också de slängda, eftersom en slängd bilaga räknas
-     * i kontots `storage_bytes` tills den raderas fysiskt (ADR-0009
-     * uppföljning 2026-11-11).
-     */
-    private function flyttaFrammandeBilagor(Account $account): void
-    {
-        // Containern kommer ur BÅDA slagen (issue 158): genom itemet för en
-        // itembilaga, ur bilagans egen kolumn för en containerbilaga.
-        // coalesce() i stället för två joins — en containerbild har
-        // `item_id = NULL` och hade fallit bort i en inre join mot item,
-        // alltså hade en främmande containerbild behållit det raderade
-        // kontot som betalare och blockerat raderingen på RESTRICT-nyckeln.
-        $rader = DB::table('attachment')
-            ->leftJoin('item', 'item.id', '=', 'attachment.item_id')
-            ->join('container', 'container.id', '=', DB::raw('coalesce(item.container_id, attachment.container_id)'))
-            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-            ->where('attachment.billed_account_id', $account->id)
-            // En personbilaga har varken item eller container och får
-            // ALDRIG ett containerkonto som betalare — den hör till
-            // personen och följer ingen container (issue 379 · [[ADR-0076
-            // Profilbilden]] § 5). Villkoret står skrivet rakt ut fastän
-            // coalesce redan ger NULL och joinen då inte träffar: nästa
-            // läsare ska inte behöva slutleda det ur en SQL-detalj.
-            ->whereNull('attachment.user_id')
-            ->where('container.account_id', '!=', $account->id)
-            ->get([
-                'attachment.id',
-                'container.account_id as agarkonto_id',
-                'stored_file.byte_size',
-            ]);
-
-        foreach ($rader->groupBy('agarkonto_id') as $agarkontoId => $grupp) {
-            $agarkontoId = (int) $agarkontoId;
-            $bytes = (int) $grupp->sum('byte_size');
-
-            if ($bytes > 0) {
-                (new AdjustUsage)->handle($account->id, bytesDelta: -$bytes);
-                (new AdjustUsage)->handle($agarkontoId, bytesDelta: +$bytes);
-            }
-
-            DB::table('attachment')
-                ->whereIn('id', $grupp->pluck('id'))
-                ->update([
-                    'billed_account_id' => $agarkontoId,
-                    'updated_at' => now(),
-                ]);
-        }
-    }
-
-    /**
      * Personbilagorna kontot betalar för (issue 379 · [[ADR-0076
      * Profilbilden]] § 5).
      *
      * **De flyttas aldrig till en container.** En personbilaga har varken
-     * `item_id` eller `container_id`, och `flyttaFrammandeBilagor()` ovan
+     * `item_id` eller `container_id`, och `TransferBilling`
      * hade ändå aldrig hittat en container åt den. Den kan alltså inte följa
      * med på samma sätt som en främmande itembilaga, och ett
      * `billed_account_id` som pekar på ett konto som raderas faller på
@@ -530,7 +457,7 @@ class DeleteAccount
      * nytt personkonto.
      *
      * Ingen soft-delete-scope: även en slängd personbilaga bär RESTRICT-nyckeln
-     * och måste bort, av samma skäl som i flyttaFrammandeBilagor().
+     * och måste bort, av samma skäl som i TransferBilling.
      */
     private function rensaPersonbilagor(Account $account): void
     {
@@ -550,7 +477,7 @@ class DeleteAccount
      * gallras inte för att en gäst försvunnit. Kolumnerna mot `user` rörs
      * inte: personen raderas i en egen fråga (issue 144).
      *
-     * Ingen soft-delete-scope, av samma skäl som i flyttaFrammandeBilagor():
+     * Ingen soft-delete-scope, av samma skäl som i TransferBilling:
      * även en mjukraderad rad bär en RESTRICT-nyckel mot kontot.
      *
      * `updated_at` stämplas som vid varje annan skrivning — raden HAR ändrats,

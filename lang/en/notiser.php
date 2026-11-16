@@ -52,6 +52,18 @@ return [
         'line_account_inactive' => 'The container ":container" was deleted because the account that owned it had been inactive for 18 months. You no longer have access to it, or to anything you added there.',
         'action' => 'Go to Mimers',
     ],
+    /*
+     * Ägaren varnas när ett konto som lagt innehåll i containern nedgraderas
+     * (issue 1304 · ADR-0081 § 6a). `line_no_date` används när kontot saknar
+     * frist och payloaden därför inte har `moves_on`; vyn väljer varianten.
+     */
+    'container_content_moving' => [
+        'subject' => 'Content in ":container" is about to move to your storage',
+        'greeting' => 'Hello!',
+        'line' => 'The account ":account" is being downgraded. On :moves_on, the files and entries it added to ":container" (:bytes) move to your storage. You can remove anything you don\'t want before then.',
+        'line_no_date' => 'The account ":account" is being downgraded. The files and entries it added to ":container" (:bytes) will move to your storage. You can remove anything you don\'t want before then.',
+        'action' => 'Go to Mimers',
+    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',
@@ -72,6 +84,7 @@ return [
             'transfer_requested' => 'ownership transfer requests',
             'account_inactive' => 'inactive account warnings',
             'container_deleted' => 'container deletion notices',
+            'container_content_moving' => 'notices about content moving to your storage',
         ],
     ],
     /*

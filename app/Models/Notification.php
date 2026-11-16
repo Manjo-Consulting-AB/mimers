@@ -63,6 +63,12 @@ class Notification extends Model
     public const TYPE_CONTAINER_DELETED = 'container.deleted';
 
     /**
+     * Ägaren av en container varnas innan ett nedgraderat konto lämnar sitt
+     * innehåll där (issue 1304 · ADR-0081 § 6a). Ingen webhooktyp.
+     */
+    public const TYPE_CONTENT_MOVING = 'container.content_moving';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

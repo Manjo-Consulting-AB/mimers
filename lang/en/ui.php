@@ -283,6 +283,11 @@ return [
         // it. The clock has no page to link to, so the row is text.
         'container' => [
             'deleted' => ':container was deleted',
+            // Issue 1304: a downgraded account's content in the container is
+            // about to move to its owner. The sentence is ready for the clock;
+            // resources/js/** is outside this issue, so the row still uses the
+            // neutral fallback until notificationPresentation.js learns the type.
+            'content_moving' => 'Content added to :container by a downgraded account is moving to your storage',
         ],
 
         /*

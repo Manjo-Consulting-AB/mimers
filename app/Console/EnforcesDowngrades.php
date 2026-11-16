@@ -3,8 +3,11 @@
 namespace App\Console;
 
 use App\Actions\Trash\PurgeContent;
+use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\Container;
+use App\Models\Item;
 use App\Models\LegalHold;
 use App\Models\Plan;
 use App\Models\Subscription;
@@ -21,8 +24,19 @@ use Throwable;
  * `grace_until`, urvalslistan och rensningen av ett fruset konto). Den här
  * klassen kör förloppet i mål: bilagor raderas automatiskt, nyast först,
  * tills kontot ligger under gratisplanens gräns, och kontot återgår till
- * `active` på gratisnivån. Items raderas aldrig — bara bilagor, det är hela
- * ADR-0009 (Beslut 5).
+ * `active` på gratisnivån.
+ *
+ * **Steg 4 enligt [[ADR-0081 All lagrad data räknas mot kvoten]] § 4 och 6**
+ * (issue 1304), som ersätter ADR-0009 Beslut 5 ("items raderas aldrig"):
+ * först flyttas det kontot betalar för i ANDRAS containrar till ägaren
+ * (TransferBilling, samma kod som kontoraderingen) — där raderas ingenting.
+ * Sedan, i kontots EGNA containrar och så länge `storage_bytes +
+ * metadata_bytes` ligger över gränsen: slängda bilagor (äldst slängd först),
+ * levande bilagor (nyast först), slängda items (äldst slängd först), levande
+ * items (nyast först). Ett item vars underträd bär något ett annat konto
+ * betalar för hoppas över. Räcker det inte loggas `downgrade.content_exhausted`
+ * och kontot återgår till `active` över gränsen; nya skrivningar som växer
+ * nekas då av kvoten.
  *
  * Urvalet är exakt (Beslut 2): `status = 'read_only'`, `read_only_reason`
  * i `payment_failed`/`over_quota`, och en `grace_until` som passerat.
@@ -42,7 +56,7 @@ use Throwable;
  * fallande), tills kontots förbrukning ligger på eller under gränsen. Båda
  * vägarna går genom PurgeContent::attachment(), samma väg som lagringsvyn
  * (StorageController). En fysisk radering minskar räknaren direkt, så loopen
- * styrs av `usedBytes` och läses om efter varje bilaga — någon lokal räkning
+ * styrs av `UsageCounter::usedBytes()` och läses om efter varje bilaga — någon lokal räkning
  * av de levande bytena behövs inte. Den slutar så snart räknaren ligger lika
  * med eller under gränsen, eller när bilagorna tar slut; den snurrar aldrig.
  * Efter steg 4 ligger kontot inom kvoten, och ingenting jobbet tagit bort
@@ -143,22 +157,36 @@ class EnforcesDowngrades
                 return;
             }
 
+            // Steg 4a (ADR-0081 § 6a): det kontot betalar för i ANDRAS
+            // containrar raderas aldrig — det flyttas till containerns ägare,
+            // utan kvotprövning, genom samma action som DeleteAccount. Först
+            // av allt, så att loopen nedan bara ser kontots egna rader.
+            (new TransferBilling)->handle($row);
+
             $removed = 0;
             $purged = 0;
+            $itemsPurged = 0;
             $bytesFreed = 0;
             $limit = $this->freeStorageLimit();
 
             // En gräns som är null betyder obegränsat (issue 25): det finns
             // inget att komma under, och ingenting att radera.
             if ($limit !== null) {
-                // Räknaren är måttet hela vägen: en fysisk radering minskar
-                // den direkt, så loopen läses om efter varje bilaga och
-                // behöver ingen lokal räkning av de levande bytena.
-                while ($this->usedBytes($row->id) > $limit) {
-                    // Papperskorgen först: det som redan är slängt töms,
-                    // äldst slängd först. Det räknas fortfarande i kvoten, så
-                    // det är den billigaste frigöringen — och det enda som
-                    // behövs när kontots slängda byten räcker.
+                $ownContainerIds = Container::withTrashed()
+                    ->where('account_id', $row->id)
+                    ->pluck('id')
+                    ->all();
+                /** @var list<int> $skipped Items med andras innehåll i underträdet. */
+                $skipped = [];
+
+                // Räknaren är måttet hela vägen — filer och text tillsammans
+                // (UsageCounter::usedBytes, som kvotprövningen i #1303): en
+                // fysisk radering minskar den direkt, så loopen läses om
+                // efter varje rad och behöver ingen lokal räkning.
+                while (UsageCounter::usedBytes($row->id) > $limit) {
+                    // 1. Slängda bilagor, äldst slängd först. De räknas
+                    // fortfarande i kvoten, så det är den billigaste
+                    // frigöringen.
                     $trashed = Attachment::onlyTrashed()
                         ->where('billed_account_id', $row->id)
                         ->orderBy('deleted_at')
@@ -172,32 +200,52 @@ class EnforcesDowngrades
                         continue;
                     }
 
-                    // Sedan de levande, nyast först, för gott — samma väg som
-                    // lagringsvyn (StorageController) och av samma skäl:
-                    // kontot är fruset, papperskorgen räknas i kvoten, och en
-                    // slängning skulle kräva att användaren gick in en gång
-                    // till och tömde den innan kontot kom under gränsen.
+                    // 2. Levande bilagor, nyast först, för gott — samma väg
+                    // som lagringsvyn (StorageController).
                     $attachment = Attachment::query()
                         ->where('billed_account_id', $row->id)
                         ->orderByDesc('created_at')
                         ->orderByDesc('id')
                         ->first();
 
-                    if ($attachment === null) {
-                        Log::warning('downgrade.attachments_exhausted', [
+                    if ($attachment !== null) {
+                        $byteSize = (int) $attachment->storedFile()->value('byte_size');
+
+                        $this->purgeContent->attachment($attachment);
+                        $removed++;
+                        $bytesFreed += $byteSize;
+
+                        continue;
+                    }
+
+                    // 3. Slängda items, äldst slängd först, och 4. levande
+                    // items, nyast först — sist, och bara när filerna inte
+                    // räckte.
+                    $item = $this->nextItem($row->id, $ownContainerIds, $skipped, trashed: true)
+                        ?? $this->nextItem($row->id, $ownContainerIds, $skipped, trashed: false);
+
+                    if ($item === null) {
+                        Log::warning('downgrade.content_exhausted', [
                             'account_ulid' => $row->ulid,
-                            'used_bytes' => $this->usedBytes($row->id),
+                            'storage_bytes' => (int) UsageCounter::query()->where('account_id', $row->id)->value('storage_bytes'),
+                            'metadata_bytes' => (int) UsageCounter::query()->where('account_id', $row->id)->value('metadata_bytes'),
                             'limit_bytes' => $limit,
                         ]);
 
                         break;
                     }
 
-                    $byteSize = (int) $attachment->storedFile()->value('byte_size');
+                    // Ett item vars underträd bär något ett annat konto
+                    // betalar för frigör inte kontots byte och raderar någon
+                    // annans arbete: det hoppas över.
+                    if ($this->subtreeHasForeignPayer($item, $row->id)) {
+                        $skipped[] = $item->id;
 
-                    $this->purgeContent->attachment($attachment);
-                    $removed++;
-                    $bytesFreed += $byteSize;
+                        continue;
+                    }
+
+                    $this->purgeContent->item($item);
+                    $itemsPurged++;
                 }
             }
 
@@ -216,20 +264,76 @@ class EnforcesDowngrades
                 'account_ulid' => $row->ulid,
                 'purged' => $purged,
                 'removed' => $removed,
+                'items_purged' => $itemsPurged,
                 'bytes_freed' => $bytesFreed,
             ]);
         });
     }
 
     /**
-     * Kontots förbrukning — alltid räknarens tal, aldrig en egen SUM
-     * (issue 28 § Att se upp med). Saknas raden är förbrukningen noll.
+     * Nästa item att radera: kontots eget (`billed_account_id`), i en container
+     * kontot äger, och inte ett som redan hoppats över. Slängda äldst slängd
+     * först, levande nyast först.
+     *
+     * @param  list<int>  $ownContainerIds
+     * @param  list<int>  $skipped
      */
-    private function usedBytes(int $accountId): int
+    private function nextItem(int $accountId, array $ownContainerIds, array $skipped, bool $trashed): ?Item
     {
-        return (int) UsageCounter::query()
-            ->where('account_id', $accountId)
-            ->value('storage_bytes');
+        $query = Item::withTrashed()
+            ->where('billed_account_id', $accountId)
+            ->whereIn('container_id', $ownContainerIds)
+            ->whereNotIn('id', $skipped);
+
+        if ($trashed) {
+            return $query->whereNotNull('deleted_at')->orderBy('deleted_at')->orderBy('id')->first();
+        }
+
+        return $query->whereNull('deleted_at')->orderByDesc('created_at')->orderByDesc('id')->first();
+    }
+
+    /**
+     * Bär itemets underträd — itemet själv, barnitems (länkar med relationen
+     * `parent`, där `from_item_id` är föräldern), scheman, förekomster,
+     * kostnadsrader, lån och bilagor — något som ett ANNAT konto betalar för?
+     * Rader utan betalare (en förekomst utan anteckning) räknas inte.
+     */
+    private function subtreeHasForeignPayer(Item $item, int $accountId): bool
+    {
+        $ids = [$item->id];
+        $frontier = [$item->id];
+
+        while ($frontier !== []) {
+            $children = DB::table('item_link')
+                ->where('relation', 'parent')
+                ->whereIn('from_item_id', $frontier)
+                ->pluck('to_item_id')
+                ->map(fn ($id): int => (int) $id)
+                ->diff($ids)
+                ->values()
+                ->all();
+
+            $ids = [...$ids, ...$children];
+            $frontier = $children;
+        }
+
+        $foreign = fn (string $table, string $column = 'item_id') => DB::table($table)
+            ->whereIn($column, $ids)
+            ->whereNotNull('billed_account_id')
+            ->where('billed_account_id', '!=', $accountId)
+            ->exists();
+
+        return $foreign('item', 'id')
+            || $foreign('schedule')
+            || $foreign('cost_entry')
+            || $foreign('loan')
+            || $foreign('attachment')
+            || DB::table('schedule_occurrence')
+                ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
+                ->whereIn('schedule.item_id', $ids)
+                ->whereNotNull('schedule_occurrence.billed_account_id')
+                ->where('schedule_occurrence.billed_account_id', '!=', $accountId)
+                ->exists();
     }
 
     /**
