@@ -36,11 +36,16 @@ import { loadIcon } from './itemIconPresentation.js';
  * (`?view=map&focus=<nod>&depth=linked`), och de når med Tab. Fokus och hovring
  * visar namn och status. Ingen redigering och ingen plusmeny.
  *
- * **Läget `container` är nivån *Whole container*** (issue 394 · § 6): samma
- * linjer över hela containern, bara att läsa. **Panoreringen och zoomen gäller
- * båda lägena** (issue 396 · § 7). Bilden panoreras med dra eller piltangenterna och zoomas med hjul, nyp, knapparna
- * `+` och `−` eller tangenterna `+` och `−`. Noderna färgas efter status och
- * namnen ritas först över en zoomnivå. `center` markerar `focus` och vyn börjar
+ * **Läget `container` är nivån *Whole container*** (issue 394 · § 6, issue 397 ·
+ * [[ADR-0084 Hela containern med itemets ikon]]): samma linjer över hela
+ * containern, bara att läsa, och **samma nod som *Neighbourhood*** — en rund
+ * platta med itemets ikon. Status `overdue` är en liten prick i `danger` nere
+ * till höger; `ok` har ingen. Namnen har fast storlek på skärmen och ritas
+ * från början under `ALL_NAMES_BELOW` noder, annars från `LABEL_ZOOM`.
+ * **Panoreringen och zoomen gäller båda lägena** (issue 396 · § 7). Bilden
+ * panoreras med dra eller piltangenterna och zoomas med hjul, nyp, knapparna
+ * `+` och `−` eller tangenterna `+` och `−`, till som mest fem steg över
+ * normal storlek (`MAX_ZOOM`). `center` markerar `focus` och vyn börjar
  * centrerad på det; sökningen (`query`) tänder träffarna och tonar ned resten
  * utan att gömma något. Ett klick går till *Focus* med noden som mitt. Med
  * `truncated` ritas en mening i stället för grafen, i båda lägena, utan något antal.
@@ -66,8 +71,15 @@ const whole = computed(() => props.mode === 'container');
 const { t } = useTranslations();
 
 const STEPS = 300;
-const RADIUS = 10;
-const CENTER_RADIUS = 15;
+/* Plattans radie; mitten är större. Layoutens avstånd räknas ur dem. */
+const PLATE_RADIUS = 16;
+const CENTER_PLATE_RADIUS = 20;
+/* Avstånden växer med plattan så att noderna och namnen under dem inte överlappar. */
+const COLLIDE_RADIUS = PLATE_RADIUS * 2.75;
+const LINK_DISTANCE = PLATE_RADIUS * 7.5;
+const SPIRAL_GAP = PLATE_RADIUS * 3;
+/* Under så här många noder ritas alla namn från början (ADR-0084 § 4). */
+const ALL_NAMES_BELOW = 40;
 
 /* En fast slumptalskälla (LCG), så att inget i layouten beror på tiden. */
 function seeded() {
@@ -86,7 +98,7 @@ function forceLayout() {
 
     const simNodes = props.nodes.map((node, index) => {
         const isCenter = node.ulid === props.center;
-        const radius = 36 * Math.sqrt(index + 1);
+        const radius = SPIRAL_GAP * Math.sqrt(index + 1);
 
         return {
             ulid: node.ulid,
@@ -101,9 +113,9 @@ function forceLayout() {
 
     const simulation = forceSimulation(simNodes)
         .randomSource(seeded())
-        .force('link', forceLink(links).id((node) => node.ulid).distance(90).strength(0.6))
-        .force('charge', forceManyBody().strength(-260))
-        .force('collide', forceCollide(30));
+        .force('link', forceLink(links).id((node) => node.ulid).distance(LINK_DISTANCE).strength(0.6))
+        .force('charge', forceManyBody().strength(-300))
+        .force('collide', forceCollide(COLLIDE_RADIUS));
 
     // Hela containern har inget fast mitt: en svag dragning mot origo håller
     // ihop de fristående noderna.
@@ -296,10 +308,6 @@ const icons = shallowReactive({});
 watch(
     () => props.nodes,
     (nodes) => {
-        if (whole.value) {
-            return;
-        }
-
         for (const name of new Set(nodes.map((node) => node.icon))) {
             const loader = name in icons ? null : loadIcon(name);
 
@@ -345,7 +353,9 @@ const activeNode = computed(() => placed.value.find((node) => node.ulid === acti
  * skärmpixlar till viewBox-enheter.
  */
 const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 8;
+/* Knappens och tangentens steg. Taket är fem steg över normal storlek. */
+const ZOOM_STEP = 1.25;
+const MAX_ZOOM = ZOOM_STEP ** 5;
 const LABEL_ZOOM = 1.6;
 const DRAG_SLOP = 5;
 
@@ -367,7 +377,8 @@ function startView() {
 
 const layerTransform = computed(() => `translate(${view.value.x} ${view.value.y}) scale(${view.value.k})`);
 
-const showNames = computed(() => view.value.k >= LABEL_ZOOM);
+const showNames = computed(() => view.value.k >= LABEL_ZOOM
+    || (whole.value && props.nodes.length < ALL_NAMES_BELOW));
 
 /* Skärmpixlar → viewBox-enheter (preserveAspectRatio `meet`). */
 function unitsPerPixel() {
@@ -489,9 +500,9 @@ function onKeydown(event) {
     if (pan) {
         view.value = { ...view.value, x: view.value.x + pan[0], y: view.value.y + pan[1] };
     } else if (event.key === '+' || event.key === '=') {
-        zoomButton(1.25);
+        zoomButton(ZOOM_STEP);
     } else if (event.key === '-' || event.key === '_') {
-        zoomButton(1 / 1.25);
+        zoomButton(1 / ZOOM_STEP);
     } else if (event.key === '0') {
         view.value = startView();
     } else {
@@ -594,39 +605,37 @@ function go(event, href) {
                         @blur="active = null"
                     >
                         <circle :cx="node.x" :cy="node.y" r="22" fill="transparent" stroke-width="3" stroke="transparent" />
-                        <template v-if="whole">
+                        <circle
+                            :cx="node.x"
+                            :cy="node.y"
+                            :r="node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS"
+                            fill="var(--color-surface)"
+                            :stroke="node.isCenter ? 'var(--color-accent)' : 'var(--color-border)'"
+                            :stroke-width="node.isCenter ? 3 : 1.5"
+                        />
+                        <g
+                            v-if="node.iconNodes"
+                            :transform="`translate(${node.x - 10} ${node.y - 10}) scale(${20 / 24})`"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.75"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            :class="node.tone"
+                        >
+                            <component :is="tag" v-for="([tag, attributes], index) in node.iconNodes" :key="index" v-bind="attributes" />
+                        </g>
+                        <circle v-else :cx="node.x" :cy="node.y" r="4" fill="var(--color-ink-subtle)" />
+                        <g v-if="node.status === 'overdue'" data-item-graph-overdue>
                             <circle
-                                :cx="node.x"
-                                :cy="node.y"
-                                :r="node.isCenter ? CENTER_RADIUS : RADIUS"
-                                :fill="node.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-accent)'"
-                                :stroke="node.isCenter || node.hit ? 'var(--color-ink)' : 'var(--color-surface)'"
-                                stroke-width="3"
+                                :cx="node.x + (node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) * 0.7"
+                                :cy="node.y + (node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS) * 0.7"
+                                r="4.5"
+                                fill="var(--color-danger)"
+                                stroke="var(--color-surface)"
+                                stroke-width="2"
                             />
-                        </template>
-                        <template v-else>
-                            <circle
-                                :cx="node.x"
-                                :cy="node.y"
-                                :r="node.isCenter ? 20 : 16"
-                                fill="var(--color-surface)"
-                                :stroke="node.isCenter ? 'var(--color-accent)' : 'var(--color-border)'"
-                                :stroke-width="node.isCenter ? 3 : 1.5"
-                            />
-                            <g
-                                v-if="node.iconNodes"
-                                :transform="`translate(${node.x - 10} ${node.y - 10}) scale(${20 / 24})`"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.75"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                :class="node.tone"
-                            >
-                                <component :is="tag" v-for="([tag, attributes], index) in node.iconNodes" :key="index" v-bind="attributes" />
-                            </g>
-                            <circle v-else :cx="node.x" :cy="node.y" r="4" fill="var(--color-ink-subtle)" />
-                        </template>
+                        </g>
                     </a>
 
                     <g aria-hidden="true" class="pointer-events-none">
@@ -634,7 +643,7 @@ function go(event, href) {
                             <text
                                 v-if="(showNames || node.hit || node.isCenter) && node.ulid !== active"
                                 :x="node.x"
-                                :y="whole ? node.y - 20 : node.y + (node.isCenter ? 36 : 32)"
+                                :y="node.y + (node.isCenter ? 36 : 32)"
                                 text-anchor="middle"
                                 fill="var(--color-ink)"
                                 stroke="var(--color-surface)"
@@ -643,7 +652,7 @@ function go(event, href) {
                                 :font-size="12 / view.k"
                                 font-weight="600"
                                 :opacity="needle !== '' && !node.hit ? 0.25 : undefined"
-                            >{{ whole ? node.name : node.short }}</text>
+                            >{{ node.short }}</text>
                         </template>
                     </g>
 
@@ -678,13 +687,13 @@ function go(event, href) {
                     type="button"
                     :aria-label="t('item.graph.zoom_in')"
                     class="flex h-11 w-11 items-center justify-center rounded-card border border-border bg-surface text-lg font-semibold text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
-                    @click="zoomButton(1.25)"
+                    @click="zoomButton(ZOOM_STEP)"
                 >+</button>
                 <button
                     type="button"
                     :aria-label="t('item.graph.zoom_out')"
                     class="flex h-11 w-11 items-center justify-center rounded-card border border-border bg-surface text-lg font-semibold text-ink hover:bg-surface-muted focus-visible:outline-2 focus-visible:outline-focus"
-                    @click="zoomButton(1 / 1.25)"
+                    @click="zoomButton(1 / ZOOM_STEP)"
                 >&minus;</button>
             </div>
         </div>

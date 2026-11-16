@@ -149,15 +149,14 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
         ->toContain('@pointerdown')
         ->toContain('@pointermove')
         ->toContain('pinchDistance')
-        ->toContain('zoomButton(1.25)')
-        ->toContain('zoomButton(1 / 1.25)')
+        ->toContain('zoomButton(ZOOM_STEP)')
+        ->toContain('zoomButton(1 / ZOOM_STEP)')
         ->toContain('@keydown')
         ->toContain('ArrowLeft')
         ->toContain(':tabindex="0"');
 
-    // Namnen först över en zoomnivå; noderna färgas efter status.
-    expect($grafen)->toContain('const showNames = computed(() => view.value.k >= LABEL_ZOOM)')
-        ->toContain("node.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-accent)'");
+    // Namnen över en zoomnivå, eller från början i en liten container (issue 397).
+    expect($grafen)->toContain('view.value.k >= LABEL_ZOOM');
 
     // Vyn börjar centrerad på `focus`, och sökningen tonar ned i stället för att gömma.
     expect($grafen)->toContain('layout.value[props.center]')
@@ -282,4 +281,81 @@ it('ritar den nya etiketten ur ui.php (issue 396)', function () {
 
     expect(str_contains($etikett, 'two steps'))->toBeFalse();
     expect($etikett)->toContain('X');
+});
+
+it('ritar Whole container med samma nod som Neighbourhood (issue 397)', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    // Ingen egen nod för läget: plattan, ikonen och namnet ritas en gång.
+    expect(substr_count($grafen, ':r="node.isCenter ? CENTER_PLATE_RADIUS : PLATE_RADIUS"'))->toBe(1)
+        ->and($grafen)->not->toContain('<template v-if="whole">')
+        ->and($grafen)->not->toContain('CENTER_RADIUS :')
+        ->and($grafen)->toContain('loadIcon(name)')
+        ->and($grafen)->toContain('TONE_CLASS[node.icon_color]')
+        ->and($grafen)->not->toContain('whole ? node.name : node.short');
+
+    // Ikonerna hämtas i båda lägena.
+    expect(kartanszoomKod('components/ItemGraph.vue'))->not->toMatch('/if \(whole\.value\) \{\s*return;/');
+
+    // Statusen är en prick i danger med en ring i surface, bara för overdue.
+    expect($grafen)->toContain("v-if=\"node.status === 'overdue'\"")
+        ->toContain('data-item-graph-overdue')
+        ->toContain('fill="var(--color-danger)"')
+        ->and($grafen)->not->toContain("node.status === 'overdue' ? 'var(--color-danger)'");
+
+    // Namnet: fast skärmstorlek, kontur i surface bakom, ellips.
+    expect($grafen)->toContain(':font-size="12 / view.k"')
+        ->toContain(':stroke-width="4 / view.k"')
+        ->toContain('paint-order="stroke"')
+        ->toContain('font-weight="600"')
+        ->toContain('shortName(node.name)');
+});
+
+it('ritar alla namn under 40 noder och annars från LABEL_ZOOM (issue 397)', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->toContain('const ALL_NAMES_BELOW = 40;')
+        ->toContain('view.value.k >= LABEL_ZOOM')
+        ->toContain('props.nodes.length < ALL_NAMES_BELOW')
+        ->toContain('(showNames || node.hit || node.isCenter) && node.ulid !== active');
+});
+
+it('ritar linjerna i Whole container raka och utan spetsar (issue 397)', function () {
+    $linje = kartanszoomFunktion('pathBetween');
+
+    expect($linje)->toContain('whole.value ||')
+        ->toContain('L ${to.x} ${to.y}');
+
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect(str_contains($grafen, '<marker'))->toBeFalse()
+        ->and(str_contains($grafen, 'marker-end'))->toBeFalse();
+});
+
+it('håller zoomens tak på fem steg och låter plattan styra layoutens avstånd (issue 397)', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->toContain('const ZOOM_STEP = 1.25;')
+        ->toContain('const MAX_ZOOM = ZOOM_STEP ** 5;')
+        ->toContain('const MIN_ZOOM = 0.4;')
+        ->and($grafen)->not->toContain('MAX_ZOOM = 8');
+
+    $kraft = kartanszoomFunktion('forceLayout');
+
+    expect($kraft)->toContain('forceCollide(COLLIDE_RADIUS)')
+        ->toContain('.distance(LINK_DISTANCE)');
+
+    expect($grafen)->toContain('COLLIDE_RADIUS = PLATE_RADIUS *')
+        ->toContain('LINK_DISTANCE = PLATE_RADIUS *');
+});
+
+it('drar inte in något nytt paket för noden (issue 397)', function () {
+    $paket = json_decode(File::get(base_path('package.json')), true);
+    $alla = array_merge(array_keys($paket['dependencies'] ?? []), array_keys($paket['devDependencies'] ?? []));
+
+    expect(array_values(array_filter($alla, fn (string $namn): bool => str_starts_with($namn, 'd3'))))->toBe(['d3-force']);
+
+    preg_match_all('/^import .* from \'([^\']+)\';$/m', kartanszoomKod('components/ItemGraph.vue'), $importer);
+
+    expect($importer[1])->toBe(['vue', '@inertiajs/vue3', 'd3-force', '../composables/useTranslations.js', './itemIconPresentation.js']);
 });
