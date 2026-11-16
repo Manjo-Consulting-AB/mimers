@@ -148,8 +148,8 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
     actingAs($anvandare)->get($bas)->assertInertia(
         fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
             ->where('create.rows', [
-                ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$item->ulid}"],
                 ['key' => 'parent_item', 'href' => "/containers/{$container->ulid}/items/create?child={$item->ulid}"],
+                ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$item->ulid}"],
                 ['key' => 'relation', 'href' => "/containers/{$container->ulid}/items?view=map&focus={$item->ulid}&add=relation"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
                 ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
@@ -284,7 +284,8 @@ it('utelämnar en rad vars policy nekar', function () {
 
     actingAs($skrivare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
         fn (AssertableInertia $page) => $page->has('create.rows', 6)
-            ->where('create.rows.1.key', 'parent_item')
+            ->where('create.rows.0.key', 'parent_item')
+            ->where('create.rows.1.key', 'item')
             ->where('create.rows.2.key', 'relation'),
     );
 });
