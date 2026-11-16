@@ -1,6 +1,6 @@
 # ADR-0046 Containerns karta
 
-**Status:** Antagen 2026-09-27 · Kolumnerna, *en öppen gren per nivå* och `?path=` ersatta av [[ADR-0059 Kartan med en mitt]] 2026-10-18; nodernas status, platsmarkeringen och läget i itemfliken gäller · Besvarar *Containerns karta* i [[Att sortera efter mockuparna]] · Bygger vidare på [[ADR-0040 Underträdets summor]] och [[ADR-0041 Itemets vy]] · Växeln och förvalet ändrade av [[ADR-0067 Itemfliken utan listläge]]: två lägen, trädet först · [[ADR-index]]
+**Status:** Antagen 2026-09-27 · Kolumnerna, *en öppen gren per nivå* och `?path=` ersatta av [[ADR-0059 Kartan med en mitt]] 2026-10-18; nodernas status, platsmarkeringen och läget i itemfliken gäller · Besvarar *Containerns karta* i [[Att sortera efter mockuparna]] · Bygger vidare på [[ADR-0040 Underträdets summor]] och [[ADR-0041 Itemets vy]] · Växeln och förvalet ändrade av [[ADR-0067 Itemfliken utan listläge]]: två lägen, trädet först · § Konsekvenser och § Alternativ (grafen över alla relationer) ändras av [[ADR-0082 Kartan är relationernas yta]] · [[ADR-index]]
 
 Tonys beslut 2026-09-27, vid genomgången av mobilmockupen (`docs/Design/mobil.png`, bild 3) och vid planeringen av [[M23 Mobilen och kartan]].
 

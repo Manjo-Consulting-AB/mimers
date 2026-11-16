@@ -1,6 +1,6 @@
 # ADR-0068 Itemets sida och skapandet
 
-**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · Ordtabellens rad *Uppgifter och underhåll* ersatt av [[ADR-0075 Tasks som listans namn]] · Uppföljning 2026-11-14: strukturen på flikarna (*Include child items* på *Documents*, *Costs* och *Loans*) · [[ADR-index]]
+**Status:** Antagen 2026-10-23 · Ändrar [[ADR-0041 Itemets vy]] (sidopanelerna får fällas ihop), [[ADR-0063 Itemets karta i containerkartans form]] § 1 (kartan under `lg:`) och [[ADR-0066 Itemets anteckning]] (anteckningen lämnar skapaformuläret) · Kompletterar [[ADR-0032 Produktens ord]] med itemets ord · Följer [[ADR-0050 Desktopdesignen]] § Uppföljning 2026-10-17 § 4 (*To do*) · Ordtabellens rad *Uppgifter och underhåll* ersatt av [[ADR-0075 Tasks som listans namn]] · Uppföljning 2026-11-14: strukturen på flikarna (*Include child items* på *Documents*, *Costs* och *Loans*) · § 4 (flikarna) och § 5 punkt 3 (*Add relation*) ändras av [[ADR-0082 Kartan är relationernas yta]] · [[ADR-index]]
 
 Underlaget är en UX-granskning av itemvyerna 2026-10-23 och två arkitekters genomgång av den. Förlagan är `docs/Design/struktur - item.jpeg`, samma bild som [[ADR-0041 Itemets vy]] byggde på.
 
