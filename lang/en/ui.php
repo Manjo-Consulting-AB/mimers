@@ -3476,6 +3476,25 @@ return [
             'map' => 'Map',
         ],
 
+        // The zoom levels of the full map (issue 393 · [[ADR-0082 Kartan är
+        // relationernas yta]] § 4 and 5). *Whole container* arrives in 394.
+        'depth' => [
+            'label' => 'Map zoom level',
+            'focus' => 'Focus',
+            'neighbourhood' => 'Neighbourhood',
+        ],
+
+        // The neighbourhood graph (issue 393). The status words are the two
+        // `ItemStatus` values the map already gets.
+        'graph' => [
+            'label' => 'Items within two steps of :name',
+            'center' => 'centre',
+            'status' => [
+                'ok' => 'On track',
+                'overdue' => 'Overdue',
+            ],
+        ],
+
         // The right-hand panel: the focus map (issue 156 · [[M23 Mobilen och
         // kartan]] § 156). The item sits in the middle, its parents above it,
         // its children below and the related items on the two sides, and the
