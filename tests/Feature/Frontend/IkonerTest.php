@@ -389,6 +389,7 @@ it('fäller en ny handskriven svg utanför undantagen', function () {
         'components/StorageBar.vue',
         'components/TotpQrCode.vue',
         'components/ItemMapEdges.vue',
+        'components/ItemGraph.vue',
     ];
 
     $vueFiler = array_values(array_filter(

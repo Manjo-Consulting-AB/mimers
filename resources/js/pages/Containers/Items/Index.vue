@@ -6,7 +6,9 @@ import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import InlineCreate from '../../../components/InlineCreate.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemForm from '../../../components/ItemForm.vue';
+import ItemGraph from '../../../components/ItemGraph.vue';
 import ItemMap from '../../../components/ItemMap.vue';
+import ItemMapDepthSwitch from '../../../components/ItemMapDepthSwitch.vue';
 import ItemMapHits from '../../../components/ItemMapHits.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
@@ -136,6 +138,12 @@ defineOptions({
  */
 const props = defineProps({
     container: { type: Object, required: true },
+    /*
+     * Grannskapet `{nodes, edges}` (issue 393 · [[ADR-0082 Kartan är
+     * relationernas yta]] § 4 och 5), eller `null`: servern skickar det bara
+     * med `view=map`, ett item som mitt och `depth=2`.
+     */
+    neighbourhood: { type: Object, default: null },
     /* Item-ULID → status: `ok` eller `overdue`. Bara i kartläget, annars `{}`. */
     statuses: { type: Object, required: true },
     /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
@@ -428,6 +436,25 @@ const views = computed(() => {
 });
 
 /*
+ * Zoomnivåerna i den fulla kartan (issue 393 · [[ADR-0082 Kartan är
+ * relationernas yta]] § 4): *Focus* skrivs utan `depth` och *Neighbourhood*
+ * med `depth=2`. Växeln finns bara när mitten är ett item; `neighbourhood` är
+ * serverns läsning av `depth`, så nivån står i adressen och ingenstans annat.
+ */
+const depthLevels = computed(() => {
+    const query = filterQuery.value;
+    const tail = query === '' ? '' : `&${query}`;
+    const focus = props.map?.center.kind === 'item' ? `&focus=${props.map.center.ulid}` : '';
+
+    return [
+        { key: 'focus', label: t('item.depth.focus'), href: `${base.value}?view=map${focus}${tail}` },
+        { key: 'neighbourhood', label: t('item.depth.neighbourhood'), href: `${base.value}?view=map${focus}&depth=2${tail}` },
+    ];
+});
+
+const showGraph = computed(() => props.neighbourhood !== null && props.map?.center.kind === 'item');
+
+/*
  * *+N till* kring containern leder till trädet. Kring ett item fäller
  * `ItemMap` ut gruppen i kartans ram och bygger adressen själv (issue 1339 ·
  * [[ADR-0082 Kartan är relationernas yta]] § 3); relationsfliken finns inte
@@ -631,16 +658,39 @@ const overflowHref = computed(() => base.value);
             />
 
             <div class="min-w-0 flex-1">
-                <ItemMap
-                    :map="map"
-                    :statuses="statuses"
-                    :container-ulid="container.ulid"
-                    :overflow-href="overflowHref"
-                    :filter-query="filterQuery"
-                    :expanded="expanded"
-                    :unlinkable="unlinkable"
-                    :link-form="linkForm"
+                <!--
+                    Växeln och grannskapet finns från `md:` (§ 7); under `md:`
+                    ritas ingen växel och kartan nedan är *Focus*, även när
+                    `depth` står i adressen.
+                -->
+                <ItemMapDepthSwitch
+                    v-if="map.center.kind === 'item'"
+                    :levels="depthLevels"
+                    :current="showGraph ? 'neighbourhood' : 'focus'"
+                    :label="t('item.depth.label')"
+                    class="mb-3"
                 />
+
+                <ItemGraph
+                    v-if="showGraph"
+                    :nodes="neighbourhood.nodes"
+                    :edges="neighbourhood.edges"
+                    :center="map.center.ulid"
+                    :container-ulid="container.ulid"
+                />
+
+                <div :class="showGraph ? 'md:hidden' : ''">
+                    <ItemMap
+                        :map="map"
+                        :statuses="statuses"
+                        :container-ulid="container.ulid"
+                        :overflow-href="overflowHref"
+                        :filter-query="filterQuery"
+                        :expanded="expanded"
+                        :unlinkable="unlinkable"
+                        :link-form="linkForm"
+                    />
+                </div>
             </div>
         </div>
     </section>

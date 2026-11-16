@@ -42,7 +42,8 @@ it('har uqr och inget annat nytt paket', function () {
     $beroenden = array_keys($paket['dependencies'] ?? []);
     sort($beroenden);
 
-    expect($beroenden)->toBe(['lucide']);
+    // `d3-force` kom med issue 393 · [[ADR-0082 Kartan är relationernas yta]] § 9.
+    expect($beroenden)->toBe(['d3-force', 'lucide']);
 
     $utvecklingsberoenden = array_keys($paket['devDependencies'] ?? []);
     sort($utvecklingsberoenden);

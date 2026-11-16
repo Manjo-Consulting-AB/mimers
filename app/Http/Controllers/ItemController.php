@@ -14,6 +14,7 @@ use App\Actions\Item\RecordRecentVisit;
 use App\Actions\Item\RenderItemNotes;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
+use App\Actions\Item\ResolveItemNeighbourhood;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Actions\Item\ResolveItemTreeRows;
@@ -272,6 +273,7 @@ class ItemController extends Controller
         ResolveItemTreeRows $resolveItemTreeRows,
         ResolveItemMap $resolveItemMap,
         ListItemLinks $listItemLinks,
+        ResolveItemNeighbourhood $resolveItemNeighbourhood,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -314,6 +316,15 @@ class ItemController extends Controller
         // itemvyns förekomst (issue 95).
         $map = $view === 'map'
             ? $resolveItemMap->handle($user, $container, $this->requestedFocus($request))
+            : null;
+
+        // Grannskapet (issue 393 · [[ADR-0082 Kartan är relationernas yta]]
+        // § 4, 5 och 8): bara i kartläget, med ett item som mitt och
+        // `depth=2`. Andra `depth`-värden är *Focus* och kostar ingenting.
+        // Kring containern är nivån inte definierad, så ett okänt `focus`
+        // (mitten blev containern) ger ingen proppe heller.
+        $neighbourhood = $view === 'map' && $map['centerItem'] !== null && $request->query('depth') === '2'
+            ? $resolveItemNeighbourhood->handle($user, $container, $map['centerItem']->ulid)
             : null;
 
         // Statusen hör till det som RITAS ([[ADR-0040 Underträdets summor]]
@@ -569,6 +580,10 @@ class ItemController extends Controller
             // total: 0}` ett filter utan träffar — samma skillnad som mellan
             // `structure`s `null` och `[]` ovan.
             'hits' => $hits,
+
+            // Grannskapet som `{nodes, edges}`, eller `null` i alla andra lägen
+            // (issue 393). Klienten ritar det bara från `md:`.
+            'neighbourhood' => $neighbourhood,
 
             // Relationerna i den fulla kartan (issue 1339 · [[ADR-0082 Kartan
             // är relationernas yta]] § 3). `expanded` är gruppen *+N till*

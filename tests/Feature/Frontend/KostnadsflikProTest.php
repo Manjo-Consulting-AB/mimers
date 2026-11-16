@@ -1008,6 +1008,10 @@ it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
         $paket['optionalDependencies'] ?? [],
     )));
 
+    // `d3-force` (issue 393 · [[ADR-0082 Kartan är relationernas yta]] § 9) är
+    // layouten i kartans grannskap och ritar inga diagram.
+    $beroenden = str_replace('d3-force', '', $beroenden);
+
     foreach (['chart', 'd3', 'apex', 'echarts', 'plotly', 'highcharts', 'vis-'] as $forbjudet) {
         expect($beroenden)->not->toContain($forbjudet);
     }
