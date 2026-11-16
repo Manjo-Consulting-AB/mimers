@@ -6,6 +6,7 @@ use App\Actions\Usage\AdjustUsage;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Löpande bokföring av textens byte i `usage_counter.metadata_bytes`
@@ -20,7 +21,7 @@ use Illuminate\Database\Query\Builder;
  * som AdjustUsage: räknaren ska ändras i samma transaktion som raden.
  *
  * - `save()` skapar eller ändrar en rad och bokför skillnaden mellan före
- *   (radens original) och efter. Byter raden betalare — en förekomst som får
+ *   (raden läst under lås i transaktionen) och efter. Byter raden betalare — en förekomst som får
  *   sin första anteckning, eller som töms — minusas den gamla betalaren och
  *   den nya plussas.
  * - `release()` och `releaseWhere()` körs FÖRE en radering för gott och
@@ -38,7 +39,13 @@ final class MetadataLedger
         $table = $row->getTable();
         $existed = $row->exists;
 
-        $before = $existed ? $row->getRawOriginal() : [];
+        // "Före" läses ur raden under lås, inte ur anroparens (möjligen förlegade)
+        // instans: radlåset serialiserar samtidiga skrivare.
+        $before = [];
+        if ($existed) {
+            $locked = DB::table($table)->where('id', $row->getKey())->lockForUpdate()->first();
+            $before = $locked === null ? $row->getRawOriginal() : (array) $locked;
+        }
         $oldPayer = $existed ? self::payerOf($table, $before) : null;
         $oldBytes = $oldPayer === null ? 0 : MetadataSize::ofAttributes($table, $before);
 
@@ -71,13 +78,17 @@ final class MetadataLedger
     public static function release(Model $row): void
     {
         $table = $row->getTable();
-        $payer = self::payerOf($table, $row->getAttributes());
+        $locked = $row->exists
+            ? DB::table($table)->where('id', $row->getKey())->lockForUpdate()->first()
+            : null;
+        $attributes = $locked === null ? $row->getAttributes() : (array) $locked;
+        $payer = self::payerOf($table, $attributes);
 
         if ($payer === null) {
             return;
         }
 
-        $bytes = MetadataSize::of($row);
+        $bytes = MetadataSize::ofAttributes($table, $attributes);
 
         if ($bytes > 0) {
             (new AdjustUsage)->handle($payer, metadataDelta: -$bytes);
@@ -97,6 +108,7 @@ final class MetadataLedger
     {
         $query = CountedRows::query($table);
         $scope($query);
+        $query->lockForUpdate();
 
         /** @var array<int, int> $perPayer */
         $perPayer = [];
