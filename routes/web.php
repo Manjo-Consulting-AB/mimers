@@ -49,7 +49,6 @@ use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
-use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\EmailChangeController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -681,21 +680,17 @@ Route::middleware('auth')->group(function () {
         ->name('settings.delete-user');
 
     /*
-     * Issue 53c · Kontoinställningarna — profil och konton, se
-     * App\Http\Controllers\Settings\ProfileController och
-     * App\Http\Controllers\Settings\AccountSettingsController.
+     * Issue 53c · Kontoinställningarna — profilen, se
+     * App\Http\Controllers\Settings\ProfileController. Kontosidan
+     * (`/settings/accounts`) togs bort i issue 398 ([[ADR-0085 Profilen bär
+     * personkontot]]), utan omdirigering: adressen är fri åt en framtida flik
+     * för organisationskonton.
      *
      * Här får /settings äntligen ett hem. 53b lämnade den som en ärlig 404
      * med flit (issue 53b § Beslut 2) och utlovade att 53c gör profilen till
      * inställningarnas förstasida. Omdirigeringen är en egen rutt och inte en
      * sida, så /settings aldrig renderar något eget — den som bokmärkt
      * adressen hamnar rätt, och en tom mellansida uppstår aldrig.
-     *
-     * `{account}` binds på kontots ULID via #[RouteKey('ulid')] på
-     * App\Models\Account — aldrig på löpnumret, och aldrig ur kroppen
-     * (Beslut 1). Ett konto som identifieras i kroppen är en rutt utan objekt
-     * att auktorisera mot; här finns objektet i rutten och
-     * App\Policies\AccountPolicy::update() prövas mot det i kontrollern.
      *
      * En ny inställningssida får också en egen rad i
      * resources/js/layouts/settingsSections.js — navigationen renderas ur den
@@ -772,12 +767,6 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/settings/profile/email/{token}', [EmailChangeController::class, 'confirm'])
         ->name('settings.profile.email.confirm');
-
-    Route::get('/settings/accounts', [AccountSettingsController::class, 'index'])
-        ->name('settings.accounts');
-
-    Route::patch('/settings/accounts/{account}', [AccountSettingsController::class, 'update'])
-        ->name('settings.accounts.update');
 
     /*
      * Issue 66a · Plansidan — det valda kontots plan, förbrukningen mot

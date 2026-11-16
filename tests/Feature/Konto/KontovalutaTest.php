@@ -36,10 +36,10 @@ beforeEach(function () {
  * uttryckligen "aldrig en blockerande fråga".
  *
  * Att den sedan går att ÄNDRA prövas här: skrivvägen är inställningarnas
- * PATCH (app/Http/Requests/Settings/UpdateAccountSettingsRequest.php och
- * App\Http\Controllers\Settings\AccountSettingsController), som kontosidan
- * redan ägde — issue 85 lägger bara ett femte fält i den. Rollerna, regel 4
- * och objektet-ur-rutten prövas i
+ * PATCH /settings/profile (app/Http/Requests/Settings/UpdateProfileRequest.php
+ * och App\Http\Controllers\Settings\ProfileController) sedan issue 398
+ * ([[ADR-0085 Profilen bär personkontot]]), som flyttade fältet dit från
+ * kontosidan. Policyn, regel 4 och personkontot-ur-servern prövas i
  * tests/Feature/Konto/KontoinstallningarTest.php och upprepas inte här.
  *
  * **Beviset för att ett byte av kontots valuta lämnar en skriven kostnadsrad
@@ -87,9 +87,8 @@ it('bär valutan som en obligatorisk kolumn på kontot', function () {
 });
 
 /**
- * Ett konto med en `owner`, och kroppen för kontots PATCH med valfria
- * överstyrningar. De fyra första fälten är obligatoriska i requesten och
- * måste skickas giltiga för att ett test ska nå fram till valutan.
+ * Ett personkonto med en `owner`, och kroppen för PATCH /settings/profile med
+ * valfria överstyrningar.
  *
  * @param  array<string, mixed>  $overrides
  * @return array{0: Account, 1: User, 2: array<string, mixed>}
@@ -101,50 +100,40 @@ function kontovalutaKonto(array $overrides = []): array
     $konto->users()->attach($anvandare, ['role' => 'owner']);
 
     $kropp = array_merge([
-        'name' => $konto->name,
-        'locale' => $konto->locale,
-        'timezone' => $konto->timezone,
-        'unit_system' => $konto->unit_system,
+        'name' => $anvandare->name,
+        'account_name' => $konto->name,
     ], $overrides);
 
     return [$konto, $anvandare, $kropp];
 }
 
-it('visar kontots valuta på kontosidan', function () {
+it('visar kontots valuta på profilsidan', function () {
     withoutVite();
 
     [$konto, $anvandare] = kontovalutaKonto();
 
-    actingAs($anvandare)->get('/settings/accounts')->assertInertia(fn (AssertableInertia $page) => $page
-        ->component('Settings/Accounts')
-        ->where('accounts.0.ulid', $konto->ulid)
-        ->where('accounts.0.currency', 'SEK')
+    actingAs($anvandare)->get('/settings/profile')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Settings/Profile')
+        ->where('personalAccount.ulid', $konto->ulid)
+        ->where('personalAccount.currency', 'SEK')
     );
 });
 
-it('låter en owner ändra kontots valuta i inställningarna', function () {
+it('låter en owner ändra kontots valuta på profilen', function () {
     withoutVite();
 
-    // `eur` och inte `EUR`: servern normaliserar till versaler, samma väg som
-    // containerns valuta går i
-    // app/Http/Requests/Container/UpdateContainerRequest.php.
+    // `eur` och inte `EUR`: servern normaliserar till versaler.
     [$konto, $anvandare, $kropp] = kontovalutaKonto(['currency' => 'eur']);
 
     actingAs($anvandare)
-        ->from('/settings/accounts')
-        ->patch("/settings/accounts/{$konto->ulid}", $kropp)
-        ->assertRedirect('/settings/accounts')
-        ->assertSessionHas('status', 'account-updated');
+        ->from('/settings/profile')
+        ->patch('/settings/profile', $kropp)
+        ->assertRedirect('/settings/profile')
+        ->assertSessionHas('status', 'profile-updated');
 
     expect($konto->fresh()->currency)->toBe('EUR');
 });
 
-/*
- * Valutan är OBLIGATORISK i schemat (`account.currency` är inte nullbar), så
- * ett värde som ÄR där får aldrig vara tomt eller fel format. Nyckeln får
- * däremot saknas — det är skillnaden mellan `sometimes` och ett tomt värde,
- * och den prövas i nästa test.
- */
 it('avvisar en valuta som inte är tre bokstäver', function () {
     withoutVite();
 
@@ -152,16 +141,11 @@ it('avvisar en valuta som inte är tre bokstäver', function () {
 
     actingAs($anvandare);
 
-    // Tomt värde: ConvertEmptyStringsToNull gör rutan till `null` innan
-    // reglerna körs, och `required` avvisar den — kolumnen är inte nullbar.
-    $tomt = from('/settings/accounts')->patch("/settings/accounts/{$konto->ulid}", $kropp + ['currency' => '']);
-    $tomt->assertSessionHasErrors('currency');
-
-    $siffror = from('/settings/accounts')->patch("/settings/accounts/{$konto->ulid}", $kropp + ['currency' => 'SE1']);
-    $siffror->assertSessionHasErrors('currency');
-
-    $forLangt = from('/settings/accounts')->patch("/settings/accounts/{$konto->ulid}", $kropp + ['currency' => 'KRONOR']);
-    $forLangt->assertSessionHasErrors('currency');
+    foreach (['', 'SE1', 'KRONOR'] as $kod) {
+        from('/settings/profile')
+            ->patch('/settings/profile', $kropp + ['currency' => $kod])
+            ->assertSessionHasErrors('currency');
+    }
 
     expect($konto->fresh()->currency)->toBe('SEK');
 });
@@ -169,22 +153,14 @@ it('avvisar en valuta som inte är tre bokstäver', function () {
 it('lämnar valutan orörd när kroppen inte nämner den', function () {
     withoutVite();
 
-    // `sometimes`: de anropare som redan skickar de fyra obligatoriska fälten
-    // — och formulärversioner före issue 85 — ska inte behöva lära sig ett
-    // femte, och en nyckel som saknas kan därför aldrig tömma kolumnen.
     $konto = Account::factory()->create(['currency' => 'NOK']);
     $anvandare = User::factory()->create();
     $konto->users()->attach($anvandare, ['role' => 'owner']);
 
     actingAs($anvandare)
-        ->from('/settings/accounts')
-        ->patch("/settings/accounts/{$konto->ulid}", [
-            'name' => 'Nytt namn',
-            'locale' => $konto->locale,
-            'timezone' => $konto->timezone,
-            'unit_system' => $konto->unit_system,
-        ])
-        ->assertRedirect('/settings/accounts')
+        ->from('/settings/profile')
+        ->patch('/settings/profile', ['name' => $anvandare->name, 'account_name' => 'Nytt namn'])
+        ->assertRedirect('/settings/profile')
         ->assertSessionHasNoErrors();
 
     $konto->refresh();
@@ -193,16 +169,13 @@ it('lämnar valutan orörd när kroppen inte nämner den', function () {
     expect($konto->currency)->toBe('NOK');
 });
 
-it('lämnar befintliga kostnadsrader oförändrade när kontots valuta byts i inställningarna', function () {
+it('lämnar befintliga kostnadsrader oförändrade när kontots valuta byts på profilen', function () {
     withoutVite();
 
-    // Issuens viktigaste acceptanskriterium, prövat genom den yta en
-    // användare faktiskt kan skriva på. Ett ändrat standardval gäller bara
-    // NYA poster: det som står i en rad är vad som betalades.
+    // Ett ändrat standardval gäller bara NYA poster: det som står i en rad är
+    // vad som betalades. Prövat genom den yta en användare faktiskt skriver på.
     [$konto, $anvandare, $kropp] = kontovalutaKonto();
 
-    // Containern har ingen egen valuta, så den ärver kontots — och kostnaden
-    // är skriven medan kontot stod i SEK.
     $container = Container::factory()->for($konto, 'account')->create(['currency' => null]);
     $item = Item::factory()->for($container, 'container')->create([
         'created_by_user_id' => $anvandare->id,
@@ -215,14 +188,12 @@ it('lämnar befintliga kostnadsrader oförändrade när kontots valuta byts i in
     ]);
 
     actingAs($anvandare)
-        ->from('/settings/accounts')
-        ->patch("/settings/accounts/{$konto->ulid}", $kropp + ['currency' => 'EUR'])
-        ->assertRedirect('/settings/accounts')
+        ->from('/settings/profile')
+        ->patch('/settings/profile', $kropp + ['currency' => 'EUR'])
+        ->assertRedirect('/settings/profile')
         ->assertSessionHasNoErrors();
 
     expect($konto->fresh()->currency)->toBe('EUR');
-    // Containern ärver det nya värdet — för NYA poster.
     expect($container->fresh()->effectiveCurrency())->toBe('EUR');
-    // Raden står kvar: det som står i en rad är vad som betalades.
     expect($kostnad->fresh()->currency)->toBe('SEK');
 });

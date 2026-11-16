@@ -39,7 +39,6 @@
  */
 export const settingsSections = [
     { key: 'profile', href: '/settings/profile' },
-    { key: 'accounts', href: '/settings/accounts' },
     { key: 'plan', href: '/settings/plan' },
     { key: 'storage', href: '/settings/storage' },
     { key: 'notifications', href: '/settings/notifications' },

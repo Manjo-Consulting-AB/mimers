@@ -47,12 +47,12 @@ function valutafaltKontext(): array
 }
 
 it('använder CurrencyField på de tre valutaytorna', function () {
-    // Kostnaden (ny rad och redigering), containern och kontot.
+    // Kostnaden (ny rad och redigering), containern och kontot (profilsidan).
     foreach ([
         'js/components/CostEntryForm.vue',
         'js/components/ItemCostSection.vue',
         'js/pages/Containers/Edit.vue',
-        'js/components/AccountSettingsForm.vue',
+        'js/pages/Settings/Profile.vue',
     ] as $sokvag) {
         expect(vueMall($sokvag))->toContain('<CurrencyField');
     }

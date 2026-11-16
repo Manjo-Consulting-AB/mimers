@@ -3,6 +3,7 @@ import { computed, ref, useId, watch } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import CurrencyField from '../../components/CurrencyField.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
 import UiSheet from '../../components/UiSheet.vue';
@@ -19,13 +20,15 @@ defineOptions({ layout: [AppLayout, SettingsLayout] });
  * ETT formulär och EN PATCH mot /settings/profile. Serverns fel går genom
  * FormField, precis som på inloggningen och säkerhetssidan.
  *
- * De tre inställningarna har var sitt förstaval i formen "Följ kontots språk
- * (svenska)". Det valet postar `null`, och `null` är hela innebörden av
- * kolumnen: användarens värde ÅSIDOSÄTTER kontots, det ärver det när det är
- * tomt ([[Konton och åtkomst]] § user och User::preferredLocale()). Vyn
- * hittar aldrig på ett kontovärde: parentesen kommer ur `accountDefaults`,
- * som servern skickar, och när den är null — användaren är medlem i flera
- * konton och värdet går inte att avgöra — står valet utan parentes.
+ * De tre inställningarna visar personens GÄLLANDE värde, ett lager
+ * ([[ADR-0085 Profilen bär personkontot]] § 4): servern skickar det redan
+ * uträknat (`preferredLocale()`, `preferredTimezone()`, och för enhetssystemet
+ * `user.unit_system` med kontots värde som reserv), och sparningen skriver
+ * bara till `user`. Valet "Följ kontots …" finns inte längre.
+ *
+ * Personkontots två fält, namn och valuta, sitter i en egen avdelning i samma
+ * formulär och samma PATCH (§ 2 och 5). Säger policyn nej (`canUpdate` är
+ * false) visas de som text och skickas inte med.
  *
  * E-postadressen har ett eget formulär sedan issue 130. Adressen visas med
  * sin verifieringsstatus i namnformuläret, och bytet begärs i
@@ -59,7 +62,9 @@ const props = defineProps({
     totpEnabled: { type: Boolean, required: true },
 
     timezones: { type: Array, required: true },
-    accountDefaults: { type: Object, default: null },
+
+    // Personkontot ({ ulid, name, currency, canUpdate }) eller null.
+    personalAccount: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -376,34 +381,20 @@ function saveCrop() {
     });
 }
 
+const canUpdateAccount = computed(() => props.personalAccount?.canUpdate === true);
+
 const form = useForm({
     name: props.name,
     locale: props.userLocale,
     timezone: props.userTimezone,
     unit_system: props.userUnitSystem,
+    ...(canUpdateAccount.value
+        ? { account_name: props.personalAccount.name, currency: props.personalAccount.currency }
+        : {}),
 });
 
 const locales = computed(() => ['sv_SE', 'en_GB']);
 const units = computed(() => ['metric', 'imperial']);
-
-/*
- * Förstavalens etiketter. Den namngivna formen bär kontots gällande värde i
- * parentesen och används bara när servern kunde avgöra det; annars den korta
- * formen. Översättningen av det inbäddade värdet går genom samma `t()` som
- * resten — `settings.locales.sv_SE` är "svenska", `settings.units.metric` är
- * "metriskt". Tidszonen är ett IANA-namn och översätts inte.
- */
-const localeFollowLabel = computed(() => (props.accountDefaults?.locale
-    ? t('settings.profile.locale_follow', { account: t(`settings.locales.${props.accountDefaults.locale}`) })
-    : t('settings.profile.locale_follow_plain')));
-
-const timezoneFollowLabel = computed(() => (props.accountDefaults?.timezone
-    ? t('settings.profile.timezone_follow', { timezone: props.accountDefaults.timezone })
-    : t('settings.profile.timezone_follow_plain')));
-
-const unitFollowLabel = computed(() => (props.accountDefaults?.unitSystem
-    ? t('settings.profile.unit_follow', { unit: t(`settings.units.${props.accountDefaults.unitSystem}`) })
-    : t('settings.profile.unit_follow_plain')));
 
 function submit() {
     form.patch('/settings/profile', { onError: focusFirstError });
@@ -459,7 +450,6 @@ function submit() {
                 name="locale"
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <option :value="null">{{ localeFollowLabel }}</option>
                 <option v-for="locale in locales" :key="locale" :value="locale">
                     {{ t(`settings.locales.${locale}`) }}
                 </option>
@@ -479,7 +469,6 @@ function submit() {
                 name="timezone"
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <option :value="null">{{ timezoneFollowLabel }}</option>
                 <option v-for="zone in timezones" :key="zone" :value="zone">{{ zone }}</option>
             </select>
         </FormField>
@@ -497,12 +486,67 @@ function submit() {
                 name="unit_system"
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <option :value="null">{{ unitFollowLabel }}</option>
                 <option v-for="unit in units" :key="unit" :value="unit">
                     {{ t(`settings.units.${unit}`) }}
                 </option>
             </select>
         </FormField>
+
+        <!-- Personkontot, se [[ADR-0085 Profilen bär personkontot]] § 2, 3 och
+             5. Kontots valuta är botten i arvet ([[ADR-0037 Valutans arv]]);
+             namnet är ett eget fält som andra kan se. Nekar policyn visas
+             båda som text. -->
+        <fieldset v-if="personalAccount" class="flex flex-col gap-4">
+            <legend class="text-lg font-semibold">{{ t('settings.profile.account.heading') }}</legend>
+
+            <template v-if="canUpdateAccount">
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('settings.profile.account.name')"
+                    id="account_name"
+                    :error="form.errors.account_name"
+                >
+                    <input
+                        id="account_name"
+                        v-model="form.account_name"
+                        :aria-describedby="[describedBy, 'account_name-hint'].filter(Boolean).join(' ')"
+                        type="text"
+                        name="account_name"
+                        required
+                        class="rounded border border-slate-300 bg-white px-3 py-2"
+                    >
+                    <p id="account_name-hint" class="text-sm text-slate-600">
+                        {{ t('settings.profile.account.name_hint') }}
+                    </p>
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('settings.profile.account.currency')"
+                    id="currency"
+                    :error="form.errors.currency"
+                >
+                    <CurrencyField
+                        id="currency"
+                        v-model="form.currency"
+                        :described-by="describedBy"
+                    />
+                </FormField>
+            </template>
+
+            <template v-else>
+                <div class="flex flex-col gap-1">
+                    <p class="text-sm font-medium text-slate-800">{{ t('settings.profile.account.name') }}</p>
+                    <p>{{ personalAccount.name }}</p>
+                    <p class="text-sm text-slate-600">{{ t('settings.profile.account.name_hint') }}</p>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <p class="text-sm font-medium text-slate-800">{{ t('settings.profile.account.currency') }}</p>
+                    <p>{{ personalAccount.currency }}</p>
+                </div>
+                <p class="text-sm text-slate-600">{{ t('settings.profile.account.read_only') }}</p>
+            </template>
+        </fieldset>
 
         <button
             type="submit"

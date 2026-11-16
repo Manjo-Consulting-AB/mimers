@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateProfileRequest;
+use App\Models\Account;
 use App\Models\User;
 use DateTimeZone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -65,17 +68,29 @@ class ProfileController extends Controller
     public function edit(Request $request): Response
     {
         $user = $request->user();
+        $account = $this->personalAccount($user);
 
         return Inertia::render('Settings/Profile', [
             'name' => $user->name,
             'email' => $user->email,
             'emailVerifiedAt' => $user->email_verified_at?->toIso8601String(),
 
-            // Användarens EGNA värden, `null` inkluderat — vyn ska visa
-            // "följ kontot" när de är null, inte ett påhittat kontovärde.
-            'userLocale' => $user->locale,
-            'userTimezone' => $user->timezone,
-            'userUnitSystem' => $user->unit_system,
+            // De GÄLLANDE värdena (ADR-0085 § 4): ett lager i gränssnittet.
+            // Språk och tidszon ur preferredLocale()/preferredTimezone(),
+            // som själva faller tillbaka på kontot; enhetssystemet ur
+            // `user.unit_system` med personkontots värde som reserv.
+            'userLocale' => $user->preferredLocale(),
+            'userTimezone' => $user->preferredTimezone(),
+            'userUnitSystem' => $user->unit_system ?? $account?->unit_system,
+
+            // Personkontots avdelning (ADR-0085 § 2). `null` när personen
+            // saknar personkonto — vyn ritar då ingen avdelning.
+            'personalAccount' => $account === null ? null : [
+                'ulid' => $account->ulid,
+                'name' => $account->name,
+                'currency' => $account->currency,
+                'canUpdate' => Gate::allows('update', $account),
+            ],
 
             // E-postformulärets två lägen, se issue 130 och
             // App\Http\Controllers\Settings\EmailChangeController. Samma
@@ -90,7 +105,6 @@ class ProfileController extends Controller
             'totpEnabled' => $user->totp_confirmed_at !== null,
 
             'timezones' => DateTimeZone::listIdentifiers(),
-            'accountDefaults' => $this->accountDefaults($user),
         ]);
     }
 
@@ -111,7 +125,26 @@ class ProfileController extends Controller
      */
     public function update(UpdateProfileRequest $request): RedirectResponse
     {
-        $request->user()->update($request->validated());
+        $user = $request->user();
+        $data = $request->validated();
+
+        // Kontots två fält hör inte till `user`.
+        $accountFields = Arr::only($data, ['account_name', 'currency']);
+        $userFields = Arr::except($data, ['account_name', 'currency']);
+
+        $user->update($userFields);
+
+        // Kontot hämtas på servern som personkontot, aldrig ur kroppen
+        // (ADR-0085 § 5). Säger policyn nej skrivs ingenting av kontots fält,
+        // och sparningen av personens egna fält lyckas ändå.
+        $account = $this->personalAccount($user);
+
+        if ($account !== null && $accountFields !== [] && Gate::allows('update', $account)) {
+            $account->update(array_filter([
+                'name' => $accountFields['account_name'] ?? null,
+                'currency' => $accountFields['currency'] ?? null,
+            ], fn ($value) => $value !== null));
+        }
 
         return redirect()
             ->route('settings.profile')
@@ -119,37 +152,14 @@ class ProfileController extends Controller
     }
 
     /**
-     * Kontots gällande värden, för parentesen i "Följ kontots språk
-     * (svenska)" — eller `null` när de inte går att avgöra.
-     *
-     * Entydighetsregeln är densamma som App\Models\User::preferredLocale()
-     * använder för sitt andrahandsvärde: ETT konto är entydigt, flera är det
-     * inte. Är användaren medlem i flera konton vet varken `preferredLocale()`
-     * eller den här metoden vilket konto som avses, och vyn visar då
-     * "Följ kontots språk" utan parentes — ett påhittat värde vore värre än
-     * ingen parentes. Formulera inte om regeln här; den bor hos
-     * `preferredLocale()` och den här metoden speglar den.
-     *
-     * Fälten returneras med samma namn som vyerna använder
-     * (`unitSystem`), så att vyn kan lägga `accountDefaults` rakt in i
-     * sin parentes utan en översättningstabell.
-     *
-     * @return array{locale: string|null, timezone: string|null, unitSystem: string|null}|null
+     * Personkontot: kontot där personen är `owner` och `type` är `personal`
+     * ([[ADR-0085 Profilen bär personkontot]] § 2).
      */
-    private function accountDefaults(User $user): ?array
+    private function personalAccount(User $user): ?Account
     {
-        $accounts = $user->accounts;
-
-        if ($accounts->count() !== 1) {
-            return null;
-        }
-
-        $account = $accounts->first();
-
-        return [
-            'locale' => $account->locale,
-            'timezone' => $account->timezone,
-            'unitSystem' => $account->unit_system,
-        ];
+        return $user->accounts()
+            ->where('account.type', 'personal')
+            ->wherePivot('role', 'owner')
+            ->first();
     }
 }

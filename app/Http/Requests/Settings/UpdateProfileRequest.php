@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Settings;
 
+use App\Rules\IsoCurrency;
 use DateTimeZone;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -9,7 +10,8 @@ use Illuminate\Validation\Rule;
 /**
  * PATCH /settings/profile, se issue 53c § Beslut 2 och 7. Kroppen bär de
  * fyra fält en användare får ändra om sig själv: `name`, `locale`,
- * `timezone` och `unit_system`.
+ * `timezone` och `unit_system`, samt personkontots `account_name` och
+ * `currency` (ADR-0085).
  *
  * Ingen auktorisering här. Rutten ligger bakom `auth` och raden som skrivs
  * är den inloggade användarens EGEN — `$request->user()` är både subjekt och
@@ -49,6 +51,26 @@ class UpdateProfileRequest extends FormRequest
     }
 
     /**
+     * Valutan trimmas och normaliseras till versaler, så en klient som
+     * skickar `sek` lagrar `SEK` ([[ADR-0078 Valutor ur ISO 4217]] § 1).
+     * Blanksteg blir en tom sträng, som `required` avvisar. En nyckel som
+     * SAKNAS lämnas orörd; det är hela skillnaden mellan `sometimes` och ett
+     * tomt värde.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (! $this->has('currency')) {
+            return;
+        }
+
+        $currency = $this->input('currency');
+
+        if (is_string($currency)) {
+            $this->merge(['currency' => mb_strtoupper(trim($currency))]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -58,6 +80,15 @@ class UpdateProfileRequest extends FormRequest
             'locale' => ['nullable', Rule::in(['sv_SE', 'en_GB'])],
             'timezone' => ['nullable', Rule::in(DateTimeZone::listIdentifiers())],
             'unit_system' => ['nullable', Rule::in(['metric', 'imperial'])],
+
+            // Personkontots två fält ([[ADR-0085 Profilen bär personkontot]]
+            // § 5), flyttade hit från UpdateAccountSettingsRequest. Nycklarna
+            // får saknas — då rörs kontot inte — men ett värde som är där får
+            // aldrig vara tomt: `account.name` och `account.currency` är
+            // obligatoriska i schemat. Vilket konto det gäller avgörs på
+            // servern, aldrig av kroppen.
+            'account_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'currency' => ['sometimes', 'required', 'string', new IsoCurrency],
         ];
     }
 }
