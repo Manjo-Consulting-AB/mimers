@@ -135,8 +135,9 @@ class AcceptOwnershipTransfer
             // hela transaktionen tillbaka och ägarbytet står kvar som pending.
             $entitlements = new Entitlements;
             $entitlements->assertCanCreateContainer($toAccount);
-            // ADR-0081 § 1: mottagaren ska rymma både bilagorna och raderna.
-            $entitlements->assertStorageWithinLimit($toAccount, $bytesSomFlyttas + $this->radbytesAttFlytta($container, $fromAccount));
+            // ADR-0081 § 1: mottagaren ska rymma både bilagorna och raderna. Det är
+            // ingen enskild fil, så felet bär `added_bytes`, inte `file_bytes`.
+            $entitlements->assertMetadataWithinLimit($toAccount, $bytesSomFlyttas + $this->radbytesAttFlytta($container, $fromAccount));
 
             // Beslut 6: containern flyttas. Ingen annan kolumn rörs — namn,
             // `kind` och `created_at` följer med containern.

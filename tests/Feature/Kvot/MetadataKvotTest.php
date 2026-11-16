@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\UpdateItem;
@@ -18,6 +19,7 @@ use App\Models\Plan;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
 use App\Models\User;
+use App\Support\Usage\CountedRows;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -253,6 +255,12 @@ it('ett ägarbyte nekas när mottagaren inte rymmer bilagorna och raderna tillsa
 
     $svar->assertStatus(403);
     expect($svar->json('error.code'))->toBe('quota.storage_exceeded');
+    // Bilagor och rader tillsammans; ingen enskild fil, så ingen `file_bytes`.
+    expect($svar->json('error.data'))->toBe([
+        'limit_bytes' => 5000,
+        'used_bytes' => 5000 - 1000 - 100,
+        'added_bytes' => 1000 + $rader + CountedRows::containerBytes($container->id),
+    ]);
     expect($container->fresh()->account_id)->toBe($säljare->id);
     expect(DB::table('ownership_transfer')->where('id', $överföring->id)->value('status'))->toBe('pending');
 });
@@ -313,4 +321,24 @@ it('nedgraderingsförhandsvisningen räknar med summan av filer och text', funct
 
     // Filerna ensamma (400) ryms; filer och text (1200) gör det inte.
     expect($användning['downgrade']['overBytes'])->toBe(200);
+});
+
+it('ett konto över gränsen kan lösa ut sin inbox, men nekas ett item med text i den', function () {
+    [$konto, $användare] = textKvotKonto(1000, filer: 1000);
+
+    $inbox = app(ResolveInbox::class)->handle($användare);
+
+    expect($inbox->exists)->toBeTrue();
+    expect(UsageCounter::usedBytes($konto->id))->toBeGreaterThan(1000);
+
+    $fångad = null;
+    try {
+        app(CreateItem::class)->handle(
+            $inbox->container, $konto, $användare, new Item(['name' => 'Text']), null, collect(), null,
+        );
+    } catch (ApiException $e) {
+        $fångad = $e;
+    }
+
+    expect($fångad?->errorCode())->toBe('quota.storage_exceeded');
 });

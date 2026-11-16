@@ -34,9 +34,10 @@ final class MetadataLedger
 {
     /**
      * Sparar raden och bokför skillnaden i vikt. Gäller både en ny och en
-     * befintlig rad.
+     * befintlig rad. `$checkQuota = false` för det systemet skapar utan
+     * användarens text (ADR-0081 § 2 och 4): raden räknas men prövas inte.
      */
-    public static function save(Model $row): void
+    public static function save(Model $row, bool $checkQuota = true): void
     {
         $table = $row->getTable();
         $existed = $row->exists;
@@ -61,7 +62,7 @@ final class MetadataLedger
             if ($newPayer !== null && $newBytes !== $oldBytes) {
                 // Bara en växande skrivning prövas (ADR-0081 § 5); krymper den
                 // går den alltid igenom. Kastet rullar tillbaka transaktionen.
-                if ($newBytes > $oldBytes) {
+                if ($checkQuota && $newBytes > $oldBytes) {
                     self::assertFits($newPayer, $newBytes - $oldBytes);
                 }
 
@@ -76,7 +77,9 @@ final class MetadataLedger
         }
 
         if ($newPayer !== null && $newBytes > 0) {
-            self::assertFits($newPayer, $newBytes);
+            if ($checkQuota) {
+                self::assertFits($newPayer, $newBytes);
+            }
             (new AdjustUsage)->handle($newPayer, metadataDelta: $newBytes);
         }
     }
