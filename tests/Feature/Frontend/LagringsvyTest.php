@@ -727,3 +727,23 @@ it('lämnar api-ytan oförändrad', function () {
     expect($lista->json('data.0.ulid'))->toBe($bilaga->ulid)
         ->and($lista->json('data.0.byte_size'))->toBe(2048);
 });
+
+/*
+ * ADR-0081 beslut 1: förbrukningen delas i filer och text, och summan är
+ * `usedBytes`.
+ */
+it('skickar fileBytes och textBytes som tillsammans är usedBytes', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = lagringsvyKonto();
+    UsageCounter::query()->updateOrCreate(
+        ['account_id' => $konto->id],
+        ['storage_bytes' => 2000, 'metadata_bytes' => 150],
+    );
+
+    $usage = lagringsvyProps($anvandare, $konto)['usage'];
+
+    expect($usage['fileBytes'])->toBe(2000)
+        ->and($usage['textBytes'])->toBe(150)
+        ->and($usage['usedBytes'])->toBe($usage['fileBytes'] + $usage['textBytes']);
+});

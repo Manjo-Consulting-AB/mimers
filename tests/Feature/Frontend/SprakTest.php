@@ -1710,3 +1710,9 @@ it('har återöppningens ord i ui.php', function () {
 it('har länktexten för inboxens bekräftelse i ui.php', function () {
     expect(Lang::get('ui.flash_link.inbox-task-captured', [], 'en'))->toBe('Open Inbox');
 });
+
+it('har katalognycklarna för fördelningen mellan filer och text', function () {
+    foreach (['ui.plan.storage_split', 'ui.storage.text_note'] as $nyckel) {
+        expect(Lang::get($nyckel, [], 'en'))->not->toBe($nyckel, "{$nyckel} saknas");
+    }
+});

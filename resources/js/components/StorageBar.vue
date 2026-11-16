@@ -95,6 +95,11 @@ const label = computed(() => (limit.value === null
             <div class="min-w-0 flex-1">
                 <p class="text-body font-medium text-ink">{{ label }}</p>
 
+                <!-- Fördelningen, bara när det finns text (ADR-0081 § 1). -->
+                <p v-if="storage.textBytes > 0" class="text-meta text-ink-subtle">
+                    {{ t('plan.storage_split', { files: formatByteSize(storage.fileBytes), text: formatByteSize(storage.textBytes) }) }}
+                </p>
+
                 <!-- Stapeln och procenten ritas bara när det finns ett tak att
                      fylla. Båda är `aria-hidden`: meningen ovanför säger redan
                      kvoten, och procenten är samma tal en gång till. -->

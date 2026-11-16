@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+import { formatByteSize } from '../../components/attachmentPresentation.js';
 
 defineOptions({ layout: [AppLayout, SettingsLayout] });
 
@@ -176,6 +177,9 @@ function graceLabel(days) {
                     {{ props.usage.storage.limitBytes === null
                         ? t('plan.of_unlimited', { used: props.usage.storage.usedLabel })
                         : t('plan.of', { used: props.usage.storage.usedLabel, limit: props.usage.storage.limitLabel }) }}
+                    <span v-if="props.usage.storage.textBytes > 0" class="mt-1 block text-xs text-slate-600">
+                        {{ t('plan.storage_split', { files: formatByteSize(props.usage.storage.fileBytes), text: formatByteSize(props.usage.storage.textBytes) }) }}
+                    </span>
 
                     <div
                         v-if="props.usage.storage.percent !== null"
