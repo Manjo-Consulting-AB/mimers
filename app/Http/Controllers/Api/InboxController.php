@@ -180,7 +180,7 @@ class InboxController extends Controller
 
         $schedule = $createSchedule->handle($inbox, $user, new Schedule($data), null);
 
-        app(CountFeatureUse::class)->handle(Features::forTaskCreate(array_keys($request->validated())), $request->user());
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
         return (new ScheduleResource($schedule))
             ->response()

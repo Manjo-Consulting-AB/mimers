@@ -24,6 +24,12 @@ final class Features
 
     public const COST_CREATE = 'cost.create';
 
+    /**
+     * Räknas för varje GET med `?children=0`, alltså även omladdningar och
+     * delade länkar — inte bara själva avstängningen. Mätningen visar
+     * sidvisningar med växeln avstängd. Att räkna bara avstängningen kräver
+     * frontendändring (utanför rutan).
+     */
     public const ITEM_INCLUDE_CHILDREN_OFF = 'item.include_children_off';
 
     public const ITEM_CREATE_CHILD = 'item.create_child';
@@ -48,14 +54,17 @@ final class Features
 
     /**
      * Snabbraden skickar bara titel, återkomsttyp och lista; formuläret skickar
-     * fler fält. Skillnaden läses ur de validerade nycklarna, eftersom ytan
-     * (resources/**) inte bär någon egen markör.
+     * fler fält. Skillnaden läses ur de validerade fälten, eftersom ytan
+     * (resources/**) inte bär någon egen markör. Samma regel gäller webben och
+     * API:et. Fält med värdet null räknas inte (en klient som skickar
+     * `notes: null` är fortfarande snabbrad). Ett nytt valfritt fält i
+     * snabbraden kräver att listan här uppdateras.
      *
-     * @param  list<string>  $validatedKeys
+     * @param  array<string, mixed>  $validated
      */
-    public static function forTaskCreate(array $validatedKeys): string
+    public static function forTaskCreate(array $validated): string
     {
-        $extra = array_diff($validatedKeys, ['title', 'recurrence_type', 'gtd_list']);
+        $extra = array_diff(array_keys(array_filter($validated, fn ($v) => $v !== null)), ['title', 'recurrence_type', 'gtd_list']);
 
         return $extra === [] ? self::TASK_QUICK_CREATE : self::TASK_FORM_CREATE;
     }

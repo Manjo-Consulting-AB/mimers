@@ -110,7 +110,7 @@ class ScheduleController extends Controller
             $request->validated('gtd_list'),
         );
 
-        app(CountFeatureUse::class)->handle(Features::TASK_FORM_CREATE, $request->user());
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
         return (new ScheduleResource($schedule))
             ->response()

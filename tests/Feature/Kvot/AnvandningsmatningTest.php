@@ -4,18 +4,23 @@ use App\Actions\Usage\CountFeatureUse;
 use App\Console\AggregatesUsageMetrics;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\StoredFile;
 use App\Models\User;
 use App\Support\Usage\Features;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -222,4 +227,182 @@ it('räknar en missad natt i efterhand så länge råraderna finns', function ()
     app(AggregatesUsageMetrics::class)->handle();
 
     expect(DB::table('usage_metric')->where('source', 'feature')->count())->toBe(2);
+});
+
+/*
+ * Per funktion och yta (webb och API): handlingen lyckas → raden räknas upp
+ * med rätt namn; handlingen misslyckas (valideringsfel eller nekad åtkomst)
+ * → ingen rad.
+ */
+
+function mattApiKonto(): array
+{
+    [$konto, $anvandare, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($konto, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $anvandare->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+
+    return [$konto, $anvandare, $headers, $container, $item];
+}
+
+function mattBilaga(Item $item, Account $konto, User $anvandare): Attachment
+{
+    return Attachment::factory()->create([
+        'item_id' => $item->id,
+        'stored_file_id' => StoredFile::factory()->create(['byte_size' => 1500])->id,
+        'filename' => 'manual.pdf',
+        'kind' => 'document',
+        'uploaded_by_user_id' => $anvandare->id,
+        'billed_account_id' => $konto->id,
+    ]);
+}
+
+function mattNamn(): array
+{
+    return DB::table('usage_event_daily')->where('source', 'feature')->pluck('count', 'name')->map(fn ($c) => (int) $c)->all();
+}
+
+function mattBilagaUrl(Container $container, Item $item, string $efter = ''): string
+{
+    return "/containers/{$container->ulid}/items/{$item->ulid}/attachments{$efter}";
+}
+
+it('räknar attachment.upload på webben och i API:et, men inte vid valideringsfel', function () {
+    Storage::fake('files');
+    [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
+
+    actingAs($anvandare)->post(mattBilagaUrl($container, $item), [])->assertSessionHasErrors('file');
+    postJson('/api/containers/'.$container->ulid.'/items/'.$item->ulid.'/attachments', ['account' => $konto->ulid], $headers)->assertUnprocessable();
+    expect(mattNamn())->toBe([]);
+
+    actingAs($anvandare)->post(mattBilagaUrl($container, $item), [
+        'file' => UploadedFile::fake()->createWithContent('a.pdf', 'webb'),
+        'account' => $konto->ulid,
+    ]);
+    expect(mattNamn())->toBe(['attachment.upload' => 1]);
+
+    postJson('/api/containers/'.$container->ulid.'/items/'.$item->ulid.'/attachments', [
+        'file' => UploadedFile::fake()->createWithContent('b.pdf', 'api'),
+        'account' => $konto->ulid,
+    ], $headers)->assertCreated();
+    expect(mattNamn())->toBe(['attachment.upload' => 2]);
+});
+
+it('räknar attachment.move, copy och to_inbox på webben, men inte vid nekad åtkomst', function () {
+    withoutVite();
+    [$konto, $anvandare, , $container, $item] = mattApiKonto();
+    $mal = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $anvandare->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+    $bilaga = mattBilaga($item, $konto, $anvandare);
+
+    // Nekad: främmande användare, ingen åtkomst.
+    $främling = mattAnvandare();
+    foreach (['/move', '/copy'] as $sluta) {
+        actingAs($främling)->post(mattBilagaUrl($container, $item, "/{$bilaga->ulid}{$sluta}"), ['target' => $mal->ulid]);
+    }
+    actingAs($främling)->post(mattBilagaUrl($container, $item, "/{$bilaga->ulid}/inbox"));
+    expect(mattNamn())->toBe([]);
+
+    actingAs($anvandare)->post(mattBilagaUrl($container, $item, "/{$bilaga->ulid}/copy"), ['target' => $mal->ulid]);
+    expect(mattNamn())->toBe(['attachment.copy' => 1]);
+
+    actingAs($anvandare)->post(mattBilagaUrl($container, $item, "/{$bilaga->ulid}/move"), ['target' => $mal->ulid]);
+    expect(mattNamn())->toBe(['attachment.copy' => 1, 'attachment.move' => 1]);
+
+    actingAs($anvandare)->post(mattBilagaUrl($container, $mal, "/{$bilaga->ulid}/inbox"));
+    expect(mattNamn())->toBe(['attachment.copy' => 1, 'attachment.move' => 1, 'attachment.to_inbox' => 1]);
+});
+
+it('räknar attachment.move, copy och to_inbox i API:et, men inte vid nekad åtkomst', function () {
+    [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
+    $mal = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $anvandare->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+    $bilaga = mattBilaga($item, $konto, $anvandare);
+    $bas = "/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$bilaga->ulid}";
+
+    [, , $främlingHeaders] = kontoMedMedlem();
+    foreach (['/move', '/copy'] as $sluta) {
+        postJson($bas.$sluta, ['target' => $mal->ulid], $främlingHeaders);
+    }
+    postJson($bas.'/inbox', [], $främlingHeaders);
+    expect(mattNamn())->toBe([]);
+
+    // Sanctum-vakten cachar användaren inom ett test.
+    app('auth')->forgetGuards();
+
+    postJson($bas.'/copy', ['target' => $mal->ulid], $headers)->assertSuccessful();
+    postJson($bas.'/move', ['target' => $mal->ulid], $headers)->assertSuccessful();
+    postJson("/api/containers/{$container->ulid}/items/{$mal->ulid}/attachments/{$bilaga->ulid}/inbox", [], $headers)->assertSuccessful();
+
+    expect(mattNamn())->toBe(['attachment.copy' => 1, 'attachment.move' => 1, 'attachment.to_inbox' => 1]);
+});
+
+it('räknar cost.create via webben och API:et, men inte vid valideringsfel', function () {
+    [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
+    $kropp = ['incurred_on' => '2026-04-12', 'amount' => '1200,50', 'currency' => 'EUR', 'description' => 'Impeller', 'supplier' => null];
+    $webb = "/containers/{$container->ulid}/items/{$item->ulid}/costs";
+    $api = "/api{$webb}";
+
+    actingAs($anvandare)->post($webb, [])->assertSessionHasErrors();
+    postJson($api, [], $headers)->assertUnprocessable();
+    expect(mattNamn())->toBe([]);
+
+    actingAs($anvandare)->post($webb, $kropp);
+    postJson($api, $kropp, $headers)->assertCreated();
+
+    expect(mattNamn())->toBe(['cost.create' => 2]);
+});
+
+it('räknar task.quick_create och task.form_create med samma regel på webben och i API:et', function () {
+    [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
+    $snabb = ['title' => 'Ring', 'recurrence_type' => 'none', 'gtd_list' => 'next'];
+    $formular = $snabb + ['notes' => 'Mer text'];
+    $webb = "/containers/{$container->ulid}/items/{$item->ulid}/schedules";
+    $api = "/api{$webb}";
+
+    // Misslyckade anrop räknas inte.
+    actingAs($anvandare)->post($webb, [])->assertSessionHasErrors();
+    postJson($api, [], $headers)->assertUnprocessable();
+    actingAs($anvandare)->post('/inbox/tasks', [])->assertSessionHasErrors();
+    postJson('/api/inbox/tasks', [], $headers)->assertUnprocessable();
+    expect(mattNamn())->toBe([]);
+
+    actingAs($anvandare)->post($webb, $snabb);
+    postJson($api, $snabb, $headers)->assertCreated();
+    expect(mattNamn())->toBe(['task.quick_create' => 2]);
+
+    actingAs($anvandare)->post($webb, $formular);
+    postJson($api, $formular, $headers)->assertCreated();
+    expect(mattNamn())->toBe(['task.quick_create' => 2, 'task.form_create' => 2]);
+
+    // En klient som skickar `notes: null` är fortfarande snabbrad.
+    postJson($api, $snabb + ['notes' => null], $headers)->assertCreated();
+    expect(mattNamn()['task.quick_create'])->toBe(3);
+
+    // Inboxens snabbrad, webb och API.
+    actingAs($anvandare)->post('/inbox/tasks', ['title' => 'Inbox']);
+    postJson('/api/inbox/tasks', ['title' => 'Inbox API'], $headers)->assertCreated();
+    expect(mattNamn()['task.quick_create'])->toBe(5);
+});
+
+it('räknar item.create_child på webben och i API:et, men inte för ett item utan förälder eller vid valideringsfel', function () {
+    [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
+    $webb = "/containers/{$container->ulid}/items";
+
+    actingAs($anvandare)->post($webb, ['parent' => $item->ulid, 'account' => $konto->ulid])->assertSessionHasErrors('name');
+    postJson("/api{$webb}", ['parent' => $item->ulid, 'account' => $konto->ulid], $headers)->assertUnprocessable();
+    actingAs($anvandare)->post($webb, ['name' => 'Rot', 'account' => $konto->ulid]);
+    postJson("/api{$webb}", ['name' => 'Rot API', 'account' => $konto->ulid], $headers)->assertCreated();
+    expect(mattNamn())->toBe([]);
+
+    actingAs($anvandare)->post($webb, ['name' => 'Barn', 'parent' => $item->ulid, 'account' => $konto->ulid]);
+    postJson("/api{$webb}", ['name' => 'Barn API', 'parent' => $item->ulid, 'account' => $konto->ulid], $headers)->assertCreated();
+
+    expect(mattNamn())->toBe(['item.create_child' => 2]);
 });

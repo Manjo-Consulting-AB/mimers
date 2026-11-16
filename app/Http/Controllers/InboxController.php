@@ -222,7 +222,7 @@ class InboxController extends Controller
             null,
         );
 
-        app(CountFeatureUse::class)->handle(Features::forTaskCreate(array_keys($request->validated())), $request->user());
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
         if ($request->has('return')) {
             return redirect(TaskCreateController::safeReturn($request->input('return')) ?? '/tasks')
