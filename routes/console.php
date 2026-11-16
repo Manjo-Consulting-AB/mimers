@@ -22,6 +22,7 @@ use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
 use App\Console\ReportsAbuseSignals;
 use App\Console\SendsWeeklyDigest;
+use App\Console\SummarizesPerformance;
 use App\Console\WatchesDeliveryQueues;
 use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
@@ -442,6 +443,19 @@ Schedule::call(fn () => app(WatchesDeliveryQueues::class)->handle())
     ->everyFifteenMinutes()
     ->name('watch-delivery-queues')
     ->sentryMonitor('watches-delivery-queues');
+
+/*
+ * Issue 390 · Veckosammanställningen av prestandaloggen, måndagar 06:00.
+ * Se [[ADR-0079 Övervakning]] § 3 och App\Console\SummarizesPerformance: utan
+ * OPS_EMAIL, eller utan rader, skickas inget.
+ *
+ * `Schedule::call`, aldrig `Schedule::command` — se AGENTS.md § Subprocesser
+ * i driftmiljön. Posten ligger före hjärtslagsloopen och `drain-queue`, som
+ * ska fortsätta ligga sist i filen.
+ */
+Schedule::call(fn () => app(SummarizesPerformance::class)->handle())
+    ->weeklyOn(1, '6:00')
+    ->name('summarize-performance');
 
 /*
  * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]

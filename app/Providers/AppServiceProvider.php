@@ -5,9 +5,11 @@ namespace App\Providers;
 use App\Actions\Access\ResolveItemScope;
 use App\Listeners\RecordsScheduleHeartbeat;
 use App\Support\Auth\LoginRateLimiter;
+use App\Support\Monitoring\QueryTracker;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -25,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
         // vidare till nästa kö-jobb i samma worker, vilket är ett läckage
         // och inte en optimering. Se App\Actions\Access\ResolveItemScope.
         $this->app->scoped(ResolveItemScope::class);
+        $this->app->scoped(QueryTracker::class);
     }
 
     /**
@@ -38,6 +41,18 @@ class AppServiceProvider extends ServiceProvider
         $this->configureCalendarFeedRateLimiting();
         $this->configureRegistrationRateLimiting();
         $this->configureScheduleHeartbeat();
+        $this->configurePerformanceLogging();
+    }
+
+    /**
+     * Issue 390 · ADR-0079 § 3. Lyssnaren på databasfrågor räknar frågorna per
+     * förfrågan och loggar de långsamma, se App\Support\Monitoring\QueryTracker.
+     * Den gör ingenting i testmiljön om inte
+     * `monitoring.track_queries_in_tests` är sant.
+     */
+    private function configurePerformanceLogging(): void
+    {
+        DB::listen(fn ($query) => $this->app->make(QueryTracker::class)->record($query));
     }
 
     /**

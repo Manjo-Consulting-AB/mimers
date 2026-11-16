@@ -61,6 +61,7 @@ jobs:
           SENTRY_LARAVEL_DSN: ${{ secrets.SENTRY_LARAVEL_DSN }}
           SENTRY_JS_DSN: ${{ secrets.SENTRY_JS_DSN }}
           SENTRY_ENVIRONMENT: ${{ secrets.SENTRY_ENVIRONMENT }}
+          OPS_EMAIL: ${{ secrets.OPS_EMAIL }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           TAG_NAME: ${{ github.event.release.tag_name }}
@@ -112,6 +113,7 @@ jobs:
             "SENTRY_LARAVEL_DSN=$SENTRY_LARAVEL_DSN" \
             "SENTRY_JS_DSN=$SENTRY_JS_DSN" \
             "SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT" \
+            "OPS_EMAIL=$OPS_EMAIL" \
           | ssh -p "$PORT" "$USER@$HOST" "umask 077; cat > $PATH_REMOTE/shared/.env.inkommande"
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE" < deploy/env-uppdatera.sh
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh

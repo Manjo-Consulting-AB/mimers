@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\LogSlowRequests;
 use App\Http\Middleware\RestrictFileOriginToDelivery;
 use App\Http\Middleware\ScrubSentryEvent;
 use App\Http\Middleware\SetLocale;
@@ -51,6 +52,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // sedan kontot skapades, hur ofta hen än loggade in. Se
         // App\Http\Middleware\UpdateLastActiveAt.
         //
+        // Issue 390: LogSlowRequests först i båda grupperna, så att tiden
+        // omfattar resten av gruppen. Se ADR-0079 § 3.
+        $middleware->web(prepend: [LogSlowRequests::class]);
+        $middleware->api(prepend: [LogSlowRequests::class]);
+
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
