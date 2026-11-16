@@ -135,7 +135,7 @@ it('renderar etikett och valfri räknare', function () {
     );
 
     expect($mall)->toMatch(
-        '#<UiBadge\b[^>]*>\s*\{\{ tab\.count \}\}\s*</UiBadge>#s',
+        '#<UiBadge\b[^>]*>\s*\{\{ countLabel\(tab\) \}\}\s*</UiBadge>#s',
         'fliken ritar ingen räknare ur proppen',
     );
 
@@ -144,7 +144,7 @@ it('renderar etikett och valfri räknare', function () {
     // ett tal, och `v-if="tab.count"` hade tystat just den fliken. Noll är
     // ett svar, inte ett tomrum.
     expect($mall)->toMatch(
-        '#<UiBadge\b[^>]*\bv-if="[^"]*tab\.count[^"]*"#s',
+        '#<template\b[^>]*\bv-if="[^"]*tab\.count[^"]*"#s',
         'brickan ritas utan att fråga om räknaren finns',
     );
 
@@ -624,4 +624,82 @@ it('håller fliken aktiv när adressen bär både flikens parameter och en främ
         '/matched\s*>\s*\w+\.matched.*?path\.length/s',
         'rangordningen jämför sökvägen före antalet matchade parametrar',
     );
+});
+
+/*
+ * Issue 1310 · Räknarens tak och mappflikarna.
+ *
+ * Taket bor i komponenten och prövas därför genom att köra dess egen
+ * `countLabel`/`isCapped` i node: funktionerna plockas ur scriptet och
+ * utvärderas med ett tal in, så att provet läser beteendet och inte en avskrift.
+ */
+function flikradRäknare(int $antal): array
+{
+    $script = flikradScript(flikradKod());
+
+    preg_match('/const COUNT_CAP = (\d+);/', $script, $tak);
+    preg_match('/const isCapped = [^\n]*;/', $script, $kapad);
+    preg_match('/const countLabel = [^\n]*;/', $script, $etikett);
+
+    expect($tak)->not->toBeEmpty('taket COUNT_CAP saknas')
+        ->and($kapad)->not->toBeEmpty('isCapped saknas')
+        ->and($etikett)->not->toBeEmpty('countLabel saknas');
+
+    $js = $tak[0]."\n".$kapad[0]."\n".$etikett[0]."\n"
+        ."const tab = { count: {$antal} };\n"
+        .'process.stdout.write(JSON.stringify([String(countLabel(tab)), isCapped(tab)]));';
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node -e '.escapeshellarg($js).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    return json_decode(implode("\n", $rader), true);
+}
+
+it('kapar räknaren vid 9+', function (int $antal, string $visas, bool $kapad) {
+    expect(flikradRäknare($antal))->toBe([$visas, $kapad]);
+})->with([
+    'ett' => [1, '1', false],
+    'nio' => [9, '9', false],
+    'tio' => [10, '9+', true],
+    'hundrafemtio' => [150, '9+', true],
+]);
+
+it('låter skärmläsaren höra det exakta talet när brickan visar 9+', function () {
+    $mall = flikradMall(flikradKod());
+
+    // Den synliga brickan göms bara när talet är kapat, och det exakta talet
+    // står i en sr-only-span som också bara finns då.
+    expect($mall)->toMatch(
+        '#<UiBadge\b[^>]*:aria-hidden="isCapped\(tab\) \? \'true\' : null"#',
+        'den kapade brickan göms inte för skärmläsaren',
+    );
+
+    expect($mall)->toMatch(
+        '#<span\b[^>]*\bv-if="isCapped\(tab\)"[^>]*\bclass="sr-only"[^>]*>\s*\{\{\s*tab\.count\s*\}\}\s*</span>#s',
+        'det exakta talet står inte i en sr-only-span',
+    );
+});
+
+it('ritar flikarna som mappflikar utan att radens underkant ligger utanför raden', function () {
+    $mall = flikradMall(flikradKod());
+
+    $rad = flikradTaggar($mall, 'ul')[0];
+    $flik = flikradTaggar($mall, 'Link')[0];
+
+    expect($flik)->toMatch('/\brounded-t-md\b/', 'flikarna har inga rundade övre hörn')
+        ->and($flik)->toMatch('/\bborder-b-0\b/', 'den aktiva fliken saknar border-b-0 och täcker inte radens underkant')
+        ->and($flik)->toMatch('/\bborder-b-border\b/', 'de inaktiva flikarna saknar egen nederkant, så radens baslinje döljs under dem')
+        ->and($flik)->toMatch('/\bbg-surface\b/', 'den aktiva fliken ligger inte på surface')
+        ->and($flik)->toMatch('/\bbg-surface-sunken\b/', 'de övriga flikarna ligger inte på sänkt yta')
+        ->and($flik)->toMatch('/\btext-ink\b/', 'den aktiva fliken saknar text-ink')
+        ->and($flik)->not->toMatch('/(?<![\w-])-mb-px\b/', '-mb-px klipps av overflow-x-auto under md:');
+
+    // Underkanten är en bakgrundslinje (gradient med hårda stopp), inte `border-b`, så att den aktiva fliken
+    // kan täcka den utan att gå utanför raden.
+    expect($rad)->toMatch('/\bbg-linear-to-t\b.*\bfrom-border\b/', 'radens underkant är ingen bakgrundslinje')
+        ->and($rad)->not->toMatch('/(?<![\w-])border-b\b/', 'radens egen border-b klipps inte av den aktiva fliken');
 });
