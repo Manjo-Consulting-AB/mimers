@@ -199,6 +199,9 @@ it('ger truncated över taket utan att lista noderna och utan att läsa items', 
     expect(array_filter($sql, fn (string $s) => str_contains($s, 'item_link')))->toBe([]);
     expect(array_filter($sql, fn (string $s) => str_contains($s, 'count(*)')))->not->toBeEmpty();
 
+    // Ingen fråga mot item utom COUNT: inga items lästes in.
+    expect(array_filter($sql, fn (string $s) => preg_match('/from [`"]?item[`"]?(\s|$)/i', $s) && ! str_contains($s, 'count(*)')))->toBe([]);
+
     // Samma sak över sidan: propp och mening, ingen nodlista.
     actingAs($anvandare)->get(containergrafAdress($container))
         ->assertInertia(fn (AssertableInertia $page) => $page

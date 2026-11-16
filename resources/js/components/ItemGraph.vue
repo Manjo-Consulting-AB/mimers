@@ -232,6 +232,8 @@ function pointOf(event) {
 }
 
 function onWheel(event) {
+    event.preventDefault();
+
     const point = pointOf(event);
 
     zoomAround(event.deltaY < 0 ? 1.2 : 1 / 1.2, point.x, point.y);
@@ -295,6 +297,11 @@ function onPointerMove(event) {
 function onPointerEnd(event) {
     pointers.delete(event.pointerId);
     pinchDistance = null;
+
+    // Ett drag som slutar utanför svg:n får inte svälja nästa klick.
+    if (pointers.size === 0 && event.type === 'pointerleave') {
+        dragged = false;
+    }
 }
 
 const STEP = 40;
@@ -358,7 +365,7 @@ function go(event, href) {
                 :class="whole ? 'touch-none cursor-grab' : ''"
                 preserveAspectRatio="xMidYMid meet"
                 :tabindex="whole ? 0 : undefined"
-                @wheel.prevent="whole && onWheel($event)"
+                @wheel="whole && onWheel($event)"
                 @pointerdown="whole && onPointerDown($event)"
                 @pointermove="whole && onPointerMove($event)"
                 @pointerup="whole && onPointerEnd($event)"

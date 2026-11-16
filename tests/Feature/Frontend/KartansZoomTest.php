@@ -143,7 +143,8 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
     // Mus, nyp, knappar och tangentbord.
-    expect($grafen)->toContain('@wheel.prevent')
+    expect($grafen)->toContain('@wheel="whole && onWheel($event)"')
+        ->toContain('event.preventDefault()')
         ->toContain('@pointerdown')
         ->toContain('@pointermove')
         ->toContain('pinchDistance')
@@ -163,6 +164,9 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
         ->toContain('data-hit');
 
     expect($grafen)->not->toContain('v-if="node.hit"');
+    expect($grafen)->not->toContain('@wheel.prevent');
+
+    expect($grafen)->toContain("event.type === 'pointerleave'");
 
     // Ett klick går till Focus, utan depth; ingen redigering och ingen plusmeny.
     expect($grafen)->toContain('?view=map&focus=${node.ulid}`');
