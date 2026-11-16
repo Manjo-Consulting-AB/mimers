@@ -223,6 +223,43 @@ it('listar kontots levande bilagor störst först med filnamn, storlek, containe
 });
 
 /*
+ * Sentry MIMERS-JS-1: en containerbilaga har `item` null, och raden visar bara
+ * containerns namn.
+ */
+it('listar en containerbilaga med item null och containerns namn', function () {
+    [$konto, $anvandare] = lagringsvyKonto();
+
+    $container = Container::factory()->for($konto, 'account')->create();
+    $bilaga = Attachment::factory()->create([
+        'item_id' => null,
+        'container_id' => $container->id,
+        'stored_file_id' => StoredFile::factory()->create(['byte_size' => 2048])->id,
+        'filename' => 'containerbild.png',
+        'kind' => 'image',
+        'uploaded_by_user_id' => $anvandare->id,
+        'billed_account_id' => $konto->id,
+    ]);
+
+    $rad = collect(lagringsvyProps($anvandare, $konto)['attachments'])->firstWhere('ulid', $bilaga->ulid);
+
+    expect($rad)->not->toBeNull()
+        ->and($rad['item'])->toBeNull()
+        ->and($rad['container']['name'])->toBe($container->name);
+});
+
+it('läser item i platsraden först efter en kontroll av row.item', function () {
+    $lista = File::get(resource_path('js/components/StorageCleanupSection.vue'));
+
+    expect($lista)->toContain('storage.row.location_container')
+        ->and($lista)->toContain('v-if="row.item"');
+
+    // Varje läsning av row.item.name måste ligga efter v-if="row.item".
+    $traff = strpos($lista, 'row.item.name');
+    expect($traff)->not->toBeFalse()
+        ->and(strpos($lista, 'v-if="row.item"'))->toBeLessThan($traff);
+});
+
+/*
  * Klart när: en mjukraderad bilaga syns inte i listan.
  *
  * En bilaga som själv ligger i papperskorgen räknas inte mot kontot längre
@@ -676,7 +713,7 @@ it('syns i inställningsnavigationen och länkas från plansidan', function () {
 it('har varje ny nyckel och läser dem i vyn', function () {
     foreach ([
         'title', 'heading', 'intro', 'account_label', 'usage_heading',
-        'list_heading', 'list_intro', 'empty', 'row.location', 'row.trashed',
+        'list_heading', 'list_intro', 'empty', 'row.location', 'row.location_container', 'row.trashed',
         'preview.one', 'preview.many', 'limit_exceeded', 'submit',
         'confirm.one', 'confirm.many',
         'result.one', 'result.many', 'result.none', 'result.usage',
@@ -692,7 +729,7 @@ it('har varje ny nyckel och läser dem i vyn', function () {
     }
 
     foreach ([
-        'list_heading', 'list_intro', 'empty', 'row.location', 'row.trashed',
+        'list_heading', 'list_intro', 'empty', 'row.location', 'row.location_container', 'row.trashed',
         'preview.one', 'preview.many', 'submit',
     ] as $nyckel) {
         expect($lista)->toContain("storage.{$nyckel}");
