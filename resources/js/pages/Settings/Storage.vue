@@ -5,6 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+import { formatByteSize } from '../../components/attachmentPresentation.js';
 
 defineOptions({ layout: [AppLayout, SettingsLayout] });
 
@@ -86,6 +87,7 @@ function selectAccount(event) {
 
     <h1 class="text-2xl font-semibold">{{ t('storage.heading') }}</h1>
     <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
+    <p v-if="props.usage.textBytes > 0" class="mt-1 text-sm text-slate-700">{{ t('storage.text_note') }}</p>
 
     <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
         <label for="account" class="text-sm font-medium text-slate-800">{{ t('storage.account_label') }}</label>
@@ -135,6 +137,9 @@ function selectAccount(event) {
                     {{ props.usage.limitBytes === null
                         ? t('plan.of_unlimited', { used: props.usage.usedLabel })
                         : t('plan.of', { used: props.usage.usedLabel, limit: props.usage.limitLabel }) }}
+                    <span v-if="props.usage.textBytes > 0" class="mt-1 block text-xs text-slate-600">
+                        {{ t('plan.storage_split', { files: formatByteSize(props.usage.fileBytes), text: formatByteSize(props.usage.textBytes) }) }}
+                    </span>
                 </dd>
             </div>
         </dl>

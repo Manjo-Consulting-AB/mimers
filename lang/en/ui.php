@@ -1983,6 +1983,9 @@ return [
         'unlimited' => 'Unlimited',
         'storage_bar' => ':percent percent of the limit used',
 
+        // The split of used space between attachments and text (ADR-0081).
+        'storage_split' => 'Files :files · Text :text',
+
         // The feature table: one row per key in ReadPlanUsage::FEATURES
         // (decision 9).
         'features_heading' => 'Features',
@@ -2073,6 +2076,7 @@ return [
         'title' => 'Storage',
         'heading' => 'Storage',
         'intro' => 'Choose yourself what has to go. What you remove here is deleted for good and cannot be restored.',
+        'text_note' => 'Text in items, tasks, costs and loans also counts toward your storage. It\'s usually small. Removing files frees the most space.',
 
         'account_label' => 'Account',
         'usage_heading' => 'Storage space',

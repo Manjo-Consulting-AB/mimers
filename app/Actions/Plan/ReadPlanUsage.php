@@ -97,6 +97,10 @@ class ReadPlanUsage
         // att formuleringen ska vara Entitlements' och inte en egen.
         // Filer och text tillsammans (ADR-0081 § 1): UsageCounter::usedBytes().
         $usedBytes = UsageCounter::usedBytes($account->id);
+        // Fördelningen (ADR-0081 § 1): filerna är `storage_bytes`, texten är
+        // resten av summan — så de två fälten alltid ger `usedBytes`.
+        $fileBytes = min($usedBytes, (int) UsageCounter::query()->where('account_id', $account->id)->value('storage_bytes'));
+        $textBytes = $usedBytes - $fileBytes;
         $usedContainers = (int) UsageCounter::query()->where('account_id', $account->id)->value('container_count');
 
         $containerLimit = $this->intLimit('containers', $plan->planLimit('containers'));
@@ -131,6 +135,8 @@ class ReadPlanUsage
                 ],
                 'storage' => [
                     'usedBytes' => $usedBytes,
+                    'fileBytes' => $fileBytes,
+                    'textBytes' => $textBytes,
                     'limitBytes' => $storageLimit,
                     'usedLabel' => Number::fileSize($usedBytes),
                     'limitLabel' => $storageLimit === null ? null : Number::fileSize($storageLimit),
