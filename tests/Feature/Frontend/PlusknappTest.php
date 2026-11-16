@@ -150,7 +150,7 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
             ->where('create.rows', [
                 ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$item->ulid}"],
                 ['key' => 'parent_item', 'href' => "/containers/{$container->ulid}/items/create?child={$item->ulid}"],
-                ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
+                ['key' => 'relation', 'href' => "/containers/{$container->ulid}/items?view=map&focus={$item->ulid}&add=relation"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
                 ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
                 // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
@@ -213,7 +213,7 @@ it('bär den aktuella förekomsten på menyraderna som pekar på en flik', funct
     $bas = "/containers/{$container->ulid}/items/{$item->ulid}";
 
     actingAs($anvandare)->get("{$bas}?path={$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.rows.2.href', "{$bas}?path={$item->ulid}&tab=relations")
+        fn (AssertableInertia $page) => $page->where('create.rows.2.href', "/containers/{$container->ulid}/items?view=map&focus={$item->ulid}&add=relation")
             ->where('create.rows.3.href', "{$bas}?path={$item->ulid}&tab=attachments&create=1"),
     );
 });

@@ -8,7 +8,6 @@ use App\Models\ItemLink;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
 use Inertia\Testing\AssertableInertia;
 
@@ -21,7 +20,7 @@ use function Pest\Laravel\withoutVite;
  * Issue 58 · Relationssektionen på itemets detaljvy. Se
  * App\Http\Controllers\ItemController::show(),
  * App\Http\Controllers\ItemLinkController, App\Actions\Item\ListItemLinks och
- * resources/js/components/ItemLinkSection.vue.
+ * resources/js/components/ItemLinkForm.vue.
  *
  * Filen bevisar de tre gränserna issuen är byggd kring:
  *
@@ -181,30 +180,6 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
     );
 });
 
-it('renderar föräldrarna, itemet, barnen och de relaterade i den ordningen', function () {
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    // Ordningen är issue 155:s ärende och den bor i `rows`: föräldrarna,
-    // itemet självt, barnen och de relaterade ([[M23 Mobilen och kartan]]
-    // § 155). `self` är itemet och ingen nyckel i `links` — noden har ingen
-    // motpart och ingenting att knyta upp.
-    expect($vy)->toContain("const rows = ['parent', 'self', 'child', 'related'];");
-
-    // Och mallen ritar raderna i den ordningen i stället för att skriva
-    // grupperna för hand: en mall som listade dem själv kunde säga en annan
-    // sak än `rows`, och ordningen hade stått två ställen.
-    expect($vy)->toContain('v-for="row in rows"');
-});
-
-it('visar itemet självt som en nod mellan föräldrarna och barnen', function () {
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    // Noden i figurens mitt (§ 155): itemets EGET namn, ur `itemName`, och
-    // etiketten ur `lang/`. Utan den vore fliken tre listor utan ett subjekt.
-    expect($vy)->toContain('{{ itemName }}')
-        ->toContain("t('item.links.current')");
-});
-
 it('visar båda föräldrarna när itemet har två', function () {
     withoutVite();
 
@@ -225,84 +200,6 @@ it('visar båda föräldrarna när itemet har två', function () {
             ->where('links.parent.0.item.name', 'Båten')
             ->where('links.parent.1.item.name', 'Riggen')
     );
-
-    // Och raden ritas per motpart — gruppen är en slinga och inte ett index.
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    expect($vy)->toContain('v-for="link in links[row]"');
-});
-
-/*
- * Klart när: "på mobil växlar relationsfliken mellan *Fokus* och *Lista*"
- * (issue 156 · [[M23 Mobilen och kartan]] § 156).
- *
- * Fliken har två ytor under `md:`: sektionen — listan, figuren och formuläret
- * — och kartan (`ItemMap` med `compact` sedan issue 313). Växeln är
- * `ItemViewSwitch`, samma komponent som itemfliken
- * använder (issue 154), och den är `md:hidden`: över brytpunkten står kartan i
- * högerpanelen, och där visar fliken alltid listan.
- *
- * Läget kommer från servern (`view`-proppen) och läses aldrig ur adressen här:
- * två läsningar av samma sträng är två regler som kan glida isär. Adresserna
- * byggs i vyn, ur relationsflikens egen `href`, så de bär den aktuella
- * förekomsten.
- */
-it('växlar fliken mellan fokus och lista under md:', function () {
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    expect($vy)->toContain("import ItemViewSwitch from './ItemViewSwitch.vue'")
-        ->toContain('<ItemViewSwitch')
-        ->toContain(':views="views"')
-        ->toContain(':current="view"')
-        ->toContain('md:hidden');
-
-    // Fokusläget ritar kartan, och bara under `md:`. Sedan issue 313 är det
-    // `ItemMap` i sin smala form ([[ADR-0063 Itemets karta i containerkartans
-    // form]] § 1).
-    expect($vy)->toContain("import ItemMap from './ItemMap.vue'")
-        ->toContain('<ItemMap')
-        ->toContain('compact')
-        ->toContain(':map="itemMap"')
-        ->toContain(':statuses="statuses"')
-        ->toContain(':container-ulid="containerUlid"')
-        ->toContain(':overflow-href="overflowHref"');
-
-    // Och listan viker för kartan i samma läge — men bara under brytpunkten:
-    // över `md:` står den kvar, för läget är mobilens.
-    expect($vy)->toContain("const focusing = computed(() => props.view === 'focus');")
-        ->toContain("focusing ? 'hidden md:block' : ''");
-});
-
-it('länkar varje rad till motpartens detaljvy', function () {
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    // Navigeringen backlogfilen ber om: raden är en länk, och målet är
-    // motpartens egen sida — inte en modal och inte en förhandsvisning.
-    expect($vy)->toContain('/containers/${containerUlid}/items/${link.item.ulid}');
-});
-
-it('visar en rad om itemet inte är kopplat till något', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = itemrelationKontext();
-    $motorn = itemrelationItem($container, 'Motorn');
-
-    actingAs($anvandare)->get(itemrelationUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->where('links.parent', [])
-            ->where('links.child', [])
-            ->where('links.related', [])
-    );
-
-    // Tre tomma rubriker säger mindre än en rad: en tom grupp ritas inte
-    // alls, och är alla tre tomma står raden om att ingenting är kopplat.
-    // Itemets egen nod ritas inte heller — figuren finns bara när något
-    // hänger på itemet (§ 155).
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    expect($vy)->toContain('v-if="hasAny"');
-    expect($vy)->toContain('v-else-if="links[row].length > 0"');
-    expect($vy)->toContain("t('item.links.empty')");
 });
 
 // --- omfånget: en motpart utanför omfånget finns inte -------------------
@@ -342,31 +239,6 @@ it('döljer en motpart utanför mottagarens omfång helt', function () {
     expect($innehall)->not->toContain($baten->ulid);
 });
 
-it('listar inte itemet självt, redan kopplade items eller items utanför omfånget', function () {
-    withoutVite();
-
-    [, , $container] = itemrelationKontext();
-
-    $motorn = itemrelationItem($container, 'Motorn');
-    $pumpen = itemrelationItem($container, 'Pumpen');
-    $masten = itemrelationItem($container, 'Masten');
-    $fria = itemrelationItem($container, 'Fria');
-
-    itemrelationKant($motorn, $pumpen, 'related');
-
-    // Skrivare på motorn, pumpen och den fria — masten ligger utanför.
-    $skrivare = itemrelationMottagare($container, $motorn, 'write');
-    itemrelationMottagare($container, $pumpen, 'write', $skrivare);
-    itemrelationMottagare($container, $fria, 'write', $skrivare);
-
-    actingAs($skrivare)->get(itemrelationUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('counterparts', 1)
-            ->where('counterparts.0.ulid', $fria->ulid)
-            ->where('counterparts.0.name', 'Fria')
-    );
-});
-
 // --- skrivningen: write i båda ändar ------------------------------------
 
 it('knyter ihop två items och visar relationen så som användaren valde den', function () {
@@ -391,7 +263,9 @@ it('knyter ihop två items och visar relationen så som användaren valde den', 
         'relation' => 'parent',
     ]);
 
-    $svar->assertRedirect(itemrelationUrl($container, $motorn));
+    // Relationerna ändras i kartan, så man står kvar där (issue 1339 ·
+    // [[ADR-0082 Kartan är relationernas yta]] § 3).
+    $svar->assertRedirect("/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}");
     $svar->assertSessionHas('status', 'item-link-created');
 
     // Kanoniskt lagrad: från motparten och till motorn (issue 14 § Beslut 4).
@@ -457,7 +331,7 @@ it('knyter upp och lämnar båda itemen kvar', function () {
 
     $svar = actingAs($skrivare)->delete(itemrelationUrl($container, $motorn)."/links/{$impellern->ulid}");
 
-    $svar->assertRedirect(itemrelationUrl($container, $motorn));
+    $svar->assertRedirect("/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}");
     $svar->assertSessionHas('status', 'item-link-removed');
 
     // Raderingen är HÅRD (issue 14 § Beslut 10) och har ingen papperskorg —
@@ -503,13 +377,9 @@ it('låter en read-innehavare se relationerna utan formulär och utan upp-knytni
             ->where('can.create', false)
     );
 
-    // Båda skrivytorna sitter bakom samma flagga, och flaggan är
-    // presentation: grinden i App\Http\Controllers\ItemLinkController är den
-    // som gäller. En yta användaren inte får använda ritas inte alls —
-    // [[M10 Webbfrontend]] § 57.
-    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
-
-    expect($vy)->toContain('v-if="can.update"');
+    // Formulärets underlag skickas inte till en läsare; det prövas i
+    // RelationerIKartanTest. Flaggan är presentation: grinden i
+    // App\Http\Controllers\ItemLinkController är den som gäller.
 });
 
 // --- de fyra domänfelen -------------------------------------------------

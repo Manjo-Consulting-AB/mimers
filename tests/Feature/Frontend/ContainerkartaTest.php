@@ -459,7 +459,7 @@ it('skickar mittens menyrader och inga rader kring containern', function () {
                 ->where('map.rows.0.key', 'item')
                 ->where('map.rows.1.key', 'parent_item')
                 ->where('map.rows.2.key', 'relation')
-                ->where('map.rows.2.href', "/containers/{$container->ulid}/items/{$motorn->ulid}?tab=relations")
+                ->where('map.rows.2.href', "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation")
         );
 });
 
@@ -556,7 +556,11 @@ it('bygger nodernas adresser och har tagit bort kolumnkomponenterna', function (
     expect($kartan)->toContain('?view=map&focus=${node.ulid}')
         ->toContain('`${base.value}/${node.ulid}`');
 
-    expect($vy)->toContain('?tab=relations');
+    // Relationsfliken finns inte längre (issue 1339 · ADR-0082): *+N till* kring
+    // ett item fäller ut gruppen i kartan, och kring containern leder den till
+    // trädet.
+    expect($vy)->not->toContain('?tab=relations')
+        ->and($kartan)->toContain('&expand=${kind}');
 
     // Kartan läser inte adressen. `page.url` finns sedan issue 1163 bara som
     // `:return-to` på registreringsraden och, sedan issue 1164, på trädtabellen.
@@ -578,7 +582,7 @@ it('bygger nodernas adresser och har tagit bort kolumnkomponenterna', function (
  */
 it('låter kartläget rita ItemMap och högerpanelen rita den med compact', function () {
     $vy = kartavyKod('pages/Containers/Items/Index.vue');
-    $panelen = kartavyKod('components/ItemLinkSection.vue');
+    $panelen = kartavyKod('components/ItemMapPanel.vue');
 
     expect($vy)->toContain("import ItemMap from '../../../components/ItemMap.vue'")
         ->toContain('<ItemMap');
@@ -815,7 +819,8 @@ it('sätter plusknappen i kortets nedre högra hörn och bara när raderna finns
     // namnet aldrig hamnar under hörnens knappar.
     preg_match("/w-56[^']*\\bpr-(\\d+)/", $noden, $traf);
 
-    expect(substr_count($noden, 'min-h-11 min-w-11'))->toBe(2)
+    // Öppna, plus och *Unlink* (issue 1339).
+    expect(substr_count($noden, 'min-h-11 min-w-11'))->toBe(3)
         ->and((int) ($traf[1] ?? 0) * 4)->toBeGreaterThanOrEqual(44);
 });
 

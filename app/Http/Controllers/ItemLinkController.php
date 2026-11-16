@@ -58,7 +58,7 @@ class ItemLinkController extends Controller
 {
     /**
      * POST /containers/{container}/items/{item}/links — 302 tillbaka till
-     * itemets detaljvy.
+     * kartan med itemet som mitt.
      *
      * `StoreItemLinkRequest` har redan bevisat att motpartens ULID finns i
      * DEN HÄR containern och inte är mjukraderad — en ULID från en annan
@@ -88,14 +88,12 @@ class ItemLinkController extends Controller
             ]);
         }
 
-        return redirect()
-            ->route('containers.items.show', [$container, $item])
-            ->with('status', 'item-link-created');
+        return $this->toMap($container, $item)->with('status', 'item-link-created');
     }
 
     /**
      * DELETE /containers/{container}/items/{item}/links/{other} — 302 tillbaka
-     * till itemets detaljvy.
+     * till kartan med itemet som mitt.
      *
      * `{other}` slås upp inom containern (§ Beslut 1 och 7), och båda ändarna
      * auktoriseras med `update` — samma grind som POST, för att knyta upp en
@@ -120,9 +118,21 @@ class ItemLinkController extends Controller
             abort(404);
         }
 
-        return redirect()
-            ->route('containers.items.show', [$container, $item])
-            ->with('status', 'item-link-removed');
+        return $this->toMap($container, $item)->with('status', 'item-link-removed');
+    }
+
+    /**
+     * Kartan med itemet som mitt — dit både knytandet och upp-knytandet
+     * landar (issue 1339 · [[ADR-0082 Kartan är relationernas yta]] § 3). Det
+     * är där relationerna ändras, så man står kvar och ser resultatet.
+     */
+    private function toMap(Container $container, Item $item): RedirectResponse
+    {
+        return redirect()->route('containers.items.index', [
+            'container' => $container,
+            'view' => 'map',
+            'focus' => $item->ulid,
+        ]);
     }
 
     /**

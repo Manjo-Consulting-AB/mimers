@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Lang;
  *
  * Att ordet inte heller står i koden, i kommentarerna eller i nycklarna
  * prövas av tests/Feature/Item/ItemRelationTest.php, som läser `app/`,
- * `lang/`, `routes/` och ItemLinkSection.vue i sin helhet. De två proven
+ * `lang/`, `routes/` och ItemLinkForm.vue i sin helhet. De två proven
  * överlappar i `lang/` med flit: det ena letar ordet överallt, det andra
  * letar det i det en användare kan möta.
  *

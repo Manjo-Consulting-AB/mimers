@@ -3497,22 +3497,14 @@ return [
         // `container` and *Container* where an item shows *Current item*.
         //
         // `heading` names the place and is the only word on the wide screen's
-        // panel. `view` is the switch the relations tab carries under `md:`:
-        // *Focus* is the map and *List* is the section as it was, and the mode
-        // is read in the querystring (`?view=focus`) like every other mode in
-        // this product. Its `label` is the group's accessible name and not a
-        // visible word — the two modes name themselves.
+        // panel. The relations tab and its *List/Focus* switch are gone
+        // (issue 1339 · [[ADR-0082 Kartan är relationernas yta]]); `collapse`
+        // folds the expanded group list that *+N more* opens.
         'map' => [
             'heading' => 'Map',
             // The same pair for the map panel (issue 335).
             'panel_collapse' => 'Collapse the map panel',
             'panel_expand' => 'Expand the map panel',
-
-            'view' => [
-                'label' => 'Relations view',
-                'focus' => 'Focus',
-                'list' => 'List',
-            ],
 
             'kind' => [
                 'parent' => 'Parent',
@@ -3528,6 +3520,11 @@ return [
             'open' => 'Open :name',
             'node_menu' => 'Create in :name',
             'more' => '+:count more',
+
+            // The expanded group in the full map (issue 1339 · [[ADR-0082
+            // Kartan är relationernas yta]] § 3): *+N more* unfolds the group
+            // into a list, and this link folds it back.
+            'collapse' => 'Show fewer',
 
             // The link under the legend in the narrow form (issue 313 ·
             // [[ADR-0063 Itemets karta i containerkartans form]] § 6). It
@@ -3764,7 +3761,7 @@ return [
         ],
 
         // The relation section, see issue 58 decisions 3, 4, 8, 9 and 10, and
-        // issue 155. It lives in resources/js/components/ItemLinkSection.vue.
+        // issue 155. It lives in resources/js/components/ItemLinkForm.vue (the form; the tab itself is gone, issue 1339).
         //
         // `group` is the three headings and `relation` the labels in the
         // direction selector — both seen from the COUNTERPART's side
@@ -3793,6 +3790,8 @@ return [
 
             'empty' => 'The item is not linked to anything.',
             'remove' => 'Unlink',
+            'remove_heading' => 'Unlink :name?',
+            'unlink_node' => 'Unlink :name',
             // Deleting a link is hard (issue 14 decision 10) and has no
             // trash — what disappears is the connection, never the items.
             'remove_confirm' => 'Only the link is removed. Both items remain. Continue?',

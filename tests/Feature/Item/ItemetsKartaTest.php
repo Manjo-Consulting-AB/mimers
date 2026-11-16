@@ -267,7 +267,7 @@ it('bär sidans förekomst i mittens menyrader', function () {
                 ->where('itemMap.rows.0.key', 'item')
                 ->where('itemMap.rows.1.key', 'parent_item')
                 ->where('itemMap.rows.2.key', 'relation')
-                ->where('itemMap.rows.2.href', "{$bas}?path={$förekomst}&tab=relations")
+                ->where('itemMap.rows.2.href', "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation")
                 // Vägen till mitten följer den första föräldern i namnordning
                 // och påverkas inte av ?path= (ADR-0059 § 9).
                 ->where('itemMap.path.0.name', 'Båten')

@@ -271,6 +271,7 @@ class ItemController extends Controller
         ResolveItemTree $resolveItemTree,
         ResolveItemTreeRows $resolveItemTreeRows,
         ResolveItemMap $resolveItemMap,
+        ListItemLinks $listItemLinks,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -335,6 +336,13 @@ class ItemController extends Controller
         // gör för sina kandidater.
         $center = $map['centerItem'] ?? null;
         $center?->setRelation('container', $container);
+
+        // Relationerna i kartan (issue 1339 · [[ADR-0082 Kartan är
+        // relationernas yta]] § 3): den utfällda gruppen, vilka kort som får
+        // *Unlink* och underlaget till formuläret. Allt tre gäller bara när
+        // mitten är ett item, och *Unlink* och formuläret bara när hon har
+        // `update` på det.
+        $relationSurface = $this->relationSurface($request, $user, $container, $map, $listItems, $listItemLinks);
 
         // Trädet och dess kolumner (issue 292 · [[ADR-0058 Trädet som tabell]]
         // § 1, 3 och 4). Trädet löses upp EN gång och båda propparna byggs ur
@@ -561,6 +569,15 @@ class ItemController extends Controller
             // total: 0}` ett filter utan träffar — samma skillnad som mellan
             // `structure`s `null` och `[]` ovan.
             'hits' => $hits,
+
+            // Relationerna i den fulla kartan (issue 1339 · [[ADR-0082 Kartan
+            // är relationernas yta]] § 3). `expanded` är gruppen *+N till*
+            // fällde ut, `unlinkable` ULID:erna på de kort och rader som får
+            // *Unlink* och `linkForm` underlaget till formuläret — de två
+            // sista bara för den som får `update` på mitten.
+            'expanded' => $relationSurface['expanded'],
+            'unlinkable' => $relationSurface['unlinkable'],
+            'linkForm' => $relationSurface['linkForm'],
         ]);
     }
 
@@ -668,7 +685,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap, RenderItemNotes $renderItemNotes, ResolveVisibleDescendants $resolveVisibleDescendants): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks, ResolveItemCover $resolveItemCover, ItemStatus $itemStatus, ResolveItemMap $resolveItemMap, RenderItemNotes $renderItemNotes, ResolveVisibleDescendants $resolveVisibleDescendants): Response
     {
         Gate::authorize('view', $item);
 
@@ -723,20 +740,6 @@ class ItemController extends Controller
         }
 
         $links = $listItemLinks->handle($user, $container, $item);
-
-        // Kandidaterna: containerns items inom anroparens omfång, EN fråga
-        // (App\Actions\Item\ListItems). Både motpartsväljaren och kartans
-        // noder väljer ur samma lista — noderna ÄR redan filtrerade av
-        // App\Actions\Item\ListItemLinks, och uppslaget här gäller deras
-        // menyrader (issue 156). Ingen ny fråga för kartan: den läser samma
-        // svar som väljaren redan bad om.
-        //
-        // `container` sätts ur den redan hämtade containern, så att
-        // `ItemPolicy::allows()` slipper slå upp den per nod — policyn läser
-        // `$item->container->account`, och kontot är laddat ovan. Samma
-        // resonemang som i `counterparts()` och `abilities()`.
-        $candidates = $listItems->handle($user, $container)
-            ->each(fn (Item $candidate) => $candidate->setRelation('container', $container));
 
         // Förekomsterna i strukturen (issue 95 · [[ADR-0041 Itemets vy]]
         // § Beslut): alla vägar från en rot ned till itemet, i serverns
@@ -1230,7 +1233,6 @@ class ItemController extends Controller
             // läses aldrig ur window.location i klienten.
             'inlineEnabled' => FileOrigin::host() !== null,
             'links' => $this->groupLinks($linkRows),
-            'counterparts' => $this->counterparts($user, $item, $links, $candidates),
 
             // Itemets karta (issue 312 · [[ADR-0063 Itemets karta i
             // containerkartans form]] § 2): containerkartans form med itemet
@@ -1268,12 +1270,6 @@ class ItemController extends Controller
             // utanför omfånget får ingen status att räknas i. Två frågor,
             // oavsett antalet noder.
             'itemMapStatuses' => $itemStatus->forItems($container, $user, array_values($itemMap['drawn'])),
-
-            // Relationsflikens läge (issue 156): *Lista* är förvalet och
-            // *Fokus* är kartan. Läget står i querysträngen och ingenstans
-            // annat — samma konstruktion som `?view=` i itemfliken (issue
-            // 154) och `?path=` i issue 95.
-            'linkView' => $this->linkView($request),
 
             // Är itemet en av användarens favoriter? Se issue 105 och
             // [[ADR-0042 Designsystemet]] § Konsekvenser. Frågan är per
@@ -2301,6 +2297,100 @@ class ItemController extends Controller
     }
 
     /**
+     * Relationerna i den fulla kartan (issue 1339 · [[ADR-0082 Kartan är
+     * relationernas yta]] § 3), alla tre ur samma läsning av mitten.
+     *
+     * - `expanded` är gruppen som *+N till* fällde ut (`?expand=parent|child|
+     *   related`): ALLA dess items ur App\Actions\Item\ListItemLinks, och inte
+     *   de fyra, tolv eller sex som kartan ritar. Det är ett eget svar bredvid
+     *   kartans, och App\Actions\Item\ResolveItemMap är oförändrad. Motparter
+     *   utanför omfånget finns inte i svaret, av samma skäl som i kartan.
+     * - `unlinkable` är ULID:erna på de kort och rader som får *Unlink*:
+     *   samma grind som ItemLinkController::destroy(), `update` på BÅDA
+     *   itemen. Mitten prövas först — utan `update` på den är listan tom.
+     * - `linkForm` är formulärets underlag (`?add=relation`): motparterna ur
+     *   `counterparts()`, bara när mitten är ett item och hon får ändra det.
+     *
+     * Allt är `null` eller tomt kring containern: den har inget att knyta.
+     *
+     * @param  array<string, mixed>|null  $map  ResolveItemMap:s svar, null utanför kartläget
+     * @return array{expanded: ?array{kind: string, nodes: list<array<string, mixed>>}, unlinkable: list<string>, linkForm: ?array{counterparts: list<array{ulid: string, name: string}>}}
+     */
+    private function relationSurface(Request $request, ?User $user, Container $container, ?array $map, ListItems $listItems, ListItemLinks $listItemLinks): array
+    {
+        $none = ['expanded' => null, 'unlinkable' => [], 'linkForm' => null];
+
+        $center = $map['centerItem'] ?? null;
+
+        if ($user === null || ! $center instanceof Item) {
+            return $none;
+        }
+
+        $gate = Gate::forUser($user);
+        $canUpdate = $gate->allows('update', $center);
+
+        $expand = $request->query('expand');
+        $expand = is_string($expand) && in_array($expand, ['parent', 'child', 'related'], true) ? $expand : null;
+        $adding = $canUpdate && $request->query('add') === 'relation';
+
+        $links = $expand !== null || $adding ? $listItemLinks->handle($user, $container, $center) : collect();
+
+        $expanded = null;
+
+        if ($expand !== null) {
+            $expanded = [
+                'kind' => $expand,
+                'nodes' => $links
+                    ->filter(fn (ItemLink $link): bool => $link->getAttribute('relation_to_item') === $expand)
+                    ->map(fn (ItemLink $link): array => [
+                        'ulid' => $link->getAttribute('counterpart_ulid'),
+                        'name' => $link->getAttribute('counterpart_name'),
+                        'icon' => $link->getAttribute('counterpart_icon'),
+                        'icon_color' => $link->getAttribute('counterpart_icon_color'),
+                    ])
+                    ->values()
+                    ->all(),
+            ];
+        }
+
+        $unlinkable = [];
+
+        if ($canUpdate) {
+            // Modellerna bakom korten och raderna. De ritade ligger redan i
+            // `drawn`; den utfällda gruppens hämtas i en fråga.
+            $models = collect($map['drawn'])->reject(fn (Item $item): bool => $item->id === $center->id);
+
+            $extra = collect($expanded['nodes'] ?? [])->pluck('ulid')->diff($models->keys())->values()->all();
+
+            if ($extra !== []) {
+                $models = $models->merge(
+                    $container->items()->whereIn('ulid', $extra)->get()->keyBy('ulid'),
+                );
+            }
+
+            $unlinkable = $models
+                ->each(fn (Item $item) => $item->setRelation('container', $container))
+                ->filter(fn (Item $item): bool => $gate->allows('update', $item))
+                ->keys()
+                ->map(fn ($ulid): string => (string) $ulid)
+                ->values()
+                ->all();
+        }
+
+        $linkForm = $adding
+            ? ['counterparts' => $this->counterparts(
+                $user,
+                $center,
+                $links,
+                $listItems->handle($user, $container)
+                    ->each(fn (Item $candidate) => $candidate->setRelation('container', $container)),
+            )]
+            : null;
+
+        return ['expanded' => $expanded, 'unlinkable' => $unlinkable, 'linkForm' => $linkForm];
+    }
+
+    /**
      * Motparterna som går att knyta det här itemet till (§ Beslut 5).
      * Kandidaterna är containerns items INOM användarens omfång — ListItems äger
      * det filtret och den här kontrollern formulerar inget eget — minus
@@ -2340,31 +2430,6 @@ class ItemController extends Controller
             ->map(fn (Item $candidate): array => ['ulid' => $candidate->ulid, 'name' => $candidate->name])
             ->values()
             ->all();
-    }
-
-    /**
-     * Relationsflikens läge ur querysträngen — issue 156 ·
-     * [[M23 Mobilen och kartan]] § 156.
-     *
-     * `list` är flikens sektion och förvalet; `focus` är kartan, som
-     * under `md:` är ett läge i samma flik. Läget är en LÄNK och inget
-     * tillstånd i vyn, samma konstruktion som `?view=` i itemfliken (issue
-     * 154) och `?path=` i issue 95: ett läge man kan länka till är ett läge
-     * man kan dela, och det överlever en omladdning.
-     *
-     * **Ett okänt värde är listan, aldrig ett fel** — samma linje som
-     * `view()` och `filter()` och av samma skäl: den som klickade på en gammal
-     * länk är inte här.
-     *
-     * Servern räknar ingenting på svaret: kartans noder behövs i BÅDA lägena
-     * — högerpanelen ritar dem över `md:` — så strängen väljer bara vilken yta
-     * fliken visar. Läsningen finns ändå här, för att klienten inte ska bära
-     * en andra upplaga av en regel om vad ett läge är (samma skäl som
-     * `ItemViewSwitch` upprepar).
-     */
-    private function linkView(Request $request): string
-    {
-        return $request->query('view') === 'focus' ? 'focus' : 'list';
     }
 
     /**

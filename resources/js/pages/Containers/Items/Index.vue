@@ -217,6 +217,20 @@ const props = defineProps({
      * kommer och går tillsammans.
      */
     create: { type: Object, default: null },
+    /*
+     * Gruppen *+N till* fällde ut (`?expand=`), `{kind, nodes}` med ALLA dess
+     * items, eller null (issue 1339 · [[ADR-0082 Kartan är relationernas yta]]
+     * § 3). Bara kring ett item.
+     */
+    expanded: { type: Object, default: null },
+    /* ULID:erna på korten och raderna som får *Unlink*; tom utan `update` på mitten. */
+    unlinkable: { type: Array, default: () => [] },
+    /*
+     * Formulärets underlag, `{counterparts}`, när adressen bär `add=relation`,
+     * mitten är ett item och hon får ändra det — annars null. `ItemMap` öppnar
+     * formuläret i ett ark över kartan.
+     */
+    linkForm: { type: Object, default: null },
     /* Kategoriträdet till formuläret (issue 1162); tomt när hon inte får registrera. */
     categories: { type: Array, default: () => [] },
     /* Kategorin ur `?category=`, förvald i formuläret. */
@@ -414,14 +428,12 @@ const views = computed(() => {
 });
 
 /*
- * *+N till* i `ItemMap` leder hit. Kring ett item är det itemets
- * relationsflik, som listar alla; kring containern är det trädet
- * ([[ADR-0059 Kartan med en mitt]] § 6, [[ADR-0067 Itemfliken utan listläge]]
- * § 7).
+ * *+N till* kring containern leder till trädet. Kring ett item fäller
+ * `ItemMap` ut gruppen i kartans ram och bygger adressen själv (issue 1339 ·
+ * [[ADR-0082 Kartan är relationernas yta]] § 3); relationsfliken finns inte
+ * längre.
  */
-const overflowHref = computed(() => (props.map.center.kind === 'item'
-    ? `${base.value}/${props.map.center.ulid}?tab=relations`
-    : base.value));
+const overflowHref = computed(() => base.value);
 </script>
 
 <template>
@@ -625,6 +637,9 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
                     :container-ulid="container.ulid"
                     :overflow-href="overflowHref"
                     :filter-query="filterQuery"
+                    :expanded="expanded"
+                    :unlinkable="unlinkable"
+                    :link-form="linkForm"
                 />
             </div>
         </div>

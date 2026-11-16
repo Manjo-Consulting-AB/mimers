@@ -235,7 +235,15 @@ final class CreateTarget
         // och inte den här — se `Klart när`-punkten "en rad vars policy nekar
         // finns inte i menyn".
         if ($gate->allows('update', $item)) {
-            $rows[] = ['key' => 'relation', 'href' => $this->tabHref($base, $path, 'relations')];
+            // Relationerna ändras i den fulla kartan med itemet som mitt, där
+            // formuläret öppnas över kartan (issue 1339 · [[ADR-0082 Kartan är
+            // relationernas yta]] § 3). Förekomsten (`$path`) hör till itemets
+            // sida och följer inte med.
+            $rows[] = [
+                'key' => 'relation',
+                'href' => route('containers.items.index', $container, absolute: false)
+                    .'?view=map&focus='.$item->ulid.'&add=relation',
+            ];
         }
 
         if ($gate->allows('create', $item)) {
