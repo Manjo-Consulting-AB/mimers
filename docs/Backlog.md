@@ -80,6 +80,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M59 Profilbilden]] | **379–382** | profilbilden: en bilaga som kan tillhöra en person, skrivvägen och kvoten, ytan på inställningssidan och i toppraden, och beskärningen med fokuspunkt och zoom — bygger [[ADR-0076 Profilbilden]] |
 | [[M60 Notislistan i appen]] | **383–386** | notislistan i appen: kanalen `in_app` med läst-läge och gallring efter 90 dagar, rutterna på webben och i API:et, klockan med panelen och sidan `/notifications`, och typernas förval med en kolumn för kanalen i inställningarna — bygger [[ADR-0077 Notislistan i appen]] |
 | [[M61 Övervakning]] | **387–391** | övervakning: felrapportering till Sentry från servern och webbläsaren, hjärtslag för schemalagda jobb och vakten för notiskön, prestandaloggen med veckosammanställningen, och sidvisningar och funktioner i den anonyma mätningen — bygger [[ADR-0079 Övervakning]] |
+| [[M62 Kartan är relationernas yta]] | **392–394** | relationsfliken bort och redigeringen i den fulla kartan, zoomnivåerna *Neighbourhood* och *Whole container* med `d3-force` — bygger [[ADR-0082 Kartan är relationernas yta]] |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 

@@ -1,6 +1,6 @@
 # ADR-0063 Itemets karta i containerkartans form
 
-**Status:** Antagen 2026-10-18 · Ersätter fokuskartans form från issue 156 ([[M23 Mobilen och kartan]] § 156): `FocusMap` och `FocusMapNode` tas bort · Ändrar [[ADR-0061 Kartans kort och kanter]] § Konsekvenser och [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § Konsekvenser, där `FocusMap` skulle stå kvar · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ersätter fokuskartans form från issue 156 ([[M23 Mobilen och kartan]] § 156): `FocusMap` och `FocusMapNode` tas bort · Ändrar [[ADR-0061 Kartans kort och kanter]] § Konsekvenser och [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § Konsekvenser, där `FocusMap` skulle stå kvar · Relationsflikens läge *Focus* ändras av [[ADR-0082 Kartan är relationernas yta]] · [[ADR-index]]
 
 Tonys beslut 2026-10-18, efter [[M36 Kartans luft, listans ruta och sökningen]].
 

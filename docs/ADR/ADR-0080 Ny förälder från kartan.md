@@ -39,3 +39,7 @@ Kartan visar var det saknas en nivå, så det är där man vill kunna lägga til
 **Förifylla placeringen med barnets förälder.** Valdes bort. Det ger barnet två placeringar som ligger bredvid varandra.
 
 **En plusmeny på varje nod.** Valdes redan bort i [[ADR-0059 Kartan med en mitt]] och [[ADR-0063 Itemets karta i containerkartans form]].
+
+## Uppföljning 2026-11-16 — ordningen och orden
+
+Tony bestämde 2026-11-16 att raden för en ny förälder står **före** raden för ett nytt barn, och att raderna heter *Parent* och *Child* i stället för *Item above* och *Item below*. Det ändrar § 1 (*"efter Item below"*) och konsekvensen om grafens meny, som blir *Parent*, *Child* och *Relation*. Kodissuen är #1343. Brödtexten ovanför ändras inte.

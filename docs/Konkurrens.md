@@ -74,7 +74,7 @@ Lokalt markdown-valv med länkar, taggar, grafvy och ett stort pluginekosystem. 
 
 ## The Brain
 
-*Ej genomarbetad.* Kärnfrågan: The Brain är associativt — allt hänger ihop med allt, och navigeringen är grafen. Mimers är hierarkiskt (container → item, kategori med `parent_id`) med länkar som komplement. Är det en svaghet, eller är hierarkin rätt för objekt som faktiskt sitter inuti varandra?
+*Ej genomarbetad.* Kärnfrågan: The Brain är associativt — allt hänger ihop med allt, och navigeringen är grafen. Mimers är hierarkiskt (container → item, kategori med `parent_id`) med länkar som komplement. Är det en svaghet, eller är hierarkin rätt för objekt som faktiskt sitter inuti varandra? Beslutet i [[ADR-0082 Kartan är relationernas yta]] svarar *båda*: hierarkin på nivån *Focus* och det associativa på *Neighbourhood* och *Whole container*.
 
 **Vad de är bra på.**
 
