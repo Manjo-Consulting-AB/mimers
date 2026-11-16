@@ -56,6 +56,8 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Barnet ur `?child` (issue 1298), eller null: det nya itemet blir dess förälder. */
+    child: { type: Object, default: null },
     /* Kategorin ur `?category` (issue 339), eller null när ingen är vald. */
     preselected: { type: String, default: null },
     /* Itemet som just skapades med *Save and add another*: `{ulid, name}` eller null. */
@@ -95,6 +97,7 @@ const account = computed(() => {
         :accounts="accounts"
         :account="account"
         :parent="parent"
+        :child="child"
         :preselected="preselected"
         :created="created"
         :structure="structure"

@@ -194,6 +194,8 @@ return [
         'rows' => [
             // Ett child till itemet man står på.
             'item' => 'Item below',
+            // Ett nytt item som blir förälder till itemet man står på (issue 1298).
+            'parent_item' => 'Item above',
             // En `related`-länk till ett annat item.
             'relation' => 'Relation',
             // Ett dokument. Singular som övriga rader, se [[ADR-0068 Itemets sida
@@ -3589,6 +3591,9 @@ return [
             'location_root' => 'Top level',
             'location_hint' => 'Created as a child of :name',
             'location_change' => 'Change',
+            // Raden för barnet när formuläret öppnats med `?child` (issue 1298).
+            'child_above' => 'Above: :name',
+            'child_remove' => 'Remove',
 
             // Issue 340 · ADR-0068 § 10: the question when a changed form is
             // left without saving.

@@ -23,6 +23,7 @@ use App\Actions\Item\UpdateItemNotes;
 use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
 use App\Actions\Usage\CountFeatureUse;
+use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemNotesRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -47,6 +48,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ActiveContainer;
+use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Frontend\CreateTarget;
 use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
@@ -58,6 +60,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -1457,6 +1460,16 @@ class ItemController extends Controller
 
         $user = $request->user();
 
+        // `?child` (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 2):
+        // ett raderat eller okänt barn ignoreras, så en gammal länk ger ett
+        // vanligt formulär. Ett barn som finns kräver `update`, samma grind som
+        // `store()` prövar.
+        $child = $this->childForForm($request, $container);
+
+        if ($child !== null) {
+            Gate::authorize('update', $child);
+        }
+
         if ($parent !== null) {
             Gate::authorize('create', $parent);
 
@@ -1482,6 +1495,7 @@ class ItemController extends Controller
             'categories' => CategoryResource::collection($categories)->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
             'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
+            'child' => $child === null ? null : ['ulid' => $child->ulid, 'name' => $child->name],
             'preselected' => $this->defaultCategoryUlid($request, $categories),
             'created' => $this->createdItem($request),
             'structure' => $this->pickableStructure($tree->roots(), $this->abilities($user, $container, $tree)),
@@ -1694,7 +1708,7 @@ class ItemController extends Controller
      * itemet, inte tvärtom: samma riktning som `Api\ItemController::store()`
      * och samma ord som `LinkItems::normalize()` förväntar sig.
      */
-    public function store(StoreItemRequest $request, Container $container, CreateItem $createItem): RedirectResponse
+    public function store(StoreItemRequest $request, Container $container, CreateItem $createItem, ApiErrorTranslator $translator): RedirectResponse
     {
         $parent = $this->parent($container, $request->validated('parent'));
 
@@ -1702,6 +1716,14 @@ class ItemController extends Controller
             Gate::authorize('create', $parent);
         } else {
             Gate::authorize('createItem', $container);
+        }
+
+        // Barnet skrivs när kanten skapas, så grinden är `update` på det
+        // (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 4).
+        $child = $this->parent($container, $request->validated('child'));
+
+        if ($child !== null) {
+            Gate::authorize('update', $child);
         }
 
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
@@ -1718,9 +1740,17 @@ class ItemController extends Controller
         // lista betyder "inga taggar" och inte "rör dem inte" (§ Beslut 6).
         $tags = Tag::whereIn('ulid', $request->validated('tags') ?? [])->get();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'another', 'return']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child', 'another', 'return']));
 
-        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
+        // En cykel eller självlänk rullar tillbaka hela skapandet och blir ett
+        // fältfel på `child` (ADR-0080 § 5).
+        try {
+            $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child);
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages([
+                'child' => $translator->message($e),
+            ]);
+        }
 
         if ($parent !== null) {
             app(CountFeatureUse::class)->handle(Features::ITEM_CREATE_CHILD, $request->user());
@@ -1993,6 +2023,19 @@ class ItemController extends Controller
         return $parentUlid === null
             ? null
             : $container->items()->where('ulid', $parentUlid)->firstOrFail();
+    }
+
+    /**
+     * `?child` på skapandeformuläret (issue 1298): barnet slås upp i
+     * containern, och en lista, en okänd eller en raderad ULID ger null.
+     */
+    private function childForForm(Request $request, Container $container): ?Item
+    {
+        $ulid = $request->query('child');
+
+        return is_string($ulid)
+            ? $container->items()->where('ulid', $ulid)->first()
+            : null;
     }
 
     /**

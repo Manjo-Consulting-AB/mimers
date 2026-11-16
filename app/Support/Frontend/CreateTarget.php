@@ -217,6 +217,18 @@ final class CreateTarget
             ];
         }
 
+        // *Item above* (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 1
+        // och 4): ett nytt item som blir förälder till det här. Grinden är
+        // `ItemController::store()`s: `createItem` på containern, eftersom det
+        // nya itemet hamnar på toppnivån, och `update` på itemet, som skrivs
+        // när kanten skapas — samma pinne som relationsraden.
+        if ($gate->allows('update', $item) && $gate->allows('createItem', $container)) {
+            $rows[] = [
+                'key' => 'parent_item',
+                'href' => route('containers.items.create', $container, absolute: false).'?child='.$item->ulid,
+            ];
+        }
+
         // Relationen är den ENDA raden med en annan grind: en `related`-länk
         // ändrar båda itemen, och `ItemLinkController::store()` kräver
         // `update` på dem. En `create`-mottagare ser därför de andra raderna
@@ -281,7 +293,7 @@ final class CreateTarget
 
         return array_values(array_filter(
             $menu['rows'],
-            fn (array $row): bool => in_array($row['key'], ['item', 'relation'], true),
+            fn (array $row): bool => in_array($row['key'], ['item', 'parent_item', 'relation'], true),
         ));
     }
 

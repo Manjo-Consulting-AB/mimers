@@ -136,6 +136,8 @@ const props = defineProps({
     item: { type: Object, default: null },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Barnet ur `?child` (issue 1298), eller null: det nya itemet blir dess förälder. */
+    child: { type: Object, default: null },
     /* Kategorins ULID ur `?category` (issue 339), förvald vid skapandet. */
     preselected: { type: String, default: null },
     /* Itemet som just skapades med *Save and add another*: `{ulid, name}` eller null. */
@@ -213,6 +215,7 @@ const form = useForm(props.item === null
     ? {
         account: props.account,
         parent: props.parent?.ulid ?? null,
+        child: props.child?.ulid ?? null,
         ...fields,
         /* Kategorin ur `?category` efter *Save and add another* (issue 339). */
         category: props.preselected,
@@ -298,6 +301,17 @@ onBeforeUnmount(() => {
  * ritas bara en gång.
  */
 const location = ref(props.parent);
+
+/*
+ * Barnet (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 2): en rad och
+ * ingen väljare. Raden och det postade fältet töms på samma ställe.
+ */
+const aboveChild = ref(props.child);
+
+function removeChild() {
+    aboveChild.value = null;
+    form.child = null;
+}
 
 const pickerOpen = ref(false);
 const changeTrigger = ref(null);
@@ -392,6 +406,9 @@ const tagError = computed(() => {
  * det blir ett avvisat val en tyst omladdning.
  */
 const parentError = computed(() => form.errors.parent ?? null);
+
+/* Serverns fel på `child` — en cykel, eller ett barn hon inte får ändra. */
+const childError = computed(() => form.errors.child ?? null);
 
 /*
  * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
@@ -695,6 +712,34 @@ function submit() {
             >
                 {{ t('item.form.location_change') }}
             </button>
+        </div>
+
+        <!-- Barnet (issue 1298): raden under placeringsraden, med en knapp som
+             tar bort det. Felet på `child` ritas här, med id:t som
+             useErrorFocus letar efter. -->
+        <div v-if="item === null && (aboveChild || childError)" class="flex flex-col gap-1">
+            <div v-if="aboveChild" class="flex items-center justify-between gap-2">
+                <p class="text-body">{{ t('item.form.child_above', { name: aboveChild.name }) }}</p>
+
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    :aria-describedby="childError ? 'child-error' : undefined"
+                    @click="removeChild"
+                >
+                    {{ t('item.form.child_remove') }}
+                </button>
+            </div>
+
+            <p
+                v-if="childError"
+                id="child-error"
+                role="alert"
+                tabindex="-1"
+                class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+            >
+                {{ childError }}
+            </p>
         </div>
 
         <ParentPicker

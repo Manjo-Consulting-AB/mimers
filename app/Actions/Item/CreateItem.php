@@ -56,6 +56,11 @@ class CreateItem
      * @param  Collection<int, Tag>  $tags  Den önskade taggmängden.
      * @param  Item|null  $parent  Föräldern ur kroppen, redan uppslagen i
      *                             containern.
+     * @param  Item|null  $child  Itemet det nya itemet blir förälder till
+     *                            (issue 1298 · [[ADR-0080 Ny förälder från
+     *                            kartan]]), redan uppslaget och auktoriserat.
+     *                            Ett `ApiException` från länken rullar
+     *                            tillbaka hela skapandet.
      */
     public function handle(
         Container $container,
@@ -65,8 +70,9 @@ class CreateItem
         ?Category $category,
         Collection $tags,
         ?Item $parent,
+        ?Item $child = null,
     ): Item {
-        DB::transaction(function () use ($container, $account, $actor, $item, $category, $tags, $parent): void {
+        DB::transaction(function () use ($container, $account, $actor, $item, $category, $tags, $parent, $child): void {
             $item->container_id = $container->id;
             $item->category_id = $category?->id;
             $item->created_by_user_id = $actor->id;
@@ -94,6 +100,11 @@ class CreateItem
 
             if ($parent !== null) {
                 $this->linkItems->handle($parent, $item, 'parent', $actor);
+            }
+
+            // Barnets andra placeringar rörs inte: kanten bara läggs till.
+            if ($child !== null) {
+                $this->linkItems->handle($item, $child, 'parent', $actor);
             }
         });
 

@@ -149,6 +149,7 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
         fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
             ->where('create.rows', [
                 ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$item->ulid}"],
+                ['key' => 'parent_item', 'href' => "/containers/{$container->ulid}/items/create?child={$item->ulid}"],
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
                 ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
@@ -183,7 +184,7 @@ it('har raden Kostnad som leder till fliken', function () {
     $bas = "/containers/{$container->ulid}/items/{$item->ulid}";
 
     actingAs($anvandare)->get($bas)->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.rows.4', [
+        fn (AssertableInertia $page) => $page->where('create.rows.5', [
             'key' => 'cost',
             'href' => "{$bas}?tab=costs&create=1",
         ]),
@@ -212,8 +213,8 @@ it('bär den aktuella förekomsten på menyraderna som pekar på en flik', funct
     $bas = "/containers/{$container->ulid}/items/{$item->ulid}";
 
     actingAs($anvandare)->get("{$bas}?path={$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.rows.1.href', "{$bas}?path={$item->ulid}&tab=relations")
-            ->where('create.rows.2.href', "{$bas}?path={$item->ulid}&tab=attachments&create=1"),
+        fn (AssertableInertia $page) => $page->where('create.rows.2.href', "{$bas}?path={$item->ulid}&tab=relations")
+            ->where('create.rows.3.href', "{$bas}?path={$item->ulid}&tab=attachments&create=1"),
     );
 });
 
@@ -282,8 +283,9 @@ it('utelämnar en rad vars policy nekar', function () {
     plusknappGrant($container, $skrivare, 'write');
 
     actingAs($skrivare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('create.rows', 5)
-            ->where('create.rows.1.key', 'relation'),
+        fn (AssertableInertia $page) => $page->has('create.rows', 6)
+            ->where('create.rows.1.key', 'parent_item')
+            ->where('create.rows.2.key', 'relation'),
     );
 });
 
@@ -465,7 +467,7 @@ it('har en mening till varje menyrad och till knappen', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
-    foreach (['item', 'relation', 'attachment', 'schedule', 'cost'] as $rad) {
+    foreach (['item', 'parent_item', 'relation', 'attachment', 'schedule', 'cost'] as $rad) {
         expect(Lang::get("ui.create.rows.{$rad}", [], 'en'))->not->toBe(
             "ui.create.rows.{$rad}",
             "ui.create.rows.{$rad} saknas",
