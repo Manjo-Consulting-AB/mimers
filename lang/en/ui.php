@@ -1247,10 +1247,8 @@ return [
 
         'nav' => [
             'profile' => 'Profile',
-            'accounts' => 'Accounts',
-            // Issue 66a decision 1: the plan page sits after the accounts —
-            // both are about the ACCOUNT, and the plan is the answer to what it
-            // may do.
+            // Issue 66a decision 1: the plan page sits after the profile,
+            // which carries the account's name and currency since issue 398.
             'plan' => 'Plan',
             // Issue 66b decision 1: the storage page sits directly after the
             // plan — it is step 2 of the downgrade and the answer to the
@@ -1349,40 +1347,23 @@ return [
             ],
 
             'locale' => 'Language',
-            'locale_follow' => 'Follow the account language (:account)',
-            'locale_follow_plain' => 'Follow the account language',
 
             'timezone' => 'Time zone',
-            'timezone_follow' => 'Follow the account time zone (:timezone)',
-            'timezone_follow_plain' => 'Follow the account time zone',
 
             'unit_system' => 'Unit system',
-            'unit_follow' => 'Follow the account unit system (:unit)',
-            'unit_follow_plain' => 'Follow the account unit system',
 
-            'submit' => 'Save',
-        ],
-
-        'accounts' => [
-            'title' => 'Accounts',
-            'heading' => 'Accounts',
-            'intro' => 'One account at a time. The changes apply to everyone in the account.',
-
-            'roles' => [
-                'owner' => 'Owner',
-                'admin' => 'Admin',
-                'member' => 'Member',
+            // Personal account section, issue 398 · [[ADR-0085 Profilen bär
+            // personkontot]]. The name is its own field and others can see it.
+            'account' => [
+                'heading' => 'Account',
+                'name' => 'Account name',
+                'name_hint' => 'Others can see this name, for example in the list of participants.',
+                // Issue 85 · [[ADR-0037 Valutans arv]] — the currency is the
+                // bottom of the inheritance: a container without one of its
+                // own falls back on this value.
+                'currency' => 'Currency',
+                'read_only' => 'You can see the account details but not change them.',
             ],
-
-            'read_only' => 'You can see the details but not change them.',
-            'empty' => 'You are not a member of any account.',
-
-            // Issue 85 · [[ADR-0037 Valutans arv]] — the account carries the
-            // currency and is the bottom of the inheritance: a container
-            // without one of its own falls back on this value. Three letters,
-            // no list to pick from ([[ADR-0033 Produktens omfång]]), and no
-            // "follow ..." option — the account has nothing to follow.
-            'currency' => 'Currency',
 
             'submit' => 'Save',
         ],

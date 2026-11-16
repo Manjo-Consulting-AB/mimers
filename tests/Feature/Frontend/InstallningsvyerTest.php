@@ -12,7 +12,7 @@ use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 53c · Profil- och kontosidorna — vyerna och flödena. Se
- * resources/js/pages/Settings/Profile.vue, Settings/Accounts.vue,
+ * resources/js/pages/Settings/Profile.vue,
  * resources/js/components/AccountSettingsForm.vue,
  * App\Http\Controllers\Settings\ProfileController och
  * App\Http\Controllers\Settings\AccountSettingsController.
@@ -84,10 +84,10 @@ it('omdirigerar /settings till profilen', function () {
         ->assertRedirect('/settings/profile');
 });
 
-it('skickar en utloggad besökare till inloggningen från alla tre sidorna', function () {
+it('skickar en utloggad besökare till inloggningen från båda sidorna', function () {
     withoutVite();
 
-    foreach (['/settings', '/settings/profile', '/settings/accounts'] as $url) {
+    foreach (['/settings', '/settings/profile'] as $url) {
         get($url)->assertRedirect('/login');
     }
 });
@@ -158,59 +158,46 @@ it('säger att kontot har ett lösenord och om tvåfaktorn är på', function ()
 });
 
 /*
- * Parentesen i "Följ kontots språk (svenska)" kommer ur kontot — servern
- * skickar värdet, vyn hittar inte på det. Är användaren medlem i exakt ett
- * konto går värdet att avgöra; annars är `accountDefaults` null och valet
- * står utan parentes (ProfileController::accountDefaults()).
+ * ADR-0085 § 4: ett lager. Väljarna visar det GÄLLANDE värdet — användarens
+ * eget, annars kontots — och "följ kontots …" finns inte. Servern räknar ut
+ * värdet, vyn hittar inte på det.
  */
-it('skickar kontots gällande värden för följ-alternativen', function () {
+it('skickar de gällande värdena: kontots när användaren inte har egna', function () {
     withoutVite();
 
-    [$konto, $anvandare] = installningKonto('sv_SE', 'en_GB');
+    [$konto, $anvandare] = installningKonto('en_GB', null, 'owner');
 
     actingAs($anvandare)->get('/settings/profile')->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('accountDefaults.locale', 'sv_SE')
-        ->where('accountDefaults.timezone', $konto->timezone)
-        ->where('accountDefaults.unitSystem', $konto->unit_system)
+        ->where('userLocale', 'en_GB')
+        ->where('userTimezone', $konto->timezone)
+        ->where('userUnitSystem', $konto->unit_system)
+        ->missing('accountDefaults')
     );
 });
 
-it('lämnar följ-alternativet utan värde när användaren är med i flera konton', function () {
-    withoutVite();
-
-    $anvandare = User::factory()->create(['locale' => null]);
-
-    foreach ([['sv_SE', 'Europe/Stockholm', 'metric'], ['en_GB', 'Europe/Oslo', 'imperial']] as [$locale, $zon, $enhet]) {
-        Account::factory()
-            ->create(['locale' => $locale, 'timezone' => $zon, 'unit_system' => $enhet])
-            ->users()->attach($anvandare, ['role' => 'member']);
-    }
-
-    actingAs($anvandare)->get('/settings/profile')->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('accountDefaults', null)
-    );
-});
-
-it('renderar Settings/Accounts med ett kort per konto användaren är med i', function () {
+it('skickar personkontots namn, valuta och behörighet', function () {
     withoutVite();
 
     [$konto, $anvandare] = installningKonto('sv_SE', null, 'owner');
 
-    // Ett konto hon INTE är med i — det ska inte ge något kort, och det är
-    // hela skillnaden mellan listan och en öppen kontolista.
+    // Ett konto hon INTE är med i ska inte synas.
     Account::factory()->create(['name' => 'Främmande varv']);
 
-    actingAs($anvandare)->get('/settings/accounts')->assertInertia(fn (AssertableInertia $page) => $page
-        ->component('Settings/Accounts')
-        ->has('accounts', 1)
-        ->where('accounts.0.ulid', $konto->ulid)
-        ->where('accounts.0.role', 'owner')
-        ->where('accounts.0.canUpdate', true)
-        ->where('accounts.0.locale', $konto->locale)
-        ->where('accounts.0.timezone', $konto->timezone)
-        ->where('accounts.0.unitSystem', $konto->unit_system)
-        ->where('accounts', fn ($konton) => collect($konton)->doesntContain('name', 'Främmande varv'))
+    actingAs($anvandare)->get('/settings/profile')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Settings/Profile')
+        ->where('personalAccount.ulid', $konto->ulid)
+        ->where('personalAccount.name', $konto->name)
+        ->where('personalAccount.currency', $konto->currency)
+        ->where('personalAccount.canUpdate', true)
     );
+});
+
+it('ger 404 för den borttagna kontosidan, utloggad som inloggad', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = installningKonto('sv_SE', null, 'owner');
+
+    actingAs($anvandare)->get('/settings/accounts')->assertNotFound();
 });
 
 it('sparar namn, locale, timezone och unit_system', function () {
@@ -238,33 +225,27 @@ it('sparar namn, locale, timezone och unit_system', function () {
 });
 
 /*
- * Beslut 2: `null` betyder "följ kontots inställning", och det valet måste gå
- * att spara. Kolumnen är nullbar sedan issue 3 — det här är första gången
- * något skriver null i den.
+ * ADR-0085 § 4: de tre inställningarna skrivs bara till `user`, aldrig till
+ * kontot.
  */
-it('sparar null när användaren väljer att följa kontot', function () {
+it('skriver språk, tidszon och enhetssystem till user och lämnar kontot orört', function () {
     withoutVite();
 
-    $anvandare = User::factory()->create([
-        'locale' => 'en_GB',
-        'timezone' => 'Europe/Oslo',
-        'unit_system' => 'imperial',
-    ]);
+    [$konto, $anvandare] = installningKonto('sv_SE', null, 'owner');
+    $fore = $konto->only(['locale', 'timezone', 'unit_system']);
     actingAs($anvandare);
 
     from('/settings/profile')
         ->patch('/settings/profile', installningProfilKropp($anvandare, [
-            'locale' => null,
-            'timezone' => null,
-            'unit_system' => null,
+            'locale' => 'en_GB',
+            'timezone' => 'Europe/Oslo',
+            'unit_system' => 'imperial',
         ]))
         ->assertRedirect('/settings/profile');
 
-    $anvandare->refresh();
-
-    expect($anvandare->locale)->toBeNull();
-    expect($anvandare->timezone)->toBeNull();
-    expect($anvandare->unit_system)->toBeNull();
+    expect($anvandare->fresh()->only(['locale', 'timezone', 'unit_system']))
+        ->toBe(['locale' => 'en_GB', 'timezone' => 'Europe/Oslo', 'unit_system' => 'imperial']);
+    expect($konto->fresh()->only(['locale', 'timezone', 'unit_system']))->toBe($fore);
 });
 
 it('avvisar en ogiltig tidszon på fältet timezone', function () {
@@ -348,14 +329,9 @@ it('ger engelska vyer när kontot byter till en_GB och användaren saknar egen l
         ->where('locale', 'en')
     );
 
-    from('/settings/accounts')
-        ->patch("/settings/accounts/{$konto->ulid}", [
-            'name' => $konto->name,
-            'locale' => 'en_GB',
-            'timezone' => $konto->timezone,
-            'unit_system' => $konto->unit_system,
-        ])
-        ->assertRedirect('/settings/accounts');
+    // Kontot byter språk (kontosidan finns inte längre; registreringen och
+    // andra vägar skriver fortfarande kontots värden, ADR-0085 § 4).
+    $konto->update(['locale' => 'en_GB']);
 
     // `fresh()` därför att testet delar modellinstans mellan anropen: PATCH:en
     // uppdaterar en annan Account-instans än den som hänger på användarens
@@ -374,13 +350,13 @@ it('ger engelska vyer när kontot byter till en_GB och användaren saknar egen l
  * strukturella kontrollen). Här prövas att de två nya posterna finns och att
  * deras etiketter är formulerade.
  */
-it('har Profil och Konton i inställningsnavigationen', function () {
+it('har Profil men inte Konton i inställningsnavigationen', function () {
     $sektioner = File::get(resource_path('js/layouts/settingsSections.js'));
 
     expect($sektioner)->toContain("href: '/settings/profile'");
-    expect($sektioner)->toContain("href: '/settings/accounts'");
+    expect($sektioner)->not->toContain('/settings/accounts');
 
-    foreach (['profile', 'accounts'] as $nyckel) {
+    foreach (['profile'] as $nyckel) {
         expect(trans("ui.settings.nav.{$nyckel}", [], 'en'))
             ->not->toBe("ui.settings.nav.{$nyckel}", "settings.nav.{$nyckel} saknas");
     }
@@ -403,14 +379,11 @@ it('har profilens och kontots texter och läser dem ur lang/', function () {
         'settings.profile.email_change.submit',
         'settings.profile.email_change.password_first',
         'settings.profile.email_change.taken',
-        'settings.profile.locale_follow',
-        'settings.profile.locale_follow_plain',
-        'settings.profile.timezone_follow',
-        'settings.profile.unit_follow',
-        'settings.accounts.heading',
-        'settings.accounts.intro',
-        'settings.accounts.read_only',
-        'settings.accounts.empty',
+        'settings.profile.account.heading',
+        'settings.profile.account.name',
+        'settings.profile.account.name_hint',
+        'settings.profile.account.currency',
+        'settings.profile.account.read_only',
         'settings.locales.sv_SE',
         'settings.locales.en_GB',
         'settings.units.metric',
@@ -428,17 +401,13 @@ it('har profilens och kontots texter och läser dem ur lang/', function () {
         expect(trim($mening))->not->toBe('');
     }
 
-    // Texten lovar att följa kontots språk, och nämner kontot vid namn.
-    expect(trans('ui.settings.profile.locale_follow', [], 'en'))
-        ->toContain(':account');
-
-    // Vyns enda väg till text går genom t(); står nycklarna inte i filerna är
-    // de döda.
     $profil = File::get(resource_path('js/pages/Settings/Profile.vue'));
 
-    foreach (['settings.profile.locale_follow', 'settings.profile.timezone_follow', 'settings.profile.unit_follow'] as $nyckel) {
+    foreach (['settings.profile.account.name_hint', 'settings.profile.account.currency', 'settings.profile.account.read_only'] as $nyckel) {
         expect($profil)->toContain($nyckel);
     }
+
+    expect($profil)->not->toContain('_follow');
 
     // E-postformuläret bor i sin egen komponent (issue 130) och renderas av
     // profilsidan — en komponent ingen sida ritar är en yta ingen ser.
@@ -449,10 +418,4 @@ it('har profilens och kontots texter och läser dem ur lang/', function () {
     foreach (['settings.profile.email_change.heading', 'settings.profile.email_change.submit', 'settings.profile.email_change.password_first'] as $nyckel) {
         expect($epostformulär)->toContain($nyckel);
     }
-
-    $konton = File::get(resource_path('js/pages/Settings/Accounts.vue'));
-
-    expect($konton)->toContain('AccountSettingsForm');
-    expect(File::get(resource_path('js/components/AccountSettingsForm.vue')))
-        ->toContain('settings.accounts.submit');
 });

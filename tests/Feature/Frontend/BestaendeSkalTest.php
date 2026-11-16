@@ -101,9 +101,9 @@ function bestaendeSkalLed(string $kod, string $komponent): string
 }
 
 /**
- * De åtta inställningssidorna i rutan, relativa `resources/js/pages/`.
+ * De sju inställningssidorna i rutan, relativa `resources/js/pages/`.
  *
- * Kedjan `[AppLayout, SettingsLayout]` gäller dem och ingen av de tjugo andra:
+ * Kedjan `[AppLayout, SettingsLayout]` gäller dem och ingen av de andra:
  * en sida utan sektionsmeny deklarerar bara `AppLayout` (issue 274).
  *
  * @return list<string>
@@ -111,7 +111,6 @@ function bestaendeSkalLed(string $kod, string $komponent): string
 function bestaendeSkalInstallningssidor(): array
 {
     return [
-        'Settings/Accounts.vue',
         'Settings/Notifications.vue',
         'Settings/Plan.vue',
         'Settings/Profile.vue',
@@ -214,7 +213,7 @@ it('menyerna stängs vid navigering', function () {
  * Inställningarnas sidor — M31 Flytande navigering · issue 274 (#833), se
  * resources/js/layouts/SettingsLayout.vue.
  *
- * **Kedjan deklareras av sidan** (Beslut 2): var och en av de åtta sidorna får
+ * **Kedjan deklareras av sidan** (Beslut 2): var och en av de sju sidorna får
  * `defineOptions({ layout: [AppLayout, SettingsLayout] })`, och
  * `<SettingsLayout>`-taggarna försvinner ur mallen. Sidan är då rotvyn och
  * inställningarnas sidonavigering står kvar när användaren går mellan två
@@ -227,15 +226,15 @@ it('menyerna stängs vid navigering', function () {
 
 /*
  * Klart när: `inställningarnas sidor deklarerar kedjan` — var och en av de
- * åtta sidorna innehåller `layout: [AppLayout, SettingsLayout]` (Beslut 2).
+ * sju sidorna innehåller `layout: [AppLayout, SettingsLayout]` (Beslut 2).
  *
  * Listan räknas och inte bara läsas: en sida som tappas ur rutan ska falla
- * här, och antalet är issuens eget — åtta.
+ * här, och antalet är issuens eget — sju.
  */
 it('inställningarnas sidor deklarerar kedjan', function () {
     $sidor = bestaendeSkalInstallningssidor();
 
-    expect($sidor)->toHaveCount(8);
+    expect($sidor)->toHaveCount(7);
 
     foreach ($sidor as $sida) {
         expect(bestaendeSkalKod("js/pages/{$sida}"))

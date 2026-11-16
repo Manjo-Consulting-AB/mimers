@@ -25,8 +25,8 @@ use function Pest\Laravel\withoutVite;
  * anropare får: ett fältfel i webben och `currency.invalid` i API-hötjet
  * (AGENTS.md § Felformat i API:et).
  *
- * **Kontot har ingen API-yta.** `UpdateAccountSettingsRequest` används bara av
- * App\Http\Controllers\Settings\AccountSettingsController; `currency.invalid`
+ * **Kontot har ingen API-yta.** Valutan skrivs bara av
+ * `UpdateProfileRequest` på profilsidan (issue 398); `currency.invalid`
  * prövas därför på kostnaden och containern, som båda finns i `/api`.
  *
  * `ABC`, `DEM` och `XAU` är de tre fallen ADR:n namnger: en påhittad kod, en
@@ -70,24 +70,6 @@ function isoValutaKostnadskropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'EUR',
         'description' => 'Impeller',
-    ], $overrides);
-}
-
-/**
- * Kontots PATCH-kropp: de fyra obligatoriska fälten, plus valfria
- * överstyrningar.
- *
- * @param  array<string, mixed>  $overrides
- * @return array<string, mixed>
- */
-function isoValutaKontokropp(Account $konto, array $overrides = []): array
-{
-    return array_merge([
-        'name' => $konto->name,
-        'locale' => $konto->locale,
-        'timezone' => $konto->timezone,
-        'unit_system' => $konto->unit_system,
-        'currency' => $konto->currency,
     ], $overrides);
 }
 
@@ -269,8 +251,8 @@ it('avvisar ABC, DEM och XAU på kontot i webben', function () {
     actingAs($anvandare);
 
     foreach (['ABC', 'DEM', 'XAU'] as $kod) {
-        from('/settings/accounts')
-            ->patch("/settings/accounts/{$konto->ulid}", isoValutaKontokropp($konto, ['currency' => $kod]))
+        from('/settings/profile')
+            ->patch('/settings/profile', ['name' => $anvandare->name, 'account_name' => $konto->name, 'currency' => $kod])
             ->assertSessionHasErrors('currency');
     }
 
