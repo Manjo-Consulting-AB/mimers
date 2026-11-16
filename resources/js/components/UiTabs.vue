@@ -92,7 +92,9 @@ import UiBadge from './UiBadge.vue';
  * hårda stopp på `<ul>` och inte en `border-b` eller `shadow-[…]` (den senare
  * fäller YtornaTest): den aktiva fliken täcker linjen genom att nå radens
  * botten och behöver inte gå utanför raden med `-mb-px`, vilket hade klippts
- * av `overflow-x-auto` under `md:`. `<li>` är `flex` så att fliken fyller hela
+ * av `overflow-x-auto` under `md:`. De inaktiva flikarna har en egen
+ * nederkant (`border-b-border`), annars täcker deras bakgrund gradientens
+ * linje och raden tappar sin baslinje under dem. `<li>` är `flex` så att fliken fyller hela
  * radhöjden. Det förutsätter att sidan under raden är `surface`.
  *
  * Träffytan är `min-h-11` — 44 px ur issue 68a § Beslut 3.
@@ -269,11 +271,11 @@ function onKeydown(event, index) {
                 role="tab"
                 :aria-selected="isActive(tab) ? 'true' : 'false'"
                 :tabindex="isTabbable(index) ? 0 : -1"
-                class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-md border border-b-0 border-t-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-t-md border border-t-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="
                     isActive(tab)
-                        ? 'border-border border-t-accent bg-surface font-medium text-ink'
-                        : 'border-transparent bg-surface-sunken text-ink-muted hover:bg-surface-muted hover:text-ink'
+                        ? 'border-border border-b-0 border-t-accent bg-surface font-medium text-ink'
+                        : 'border-transparent border-b-border bg-surface-sunken text-ink-muted hover:bg-surface-muted hover:text-ink'
                 "
                 @keydown="onKeydown($event, index)"
             >

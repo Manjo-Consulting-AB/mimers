@@ -691,7 +691,8 @@ it('ritar flikarna som mappflikar utan att radens underkant ligger utanför rade
     $flik = flikradTaggar($mall, 'Link')[0];
 
     expect($flik)->toMatch('/\brounded-t-md\b/', 'flikarna har inga rundade övre hörn')
-        ->and($flik)->toMatch('/\bborder-b-0\b/', 'fliken har kant nedtill')
+        ->and($flik)->toMatch('/\bborder-b-0\b/', 'den aktiva fliken saknar border-b-0 och täcker inte radens underkant')
+        ->and($flik)->toMatch('/\bborder-b-border\b/', 'de inaktiva flikarna saknar egen nederkant, så radens baslinje döljs under dem')
         ->and($flik)->toMatch('/\bbg-surface\b/', 'den aktiva fliken ligger inte på surface')
         ->and($flik)->toMatch('/\bbg-surface-sunken\b/', 'de övriga flikarna ligger inte på sänkt yta')
         ->and($flik)->toMatch('/\btext-ink\b/', 'den aktiva fliken saknar text-ink')
