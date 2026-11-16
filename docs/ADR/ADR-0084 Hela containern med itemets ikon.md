@@ -1,6 +1,6 @@
 # ADR-0084 Hela containern med itemets ikon
 
-**Status:** Föreslagen 2026-11-16 · Ändrar [[ADR-0082 Kartan är relationernas yta]] § 6 (*noderna färgas efter status*, *namnen ritas först när man zoomat in*) · Bygger vidare på [[ADR-0083 Grannskapet är itemets släkt]] § 6 och [[ADR-0061 Kartans kort och kanter]] § 5 · [[ADR-index]]
+**Status:** Antagen 2026-11-16 · Ändrar [[ADR-0082 Kartan är relationernas yta]] § 6 (*noderna färgas efter status*, *namnen ritas först när man zoomat in*) · Bygger vidare på [[ADR-0083 Grannskapet är itemets släkt]] § 6 och [[ADR-0061 Kartans kort och kanter]] § 5 · [[ADR-index]]
 
 Tonys beslut 2026-11-16, efter att ha jämfört *Whole container* med en förlaga där varje nod är en rund platta med itemets ikon och namnet bredvid.
 
