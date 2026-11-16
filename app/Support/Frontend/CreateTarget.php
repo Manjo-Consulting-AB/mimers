@@ -210,14 +210,7 @@ final class CreateTarget
 
         $rows = [];
 
-        if ($gate->allows('create', $item)) {
-            $rows[] = [
-                'key' => 'item',
-                'href' => route('containers.items.create', $container, absolute: false).'?parent='.$item->ulid,
-            ];
-        }
-
-        // *Item above* (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 1
+        // *Parent* (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 1
         // och 4): ett nytt item som blir förälder till det här. Grinden är
         // `ItemController::store()`s: `createItem` på containern, eftersom det
         // nya itemet hamnar på toppnivån, och `update` på itemet, som skrivs
@@ -226,6 +219,14 @@ final class CreateTarget
             $rows[] = [
                 'key' => 'parent_item',
                 'href' => route('containers.items.create', $container, absolute: false).'?child='.$item->ulid,
+            ];
+        }
+
+        // *Child*: ett nytt item under det här.
+        if ($gate->allows('create', $item)) {
+            $rows[] = [
+                'key' => 'item',
+                'href' => route('containers.items.create', $container, absolute: false).'?parent='.$item->ulid,
             ];
         }
 

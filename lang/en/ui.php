@@ -192,10 +192,10 @@ return [
         // och slås upp som `create.pick_item`.
         'pick_item' => 'Choose item',
         'rows' => [
-            // Ett child till itemet man står på.
-            'item' => 'Item below',
             // Ett nytt item som blir förälder till itemet man står på (issue 1298).
-            'parent_item' => 'Item above',
+            'parent_item' => 'Parent',
+            // Ett child till itemet man står på.
+            'item' => 'Child',
             // En `related`-länk till ett annat item.
             'relation' => 'Relation',
             // Ett dokument. Singular som övriga rader, se [[ADR-0068 Itemets sida

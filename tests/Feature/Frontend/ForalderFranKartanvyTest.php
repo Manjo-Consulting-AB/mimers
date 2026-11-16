@@ -10,7 +10,7 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 1298 · raden *Item above* och formuläret med `?child`, se
+ * Issue 1298 · raden *Parent* och formuläret med `?child`, se
  * [[ADR-0080 Ny förälder från kartan]] § 1, 2 och 4.
  *
  * Hjälparna har prefixet `foralderVy`.
@@ -38,11 +38,11 @@ it('har raden parent_item i itemets meny och i kartans mittmeny, med ?child', fu
     $href = "/containers/{$container->ulid}/items/create?child={$item->ulid}";
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.rows.1', ['key' => 'parent_item', 'href' => $href]),
+        fn (AssertableInertia $page) => $page->where('create.rows.0', ['key' => 'parent_item', 'href' => $href]),
     );
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map&focus={$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('map.rows.1', ['key' => 'parent_item', 'href' => $href]),
+        fn (AssertableInertia $page) => $page->where('map.rows.0', ['key' => 'parent_item', 'href' => $href]),
     );
 });
 
@@ -96,5 +96,6 @@ it('ritar Above-raden med Remove och skickar child i kroppen', function () {
         ->and($skript)->toContain('form.child = null')
         ->and(vueMall('js/pages/Containers/Items/Create.vue'))->toContain(':child="child"')
         ->and(__('ui.item.form.child_above', ['name' => 'Motorn'], 'en'))->toBe('Above: Motorn')
-        ->and(__('ui.create.rows.parent_item', [], 'en'))->toBe('Item above');
+        ->and(__('ui.create.rows.parent_item', [], 'en'))->toBe('Parent')
+        ->and(__('ui.create.rows.item', [], 'en'))->toBe('Child');
 });

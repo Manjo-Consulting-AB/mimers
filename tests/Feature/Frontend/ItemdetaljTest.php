@@ -310,8 +310,8 @@ it('bär plusknappens meny med radadresser på ett item', function () {
     actingAs($anvandare)->get($bas)->assertInertia(
         fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
             ->where('create.rows', [
-                ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"],
                 ['key' => 'parent_item', 'href' => "/containers/{$container->ulid}/items/create?child={$motorn->ulid}"],
+                ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"],
                 ['key' => 'relation', 'href' => "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
                 ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],

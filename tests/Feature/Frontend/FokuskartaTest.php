@@ -314,8 +314,8 @@ it('bär den aktuella förekomsten i mittens menyrader', function () {
         ->assertInertia(
             fn (AssertableInertia $page) => $page
                 ->has('itemMap.rows', 3)
-                ->where('itemMap.rows.0.key', 'item')
-                ->where('itemMap.rows.1.key', 'parent_item')
+                ->where('itemMap.rows.0.key', 'parent_item')
+                ->where('itemMap.rows.1.key', 'item')
                 ->where('itemMap.rows.2.key', 'relation')
                 ->where('itemMap.rows.2.href', "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation")
         );
