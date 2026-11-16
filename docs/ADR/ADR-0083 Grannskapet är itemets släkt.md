@@ -1,6 +1,6 @@
 # ADR-0083 Grannskapet är itemets släkt
 
-**Status:** Föreslagen 2026-11-16 · Ändrar [[ADR-0082 Kartan är relationernas yta]] § 4 (`depth=2`), § 5 (*två steg*, *kraftbaserad*) och § 9 (`d3-force` för *Neighbourhood*) · Bygger vidare på [[ADR-0028 Åtkomst på itemnivå]] och [[ADR-0061 Kartans kort och kanter]] · [[ADR-index]]
+**Status:** Antagen 2026-11-16 · Ändrar [[ADR-0082 Kartan är relationernas yta]] § 4 (`depth=2`), § 5 (*två steg*, *kraftbaserad*) och § 9 (`d3-force` för *Neighbourhood*) · Bygger vidare på [[ADR-0028 Åtkomst på itemnivå]] och [[ADR-0061 Kartans kort och kanter]] · Noden delas med *Whole container* genom [[ADR-0084 Hela containern med itemets ikon]] · [[ADR-index]]
 
 Tonys beslut 2026-11-16, efter att ha sett nivån *Neighbourhood* byggd i [[M62 Kartan är relationernas yta]] § 393.
 
