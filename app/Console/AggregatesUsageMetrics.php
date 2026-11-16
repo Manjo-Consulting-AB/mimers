@@ -78,6 +78,15 @@ use Illuminate\Support\Facades\DB;
  * som 26b § Beslut 5 och 50b § Beslut 13): en GROUP BY per källa och dag,
  * aldrig en fråga per rad.
  *
+ * SIDVISNINGAR OCH FUNKTIONER (issue 391, ADR-0079 § 4) kommer inte ur en
+ * logg utan ur råtabellen `usage_event_daily`, som redan bär ett tal per dag,
+ * namn och plan. Jobbet läser varje dag före idag, kör SAMMA tröskel och
+ * sammanslagning, skriver till `usage_metric` (`action` = namnet) och tar bort
+ * de lästa råraderna i samma transaktion. Här är det råraderna och inte ett
+ * högvattenmärke som visar vad som återstår: en missad natt räknas i efterhand
+ * så länge råraderna finns. Finns redan rader i `usage_metric` för dagen (en
+ * sen rå rad) slås de ihop med de nya i stället för att skrivas över.
+ *
  * Schemaläggs med `Schedule::call(...)`, aldrig `Schedule::command(...)` — se
  * AGENTS.md § Subprocesser i driftmiljön. Klassen är medvetet fri från
  * Artisan-beroenden av samma skäl som App\Console\PrunesRegistrationIps, så
@@ -121,6 +130,51 @@ class AggregatesUsageMetrics
             foreach ($this->daysToCount($källa, $tabell) as $dag) {
                 $skrivna += $this->write($dag, $källa, $this->groups($tabell, $dag));
             }
+        }
+
+        foreach ([UsageMetric::SOURCE_ROUTE, UsageMetric::SOURCE_FEATURE] as $källa) {
+            $skrivna += $this->aggregateEvents($källa);
+        }
+
+        return $skrivna;
+    }
+
+    /**
+     * Flyttar råraderna för en källa före idag till `usage_metric` och tar bort
+     * dem. En dag i taget, i var sin transaktion.
+     *
+     * @return int Antal skrivna rader.
+     */
+    private function aggregateEvents(string $källa): int
+    {
+        $skrivna = 0;
+
+        $dagar = DB::table('usage_event_daily')
+            ->where('source', $källa)
+            ->where('date', '<', now()->toDateString())
+            ->distinct()
+            ->orderBy('date')
+            ->pluck('date');
+
+        foreach ($dagar as $dag) {
+            $dag = Carbon::parse((string) $dag)->toDateString();
+            $grupper = [];
+
+            $läsning = fn () => DB::table('usage_event_daily')->where('source', $källa)->whereDate('date', $dag);
+
+            foreach ($läsning()->get(['name', 'plan', 'count']) as $rad) {
+                $grupper[(string) $rad->name][(string) $rad->plan] =
+                    ($grupper[(string) $rad->name][(string) $rad->plan] ?? 0) + (int) $rad->count;
+            }
+
+            // Redan skrivna rader för dagen räknas med, så att en sen rå rad
+            // inte skriver över det som redan mätts.
+            foreach (DB::table('usage_metric')->where('source', $källa)->whereDate('date', $dag)->get(['action', 'plan', 'count']) as $rad) {
+                $grupper[(string) $rad->action][(string) $rad->plan] =
+                    ($grupper[(string) $rad->action][(string) $rad->plan] ?? 0) + (int) $rad->count;
+            }
+
+            $skrivna += $this->write($dag, $källa, $grupper, fn () => $läsning()->delete());
         }
 
         return $skrivna;
@@ -294,9 +348,10 @@ class AggregatesUsageMetrics
      * en halvskriven dag vore en dag som varken är räknad eller oräknad.
      *
      * @param  array<string, array<string, int>>  $grupper
+     * @param  ?\Closure  $efterSkrivning  Körs i samma transaktion, efter skrivningen.
      * @return int Antal skrivna rader.
      */
-    private function write(string $dag, string $källa, array $grupper): int
+    private function write(string $dag, string $källa, array $grupper, ?\Closure $efterSkrivning = null): int
     {
         $nu = now();
         $rader = [];
@@ -315,13 +370,17 @@ class AggregatesUsageMetrics
             }
         }
 
-        DB::transaction(function () use ($dag, $källa, $rader): void {
+        DB::transaction(function () use ($dag, $källa, $rader, $efterSkrivning): void {
             DB::table('usage_metric')
                 ->where('date', $dag)
                 ->where('source', $källa)
                 ->delete();
 
             DB::table('usage_metric')->insert($rader);
+
+            if ($efterSkrivning !== null) {
+                $efterSkrivning();
+            }
         });
 
         return count($rader);

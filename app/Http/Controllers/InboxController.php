@@ -10,6 +10,7 @@ use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Inbox\DeleteInboxAttachmentsRequest;
 use App\Http\Requests\Inbox\ProcessInboxAttachmentsRequest;
@@ -23,6 +24,7 @@ use App\Models\Schedule;
 use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\Features;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -175,6 +177,8 @@ class InboxController extends Controller
             throw ValidationException::withMessages(['files' => $translator->message($e)]);
         }
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_UPLOAD, $user);
+
         return back()->with('status', 'inbox-files-captured');
     }
 
@@ -217,6 +221,8 @@ class InboxController extends Controller
             new Schedule($data),
             null,
         );
+
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
         if ($request->has('return')) {
             return redirect(TaskCreateController::safeReturn($request->input('return')) ?? '/tasks')

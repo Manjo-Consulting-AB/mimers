@@ -426,7 +426,7 @@ Mätningen: anonyma summor över vad som görs, en rad per dag, källa, handling
 |---|---|---|
 | id | BIGINT UNSIGNED PK | Ingen `ulid` |
 | date | DATE | Mätdagen |
-| source | VARCHAR(20) | `audit` \| `security` — vilken av de två loggarna raden räknats ur. CHECK-villkor i databasen |
+| source | VARCHAR(20) | `audit` \| `security` \| `route` \| `feature` — vilken logg eller råkälla (`usage_event_daily`) raden räknats ur. CHECK-villkor i databasen |
 | action | VARCHAR(60) | Handlingens namn ur respektive logg, eller `other` — dit grupper under fem slås ihop, så att en enskild person inte kan pekas ut |
 | plan | VARCHAR(40) | Kontots plankod. `unknown` när kontot inte längre finns, `mixed` när en `other`-grupp slagits ihop över planerna — de två är olika fakta och får inte blandas |
 | count | INT UNSIGNED | |
@@ -435,6 +435,22 @@ Mätningen: anonyma summor över vad som görs, en rad per dag, källa, handling
 UNIQUE `(date, source, action, plan)` — det **är** idempotensen: en andra körning för samma dag skriver om mängden i stället för att lägga till.
 
 **Ingen kolumn pekar på en person, ett konto eller en container** — ingen `user_id`, ingen `account_id`, ingen `container_id`, ingen IP-adress och inget `ulid`. En rad som kan knytas till en användare vore personuppgifter med evig livslängd. Ingen främmande nyckel mot `plan`: mätningen överlever planen den räknades på, precis som loggen överlever sitt subjekt.
+
+## usage_event_daily
+
+Mellanlagringen för sidvisningar och funktionsanvändning, [[ADR-0079 Övervakning]] § 4. Nattjobbet `AggregatesUsageMetrics` flyttar gårdagens rader till `usage_metric` (tröskel fem, samma sammanslagning) och tömmer dem.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` |
+| date | DATE | Räknedagen |
+| source | VARCHAR(20) | `route` \| `feature`. CHECK-villkor i databasen |
+| name | VARCHAR(60) | Ruttnamnet, eller en konstant ur `App\Support\Usage\Features` |
+| plan | VARCHAR(40) | Planens kod, eller `guest` |
+| count | INT UNSIGNED | |
+| created_at, updated_at | | |
+
+UNIQUE `(date, source, name, plan)` — uppräkningen är en enda upsert. **Ingen kolumn pekar på en person, ett konto eller en IP-adress.**
 
 ## Behörighetsregler
 

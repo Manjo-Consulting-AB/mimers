@@ -7,6 +7,7 @@ use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
 use App\Actions\Schedule\MoveSchedule;
 use App\Actions\Schedule\UpdateSchedule;
+use App\Actions\Usage\CountFeatureUse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
@@ -15,6 +16,7 @@ use App\Http\Resources\ScheduleResource;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
+use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -107,6 +109,8 @@ class ScheduleController extends Controller
             new Schedule($request->validated()),
             $request->validated('gtd_list'),
         );
+
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate($request->validated()), $request->user());
 
         return (new ScheduleResource($schedule))
             ->response()

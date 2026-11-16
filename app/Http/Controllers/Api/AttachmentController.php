@@ -7,6 +7,7 @@ use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Inbox\SendToInbox;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
@@ -17,6 +18,7 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -98,6 +100,8 @@ class AttachmentController extends Controller
             user: $request->user(),
             account: $account,
         );
+
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_UPLOAD, $request->user());
 
         return (new AttachmentResource($attachment))
             ->response()
@@ -189,6 +193,8 @@ class AttachmentController extends Controller
 
         $moved = $moveAttachment->handle($attachment, $target, $request->user());
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_MOVE, $request->user());
+
         // Flytten returnerar den LÅSTA raden utan relationer; resursen läser
         // `storedFile` och `billedAccount`, så de laddas här i stället för ett
         // oplanerat lazy-load per svar.
@@ -222,6 +228,8 @@ class AttachmentController extends Controller
 
         $copy = $copyAttachment->handle($attachment, $target, $request->user());
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_COPY, $request->user());
+
         return (new AttachmentResource($copy))
             ->response()
             ->setStatusCode(201);
@@ -248,6 +256,8 @@ class AttachmentController extends Controller
         Gate::authorize('delete', $item);
 
         $moved = $sendToInbox->attachment($attachment, $request->user());
+
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_TO_INBOX, $request->user());
 
         $moved->loadMissing(['storedFile', 'billedAccount']);
 

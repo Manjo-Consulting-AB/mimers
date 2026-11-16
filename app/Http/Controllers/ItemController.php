@@ -22,6 +22,7 @@ use App\Actions\Item\UpdateItem;
 use App\Actions\Item\UpdateItemNotes;
 use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
+use App\Actions\Usage\CountFeatureUse;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemNotesRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -50,6 +51,7 @@ use App\Support\Frontend\CreateTarget;
 use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
+use App\Support\Usage\Features;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -689,6 +691,11 @@ class ItemController extends Controller
         // `tabs` i resources/js/pages/Containers/Items/Show.vue), så att
         // stänga av på *Documents* inte påverkar *Costs*.
         $includeChildren = $request->boolean('children', true);
+
+        // Issue 391 · ADR-0079 § 4: någon stänger av växeln.
+        if ($request->has('children') && ! $includeChildren) {
+            app(CountFeatureUse::class)->handle(Features::ITEM_INCLUDE_CHILDREN_OFF, $user);
+        }
 
         // Besöket skrivs EFTER grinden (issue 160 · [[ADR-0049 Nyligen
         // besökta]] § Beslut). Det är hela skillnaden mellan en visning och
@@ -1714,6 +1721,10 @@ class ItemController extends Controller
         $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'another', 'return']));
 
         $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
+
+        if ($parent !== null) {
+            app(CountFeatureUse::class)->handle(Features::ITEM_CREATE_CHILD, $request->user());
+        }
 
         // *Save and add another* (issue 339): ett nytt formulär med samma plats
         // och samma kategori, och en flash som säger vilket item som skapades.

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CountRouteView;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogSlowRequests;
 use App\Http\Middleware\RestrictFileOriginToDelivery;
@@ -62,6 +63,8 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
+            // Issue 391: sidvisningarna räknas i terminate, ADR-0079 § 4.
+            CountRouteView::class,
         ]);
 
         // Issue 3: last_active_at uppdateras av alla autentiserade
