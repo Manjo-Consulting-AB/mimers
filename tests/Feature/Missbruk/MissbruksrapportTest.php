@@ -129,6 +129,25 @@ function missbrukFyll(): void
     }
 
     missbrukNotis($konto, 'email', 'sent', now()->subDay());
+
+    UsageCounter::query()->where('account_id', $konto->id)->update(['metadata_bytes' => 50]);
+    $container = Container::factory()->for($konto, 'account')->create();
+    Item::factory()->for($container, 'container')->create(['created_by_account_id' => $konto->id]);
+}
+
+/**
+ * $antal items belastade på $konto, varav $slangda slängda.
+ */
+function missbrukItems(Account $konto, int $antal, int $slangda = 0): void
+{
+    $container = Container::factory()->for($konto, 'account')->create();
+
+    foreach (range(1, $antal) as $i) {
+        Item::factory()->for($container, 'container')->create([
+            'created_by_account_id' => $konto->id,
+            'deleted_at' => $i <= $slangda ? now() : null,
+        ]);
+    }
 }
 
 /**
@@ -156,10 +175,13 @@ it('handle() returnerar samtliga mätvärden med rätt nycklar även när databa
         'free_accounts_never_uploaded',
         'storage_per_free_account',
         'emails_per_account',
+        'metadata_per_free_account',
+        'items_per_free_account',
         'accounts_per_registration_ip',
         'managed_access_breadth',
         'container_clusters_per_registration_ip',
         'shared_stored_files',
+        'largest_free_accounts_by_items',
     ]);
 
     // Talen är noll och listningarna tomma arrayer — inte saknade nycklar.
@@ -167,6 +189,9 @@ it('handle() returnerar samtliga mätvärden med rätt nycklar även när databa
     expect($rapport['free_accounts_never_uploaded'])->toBe(['accounts' => 0, 'never_uploaded' => 0, 'share' => 0.0]);
     expect($rapport['storage_per_free_account'])->toBe(['accounts' => 0, 'total_bytes' => 0, 'max_bytes' => 0, 'p90_bytes' => 0, 'median_bytes' => 0]);
     expect($rapport['emails_per_account'])->toBe(['total' => 0, 'accounts' => 0, 'max' => 0, 'p90' => 0, 'median' => 0]);
+    expect($rapport['metadata_per_free_account'])->toBe(['accounts' => 0, 'total_bytes' => 0, 'max_bytes' => 0, 'p90_bytes' => 0, 'median_bytes' => 0]);
+    expect($rapport['items_per_free_account'])->toBe(['accounts' => 0, 'total_items' => 0, 'max_items' => 0, 'p90_items' => 0, 'median_items' => 0]);
+    expect($rapport['largest_free_accounts_by_items'])->toBe([]);
     expect($rapport['accounts_per_registration_ip'])->toBe([]);
     expect($rapport['managed_access_breadth'])->toBe([]);
     expect($rapport['container_clusters_per_registration_ip'])->toBe([]);
@@ -245,6 +270,71 @@ it('storage_per_free_account läser usage_counter och räknar ett konto utan rad
         'p90_bytes' => 4242,
         'median_bytes' => 0,
     ]);
+});
+
+it('metadata_per_free_account och items_per_free_account räknar rätt, slängda items med, och ett Pro-konto påverkar inte', function () {
+    $a = Account::factory()->create();
+    UsageCounter::factory()->create(['account_id' => $a->id, 'metadata_bytes' => 900]);
+    missbrukItems($a, 3, 1);
+
+    $b = Account::factory()->create();
+    UsageCounter::factory()->create(['account_id' => $b->id, 'metadata_bytes' => 100]);
+    missbrukItems($b, 1);
+
+    // Utan räknarrad och utan items: noll.
+    Account::factory()->create();
+
+    $pro = Account::factory()->create();
+    missbrukPro($pro);
+    UsageCounter::factory()->create(['account_id' => $pro->id, 'metadata_bytes' => 99999]);
+    missbrukItems($pro, 20);
+
+    $rapport = (new ReportsAbuseSignals)->handle();
+
+    // Sorterat [0, 100, 900].
+    expect($rapport['metadata_per_free_account'])->toBe([
+        'accounts' => 3, 'total_bytes' => 1000, 'max_bytes' => 900, 'p90_bytes' => 900, 'median_bytes' => 100,
+    ]);
+    // Sorterat [0, 1, 3].
+    expect($rapport['items_per_free_account'])->toBe([
+        'accounts' => 3, 'total_items' => 4, 'max_items' => 3, 'p90_items' => 3, 'median_items' => 1,
+    ]);
+});
+
+it('largest_free_accounts_by_items kapas vid listing_limit och bär varken namn eller e-post', function () {
+    config(['missbruk.listing_limit' => 2]);
+
+    $konton = collect(range(1, 3))->map(function (int $n): Account {
+        $konto = Account::factory()->create();
+        UsageCounter::factory()->create(['account_id' => $konto->id, 'metadata_bytes' => $n * 10, 'storage_bytes' => $n * 100]);
+        missbrukItems($konto, $n);
+
+        return $konto;
+    });
+    missbrukItems(Account::factory()->create(), 1);
+    $pro = Account::factory()->create();
+    missbrukPro($pro);
+    missbrukItems($pro, 9);
+
+    $nivaer = [];
+    $kontexter = [];
+    missbrukLoggar($nivaer, $kontexter);
+
+    $rapport = (new ReportsAbuseSignals)->handle();
+
+    expect($rapport['largest_free_accounts_by_items'])->toBe([
+        ['account_ulid' => $konton[2]->ulid, 'items' => 3, 'metadata_bytes' => 30, 'storage_bytes' => 300],
+        ['account_ulid' => $konton[1]->ulid, 'items' => 2, 'metadata_bytes' => 20, 'storage_bytes' => 200],
+    ]);
+
+    $signaler = array_values(array_filter($kontexter, fn (array $rad): bool => ($rad['listing'] ?? null) === 'largest_free_accounts_by_items'));
+    expect($signaler)->toHaveCount(2);
+    foreach ($signaler as $rad) {
+        expect($rad['shown'])->toBe(2);
+        expect($rad['total'])->toBe(4);
+        expect(array_keys($rad))->not->toContain('name', 'email');
+    }
+    expect(json_encode($kontexter))->not->toContain($konton[2]->email ?? 'finns-inte');
 });
 
 it('emails_per_account räknar sent inom fönstret och varken failed, suppressed, pending eller webhook', function () {
@@ -513,6 +603,7 @@ it('skriver ingenting i databasen — radantal och usage_counter.updated_at är 
         'stored_file' => DB::table('stored_file')->count(),
         'usage_counter' => DB::table('usage_counter')->count(),
         'notification_delivery' => DB::table('notification_delivery')->count(),
+        'item' => DB::table('item')->count(),
     ];
 
     $fore = $rakna();

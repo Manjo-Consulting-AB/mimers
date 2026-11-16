@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Den nattliga missbruksrapporten — se issue 50b (M9) och [[ADR-0017
- * Missbruksvektorer]] § Mätningen. Jobbet räknar fram åtta mätvärden om hur
+ * Missbruksvektorer]] § Mätningen. Jobbet räknar fram elva mätvärden om hur
  * gratisnivån används och skriver dem till loggen. Det larmar inte, spärrar
  * ingenting och skriver ingenting i databasen.
  *
@@ -70,6 +70,9 @@ use Illuminate\Support\Facades\Log;
  *     containers är delning, många konton och lika många containers är
  *     spridning.
  *
+ * Träffar på skrivbegränsningen (#1306) syns INTE i rapporten: de loggas när
+ * de händer, som `rate_limit.writes`, och läses med `grep rate_limit.writes`.
+ *
  * Schemaläggs i routes/console.php med `Schedule::call` och `->dailyAt('01:00')`,
  * aldrig `Schedule::command` — se AGENTS.md § Subprocesser i driftmiljön —
  * och klassen är medvetet fri från Artisan-beroenden av samma skäl som
@@ -84,7 +87,7 @@ class ReportsAbuseSignals
      *
      * Returvärdet finns för att testerna ska kunna påstå något om talen utan
      * att tolka loggrader (Beslut 1); loggen finns för att en människa ska
-     * kunna läsa dem. Alla åtta nycklar finns alltid med — är databasen tom är
+     * kunna läsa dem. Alla elva nycklar finns alltid med — är databasen tom är
      * talen noll och listningarna tomma arrayer, inte saknade nycklar.
      *
      * @return array{
@@ -92,10 +95,13 @@ class ReportsAbuseSignals
      *     free_accounts_never_uploaded: array{accounts: int, never_uploaded: int, share: float},
      *     storage_per_free_account: array{accounts: int, total_bytes: int, max_bytes: int, p90_bytes: int, median_bytes: int},
      *     emails_per_account: array{total: int, accounts: int, max: int, p90: int, median: int},
+     *     metadata_per_free_account: array{accounts: int, total_bytes: int, max_bytes: int, p90_bytes: int, median_bytes: int},
+     *     items_per_free_account: array{accounts: int, total_items: int, max_items: int, p90_items: int, median_items: int},
      *     accounts_per_registration_ip: list<array<string, mixed>>,
      *     managed_access_breadth: list<array<string, mixed>>,
      *     container_clusters_per_registration_ip: list<array<string, mixed>>,
      *     shared_stored_files: list<array<string, mixed>>,
+     *     largest_free_accounts_by_items: list<array{account_ulid: string, items: int, metadata_bytes: int, storage_bytes: int}>,
      * }
      */
     public function handle(): array
@@ -112,6 +118,7 @@ class ReportsAbuseSignals
             'managed_access_breadth' => $this->managedAccessBreadth(),
             'container_clusters_per_registration_ip' => $this->containerClustersPerRegistrationIp($windowStart),
             'shared_stored_files' => $this->sharedStoredFiles(),
+            'largest_free_accounts_by_items' => $this->largestFreeAccountsByItems(),
         ];
 
         $visade = [];
@@ -127,10 +134,13 @@ class ReportsAbuseSignals
             'free_accounts_never_uploaded' => $this->freeAccountsNeverUploaded(),
             'storage_per_free_account' => $this->storagePerFreeAccount(),
             'emails_per_account' => $this->emailsPerAccount($windowStart),
+            'metadata_per_free_account' => $this->metadataPerFreeAccount(),
+            'items_per_free_account' => $this->itemsPerFreeAccount(),
             'accounts_per_registration_ip' => $visade['accounts_per_registration_ip'],
             'managed_access_breadth' => $visade['managed_access_breadth'],
             'container_clusters_per_registration_ip' => $visade['container_clusters_per_registration_ip'],
             'shared_stored_files' => $visade['shared_stored_files'],
+            'largest_free_accounts_by_items' => $visade['largest_free_accounts_by_items'],
         ];
 
         $this->logReport($rapport, $windowDays, $visade, $antal);
@@ -272,6 +282,98 @@ class ReportsAbuseSignals
             'p90' => $this->percentile($perKonto, 0.90),
             'median' => $this->percentile($perKonto, 0.50),
         ];
+    }
+
+    /**
+     * Tal 5 — text per gratiskonto, läst ur `usage_counter.metadata_bytes` och
+     * aldrig ur en egen summering av textkolumnerna (ADR-0081 beslut 8), av
+     * samma skäl som tal 3 läser räknaren. Ett konto utan räknarrad är noll.
+     *
+     * @return array{accounts: int, total_bytes: int, max_bytes: int, p90_bytes: int, median_bytes: int}
+     */
+    private function metadataPerFreeAccount(): array
+    {
+        $bytes = $this->freeAccountsQuery()
+            ->leftJoin('usage_counter', 'usage_counter.account_id', '=', 'account.id')
+            ->pluck('usage_counter.metadata_bytes')
+            ->map(fn ($varde): int => (int) $varde)
+            ->sort()
+            ->values()
+            ->all();
+
+        $accounts = count($bytes);
+
+        if ($accounts === 0) {
+            return ['accounts' => 0, 'total_bytes' => 0, 'max_bytes' => 0, 'p90_bytes' => 0, 'median_bytes' => 0];
+        }
+
+        return [
+            'accounts' => $accounts,
+            'total_bytes' => array_sum($bytes),
+            'max_bytes' => $bytes[$accounts - 1],
+            'p90_bytes' => $this->percentile($bytes, 0.90),
+            'median_bytes' => $this->percentile($bytes, 0.50),
+        ];
+    }
+
+    /**
+     * Tal 6 — items per gratiskonto efter `item.billed_account_id`, slängda
+     * medräknade (de räknas mot kvoten tills de rensas). Ett gratiskonto utan
+     * items är noll. Räknas med GROUP BY i databasen.
+     *
+     * @return array{accounts: int, total_items: int, max_items: int, p90_items: int, median_items: int}
+     */
+    private function itemsPerFreeAccount(): array
+    {
+        $items = $this->freeAccountsQuery()
+            ->leftJoin('item', 'item.billed_account_id', '=', 'account.id')
+            ->groupBy('account.id')
+            ->selectRaw('account.id as account_id, COUNT(item.id) as items')
+            ->pluck('items', 'account_id')
+            ->map(fn ($antal): int => (int) $antal)
+            ->sort()
+            ->values()
+            ->all();
+
+        $accounts = count($items);
+
+        if ($accounts === 0) {
+            return ['accounts' => 0, 'total_items' => 0, 'max_items' => 0, 'p90_items' => 0, 'median_items' => 0];
+        }
+
+        return [
+            'accounts' => $accounts,
+            'total_items' => array_sum($items),
+            'max_items' => $items[$accounts - 1],
+            'p90_items' => $this->percentile($items, 0.90),
+            'median_items' => $this->percentile($items, 0.50),
+        ];
+    }
+
+    /**
+     * Listning 9 — gratiskontona med flest items (ADR-0081 beslut 8). Bara
+     * konton med minst ett item; kontot identifieras med `ulid`, aldrig namn
+     * eller e-post. Text och lagring läses ur räknaren.
+     *
+     * @return list<array{account_ulid: string, items: int, metadata_bytes: int, storage_bytes: int}>
+     */
+    private function largestFreeAccountsByItems(): array
+    {
+        return $this->freeAccountsQuery()
+            ->join('item', 'item.billed_account_id', '=', 'account.id')
+            ->leftJoin('usage_counter', 'usage_counter.account_id', '=', 'account.id')
+            ->groupBy('account.id', 'account.ulid', 'usage_counter.metadata_bytes', 'usage_counter.storage_bytes')
+            ->selectRaw('account.ulid as account_ulid, COUNT(item.id) as items, usage_counter.metadata_bytes as metadata_bytes, usage_counter.storage_bytes as storage_bytes')
+            ->orderByDesc('items')
+            ->orderBy('account.ulid')
+            ->get()
+            ->map(fn ($rad): array => [
+                'account_ulid' => (string) $rad->account_ulid,
+                'items' => (int) $rad->items,
+                'metadata_bytes' => (int) $rad->metadata_bytes,
+                'storage_bytes' => (int) $rad->storage_bytes,
+            ])
+            ->all();
     }
 
     /**
@@ -532,6 +634,8 @@ class ReportsAbuseSignals
             'free_accounts_never_uploaded' => $rapport['free_accounts_never_uploaded'],
             'storage_per_free_account' => $rapport['storage_per_free_account'],
             'emails_per_account' => $rapport['emails_per_account'],
+            'metadata_per_free_account' => $rapport['metadata_per_free_account'],
+            'items_per_free_account' => $rapport['items_per_free_account'],
         ]);
 
         foreach ($visade as $namn => $rader) {
