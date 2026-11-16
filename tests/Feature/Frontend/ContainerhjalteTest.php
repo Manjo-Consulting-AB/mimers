@@ -496,7 +496,7 @@ it('ersätter mörkläggningen med en toning och behåller den neutrala ytan', f
 it('lämnar markupen under md orörd', function () {
     $skal = hjalteKod('layouts/ContainerLayout.vue');
 
-    expect($skal)->toMatch('#<ContainerHero\b[^>]*class="hidden md:block"#s')
+    expect($skal)->toMatch('#<ContainerHero\b[^>]*class="(?=[^"]*\bhidden\b)(?=[^"]*\bmd:block\b)(?=[^"]*\bmd:mb-4\b)[^"]*"#s')
         ->and($skal)->toContain('<Teleport defer to="#shell-topbar">')
         ->and($skal)->toContain('md:hidden');
 });
