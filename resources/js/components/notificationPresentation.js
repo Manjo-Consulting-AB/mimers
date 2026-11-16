@@ -118,6 +118,9 @@ export function notificationMessage(t, notification, formatDate) {
         case 'transfer.requested':
             return t('inbox.transfer.requested', { container: payload.container });
 
+        case 'container.deleted':
+            return t('inbox.container.deleted', { container: payload.container });
+
         case 'account.inactive':
             return t('inbox.account.inactive', {
                 months: payload.months,

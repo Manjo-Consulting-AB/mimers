@@ -758,3 +758,37 @@ it('säger att tysta timmar fördröjer notisen i stället för att ta bort den'
     expect(File::get(resource_path('js/components/QuietHoursForm.vue')))
         ->toContain('notifications.quiet_hours.delays_note');
 });
+
+/*
+ * Issue 1294 · raden för `container.deleted` bär containerns namn. Notisen har
+ * `container_id = NULL`, så meningen är det enda som pekar ut containern.
+ * `t` är en liten ersättare som fyller `:namn`-platshållare ur den riktiga
+ * katalogtexten; en platshållare som aldrig fylls lämnas kvar som `:container`.
+ */
+it('visar containerns namn på raden för en raderad container', function () {
+    $mall = __('ui.inbox.container.deleted');
+
+    $skript = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const m = await import(pathToFileURL('
+            .json_encode(resource_path('js/components/notificationPresentation.js'), JSON_UNESCAPED_SLASHES).').href);',
+        'const mall = '.json_encode($mall).';',
+        "const t = (key, params = {}) => key === 'inbox.container.deleted'",
+        '  ? mall.replace(/:(\w+)/g, (hit, namn) => (namn in params ? String(params[namn]) : hit))',
+        '  : key;',
+        'const rad = m.notificationMessage(t, { type: "container.deleted", payload: { container: "Garaget", reason: "owner_deleted" } }, (d) => d);',
+        'process.stdout.write(JSON.stringify(rad));',
+    ]);
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    $rad = json_decode(implode("\n", $rader), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($rad)->toContain('Garaget');
+    expect($rad)->not->toContain(':container');
+});
