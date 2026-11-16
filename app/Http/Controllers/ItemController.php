@@ -321,11 +321,12 @@ class ItemController extends Controller
             : null;
 
         // Grannskapet (issue 393 · [[ADR-0082 Kartan är relationernas yta]]
-        // § 4, 5 och 8): bara i kartläget, med ett item som mitt och
-        // `depth=2`. Andra `depth`-värden är *Focus* och kostar ingenting.
+        // § 4 och 8, [[ADR-0083 Grannskapet är itemets släkt]] § 2): bara i
+        // kartläget, med ett item som mitt och `depth=linked`. Andra
+        // `depth`-värden, `depth=2` med, är *Focus* och kostar ingenting.
         // Kring containern är nivån inte definierad, så ett okänt `focus`
         // (mitten blev containern) ger ingen proppe heller.
-        $neighbourhood = $view === 'map' && $map['centerItem'] !== null && $request->query('depth') === '2'
+        $neighbourhood = $view === 'map' && $map['centerItem'] !== null && $request->query('depth') === 'linked'
             ? $resolveItemNeighbourhood->handle($user, $container, $map['centerItem']->ulid)
             : null;
 

@@ -23,7 +23,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * riktningen här, och relationens slag gör det inte heller.
  *
  * **Noderna är länkar.** Ett klick gör noden till mitt på samma nivå
- * (`?view=map&focus=<nod>&depth=2`), och de når med Tab. Fokus och hovring
+ * (`?view=map&focus=<nod>&depth=linked`), och de når med Tab. Fokus och hovring
  * visar namn och status. Ingen redigering och ingen plusmeny.
  *
  * **Läget `container` är nivån *Whole container*** (issue 394 · § 6): samma
@@ -154,7 +154,7 @@ const placed = computed(() => props.nodes.map((node) => ({
     isCenter: node.ulid === props.center,
     href: whole.value
         ? `/containers/${props.containerUlid}/items?view=map&focus=${node.ulid}`
-        : `/containers/${props.containerUlid}/items?view=map&focus=${node.ulid}&depth=2`,
+        : `/containers/${props.containerUlid}/items?view=map&focus=${node.ulid}&depth=linked`,
     hit: isHit(node),
     statusLabel: t(`item.graph.status.${node.status === 'overdue' ? 'overdue' : 'ok'}`),
 })));
