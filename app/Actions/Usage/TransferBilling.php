@@ -3,6 +3,7 @@
 namespace App\Actions\Usage;
 
 use App\Models\Account;
+use App\Models\Container;
 use App\Support\Usage\CountedRows;
 use App\Support\Usage\MetadataSize;
 use Illuminate\Database\Query\Builder;
@@ -39,19 +40,49 @@ class TransferBilling
      */
     public function handle(Account $account): void
     {
-        $rows = $this->foreignAttachments($account->id)
-            ->get([
-                'attachment.id',
-                'container.account_id as owner_id',
-                'stored_file.byte_size',
-            ]);
+        $this->moveAttachments($account->id, $this->foreignAttachments($account->id));
+
+        CountedRows::moveToContainerOwner($account->id);
+    }
+
+    /**
+     * Samma flytt för EN container (ADR-0081 § 4, issue 1305): kontot har
+     * förlorat sin sista giltiga åtkomst dit, så bilagorna och raderna det
+     * betalar för i just den containern får ägaren som betalare. Ingen
+     * kvotprövning, ingenting raderas. Är kontot själv ägare händer inget.
+     */
+    public function forContainer(Account $account, Container $container): void
+    {
+        if ($container->account_id === $account->id) {
+            return;
+        }
+
+        $this->moveAttachments(
+            $account->id,
+            $this->foreignAttachments($account->id)->where('container.id', $container->id),
+        );
+
+        CountedRows::moveContainerPayer($container->id, $account->id, $container->account_id);
+    }
+
+    /**
+     * Flyttar bilagorna i `$query` från `$accountId` till respektive
+     * containers ägare, med bytena.
+     */
+    private function moveAttachments(int $accountId, Builder $query): void
+    {
+        $rows = $query->get([
+            'attachment.id',
+            'container.account_id as owner_id',
+            'stored_file.byte_size',
+        ]);
 
         foreach ($rows->groupBy('owner_id') as $ownerId => $group) {
             $ownerId = (int) $ownerId;
             $bytes = (int) $group->sum('byte_size');
 
             if ($bytes > 0) {
-                (new AdjustUsage)->handle($account->id, bytesDelta: -$bytes);
+                (new AdjustUsage)->handle($accountId, bytesDelta: -$bytes);
                 (new AdjustUsage)->handle($ownerId, bytesDelta: +$bytes);
             }
 
@@ -62,8 +93,6 @@ class TransferBilling
                     'updated_at' => now(),
                 ]);
         }
-
-        CountedRows::moveToContainerOwner($account->id);
     }
 
     /**

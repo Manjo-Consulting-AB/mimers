@@ -9,6 +9,7 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,7 +33,10 @@ use Illuminate\Support\Facades\DB;
  */
 class RevokeContainerAccess
 {
-    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+    public function __construct(
+        private readonly RecordAuditEvent $recordAuditEvent,
+        private readonly ReleaseOrphanedBilling $releaseOrphanedBilling,
+    ) {}
 
     /**
      * Sätter `revoked_at` och raderar aldrig raden (issue 9b § Beslut 9).
@@ -102,7 +106,33 @@ class RevokeContainerAccess
                         'kind' => $låstAccess->kind,
                     ],
                 );
+
+                // ADR-0081 § 4 (issue 1305): var det kontots sista giltiga
+                // åtkomst flyttar betalningen till ägaren, i samma
+                // transaktion. En kvarvarande åtkomst, eller ett konto som
+                // inte betalar själv, gör flytten till en no-op.
+                foreach ($this->affectedAccounts($låstAccess) as $account) {
+                    $this->releaseOrphanedBilling->handle($account, $container);
+                }
             }
         });
+    }
+
+    /**
+     * Kontona vars åtkomst återkallelsen kan ha tagit: grantee-kontot, eller
+     * en persons personkonton.
+     *
+     * @return Collection<int, Account>
+     */
+    private function affectedAccounts(ContainerAccess $access): Collection
+    {
+        if ($access->grantee_type === 'account') {
+            return Account::query()->whereKey($access->grantee_id)->get();
+        }
+
+        return Account::query()
+            ->where('type', 'personal')
+            ->whereIn('id', DB::table('account_user')->where('user_id', $access->grantee_id)->select('account_id'))
+            ->get();
     }
 }
