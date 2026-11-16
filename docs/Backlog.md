@@ -82,6 +82,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M61 Övervakning]] | **387–391** | övervakning: felrapportering till Sentry från servern och webbläsaren, hjärtslag för schemalagda jobb och vakten för notiskön, prestandaloggen med veckosammanställningen, och sidvisningar och funktioner i den anonyma mätningen — bygger [[ADR-0079 Övervakning]] |
 | [[M62 Kartan är relationernas yta]] | **392–394** | relationsfliken bort och redigeringen i den fulla kartan, zoomnivåerna *Neighbourhood* och *Whole container* med `d3-force` — bygger [[ADR-0082 Kartan är relationernas yta]] |
 | [[M63 Itemets släkt]] | **395–397** | grannskapet utan stegräkning och ritat som ett radialt träd med ringar efter avstånd, och hela containern med samma nod — bygger [[ADR-0083 Grannskapet är itemets släkt]] och [[ADR-0084 Hela containern med itemets ikon]] |
+| [[M64 Profilen bär kontot]] | **398** | kontosidan bort, personkontots namn och valuta på profilsidan och ett lager för språk, tidszon och enhetssystem — bygger [[ADR-0085 Profilen bär personkontot]] |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 

@@ -23,7 +23,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | registration_ip | VARCHAR(45) NULL | IP:n registreringen kom från, IPv6 ryms i textform. Sätts vid registrering, nollas av `prune-registration-ips` — se [[Registerförteckning]] |
 | created_at, updated_at | | |
 
-**Vid registrering** skapas kontot av den som registrerar sig: `type` blir `personal`, `status` blir `active`, och `name` sätts till **användarens namn**, som formuläret frågar efter tillsammans med e-post och lösenord. Ett personkonto är den personen, och kontonamnet syns för andra i deltagarlistan — där vore en e-postadress en läcka snarare än en identitet. Kontot döps om i kontovyerna. Övriga fält får defaultvärden: `locale` `sv_SE`, `timezone` `Europe/Stockholm`, `unit_system` `metric`. Kontot får samtidigt en `account_user`-rad med `role` `owner` — utan den äger den nya användaren ingenting, se [[ADR-0002 Konto äger container]].
+**Vid registrering** skapas kontot av den som registrerar sig: `type` blir `personal`, `status` blir `active`, och `name` sätts till **användarens namn**, som formuläret frågar efter tillsammans med e-post och lösenord. Ett personkonto är den personen, och kontonamnet syns för andra i deltagarlistan — där vore en e-postadress en läcka snarare än en identitet. Kontot döps om på profilsidan ([[ADR-0085 Profilen bär personkontot]]). Övriga fält får defaultvärden: `locale` `sv_SE`, `timezone` `Europe/Stockholm`, `unit_system` `metric`. Kontot får samtidigt en `account_user`-rad med `role` `owner` — utan den äger den nya användaren ingenting, se [[ADR-0002 Konto äger container]].
 
 ## user
 

@@ -90,6 +90,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0082 Kartan är relationernas yta]] | Kartan är relationernas enda yta: relationsfliken utgår, relationer läggs till och knyts upp i den fulla kartans nivå *Focus*, och kartan får zoomnivåerna *Neighbourhood* (två steg, `d3-force`) och *Whole container* (läsning, högst 500 noder) från `md:` i `depth`; ny fråga med ADR-0028:s omfång | Items, kartan |
 | [[ADR-0083 Grannskapet är itemets släkt]] | *Neighbourhood* är itemets släkt: varje item som nås genom relationer i omfånget utan stegräkning, samma tak på 500 noder, ritat som ett radialt träd med synliga ringar efter kortaste avstånd, ikon och namn per nod, zoom och panorering; adressen blir `depth=linked` | Items, kartan |
 | [[ADR-0084 Hela containern med itemets ikon]] | *Whole container* ritar varje nod som *Neighbourhood*: rund platta med itemets ikon i dess färg, statusen `overdue` som en prick, tydliga namn i fast skärmstorlek, alla namn direkt under 40 noder, raka linjer enligt ADR-0061 § 5, zoomens tak sänkt från 8 till fem knappsteg (`1.25 ** 5`) | Items, kartan |
+| [[ADR-0085 Profilen bär personkontot]] | Kontosidan tas bort; profilen bär personkontots namn (eget fält, märkt som synligt för andra) och valuta; språk, tidszon och enhetssystem utan *Följ kontots …*, sparas bara till `user` med kontot som reservvärde; ingen omdirigering från `/settings/accounts`; policyn prövar kontoskrivningen; organisationskonton får egen flik när de finns | Konton, inställningar |
 
 ## Om att ändra ett beslut
 
