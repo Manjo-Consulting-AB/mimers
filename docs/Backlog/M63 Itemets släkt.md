@@ -2,11 +2,11 @@
 
 Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet. Läs dem en gång, inte per issue.
 
-Tillagd 2026-11-16, efter Tonys beslut om nivån *Neighbourhood*. Grannskapet visar itemets hela släkt i stället för två steg, och ritas som ett radialt träd med ringar efter avstånd. Beslutet och motiveringen står i [[ADR-0083 Grannskapet är itemets släkt]].
+Tillagd 2026-11-16, efter Tonys beslut om nivån *Neighbourhood*. Grannskapet visar itemets hela släkt i stället för två steg, och ritas som ett radialt träd med ringar efter avstånd. Beslutet och motiveringen står i [[ADR-0083 Grannskapet är itemets släkt]]. Samma dag beslöt Tony att *Whole container* ska rita noden likadant ([[ADR-0084 Hela containern med itemets ikon]]).
 
-Två issues: frågan, och ritningen.
+Tre issues: frågan, ritningen av grannskapet, och hela containern med samma nod.
 
-**Releasen:** en, när 395 och 396 är mergade. Issuerna skrevs direkt i GitHub (#1360, #1361) och är sammanfattade här.
+**Releasen:** en, när 395, 396 och 397 är mergade. Issuerna skrevs direkt i GitHub (#1360, #1361, #1364) och är sammanfattade här.
 
 ---
 
@@ -33,3 +33,15 @@ GitHub #1361. **Läget:** `ItemGraph.vue` lägger ut *Neighbourhood* med `d3-for
 **Klart när:** *Neighbourhood* ritas med synliga ringar och varje nod på ringen för sitt avstånd, likadant varje gång och utan `d3-force`; varje nod står i sitt ankares sektor; linjerna följer kartans och saknar spetsar; noderna visar ikon, färg och namn och mitten är markerad; panorering och zoom fungerar med mus, nyp och tangentbord; ett klick gör noden till mitt och noderna nås med Tab; `KartansZoomTest` täcker läget; hela sviten är grön.
 
 **Beror på:** 395
+
+### 397. Hela containern med itemets ikon
+
+GitHub #1364. **Läget:** `ItemGraph.vue` ritar *Whole container* som prickar färgade efter status, med namnen först från `LABEL_ZOOM`.
+
+**Lösningen:** läget `container` ritar noden med samma komponent och mått som läget `neighbourhood` från 396: en rund platta med itemets ikon i `icon_color`, mitten (`focus`) större och fylld i `accent` ([[ADR-0084 Hela containern med itemets ikon]] § 1). Status `overdue` blir en liten prick i `danger` nere till höger med en ring i `surface`; `ok` ger ingen prick (§ 2). Namnet står under noden i `ink`, halvfett, med kontur i `surface`, i fast skärmstorlek oavsett zoom och avkortat med ellips; fullt namn och status vid fokus och hovring (§ 3). Under 40 noder ritas alla namn från början, från 40 från `LABEL_ZOOM`; mitten och sökträffarna har alltid namn (§ 4). Kanterna är raka med `ItemMapEdges` färg och streckning, utan spetsar (§ 5). Zoomens tak (`MAX_ZOOM`) sänks från 8 till `1.25 ** 5`, de fem sista knappstegen bort, och gäller båda nivåerna (§ 6). `forceCollide` och länklängden växer med plattan. Servern ändras inte.
+
+**Läs:** [[ADR-0084 Hela containern med itemets ikon]], [[ADR-0083 Grannskapet är itemets släkt]] § 6, [[ADR-0082 Kartan är relationernas yta]] § 6, [[ADR-0061 Kartans kort och kanter]] § 5
+
+**Klart när:** *Whole container* visar varje nod med itemets ikon och färg, ritad av samma kod som *Neighbourhood*; ett försenat item har pricken och ett item utan försening saknar den; namnen har fast skärmstorlek och går att läsa ovanpå linjer; under 40 noder syns alla namn utan zoom, från 40 först vid `LABEL_ZOOM`, och mitten och sökträffarna har alltid namn; linjerna är raka och följer kartans streckning; noderna överlappar inte; zoomen stannar efter fem steg på `+` från normal storlek; `KartansZoomTest` täcker pricken, gränsen på 40 och taket; hela sviten är grön.
+
+**Beror på:** 396
