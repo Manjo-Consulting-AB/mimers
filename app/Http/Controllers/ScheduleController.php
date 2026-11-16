@@ -7,6 +7,7 @@ use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
 use App\Actions\Schedule\MoveSchedule;
 use App\Actions\Schedule\UpdateSchedule;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
@@ -22,6 +23,7 @@ use App\Models\Schedule;
 use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Usage\Features;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -196,6 +198,8 @@ class ScheduleController extends Controller
             new Schedule($request->validated()),
             $request->validated('gtd_list'),
         );
+
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate(array_keys($request->validated())), $request->user());
 
         if ($request->has('return')) {
             return redirect(TaskCreateController::safeReturn($request->input('return')) ?? '/tasks')

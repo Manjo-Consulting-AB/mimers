@@ -7,6 +7,7 @@ use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Inbox\SendToInbox;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
 use App\Http\Requests\TargetItemRequest;
@@ -16,6 +17,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\Features;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -121,6 +123,8 @@ class AttachmentController extends Controller
             throw ValidationException::withMessages(['file' => $translator->message($e)]);
         }
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_UPLOAD, $request->user());
+
         return back()->with('status', 'attachment-uploaded');
     }
 
@@ -197,6 +201,8 @@ class AttachmentController extends Controller
             throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
         }
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_MOVE, $request->user());
+
         return back()->with('status', 'attachment-moved');
     }
 
@@ -234,6 +240,8 @@ class AttachmentController extends Controller
             throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
         }
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_TO_INBOX, $request->user());
+
         return back()->with('status', 'attachment-in-inbox');
     }
 
@@ -269,6 +277,8 @@ class AttachmentController extends Controller
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
         }
+
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_COPY, $request->user());
 
         return back()->with('status', 'attachment-copied');
     }

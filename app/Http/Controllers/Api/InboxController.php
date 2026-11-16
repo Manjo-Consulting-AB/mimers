@@ -8,6 +8,7 @@ use App\Actions\Inbox\ProcessInboxTask;
 use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Inbox\ProcessInboxAttachmentsRequest;
@@ -19,6 +20,7 @@ use App\Http\Resources\ScheduleResource;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -147,6 +149,8 @@ class InboxController extends Controller
             );
         }
 
+        app(CountFeatureUse::class)->handle(Features::ATTACHMENT_UPLOAD, $user);
+
         return AttachmentResource::collection($created)
             ->response()
             ->setStatusCode(201);
@@ -175,6 +179,8 @@ class InboxController extends Controller
         $data['is_active'] = true;
 
         $schedule = $createSchedule->handle($inbox, $user, new Schedule($data), null);
+
+        app(CountFeatureUse::class)->handle(Features::forTaskCreate(array_keys($request->validated())), $request->user());
 
         return (new ScheduleResource($schedule))
             ->response()

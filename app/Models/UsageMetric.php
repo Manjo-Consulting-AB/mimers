@@ -41,6 +41,16 @@ class UsageMetric extends Model
     public const SOURCE_SECURITY = 'security';
 
     /**
+     * Raden är räknad ur sidvisningarna (`usage_event_daily`), issue 391.
+     */
+    public const SOURCE_ROUTE = 'route';
+
+    /**
+     * Raden är räknad ur funktionsanvändningen (`usage_event_daily`), issue 391.
+     */
+    public const SOURCE_FEATURE = 'feature';
+
+    /**
      * Samlingshandlingen för de grupper som ligger under tröskeln. En grupp
      * under fem skrivs aldrig som sig själv — den kan peka ut en person — utan
      * hamnar här, se AggregatesUsageMetrics::MIN_GROUP_SIZE.

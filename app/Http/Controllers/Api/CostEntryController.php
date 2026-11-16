@@ -6,6 +6,7 @@ use App\Actions\Cost\CreateCostEntry;
 use App\Actions\Cost\DeleteCostEntry;
 use App\Actions\Cost\ListCostSuppliers;
 use App\Actions\Cost\UpdateCostEntry;
+use App\Actions\Usage\CountFeatureUse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cost\StoreCostEntryRequest;
 use App\Http\Requests\Cost\UpdateCostEntryRequest;
@@ -13,6 +14,7 @@ use App\Http\Resources\CostEntryResource;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -102,6 +104,8 @@ class CostEntryController extends Controller
         Gate::authorize('create', $item);
 
         $cost = $createCostEntry->handle($container, $item, $request->validated(), $request->user());
+
+        app(CountFeatureUse::class)->handle(Features::COST_CREATE, $request->user());
 
         return (new CostEntryResource($cost))
             ->response()

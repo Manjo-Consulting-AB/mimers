@@ -6,6 +6,7 @@ use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\UpdateItem;
+use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexItemRequest;
@@ -16,6 +17,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -152,6 +154,10 @@ class ItemController extends Controller
         $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
 
         $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
+
+        if ($parent !== null) {
+            app(CountFeatureUse::class)->handle(Features::ITEM_CREATE_CHILD, $request->user());
+        }
 
         // $account, $category and $tags are already in hand above — set the
         // relations directly instead of letting ItemResource trigger new
