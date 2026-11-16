@@ -911,6 +911,10 @@ return [
 
         'generic' => 'Something went wrong. Try again in a moment.',
 
+        'rate_limit' => [
+            'writes_exceeded' => "You're making changes faster than we allow. Try again in :seconds seconds.",
+        ],
+
         'quota' => [
             'containers_exceeded' => 'The account has reached its limit for the number of containers (:used of :limit).',
             // Issue 55b decision 6: the two limits an invitation form can hit.

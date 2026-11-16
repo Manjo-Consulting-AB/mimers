@@ -45,4 +45,8 @@ return [
     // rader per listning i loggen.
     'listing_limit' => (int) env('ABUSE_REPORT_LISTING_LIMIT', 20),
 
+    // Skrivande anrop per användare och minut, webb och API gemensamt.
+    // ADR-0081 beslut 7; App\Http\Middleware\ThrottleWrites.
+    'write_rate_limit_per_minute' => (int) env('MISSBRUK_WRITE_RATE_LIMIT_PER_MINUTE', 120),
+
 ];

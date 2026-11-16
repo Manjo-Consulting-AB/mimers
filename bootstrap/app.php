@@ -7,6 +7,7 @@ use App\Http\Middleware\RestrictFileOriginToDelivery;
 use App\Http\Middleware\ScrubSentryEvent;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\SetSecurityHeaders;
+use App\Http\Middleware\ThrottleWrites;
 use App\Http\Middleware\UpdateLastActiveAt;
 use App\Support\Api\ApiError;
 use App\Support\Api\ValidationErrorMapper;
@@ -65,6 +66,8 @@ return Application::configure(basePath: dirname(__DIR__))
             RestrictFileOriginToDelivery::class,
             // Issue 391: sidvisningarna räknas i terminate, ADR-0079 § 4.
             CountRouteView::class,
+            // Issue 1306: skrivtaket, ADR-0081 beslut 7. Sist i båda grupperna.
+            ThrottleWrites::class,
         ]);
 
         // Issue 3: last_active_at uppdateras av alla autentiserade
@@ -72,6 +75,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(append: [
             UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
+            ThrottleWrites::class,
         ]);
 
         // Issue 4: appen körs bakom LiteSpeed hos inleed, se
