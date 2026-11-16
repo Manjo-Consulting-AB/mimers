@@ -313,10 +313,11 @@ it('bär den aktuella förekomsten i mittens menyrader', function () {
         ->assertOk()
         ->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->has('itemMap.rows', 2)
+                ->has('itemMap.rows', 3)
                 ->where('itemMap.rows.0.key', 'item')
-                ->where('itemMap.rows.1.key', 'relation')
-                ->where('itemMap.rows.1.href', "{$bas}?path={$förekomst}&tab=relations")
+                ->where('itemMap.rows.1.key', 'parent_item')
+                ->where('itemMap.rows.2.key', 'relation')
+                ->where('itemMap.rows.2.href', "{$bas}?path={$förekomst}&tab=relations")
         );
 });
 

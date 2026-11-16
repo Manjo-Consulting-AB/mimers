@@ -131,6 +131,17 @@ class ItemController extends Controller
             Gate::authorize('createItem', $container);
         }
 
+        $childUlid = $request->validated('child');
+
+        $child = $childUlid !== null
+            ? $container->items()->where('ulid', $childUlid)->firstOrFail()
+            : null;
+
+        // Barnet skrivs när kanten skapas (issue 1298 · ADR-0080 § 4).
+        if ($child !== null) {
+            Gate::authorize('update', $child);
+        }
+
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
         if (! $account->users()->whereKey($request->user()->id)->exists()) {
@@ -151,9 +162,9 @@ class ItemController extends Controller
             ? Tag::whereIn('ulid', $request->validated('tags'))->get()
             : collect();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child']));
 
-        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
+        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child);
 
         if ($parent !== null) {
             app(CountFeatureUse::class)->handle(Features::ITEM_CREATE_CHILD, $request->user());

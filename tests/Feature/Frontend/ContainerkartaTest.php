@@ -455,10 +455,11 @@ it('skickar mittens menyrader och inga rader kring containern', function () {
     actingAs($anvandare)->get(kartavyUrl($container, "view=map&focus={$motorn->ulid}"))
         ->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->has('map.rows', 2)
+                ->has('map.rows', 3)
                 ->where('map.rows.0.key', 'item')
-                ->where('map.rows.1.key', 'relation')
-                ->where('map.rows.1.href', "/containers/{$container->ulid}/items/{$motorn->ulid}?tab=relations")
+                ->where('map.rows.1.key', 'parent_item')
+                ->where('map.rows.2.key', 'relation')
+                ->where('map.rows.2.href', "/containers/{$container->ulid}/items/{$motorn->ulid}?tab=relations")
         );
 });
 

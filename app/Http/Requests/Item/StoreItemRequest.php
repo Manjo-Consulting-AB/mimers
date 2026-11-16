@@ -122,6 +122,16 @@ class StoreItemRequest extends FormRequest
                     fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
                 ),
             ],
+            // `child` (issue 1298 · [[ADR-0080 Ny förälder från kartan]] § 2):
+            // itemet som det nya itemet blir förälder till. Samma regel som
+            // `parent`: i containern och inte mjukraderat.
+            'child' => [
+                'nullable',
+                'string',
+                Rule::exists('item', 'ulid')->where(
+                    fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
+                ),
+            ],
             'tags' => ['sometimes', 'array'],
             'tags.*' => ['string', Rule::in($validTagUlids)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
