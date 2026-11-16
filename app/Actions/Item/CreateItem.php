@@ -10,6 +10,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -79,7 +80,7 @@ class CreateItem
             $item->created_by_account_id = $account->id;
             // Betalaren är det agerande kontot (ADR-0081 § 3), samma som författaren.
             $item->billed_account_id = $account->id;
-            $item->save();
+            MetadataLedger::save($item);
 
             // Först itemet, sedan det som hänger på det: listan sorterar
             // nyaste raden först, så itemets egen rad hamnar underst av de

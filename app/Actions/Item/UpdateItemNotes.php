@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditEvent;
 use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -53,7 +54,7 @@ class UpdateItemNotes
                 return;
             }
 
-            $item->save();
+            MetadataLedger::save($item);
 
             if ($this->continuesSession($item, $actor)) {
                 return;

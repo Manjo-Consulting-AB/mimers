@@ -10,6 +10,7 @@ use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Cost\MinorUnits;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -84,7 +85,7 @@ class CreateCostEntry
         $cost->billed_account_id = $cost->created_by_account_id;
 
         DB::transaction(function () use ($cost, $item, $actor): void {
-            $cost->save();
+            MetadataLedger::save($cost);
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_COST_ENTRY_CREATED,

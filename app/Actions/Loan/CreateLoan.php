@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
@@ -60,7 +61,7 @@ class CreateLoan
 
             $loan->item_id = $lockedItem->id;
             $loan->billed_account_id = Payer::idFor($actor, $lockedItem->container);
-            $loan->save();
+            MetadataLedger::save($loan);
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_LOAN_CREATED,

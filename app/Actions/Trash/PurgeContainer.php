@@ -11,6 +11,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -183,6 +184,11 @@ class PurgeContainer
             if ($raderade === 0) {
                 return;
             }
+
+            // Containerradens egen text minskar ägarens räknare (issue 1302):
+            // raderna i containern har redan gått genom PurgeContent ovan,
+            // och betalaren för själva containern är alltid ägaren.
+            MetadataLedger::release($rad);
 
             if ($varLevande) {
                 (new AdjustUsage)->handle($accountId, containersDelta: -1);

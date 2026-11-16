@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -100,6 +101,7 @@ class ReopenOccurrence
             if ($removed !== null) {
                 $this->moveDependencies($removed, $locked);
 
+                MetadataLedger::release($removed);
                 $removed->delete();
             }
 
@@ -109,7 +111,7 @@ class ReopenOccurrence
             $locked->completed_by_account_id = null;
             $locked->completion_note = null;
             $locked->billed_account_id = null;
-            $locked->save();
+            MetadataLedger::save($locked);
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_SCHEDULE_OCCURRENCE_REOPENED,

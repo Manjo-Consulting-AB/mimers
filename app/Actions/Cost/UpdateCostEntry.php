@@ -8,6 +8,7 @@ use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Cost\MinorUnits;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -80,7 +81,7 @@ class UpdateCostEntry
         $meta = $this->metaFor($cost);
 
         DB::transaction(function () use ($cost, $item, $actor, $meta): void {
-            $cost->save();
+            MetadataLedger::save($cost);
 
             if ($meta === null) {
                 return;

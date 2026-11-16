@@ -5,6 +5,7 @@ namespace App\Actions\Inbox;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -97,7 +98,7 @@ class ResolveInbox
         $container = new Container(['name' => 'Inbox']);
         $container->account_id = $this->personalAccountId($user);
         $container->inbox_user_id = $user->id;
-        $container->save();
+        MetadataLedger::save($container);
 
         return $container;
     }
@@ -109,7 +110,7 @@ class ResolveInbox
         $item->created_by_user_id = $user->id;
         $item->created_by_account_id = $container->account_id;
         $item->billed_account_id = $container->account_id;
-        $item->save();
+        MetadataLedger::save($item);
 
         return $item;
     }

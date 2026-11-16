@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -63,7 +64,7 @@ class UpdateTag
         $meta = $this->metaFor($tag);
 
         DB::transaction(function () use ($container, $tag, $actor, $meta): void {
-            $tag->save();
+            MetadataLedger::save($tag);
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(
