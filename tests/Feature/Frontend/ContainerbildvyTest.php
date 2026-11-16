@@ -772,7 +772,7 @@ it('lämnar toppraden under md: oförändrad när hjälten ritas', function () {
 
     // Hjälten är dold under `md:`, och namnraden den ersätter gäller bara
     // över brytpunkten — samma `hidden ... md:block` som förut.
-    expect($vy)->toContain('class="hidden md:block"');
+    expect($vy)->toMatch('#<ContainerHero\b[^>]*class="(?=[^"]*\bhidden\b)(?=[^"]*\bmd:block\b)[^"]*"#s');
 
     // Toppraden: teleporten, tillbakaknappen, bilden, namnet och pennan.
     // Sedan issue 275 ritas markupen av `ContainerLayout` och teleporteras in

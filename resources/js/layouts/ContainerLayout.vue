@@ -284,7 +284,7 @@ const tabs = computed(() =>
             -->
             <ContainerHero
                 v-if="hero"
-                class="hidden md:block"
+                class="hidden md:mb-4 md:block"
                 :hero="hero"
                 :container="container"
             />
