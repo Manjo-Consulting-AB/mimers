@@ -22,8 +22,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Staplarna är dekorativa och dolda för skärmläsaren.** En bildbeskrivning
  * av ett stapeldiagram är inget någon kan formulera ur data, så tabellen
  * under grafen bär samma sak som text — dag och antal, i serverns ordning —
- * och den är `sr-only`: siffrorna står i grafen för den som ser, och i
- * tabellen för den som inte gör det.
+ * och den ligger i ett `sr-only`-omslag (inte på `<table>` själv, för en
+ * `caption` klipps inte av en tabells `sr-only` och skulle synas en gång till):
+ * siffrorna står i grafen för den som ser, och i tabellen för den som inte
+ * gör det.
  *
  * **Etiketterna glesas ut.** Trettio dagar ger trettio staplar, och ett
  * datumetikett är bredare än en stapel; var `labelStep`:te stapel får därför
@@ -130,20 +132,22 @@ const chart = computed(() => {
         </svg>
 
         <!-- Grafens text: varje dag och dess antal, i serverns ordning. -->
-        <table class="sr-only">
-            <caption>{{ t('audit.history.activity_over_time') }}</caption>
-            <thead>
-                <tr>
-                    <th scope="col">{{ t('audit.history.chart_date') }}</th>
-                    <th scope="col">{{ t('audit.history.chart_events') }}</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="bar in chart.bars" :key="bar.date">
-                    <td>{{ bar.label }}</td>
-                    <td>{{ bar.count }}</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="sr-only">
+            <table>
+                <caption>{{ t('audit.history.activity_over_time') }}</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">{{ t('audit.history.chart_date') }}</th>
+                        <th scope="col">{{ t('audit.history.chart_events') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="bar in chart.bars" :key="bar.date">
+                        <td>{{ bar.label }}</td>
+                        <td>{{ bar.count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </template>
