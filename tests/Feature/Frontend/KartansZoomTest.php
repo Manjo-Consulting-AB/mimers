@@ -31,7 +31,7 @@ it('ritar växeln och grafen bara från md:', function () {
     $sidan = kartanszoomKod('pages/Containers/Items/Index.vue');
 
     expect($vaxeln)->toContain('class="hidden md:block"')
-        ->and($grafen)->toContain('class="hidden h-[32rem] w-full rounded-card border border-border bg-surface md:block"');
+        ->and($grafen)->toContain('class="hidden h-[32rem] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"');
 
     // Under `md:` är kartan Focus: den ritas, grafen inte, och växeln saknas.
     expect($sidan)->toContain("showGraph || showWhole ? 'md:hidden' : ''")
@@ -53,7 +53,7 @@ it('lägger nivån i adressen och bara Focus utan depth', function () {
     expect($grafen)->toContain('?view=map&focus=${node.ulid}&depth=linked');
 });
 
-it('har d3-force och inget annat nytt paket', function () {
+it('har d3-force för Whole container och inget annat nytt paket', function () {
     $paket = json_decode(File::get(base_path('package.json')), true);
 
     expect($paket['dependencies']['d3-force'] ?? null)->not->toBeNull();
@@ -74,6 +74,7 @@ it('har d3-force och inget annat nytt paket', function () {
         '@inertiajs/vue3',
         'd3-force',
         '../composables/useTranslations.js',
+        './itemIconPresentation.js',
     ]);
 });
 
@@ -143,7 +144,7 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
     // Mus, nyp, knappar och tangentbord.
-    expect($grafen)->toContain('@wheel="whole && onWheel($event)"')
+    expect($grafen)->toContain('@wheel="onWheel($event)"')
         ->toContain('event.preventDefault()')
         ->toContain('@pointerdown')
         ->toContain('@pointermove')
@@ -152,7 +153,7 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
         ->toContain('zoomButton(1 / 1.25)')
         ->toContain('@keydown')
         ->toContain('ArrowLeft')
-        ->toContain(':tabindex="whole ? 0 : undefined"');
+        ->toContain(':tabindex="0"');
 
     // Namnen först över en zoomnivå; noderna färgas efter status.
     expect($grafen)->toContain('const showNames = computed(() => view.value.k >= LABEL_ZOOM)')
@@ -178,7 +179,7 @@ it('ritar hela containern med panorering, zoom, namn först inzoomat och söktr�
 it('ritar en mening vid truncated och nämner inget antal', function () {
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
-    expect($grafen)->toContain('v-if="whole && truncated"')
+    expect($grafen)->toContain('v-if="truncated"')
         ->toContain("t('item.graph.truncated')");
 
     $mening = Lang::get('ui.item.graph.truncated', [], 'en');
@@ -186,4 +187,97 @@ it('ritar en mening vid truncated och nämner inget antal', function () {
     expect($mening)->not->toBe('ui.item.graph.truncated')
         ->and($mening)->not->toMatch('/\d/')
         ->and($mening)->not->toContain(':');
+});
+
+/** Texten i en namngiven funktion i ItemGraph.vue, till nästa funktion på översta nivån. */
+function kartanszoomFunktion(string $namn): string
+{
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+    $start = strpos($grafen, "function {$namn}(");
+
+    expect($start)->not->toBeFalse();
+
+    preg_match('~^\}~m', substr($grafen, (int) $start), $slut, PREG_OFFSET_CAPTURE);
+
+    return substr($grafen, (int) $start, $slut[0][1] + 1);
+}
+
+it('lägger Neighbourhood ut radiellt utan simulering, och ritar ringarna (issue 396)', function () {
+    $radiellt = kartanszoomFunktion('radialLayout');
+
+    foreach (['forceSimulation', 'forceLink', 'forceManyBody', 'forceCollide', 'Math.random', 'Date', 'performance'] as $forbjudet) {
+        expect($radiellt)->not->toContain($forbjudet);
+    }
+
+    // Ringens radie växer med antalet noder och är aldrig mindre än föregående plus ett avstånd.
+    expect($radiellt)->toContain('radii[ring - 1] + RING_GAP')
+        ->toContain('perRing.get(ring)');
+
+    // Kraftlayouten är kvar för Whole container, och bara där.
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect(kartanszoomFunktion('forceLayout'))->toContain('forceSimulation(simNodes)')
+        ->and($grafen)->toContain('whole.value ? forceLayout() : radial.value.positions');
+
+    // Ringarna ritas under kanterna i en dämpad token.
+    expect($grafen)->toContain('data-item-graph-rings')
+        ->toContain('v-for="(radius, index) in rings"')
+        ->toContain('stroke="var(--color-border)"');
+
+    expect(strpos($grafen, 'data-item-graph-rings'))->toBeLessThan((int) strpos($grafen, 'v-for="line in lines"'));
+});
+
+it('förankrar varje nod i första grannen på ringen innanför utan att läsa kantens slag (issue 396)', function () {
+    $radiellt = kartanszoomFunktion('radialLayout');
+
+    expect($radiellt)->toContain('ringOf(other) === ringOf(node.ulid) - 1')
+        ->toContain('order.get(a) - order.get(b)')
+        ->toContain('children.get(inner[0] ?? root).push(node.ulid)')
+        ->toContain('weight.get(child)');
+
+    // Ankaret ser aldrig `kind`; det gör bara kantens ritning.
+    expect($radiellt)->not->toContain('kind')
+        ->and($radiellt)->not->toContain('parent');
+});
+
+it('ritar kanter inom en ring som bågar och mellan ringar som raka linjer (issue 396)', function () {
+    $linje = kartanszoomFunktion('pathBetween');
+
+    expect($linje)->toContain('L ${to.x} ${to.y}')
+        ->toContain('Q ');
+
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->not->toContain('<line');
+});
+
+it('ritar noderna som ikon i icon_color med namnet under och mitten i accent (issue 396)', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->toContain('loadIcon(name)')
+        ->toContain('TONE_CLASS[node.icon_color]')
+        ->toContain('text-tint-violet')
+        ->toContain("node.isCenter ? 'var(--color-accent)' : 'var(--color-border)'")
+        ->toContain('node.short')
+        ->toContain('…');
+});
+
+it('delar panoreringen och zoomen mellan lägena, och vyn börjar inpassad (issue 396)', function () {
+    $grafen = kartanszoomKod('components/ItemGraph.vue');
+
+    expect($grafen)->not->toContain('whole && onWheel')
+        ->not->toContain('whole && onPointer')
+        ->not->toContain('whole && onKeydown')
+        ->not->toContain('<div v-if="whole" class="absolute right-3')
+        ->toContain('<div class="absolute right-3')
+        ->toContain('const reach = rings.value[rings.value.length - 1] + pad');
+
+    // Namnen visas från samma zoomnivå i båda lägena.
+    expect($grafen)->toContain('(showNames || node.hit || node.isCenter) && node.ulid !== active')
+        ->not->toContain('<g v-if="whole" aria-hidden="true" class="pointer-events-none">');
+});
+
+it('ritar den nya etiketten ur ui.php (issue 396)', function () {
+    expect(Lang::get('ui.item.graph.label', ['name' => 'X'], 'en'))->not->toContain('two steps')
+        ->and(Lang::get('ui.item.graph.label', ['name' => 'X'], 'en'))->toContain('X');
 });

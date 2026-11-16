@@ -1,22 +1,32 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, shallowReactive, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY } from 'd3-force';
 import { useTranslations } from '../composables/useTranslations.js';
+import { loadIcon } from './itemIconPresentation.js';
 
 /*
  * Kartans nivå *Neighbourhood* — se issue 393 · [[ADR-0082 Kartan är
  * relationernas yta]] § 5 och 9.
  *
- * **Layouten räknas här och ritas som SVG.** `d3-force` (bara det paketet)
- * flyttar noderna, och sidan ritar dem med designsystemets token, så att
+ * **Layouten räknas här och ritas som SVG** med designsystemets token, så att
  * mörkt läge byter färgerna på samma ställe som resten av ytan.
  *
- * **Samma grannskap ritas likadant varje gång.** Startpositionerna följer
- * nodernas ordning — serverns namnordning — på en spiral, mitten ligger fast
- * i origo, slumptalskällan är en fast följd och simuleringen körs ett fast
- * antal steg på en gång i stället för i animation. Ingen `Math.random()` och
- * ingen tidtagning ingår, så två besök ger samma bild.
+ * **Läget `neighbourhood` är ett radialt träd** (issue 396 · [[ADR-0083
+ * Grannskapet är itemets släkt]] § 4–7), räknat utan simulering. Mitten står
+ * i origo och varje nod på ringen ur sin `ring`. Varje nod är förankrad i den
+ * första av sina grannar på ringen innanför (serverns namnordning) — ankaret
+ * är ett layoutbegrepp och läser aldrig kanternas `kind` — och får en
+ * vinkelsektor i proportion till antalet noder förankrade i den. Övriga
+ * grannar på ringen innanför ritas som längre linjer. Ringarna ritas som
+ * breda, dämpade cirklar under kanterna. Noden är itemets ikon i `icon_color`
+ * med namnet under; mitten har en ring i `accent`. Samma svar ger samma bild:
+ * ingen slump och ingen tid.
+ *
+ * **Läget `container` använder `d3-force`** (bara det paketet). Startpositionerna
+ * följer nodernas ordning på en spiral, mitten ligger fast i origo,
+ * slumptalskällan är en fast följd och simuleringen körs ett fast antal steg på
+ * en gång. Ingen `Math.random()` och ingen tidtagning ingår.
  *
  * **Linjerna följer `ItemMapEdges`:** heldragna till föräldrar och barn och
  * streckade till de relaterade, utan spetsar — placeringen säger inte
@@ -27,13 +37,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * visar namn och status. Ingen redigering och ingen plusmeny.
  *
  * **Läget `container` är nivån *Whole container*** (issue 394 · § 6): samma
- * layout och samma linjer över hela containern, bara att läsa. Bilden
- * panoreras med dra eller piltangenterna och zoomas med hjul, nyp, knapparna
+ * linjer över hela containern, bara att läsa. **Panoreringen och zoomen gäller
+ * båda lägena** (issue 396 · § 7). Bilden panoreras med dra eller piltangenterna och zoomas med hjul, nyp, knapparna
  * `+` och `−` eller tangenterna `+` och `−`. Noderna färgas efter status och
  * namnen ritas först över en zoomnivå. `center` markerar `focus` och vyn börjar
  * centrerad på det; sökningen (`query`) tänder träffarna och tonar ned resten
  * utan att gömma något. Ett klick går till *Focus* med noden som mitt. Med
- * `truncated` ritas en mening i stället för grafen, utan något antal.
+ * `truncated` ritas en mening i stället för grafen, i båda lägena, utan något antal.
  */
 const props = defineProps({
     /* `{ulid, name, icon, icon_color, status}` i namnordning. */
@@ -70,8 +80,8 @@ function seeded() {
     };
 }
 
-/* Layouten: ulid → `{x, y}`, räknad en gång per grannskap. */
-const layout = computed(() => {
+/* Kraftlayouten för läget `container`: ulid → `{x, y}`. */
+function forceLayout() {
     const golden = Math.PI * (3 - Math.sqrt(5));
 
     const simNodes = props.nodes.map((node, index) => {
@@ -97,9 +107,7 @@ const layout = computed(() => {
 
     // Hela containern har inget fast mitt: en svag dragning mot origo håller
     // ihop de fristående noderna.
-    if (whole.value) {
-        simulation.force('x', forceX(0).strength(0.04)).force('y', forceY(0).strength(0.04));
-    }
+    simulation.force('x', forceX(0).strength(0.04)).force('y', forceY(0).strength(0.04));
 
     simulation.stop();
 
@@ -112,7 +120,106 @@ const layout = computed(() => {
     }
 
     return positions;
-});
+}
+
+
+const RING_GAP = 120;
+const NODE_SPACING = 96;
+
+/*
+ * Den radiala layouten för läget `neighbourhood`: ulid → `{x, y}` plus
+ * ringarnas radier. Ren beräkning; `nodes` är i namnordning och ordningen ger
+ * både ankaret och sektorernas följd.
+ */
+function radialLayout() {
+    const order = new Map(props.nodes.map((node, index) => [node.ulid, index]));
+    const ringOf = (ulid) => props.nodes[order.get(ulid)].ring ?? 0;
+
+    const neighbours = new Map(props.nodes.map((node) => [node.ulid, []]));
+
+    for (const edge of props.edges) {
+        if (order.has(edge.from) && order.has(edge.to)) {
+            neighbours.get(edge.from).push(edge.to);
+            neighbours.get(edge.to).push(edge.from);
+        }
+    }
+
+    // Ankaret: den första grannen på ringen innanför, utan hänsyn till kantens slag.
+    const children = new Map(props.nodes.map((node) => [node.ulid, []]));
+    let root = props.center && order.has(props.center) ? props.center : null;
+
+    for (const node of props.nodes) {
+        if (node.ulid === root || ringOf(node.ulid) === 0) {
+            root ??= node.ulid;
+
+            continue;
+        }
+
+        const inner = neighbours.get(node.ulid)
+            .filter((other) => ringOf(other) === ringOf(node.ulid) - 1)
+            .sort((a, b) => order.get(a) - order.get(b));
+
+        if (root !== null) {
+            children.get(inner[0] ?? root).push(node.ulid);
+        }
+    }
+
+    const weight = new Map();
+
+    function weigh(ulid) {
+        const total = children.get(ulid).reduce((sum, child) => sum + weigh(child), 1);
+
+        weight.set(ulid, total);
+
+        return total;
+    }
+
+    const perRing = new Map();
+
+    for (const node of props.nodes) {
+        perRing.set(ringOf(node.ulid), (perRing.get(ringOf(node.ulid)) ?? 0) + 1);
+    }
+
+    const radii = [0];
+
+    for (let ring = 1; ring <= Math.max(0, ...perRing.keys()); ring++) {
+        radii[ring] = Math.max(radii[ring - 1] + RING_GAP, ((perRing.get(ring) ?? 0) * NODE_SPACING) / (2 * Math.PI));
+    }
+
+    const positions = {};
+
+    if (root === null) {
+        return { positions, radii };
+    }
+
+    weigh(root);
+    positions[root] = { x: 0, y: 0 };
+
+    function spread(ulid, from, to) {
+        let start = from;
+
+        for (const child of children.get(ulid)) {
+            const end = start + ((to - from) * weight.get(child)) / (weight.get(ulid) - 1);
+            const angle = (start + end) / 2;
+
+            positions[child] = { x: radii[ringOf(child)] * Math.cos(angle), y: radii[ringOf(child)] * Math.sin(angle) };
+
+            spread(child, start, end);
+            start = end;
+        }
+    }
+
+    spread(root, -Math.PI / 2, (3 * Math.PI) / 2);
+
+    return { positions, radii };
+}
+
+const radial = computed(() => (whole.value ? { positions: {}, radii: [0] } : radialLayout()));
+
+const rings = computed(() => radial.value.radii.slice(1));
+
+/* Layouten: ulid → `{x, y}`, räknad en gång per grannskap. */
+const layout = computed(() => (whole.value ? forceLayout() : radial.value.positions));
 
 const viewBox = computed(() => {
     const points = Object.values(layout.value);
@@ -120,6 +227,13 @@ const viewBox = computed(() => {
 
     if (points.length === 0) {
         return '0 0 1 1';
+    }
+
+    // Släkten ligger runt origo: en kvadrat kring yttersta ringen visar allt.
+    if (!whole.value) {
+        const reach = rings.value[rings.value.length - 1] + pad;
+
+        return `${-reach} ${-reach} ${2 * reach} ${2 * reach}`;
     }
 
     const xs = points.map((point) => point.x);
@@ -130,14 +244,24 @@ const viewBox = computed(() => {
     return `${minX} ${minY} ${Math.max(...xs) + pad - minX} ${Math.max(...ys) + pad - minY}`;
 });
 
+/* Kanter mellan ringar är raka; inom en ring är de en båge utåt. */
+function pathBetween(from, to) {
+    const straight = `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+
+    if (whole.value || Math.hypot(from.x, from.y).toFixed(3) !== Math.hypot(to.x, to.y).toFixed(3)) {
+        return straight;
+    }
+
+    const bulge = 1.35;
+
+    return `M ${from.x} ${from.y} Q ${((from.x + to.x) / 2) * bulge} ${((from.y + to.y) / 2) * bulge} ${to.x} ${to.y}`;
+}
+
 const lines = computed(() => props.edges
     .filter((edge) => layout.value[edge.from] && layout.value[edge.to])
     .map((edge) => ({
         key: `${edge.kind}:${edge.from}:${edge.to}`,
-        x1: layout.value[edge.from].x,
-        y1: layout.value[edge.from].y,
-        x2: layout.value[edge.to].x,
-        y2: layout.value[edge.to].y,
+        d: pathBetween(layout.value[edge.from], layout.value[edge.to]),
         related: edge.kind === 'related',
     })));
 
@@ -152,12 +276,61 @@ const placed = computed(() => props.nodes.map((node) => ({
     ...node,
     ...layout.value[node.ulid],
     isCenter: node.ulid === props.center,
+    iconNodes: icons[node.icon] ?? null,
+    tone: TONE_CLASS[node.icon_color] ?? TONE_CLASS.slate,
+    short: shortName(node.name),
     href: whole.value
         ? `/containers/${props.containerUlid}/items?view=map&focus=${node.ulid}`
         : `/containers/${props.containerUlid}/items?view=map&focus=${node.ulid}&depth=linked`,
     hit: isHit(node),
     statusLabel: t(`item.graph.status.${node.status === 'overdue' ? 'overdue' : 'ok'}`),
 })));
+
+/*
+ * Ikonerna: Lucide-namn → ritnoder, hämtade en gång per namn med samma lata
+ * glob som `ItemIcon` (`itemIconPresentation.js`). Medan en fil hämtas, och för
+ * ett okänt namn, ritas en neutral prick.
+ */
+const icons = shallowReactive({});
+
+watch(
+    () => props.nodes,
+    (nodes) => {
+        if (whole.value) {
+            return;
+        }
+
+        for (const name of new Set(nodes.map((node) => node.icon))) {
+            const loader = name in icons ? null : loadIcon(name);
+
+            if (loader) {
+                icons[name] = null;
+                loader().then((loaded) => {
+                    icons[name] = loaded;
+                });
+            }
+        }
+    },
+    { immediate: true },
+);
+
+/* Klasserna står som hela strängar så att Tailwind ser dem (som `ItemIcon`). */
+const TONE_CLASS = {
+    slate: 'text-tint-slate',
+    blue: 'text-tint-blue',
+    sky: 'text-tint-sky',
+    teal: 'text-tint-teal',
+    green: 'text-tint-green',
+    amber: 'text-tint-amber',
+    orange: 'text-tint-orange',
+    violet: 'text-tint-violet',
+};
+
+const NAME_LENGTH = 18;
+
+function shortName(name) {
+    return name.length > NAME_LENGTH ? `${name.slice(0, NAME_LENGTH - 1)}…` : name;
+}
 
 const centerName = computed(() => props.nodes.find((node) => node.ulid === props.center)?.name ?? '');
 
@@ -354,7 +527,7 @@ function go(event, href) {
 <template>
     <div class="hidden md:block">
         <p
-            v-if="whole && truncated"
+            v-if="truncated"
             data-item-graph-truncated
             class="rounded-card border border-border bg-surface p-4 text-sm text-ink-muted"
         >{{ t('item.graph.truncated') }}</p>
@@ -366,27 +539,38 @@ function go(event, href) {
                 role="group"
                 :aria-label="whole ? t('item.graph.label_all') : t('item.graph.label', { name: centerName })"
                 data-item-graph
-                class="hidden h-[32rem] w-full rounded-card border border-border bg-surface md:block"
-                :class="whole ? 'touch-none cursor-grab' : ''"
+                class="hidden h-[32rem] w-full touch-none cursor-grab rounded-card border border-border bg-surface md:block"
                 preserveAspectRatio="xMidYMid meet"
-                :tabindex="whole ? 0 : undefined"
-                @wheel="whole && onWheel($event)"
-                @pointerdown="whole && onPointerDown($event)"
-                @pointermove="whole && onPointerMove($event)"
-                @pointerup="whole && onPointerEnd($event)"
-                @pointercancel="whole && onPointerEnd($event)"
-                @pointerleave="whole && onPointerEnd($event)"
-                @keydown="whole && onKeydown($event)"
+                :tabindex="0"
+                @wheel="onWheel($event)"
+                @pointerdown="onPointerDown($event)"
+                @pointermove="onPointerMove($event)"
+                @pointerup="onPointerEnd($event)"
+                @pointercancel="onPointerEnd($event)"
+                @pointerleave="onPointerEnd($event)"
+                @keydown="onKeydown($event)"
             >
-                <g :transform="whole ? layerTransform : undefined">
+                <g :transform="layerTransform">
+                    <g v-if="!whole" aria-hidden="true" data-item-graph-rings>
+                        <circle
+                            v-for="(radius, index) in rings"
+                            :key="index"
+                            cx="0"
+                            cy="0"
+                            :r="radius"
+                            fill="none"
+                            stroke="var(--color-border)"
+                            stroke-width="18"
+                            opacity="0.6"
+                        />
+                    </g>
+
                     <g aria-hidden="true" :opacity="whole && needle !== '' ? 0.35 : undefined">
-                        <line
+                        <path
                             v-for="line in lines"
                             :key="line.key"
-                            :x1="line.x1"
-                            :y1="line.y1"
-                            :x2="line.x2"
-                            :y2="line.y2"
+                            :d="line.d"
+                            fill="none"
                             :stroke="line.related ? 'var(--color-ink-subtle)' : 'var(--color-accent)'"
                             stroke-width="2"
                             stroke-linecap="round"
@@ -410,22 +594,47 @@ function go(event, href) {
                         @blur="active = null"
                     >
                         <circle :cx="node.x" :cy="node.y" r="22" fill="transparent" stroke-width="3" stroke="transparent" />
-                        <circle
-                            :cx="node.x"
-                            :cy="node.y"
-                            :r="node.isCenter ? CENTER_RADIUS : RADIUS"
-                            :fill="node.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-accent)'"
-                            :stroke="node.isCenter || (whole && node.hit) ? 'var(--color-ink)' : 'var(--color-surface)'"
-                            stroke-width="3"
-                        />
+                        <template v-if="whole">
+                            <circle
+                                :cx="node.x"
+                                :cy="node.y"
+                                :r="node.isCenter ? CENTER_RADIUS : RADIUS"
+                                :fill="node.status === 'overdue' ? 'var(--color-danger)' : 'var(--color-accent)'"
+                                :stroke="node.isCenter || node.hit ? 'var(--color-ink)' : 'var(--color-surface)'"
+                                stroke-width="3"
+                            />
+                        </template>
+                        <template v-else>
+                            <circle
+                                :cx="node.x"
+                                :cy="node.y"
+                                :r="node.isCenter ? 20 : 16"
+                                fill="var(--color-surface)"
+                                :stroke="node.isCenter ? 'var(--color-accent)' : 'var(--color-border)'"
+                                :stroke-width="node.isCenter ? 3 : 1.5"
+                            />
+                            <g
+                                v-if="node.iconNodes"
+                                :transform="`translate(${node.x - 10} ${node.y - 10}) scale(${20 / 24})`"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.75"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                :class="node.tone"
+                            >
+                                <component :is="tag" v-for="([tag, attributes], index) in node.iconNodes" :key="index" v-bind="attributes" />
+                            </g>
+                            <circle v-else :cx="node.x" :cy="node.y" r="4" fill="var(--color-ink-subtle)" />
+                        </template>
                     </a>
 
-                    <g v-if="whole" aria-hidden="true" class="pointer-events-none">
+                    <g aria-hidden="true" class="pointer-events-none">
                         <template v-for="node in placed" :key="node.ulid">
                             <text
                                 v-if="(showNames || node.hit || node.isCenter) && node.ulid !== active"
                                 :x="node.x"
-                                :y="node.y - 20"
+                                :y="whole ? node.y - 20 : node.y + (node.isCenter ? 36 : 32)"
                                 text-anchor="middle"
                                 fill="var(--color-ink)"
                                 stroke="var(--color-surface)"
@@ -434,7 +643,7 @@ function go(event, href) {
                                 :font-size="12 / view.k"
                                 font-weight="600"
                                 :opacity="needle !== '' && !node.hit ? 0.25 : undefined"
-                            >{{ node.name }}</text>
+                            >{{ whole ? node.name : node.short }}</text>
                         </template>
                     </g>
 
@@ -464,7 +673,7 @@ function go(event, href) {
                 </g>
             </svg>
 
-            <div v-if="whole" class="absolute right-3 top-3 flex flex-col gap-2">
+            <div class="absolute right-3 top-3 flex flex-col gap-2">
                 <button
                     type="button"
                     :aria-label="t('item.graph.zoom_in')"

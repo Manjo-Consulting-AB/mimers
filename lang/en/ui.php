@@ -3488,7 +3488,7 @@ return [
         // The neighbourhood graph (issue 393). The status words are the two
         // `ItemStatus` values the map already gets.
         'graph' => [
-            'label' => 'Items within two steps of :name',
+            'label' => 'Every item linked to :name, drawn in rings by distance',
             'center' => 'centre',
             // The whole-container level (issue 394). `truncated` names no
             // count: nothing in the answer says how many items there are.
