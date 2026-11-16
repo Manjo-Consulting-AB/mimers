@@ -139,9 +139,10 @@ defineOptions({
 const props = defineProps({
     container: { type: Object, required: true },
     /*
-     * Grannskapet `{nodes, edges}` (issue 393 · [[ADR-0082 Kartan är
-     * relationernas yta]] § 4 och 5), eller `null`: servern skickar det bara
-     * med `view=map`, ett item som mitt och `depth=2`.
+     * Grannskapet `{nodes, edges, truncated}` (issue 393 · [[ADR-0082 Kartan
+     * är relationernas yta]] § 4, [[ADR-0083 Grannskapet är itemets släkt]]
+     * § 2 och 3), eller `null`: servern skickar det bara med `view=map`, ett
+     * item som mitt och `depth=linked`.
      */
     neighbourhood: { type: Object, default: null },
     /*
@@ -443,7 +444,7 @@ const views = computed(() => {
 /*
  * Zoomnivåerna i den fulla kartan (issue 393 · [[ADR-0082 Kartan är
  * relationernas yta]] § 4): *Focus* skrivs utan `depth` och *Neighbourhood*
- * med `depth=2`. Växeln finns bara när mitten är ett item; `neighbourhood` är
+ * med `depth=linked`. Växeln finns bara när mitten är ett item; `neighbourhood` är
  * serverns läsning av `depth`, så nivån står i adressen och ingenstans annat.
  */
 const depthLevels = computed(() => {
@@ -456,7 +457,7 @@ const depthLevels = computed(() => {
 
     // *Neighbourhood* har ett item som mitt; kring containern finns den inte.
     if (focus !== '') {
-        levels.push({ key: 'neighbourhood', label: t('item.depth.neighbourhood'), href: `${base.value}?view=map${focus}&depth=2${tail}` });
+        levels.push({ key: 'neighbourhood', label: t('item.depth.neighbourhood'), href: `${base.value}?view=map${focus}&depth=linked${tail}` });
     }
 
     levels.push({ key: 'all', label: t('item.depth.all'), href: `${base.value}?view=map${focus}&depth=all${tail}` });
@@ -697,6 +698,7 @@ const overflowHref = computed(() => base.value);
                     v-if="showGraph"
                     :nodes="neighbourhood.nodes"
                     :edges="neighbourhood.edges"
+                    :truncated="neighbourhood.truncated"
                     :center="map.center.ulid"
                     :container-ulid="container.ulid"
                 />

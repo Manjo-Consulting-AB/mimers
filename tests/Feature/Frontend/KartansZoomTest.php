@@ -45,12 +45,12 @@ it('lägger nivån i adressen och bara Focus utan depth', function () {
     $sidan = kartanszoomKod('pages/Containers/Items/Index.vue');
 
     expect($sidan)->toContain('?view=map${focus}${tail}`')
-        ->toContain('?view=map${focus}&depth=2${tail}`')
+        ->toContain('?view=map${focus}&depth=linked${tail}`')
         ->toContain('?view=map${focus}&depth=all${tail}`');
 
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
-    expect($grafen)->toContain('?view=map&focus=${node.ulid}&depth=2');
+    expect($grafen)->toContain('?view=map&focus=${node.ulid}&depth=linked');
 });
 
 it('har d3-force och inget annat nytt paket', function () {

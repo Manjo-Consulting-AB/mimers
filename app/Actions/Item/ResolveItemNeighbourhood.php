@@ -10,9 +10,10 @@ use App\Support\Item\ItemStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Kartans nivå *Neighbourhood*: mitten och varje item inom två steg, över
- * föräldra-, barn- och related-kanter — se [[ADR-0082 Kartan är relationernas
- * yta]] § 5 och 8 och [[M62 Kartan är relationernas yta]] § 393.
+ * Kartans nivå *Neighbourhood*: mitten och hela dess släkt — varje item som
+ * går att nå över föräldra-, barn- och related-kanter, oavsett avstånd. Se
+ * [[ADR-0083 Grannskapet är itemets släkt]] § 1–3 och [[ADR-0082 Kartan är
+ * relationernas yta]] § 8.
  *
  * **Omfånget är ADR-0028:s, prövat per item** med samma regel som
  * App\Actions\Item\ResolveItemMap: bara items som `inScope()` släpper igenom
@@ -23,26 +24,30 @@ use Illuminate\Support\Facades\DB;
  * kanternas frågan prövar `deleted_at` på båda ändarna.
  *
  * **Ett steg är en kant, oavsett slag.** Vandringen är en bredden-först över
- * kanterna sedda utan riktning: förälder, barn och relaterad räknas lika, så
- * en förälders andra barn (ett syskon) ligger två steg bort. Vandringen går
- * bara genom noder i omfånget — ett item bakom ett dolt item nås inte via det.
+ * kanterna sedda utan riktning och går tills inget nytt item nås: förälder,
+ * barn och relaterad räknas lika. Den går bara genom noder i omfånget — ett
+ * item bakom ett dolt item nås inte via det.
  *
- * **Svaret är `{nodes, edges}`.** Noderna står i namnordning (samma ordning
- * som ResolveItemMap, med `id` som skiljetecken), och ordningen är det
- * klientens startpositioner följer, så att samma grannskap ritas likadant
- * varje gång. Kanterna är `{from, to, kind}` med ULID:er: `parent` går från
- * förälder till barn och `related` från den ände som lagrats först. Varje par
- * och slag förekommer en gång.
+ * **Varje nod bär `ring`:** sitt kortaste avstånd till mitten i antal kanter,
+ * mitten är `0`. Det är vandringens eget avstånd.
  *
- * **Frågorna är fasta:** items, kanter och statusens två — oavsett hur
- * många grannar mitten har. Slutningen sker i minnet, av samma skäl som i
- * ResolveItemMap.
+ * **Svaret är `{nodes, edges, truncated}`**, samma form som
+ * ResolveContainerGraph. Noderna står i namnordning (med `id` som
+ * skiljetecken), och ordningen är det klientens startpositioner följer, så att
+ * samma grannskap ritas likadant varje gång. Kanterna är `{from, to, kind}` med
+ * ULID:er: `parent` går från förälder till barn och `related` från den ände som
+ * lagrats först. Varje par och slag förekommer en gång.
+ *
+ * **Taket är ResolveContainerGraph::MAX_NODES.** Når släkten över taket är
+ * `nodes` och `edges` tomma och `truncated` sant, och statusfrågorna har inte
+ * kostat något.
+ *
+ * **Frågorna är fasta:** omfånget, items, kanter och statusens två — oavsett
+ * släktens storlek. Kanterna i omfånget läses en gång och vandringen sker i
+ * minnet.
  */
 class ResolveItemNeighbourhood
 {
-    /* Antalet steg från mitten ([[ADR-0082 Kartan är relationernas yta]] § 5). */
-    private const STEPS = 2;
-
     public function __construct(
         private readonly ResolveItemScope $resolveItemScope,
         private readonly ItemStatus $itemStatus,
@@ -56,8 +61,9 @@ class ResolveItemNeighbourhood
      * item.
      *
      * @return array{
-     *     nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, status: string}>,
+     *     nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, status: string, ring: int}>,
      *     edges: list<array{from: string, to: string, kind: string}>,
+     *     truncated: bool,
      * }
      */
     public function handle(User $user, Container $container, string $centerUlid): array
@@ -86,22 +92,23 @@ class ResolveItemNeighbourhood
         }
 
         if ($centerId === null) {
-            return ['nodes' => [], 'edges' => []];
+            return ['nodes' => [], 'edges' => [], 'truncated' => false];
         }
 
         [$edges, $neighbours] = $this->edges($container, $items);
 
-        // Bredden-först, två steg, genom noder i omfånget.
-        $reached = [$centerId => true];
+        // Bredden-först tills inget nytt item nås, genom noder i omfånget.
+        // `$ring` är varje nods kortaste avstånd till mitten.
+        $ring = [$centerId => 0];
         $frontier = [$centerId];
 
-        for ($step = 0; $step < self::STEPS; $step++) {
+        while ($frontier !== []) {
             $next = [];
 
             foreach ($frontier as $id) {
                 foreach ($neighbours[$id] ?? [] as $neighbour) {
-                    if (! isset($reached[$neighbour])) {
-                        $reached[$neighbour] = true;
+                    if (! isset($ring[$neighbour])) {
+                        $ring[$neighbour] = $ring[$id] + 1;
                         $next[] = $neighbour;
                     }
                 }
@@ -109,6 +116,12 @@ class ResolveItemNeighbourhood
 
             $frontier = $next;
         }
+
+        if (count($ring) > ResolveContainerGraph::MAX_NODES) {
+            return ['nodes' => [], 'edges' => [], 'truncated' => true];
+        }
+
+        $reached = $ring;
 
         // Namnordning: $items är redan sorterad, så filtreringen behåller den.
         $inside = array_intersect_key($items, $reached);
@@ -124,6 +137,7 @@ class ResolveItemNeighbourhood
                 'icon' => $item->icon,
                 'icon_color' => $item->icon_color,
                 'status' => $statuses[$item->ulid] ?? ItemStatus::OK,
+                'ring' => $ring[$item->id],
             ];
         }
 
@@ -139,7 +153,7 @@ class ResolveItemNeighbourhood
             }
         }
 
-        return ['nodes' => $nodes, 'edges' => $kept];
+        return ['nodes' => $nodes, 'edges' => $kept, 'truncated' => false];
     }
 
     /**
