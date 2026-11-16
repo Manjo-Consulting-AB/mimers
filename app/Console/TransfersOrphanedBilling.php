@@ -37,7 +37,7 @@ class TransfersOrphanedBilling
         $moved = 0;
 
         foreach ($this->pairs() as $containerId => $payerIds) {
-            $container = Container::query()->find($containerId);
+            $container = Container::withTrashed()->find($containerId);
 
             if ($container === null) {
                 continue;
@@ -51,6 +51,10 @@ class TransfersOrphanedBilling
                 }
 
                 DB::transaction(function () use ($account, $container, &$moved): void {
+                    // Lås containerraden så en samtidig GrantContainerAccess
+                    // inte kan skapa åtkomst mellan kontrollen och flytten.
+                    Container::withTrashed()->whereKey($container->id)->lockForUpdate()->first();
+
                     $before = $this->billedBytes($account->id, $container->id);
 
                     if (! $this->release->handle($account, $container)) {

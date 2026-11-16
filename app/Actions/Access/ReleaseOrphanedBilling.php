@@ -36,6 +36,16 @@ class ReleaseOrphanedBilling
                 $q->where(fn ($a) => $a->where('grantee_type', 'account')->where('grantee_id', $account->id));
 
                 if ($account->type === 'personal') {
+                    // Personens åtkomst via en kontogrant på ett konto hen är
+                    // medlem i (t.ex. ett företag) räknas också.
+                    $q->orWhere(fn ($a) => $a->where('grantee_type', 'account')->whereIn(
+                        'grantee_id',
+                        DB::table('account_user')->whereIn(
+                            'user_id',
+                            DB::table('account_user')->where('account_id', $account->id)->select('user_id'),
+                        )->select('account_id'),
+                    ));
+
                     $q->orWhere(fn ($u) => $u->where('grantee_type', 'user')->whereIn(
                         'grantee_id',
                         DB::table('account_user')->where('account_id', $account->id)->select('user_id'),

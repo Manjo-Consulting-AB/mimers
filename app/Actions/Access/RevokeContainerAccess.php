@@ -127,7 +127,15 @@ class RevokeContainerAccess
     private function affectedAccounts(ContainerAccess $access): Collection
     {
         if ($access->grantee_type === 'account') {
-            return Account::query()->whereKey($access->grantee_id)->get();
+            // Grantee-kontot, och personkontona för dess medlemmar: de når
+            // containern genom kontograntet och betalar med sitt personkonto.
+            return Account::query()
+                ->where(fn ($q) => $q->whereKey($access->grantee_id)->orWhere(fn ($p) => $p
+                    ->where('type', 'personal')
+                    ->whereIn('id', DB::table('account_user')
+                        ->whereIn('user_id', DB::table('account_user')->where('account_id', $access->grantee_id)->select('user_id'))
+                        ->select('account_id'))))
+                ->get();
         }
 
         return Account::query()

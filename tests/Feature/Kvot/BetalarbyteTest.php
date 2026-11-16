@@ -233,3 +233,29 @@ it('avstämningen rapporterar ingen drift efter flytten', function () {
 
     expect(app(ReconcilesUsageCounters::class)->handle())->toBe(0);
 });
+
+it('en medlems personkonto behåller betalningen via en kvarvarande kontogrant, och flyttas när den återkallas', function () {
+    $u = bbUppsättning();
+    $företag = Account::factory()->organisation()->create();
+    $företag->users()->attach($u['person']->id, ['role' => 'member']);
+    $grant = bbÅtkomst($u['container'], 'account', $företag->id);
+    $annan = bbÅtkomst($u['container'], 'account', $företag->id, ['item_id' => $u['item']->id]);
+
+    expect(app(TransfersOrphanedBilling::class)->handle())->toBe(0)
+        ->and($u['bilaga']->fresh()->billed_account_id)->toBe($u['gast']->id);
+
+    bbÅterkalla($u['container'], $grant);
+    expect($u['bilaga']->fresh()->billed_account_id)->toBe($u['gast']->id);
+
+    bbÅterkalla($u['container'], $annan);
+    expect($u['bilaga']->fresh()->billed_account_id)->toBe($u['agare']->id);
+});
+
+it('nattjobbet flyttar betalare i en mjukraderad container', function () {
+    $u = bbUppsättning();
+    $u['container']->delete();
+
+    app(TransfersOrphanedBilling::class)->handle();
+
+    expect($u['bilaga']->fresh()->billed_account_id)->toBe($u['agare']->id);
+});
