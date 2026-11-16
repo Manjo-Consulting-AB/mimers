@@ -203,6 +203,14 @@ it('behåller bara brödsmulor på warning och uppåt', function () {
     expect(array_map(fn ($b) => $b->getMessage(), $rensad->getBreadcrumbs()))->toBe(['en varning', 'ett fel']);
 });
 
+it('bygger ingen text av kommandoraden i brödsmulorna', function () {
+    // ADR-0070: command_info => true gör (string) $input, som anropar
+    // escapeshellarg() för ord som config:cache. Funktionen står i inleeds
+    // disable_functions, så utrullningen faller. Slå inte på funktionen i
+    // panelen; den kan återställas.
+    expect(config('sentry.breadcrumbs.command_info'))->toBeFalse();
+});
+
 it('har klientfelslistan på ett ställe', function () {
     expect(ScrubSentryEvent::isClientError(ApiException::make('a.b', [], 499)))->toBeTrue()
         ->and(ScrubSentryEvent::isClientError(ApiException::make('a.b', [], 500)))->toBeFalse()
