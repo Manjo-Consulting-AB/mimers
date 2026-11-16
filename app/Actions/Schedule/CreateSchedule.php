@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use App\Support\Usage\Payer;
 use Illuminate\Support\Facades\DB;
 
@@ -84,7 +85,7 @@ class CreateSchedule
                 default => ScheduleOccurrence::GTD_NEXT,
             };
 
-            $schedule->save();
+            MetadataLedger::save($schedule);
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_SCHEDULE_CREATED,

@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditEvent;
 use App\Models\AuditLog;
 use App\Models\Schedule;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -129,7 +130,7 @@ class UpdateSchedule
         $leadChanged = $schedule->isDirty('lead_days');
 
         DB::transaction(function () use ($schedule, $actor, $meta, $reactivated, $dueChanged, $leadChanged): void {
-            $schedule->save();
+            MetadataLedger::save($schedule);
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(

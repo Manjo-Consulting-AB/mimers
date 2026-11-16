@@ -4,6 +4,7 @@ namespace App\Actions\Category;
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Category;
+use App\Support\Usage\MetadataLedger;
 
 /**
  * Flyttar (eller placerar, för en ny kategori) en kategori under en
@@ -59,7 +60,7 @@ class MoveCategory
         }
 
         $category->parent_id = $newParent?->id;
-        $category->save();
+        MetadataLedger::save($category);
     }
 
     /**

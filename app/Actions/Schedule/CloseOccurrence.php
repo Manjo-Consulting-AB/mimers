@@ -9,6 +9,7 @@ use App\Models\AuditLog;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -161,7 +162,7 @@ class CloseOccurrence
             // Anteckningen räknas mot kvoten, och den som skriver den betalar
             // (ADR-0081 § 3). Utan anteckning finns ingen betalare.
             $lockedOccurrence->billed_account_id = ($completionNote !== null && $completionNote !== '') ? $account->id : null;
-            $lockedOccurrence->save();
+            MetadataLedger::save($lockedOccurrence);
 
             // Raden i händelseloggen (issue 110). `completed` och `skipped` är
             // två handlingar och inte en med en flagga: skillnaden syns i

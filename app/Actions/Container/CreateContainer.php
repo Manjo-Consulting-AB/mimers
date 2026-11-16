@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -93,7 +94,7 @@ final class CreateContainer
                 'icon_color' => $iconColor,
             ]);
             $container->account_id = $account->id;
-            $container->save();
+            MetadataLedger::save($container);
 
             // En levande container räknas mot ägarkontots containertak (issue
             // 26a) — i samma transaktion som raden. Kontot är alltid ägaren;

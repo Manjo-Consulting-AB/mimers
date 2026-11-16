@@ -11,6 +11,8 @@ use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\Tag;
+use App\Support\Usage\MetadataLedger;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -135,6 +137,18 @@ class PurgeContent
                 ->orWhereIn('depends_on_occurrence_id', (clone $itemetsForekomster))
                 ->delete();
 
+            // Räknaren minskas med de rader som följer med itemet (issue 1302 ·
+            // ADR-0081 § 2): summan per betalare räknas fram HÄR, före
+            // raderingarna, eftersom raderna inte finns kvar efteråt. Alla
+            // rader räknas, mjukraderade också. Raderna tas med query builder
+            // och `forceDelete()` på en byggare, så ingen modellhändelse kan
+            // göra avdraget åt oss.
+            MetadataLedger::releaseWhere('schedule_occurrence', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
+            MetadataLedger::releaseWhere('schedule', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
+            MetadataLedger::releaseWhere('loan', fn (Builder $query) => $query->where('loan.item_id', $itemId));
+            MetadataLedger::releaseWhere('cost_entry', fn (Builder $query) => $query->where('cost_entry.item_id', $itemId));
+            MetadataLedger::releaseWhere('item', fn (Builder $query) => $query->where('item.id', $itemId));
+
             // Förekomsterna måste bort före schemat — schedule_occurrence
             // pekar på schedule med ON DELETE RESTRICT. Delfrågan tar med
             // även mjukraderade scheman: DB::table känner inga globala scopet.
@@ -227,6 +241,8 @@ class PurgeContent
                 ->where('parent_id', $categoryId)
                 ->update(['parent_id' => null]);
 
+            MetadataLedger::releaseWhere('category', fn (Builder $query) => $query->where('category.id', $categoryId));
+
             $category->forceDelete();
         });
     }
@@ -238,6 +254,8 @@ class PurgeContent
     public function tag(Tag $tag): void
     {
         DB::transaction(function () use ($tag): void {
+            MetadataLedger::releaseWhere('tag', fn (Builder $query) => $query->where('tag.id', $tag->getKey()));
+
             DB::table('item_tag')->where('tag_id', $tag->getKey())->delete();
 
             $tag->forceDelete();

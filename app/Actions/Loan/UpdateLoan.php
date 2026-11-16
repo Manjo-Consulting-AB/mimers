@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -87,7 +88,7 @@ class UpdateLoan
             $returned = $lockedLoan->getOriginal('returned_at') === null
                 && $lockedLoan->returned_at !== null;
 
-            $lockedLoan->save();
+            MetadataLedger::save($lockedLoan);
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(

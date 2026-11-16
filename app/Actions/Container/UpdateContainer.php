@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditEvent;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -72,7 +73,7 @@ class UpdateContainer
         $meta = $this->metaFor($container);
 
         DB::transaction(function () use ($container, $actor, $meta): void {
-            $container->save();
+            MetadataLedger::save($container);
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(

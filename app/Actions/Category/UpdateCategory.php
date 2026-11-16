@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -91,7 +92,7 @@ class UpdateCategory
             if ($parentGiven) {
                 $this->moveCategory->handle($category, $parent);
             } else {
-                $category->save();
+                MetadataLedger::save($category);
             }
 
             if ($meta !== null) {

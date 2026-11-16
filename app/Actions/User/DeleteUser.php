@@ -16,6 +16,7 @@ use App\Models\LegalHold;
 use App\Models\OwnershipTransfer;
 use App\Models\SecurityLog;
 use App\Models\User;
+use App\Support\Usage\MetadataLedger;
 use App\Support\User\DeletionBlocker;
 use App\Support\User\DeletionWarning;
 use App\Support\User\UserDeletionBlocked;
@@ -651,6 +652,10 @@ class DeleteUser
         // men raden kan finnas — skriven direkt i databasen — och
         // `container_access.container_id` är ON DELETE RESTRICT.
         DB::table('container_access')->where('container_id', $inbox->id)->delete();
+
+        // Inboxens egen rad räknas (issue 1302): PurgeContent::item() tog
+        // itemen, men containerraden minskar räknaren här.
+        MetadataLedger::release($inbox);
 
         $inbox->forceDelete();
     }
