@@ -20,11 +20,14 @@ Tonys beslut 2026-11-16, efter att ha jämfört *Whole container* med en förlag
 
 **5. Linjerna är raka.** Kanterna i *Whole container* ritas raka, med [[ADR-0061 Kartans kort och kanter]] § 5:s färg och streckning: heldragna till föräldrar och barn, streckade till de relaterade, inga pilspetsar. Krökta linjer valdes bort, se nedan.
 
-**6. Resten av ADR-0082 § 6 står.** Layouten är fortfarande `d3-force` (§ 9), sökfältet tänder träffarna, ett klick går till *Focus* med noden som mitt, panorering och zoom är oförändrade.
+**6. Zoomen har ett lägre tak.** I dag går det att zooma in åtta gånger (`MAX_ZOOM = 8`), tills ett enda item nästan fyller skärmen. Det tillför ingenting: plattan och namnet blir inte mer läsbara än i normal storlek, och man tappar sammanhanget. Från normal storlek (zoom 1) tar knappen `+` i dag tio steg på 1,25 till taket. De fem sista tas bort: taket blir fem steg, `1.25 ** 5` (ungefär 3), så att en platta som störst blir ungefär tre gånger sin normala storlek. Taket gäller båda nivåerna, eftersom *Neighbourhood* delar panoreringen och zoomen ([[ADR-0083 Grannskapet är itemets släkt]] § 7). Golvet (`MIN_ZOOM`) är oförändrat.
+
+**7. Resten av ADR-0082 § 6 står.** Layouten är fortfarande `d3-force` (§ 9), sökfältet tänder träffarna, ett klick går till *Focus* med noden som mitt, och panoreringen och zoomen fungerar som i dag, med det lägre taket.
 
 ## Konsekvenser
 
 - [[ADR-0082 Kartan är relationernas yta]] § 6 gäller inte längre i orden *noderna färgas efter status* och *namnen ritas först när man zoomat in tillräckligt*; resten av paragrafen står.
+- Taket för zoomen sänks i båda nivåerna; *Neighbourhood* ärver det genom den delade zoomen.
 - Servern ändras inte: `ResolveContainerGraph` lämnar redan `icon`, `icon_color` och `status`.
 - Noden som [[M63 Itemets släkt]] § 396 bygger för *Neighbourhood* blir gemensam. Kraftlayoutens avstånd (`forceCollide`, länklängden) växer med plattan, så att noderna inte överlappar.
 - Byggs i [[M63 Itemets släkt]] som 397, efter 396.
