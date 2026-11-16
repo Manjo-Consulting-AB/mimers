@@ -265,19 +265,21 @@ it('ritar noderna som ikon i icon_color med namnet under och mitten i accent (is
 it('delar panoreringen och zoomen mellan lägena, och vyn börjar inpassad (issue 396)', function () {
     $grafen = kartanszoomKod('components/ItemGraph.vue');
 
-    expect($grafen)->not->toContain('whole && onWheel')
-        ->not->toContain('whole && onPointer')
-        ->not->toContain('whole && onKeydown')
-        ->not->toContain('<div v-if="whole" class="absolute right-3')
-        ->toContain('<div class="absolute right-3')
+    foreach (['whole && onWheel', 'whole && onPointer', 'whole && onKeydown', '<div v-if="whole" class="absolute right-3'] as $gammal) {
+        expect(str_contains($grafen, $gammal))->toBeFalse();
+    }
+
+    expect($grafen)->toContain('<div class="absolute right-3')
         ->toContain('const reach = rings.value[rings.value.length - 1] + pad');
 
     // Namnen visas från samma zoomnivå i båda lägena.
-    expect($grafen)->toContain('(showNames || node.hit || node.isCenter) && node.ulid !== active')
-        ->not->toContain('<g v-if="whole" aria-hidden="true" class="pointer-events-none">');
+    expect($grafen)->toContain('(showNames || node.hit || node.isCenter) && node.ulid !== active');
+    expect(str_contains($grafen, '<g v-if="whole" aria-hidden="true" class="pointer-events-none">'))->toBeFalse();
 });
 
 it('ritar den nya etiketten ur ui.php (issue 396)', function () {
-    expect(Lang::get('ui.item.graph.label', ['name' => 'X'], 'en'))->not->toContain('two steps')
-        ->and(Lang::get('ui.item.graph.label', ['name' => 'X'], 'en'))->toContain('X');
+    $etikett = (string) Lang::get('ui.item.graph.label', ['name' => 'X'], 'en');
+
+    expect(str_contains($etikett, 'two steps'))->toBeFalse();
+    expect($etikett)->toContain('X');
 });
