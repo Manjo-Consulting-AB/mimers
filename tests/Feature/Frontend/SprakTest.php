@@ -623,7 +623,7 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    expect($typer)->toHaveCount(7);
+    expect($typer)->toHaveCount(8);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';

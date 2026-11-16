@@ -33,7 +33,8 @@ use function Pest\Laravel\postJson;
  * automatiskt för gott, nyast först, tills kontot ligger under GRATISplanens
  * gräns, och kontot återgår till active på gratisnivån. Ingen bilaga som
  * jobbet tar bort hamnar i papperskorgen (ADR-0009 § Uppföljning
- * 2026-11-14). Items raderas aldrig — bara bilagor, det är hela ADR-0009.
+ * 2026-11-14). Items tas bara när bilagorna inte räcker (ADR-0081 § 6b) —
+ * det och flytten av främmande innehåll testas i NedgraderingTextTest.
  *
  * Klassens `handle()` anropas direkt, precis som PurgesExpiredTrash testas i
  * GallringTest. Tiden styrs med Carbon::setTestNow() — fristen är tre
@@ -161,7 +162,7 @@ function raderingKör(?PurgeContent $purgeContent = null): void
     (new EnforcesDowngrades($purgeContent ?? app(PurgeContent::class)))->handle();
 }
 
-it('inga items raderas — bara bilagor', function () {
+it('items står kvar när bilagorna räcker', function () {
     Carbon::setTestNow('2026-09-04 12:00:00');
     sättPlangräns('free', 'storage_bytes', 100);
     [$account, $subscription] = raderingForfalltKonto();
@@ -561,9 +562,10 @@ it('en räknare som ligger över sanningen raderar tills bilagorna tar slut och 
     expect(raderingForbrukning($account->id))->toBe(200);
 
     $logg->shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.attachments_exhausted'
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.content_exhausted'
             && ($kontext['account_ulid'] ?? null) === $account->ulid
-            && ($kontext['used_bytes'] ?? null) === 200
+            && ($kontext['storage_bytes'] ?? null) === 200
+            && ($kontext['metadata_bytes'] ?? null) === 0
             && ($kontext['limit_bytes'] ?? null) === 100,
     );
 

@@ -2,7 +2,11 @@
 
 namespace App\Actions\Plan;
 
+use App\Actions\Notification\CreateNotification;
+use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
+use App\Models\Container;
+use App\Models\Notification as NotificationModel;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -31,8 +35,13 @@ use Illuminate\Support\Facades\DB;
  *
  * $reason är ett av `payment_failed` och `over_quota` — de värden
  * `account.read_only_reason` redan tillåter enligt sitt CHECK-villkor
- * (`inactivity` hör till 29a). Inga varningar skickas här (Beslut 7): M5:s
- * notisjobb räknar bakåt från `grace_until`.
+ * (`inactivity` hör till 29a). Varningarna till kontot SJÄLVT skickas inte här
+ * (Beslut 7): M5:s notisjobb räknar bakåt från `grace_until`. Notisen till
+ * ÄGARNA av de containrar kontot lagt innehåll i är däremot en händelse i
+ * steg 1 och skapas här (issue 1304 · [[ADR-0081 All lagrad data räknas mot
+ * kvoten]] § 6a): `container.content_moving`, en per främmande container och
+ * person i ägarkontot, med byte (filer + text) och datumet då innehållet
+ * flyttar.
  */
 class StartDowngrade
 {
@@ -66,6 +75,50 @@ class StartDowngrade
                 $subscription->grace_until = now()->addMonths(3);
                 $subscription->save();
             }
+
+            $this->notifyContainerOwners($rad, $subscription?->grace_until?->toDateString());
         });
+    }
+
+    /**
+     * En notis per främmande container och person i ägarkontot, genom
+     * CreateNotification (förlagan är OfferOwnershipTransfer::
+     * notifyAccountMembers). `moves_on` utelämnas för ett konto utan frist, och
+     * mejlet har då en variant utan datum.
+     *
+     * `dedupe_key` har mottagaren som sista led — utan den skulle bara första
+     * personen i ägarkontot få en notis.
+     */
+    private function notifyContainerOwners(Account $account, ?string $movesOn): void
+    {
+        foreach ((new TransferBilling)->foreignContainers($account) as $containerId => $info) {
+            $container = Container::withTrashed()->with('account.users')->find($containerId);
+
+            if ($container === null || $container->account === null) {
+                continue;
+            }
+
+            $payload = [
+                'container' => $container->name,
+                'account' => $account->name,
+                'bytes' => $info['bytes'],
+            ];
+
+            if ($movesOn !== null) {
+                $payload['moves_on'] = $movesOn;
+            }
+
+            foreach ($container->account->users as $recipient) {
+                app(CreateNotification::class)->handle(
+                    type: NotificationModel::TYPE_CONTENT_MOVING,
+                    account: $container->account,
+                    user: $recipient,
+                    container: $container,
+                    payload: $payload,
+                    dedupeKey: NotificationModel::TYPE_CONTENT_MOVING
+                        .":{$container->ulid}:{$account->ulid}:".($movesOn !== null ? "{$movesOn}:" : '').$recipient->ulid,
+                );
+            }
+        }
     }
 }
