@@ -192,6 +192,9 @@ it('steg 1 utan frist utelämnar datumet, och mejlet har en variant utan det', f
         ->and($utanDatum)->not->toContain(':moves_on')
         ->and($utanDatum)->not->toContain('On ');
 
+    $stor = (new NotificationMail($person, $notis->type, [...$notis->payload, 'bytes' => 12900000]))->render();
+    expect($stor)->toContain('12.3 MB')->and($stor)->not->toContain('12900000');
+
     $medDatum = (new NotificationMail($person, $notis->type, [...$notis->payload, 'moves_on' => '2026-12-01']))->render();
     expect($medDatum)->toContain('On 2026-12-01');
 });

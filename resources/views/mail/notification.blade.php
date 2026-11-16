@@ -5,7 +5,9 @@
 
 # {{ trans("notiser.{$key}.greeting") }}
 
-{{ trans($lineKey, $payload) }}
+@php($replace = $type === 'container.content_moving' && isset($payload['bytes']) ? [...$payload, 'bytes' => \Illuminate\Support\Number::fileSize((int) $payload['bytes'], 1)] : $payload)
+
+{{ trans($lineKey, $replace) }}
 
 <x-mail::button :url="config('app.url')">
 {{ trans("notiser.{$key}.action") }}
