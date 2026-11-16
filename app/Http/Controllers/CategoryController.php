@@ -150,17 +150,22 @@ class CategoryController extends Controller
      * `position` utelämnas av webbens formulär, så den nya kategorin hamnar
      * sist bland sina syskon (Beslut 2 och 7).
      */
-    public function store(StoreCategoryRequest $request, Container $container, CreateCategory $createCategory): RedirectResponse
+    public function store(StoreCategoryRequest $request, Container $container, CreateCategory $createCategory, ApiErrorTranslator $translator): RedirectResponse
     {
         Gate::authorize('update', $container);
 
-        $createCategory->handle(
-            $container,
-            $request->validated('name'),
-            $this->parent($container, $request->validated('parent')),
-            $request->validated('position'),
-            $request->user(),
-        );
+        try {
+            $createCategory->handle(
+                $container,
+                $request->validated('name'),
+                $this->parent($container, $request->validated('parent')),
+                $request->validated('position'),
+                $request->user(),
+            );
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages(['name' => $translator->message($e)]);
+        }
 
         return back()->with('status', 'category-created');
     }
@@ -354,7 +359,10 @@ class CategoryController extends Controller
                 parent: $this->parent($container, $request->validated('parent')),
             );
         } catch (ApiException $e) {
-            throw ValidationException::withMessages(['parent' => $translator->message($e)]);
+            throw ValidationException::withMessages([
+                // Textkvoten (issue 1303) hör till namnfältet.
+                ($e->errorCode() === 'quota.storage_exceeded' ? 'name' : 'parent') => $translator->message($e),
+            ]);
         }
 
         return back()->with('status', 'category-updated');

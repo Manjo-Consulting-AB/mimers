@@ -98,7 +98,7 @@ class ResolveInbox
         $container = new Container(['name' => 'Inbox']);
         $container->account_id = $this->personalAccountId($user);
         $container->inbox_user_id = $user->id;
-        MetadataLedger::save($container);
+        MetadataLedger::save($container, checkQuota: false);
 
         return $container;
     }
@@ -110,7 +110,7 @@ class ResolveInbox
         $item->created_by_user_id = $user->id;
         $item->created_by_account_id = $container->account_id;
         $item->billed_account_id = $container->account_id;
-        MetadataLedger::save($item);
+        MetadataLedger::save($item, checkQuota: false);
 
         return $item;
     }

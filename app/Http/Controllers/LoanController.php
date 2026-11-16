@@ -157,7 +157,8 @@ class LoanController extends Controller
             );
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
-                'returned_at' => $translator->message($e),
+                // Textkvoten (issue 1303) hör till låntagarens namn.
+                ($e->errorCode() === 'quota.storage_exceeded' ? 'borrower_name' : 'returned_at') => $translator->message($e),
             ]);
         }
 

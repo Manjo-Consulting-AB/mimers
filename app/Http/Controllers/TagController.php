@@ -6,15 +6,18 @@ use App\Actions\Tag\CreateTag;
 use App\Actions\Tag\DeleteTag;
 use App\Actions\Tag\ListTags;
 use App\Actions\Tag\UpdateTag;
+use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Tag\StoreTagRequest;
 use App\Http\Requests\Tag\UpdateTagRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\TagResource;
 use App\Models\Container;
 use App\Models\Tag;
+use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -93,16 +96,21 @@ class TagController extends Controller
      * Den senare återupplivas av App\Actions\Tag\CreateTag med sin gamla ULID
      * — hela avvikelsen från ren CRUD i issue 12 § Beslut 4.
      */
-    public function store(StoreTagRequest $request, Container $container, CreateTag $createTag): RedirectResponse
+    public function store(StoreTagRequest $request, Container $container, CreateTag $createTag, ApiErrorTranslator $translator): RedirectResponse
     {
         Gate::authorize('update', $container);
 
-        $createTag->handle(
-            $container,
-            $request->validated('name'),
-            $request->validated('color'),
-            $request->user(),
-        );
+        try {
+            $createTag->handle(
+                $container,
+                $request->validated('name'),
+                $request->validated('color'),
+                $request->user(),
+            );
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages(['name' => $translator->message($e)]);
+        }
 
         return back()->with('status', 'tag-created');
     }
@@ -118,11 +126,16 @@ class TagController extends Controller
      * samma sätt. Ett `color: null` betyder "ingen färg" — det är inte en
      * tömning att skydda sig mot.
      */
-    public function update(UpdateTagRequest $request, Container $container, Tag $tag, UpdateTag $updateTag): RedirectResponse
+    public function update(UpdateTagRequest $request, Container $container, Tag $tag, UpdateTag $updateTag, ApiErrorTranslator $translator): RedirectResponse
     {
         Gate::authorize('update', $container);
 
-        $updateTag->handle($container, $tag, $request->user(), $request->validated());
+        try {
+            $updateTag->handle($container, $tag, $request->user(), $request->validated());
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages(['name' => $translator->message($e)]);
+        }
 
         return back()->with('status', 'tag-updated');
     }

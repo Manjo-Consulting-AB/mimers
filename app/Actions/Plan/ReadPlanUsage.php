@@ -95,7 +95,8 @@ class ReadPlanUsage
         // förbrukningen noll: ett konto utan räknarrad har inga bilagor och
         // inga containers (issue 26a § Beslut 1). Två frågor och inte en, för
         // att formuleringen ska vara Entitlements' och inte en egen.
-        $usedBytes = (int) UsageCounter::query()->where('account_id', $account->id)->value('storage_bytes');
+        // Filer och text tillsammans (ADR-0081 § 1): UsageCounter::usedBytes().
+        $usedBytes = UsageCounter::usedBytes($account->id);
         $usedContainers = (int) UsageCounter::query()->where('account_id', $account->id)->value('container_count');
 
         $containerLimit = $this->intLimit('containers', $plan->planLimit('containers'));

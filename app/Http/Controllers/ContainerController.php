@@ -488,7 +488,8 @@ class ContainerController extends Controller
                 $request->validated('icon_color'),
             );
         } catch (ApiException $e) {
-            throw ValidationException::withMessages(['quota' => $translator->message($e)]);
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages([($e->errorCode() === 'quota.storage_exceeded' ? 'name' : 'quota') => $translator->message($e)]);
         }
 
         $activeContainer->set($user, $container);
@@ -613,10 +614,16 @@ class ContainerController extends Controller
         UpdateContainerRequest $request,
         Container $container,
         UpdateContainer $updateContainer,
+        ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        $updateContainer->handle($container, $request->user(), $request->validated());
+        try {
+            $updateContainer->handle($container, $request->user(), $request->validated());
+        } catch (ApiException $e) {
+            // Textkvoten (issue 1303) hör till namnfältet.
+            throw ValidationException::withMessages(['name' => $translator->message($e)]);
+        }
 
         return redirect()
             ->route('containers.edit', $container)

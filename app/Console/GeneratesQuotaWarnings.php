@@ -5,6 +5,7 @@ namespace App\Console;
 use App\Actions\Notification\CreateNotification;
 use App\Models\Account;
 use App\Models\Notification;
+use App\Models\UsageCounter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -52,7 +53,7 @@ class GeneratesQuotaWarnings
         Account::query()
             ->with(['subscription.plan'])
             ->leftJoin('usage_counter', 'usage_counter.account_id', '=', 'account.id')
-            ->select('account.*', DB::raw('COALESCE(usage_counter.storage_bytes, 0) AS used_bytes'))
+            ->select('account.*', DB::raw(UsageCounter::USED_BYTES_SQL.' AS used_bytes'))
             ->chunkById(100, function ($accounts): void {
                 foreach ($accounts as $account) {
                     try {

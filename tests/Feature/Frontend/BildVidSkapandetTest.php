@@ -5,6 +5,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\UsageCounter;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -158,7 +159,6 @@ it('debiterar uppladdningen på kontot itemet skapades med och går mot den befi
 it('lämnar itemet skapat, öppnar Documents och visar felet när kvoten nekar uppladdningen', function () {
     withoutVite();
 
-    sättPlangräns('free', 'storage_bytes', 10);
     [$konto, $anvandare, $container] = bildvidskapandetKontext();
 
     // Klienten: felet bärs till itemets Documents-flik, som ritar det.
@@ -171,6 +171,10 @@ it('lämnar itemet skapat, öppnar Documents och visar felet när kvoten nekar u
 
     // Servern: itemet finns, bilagan finns inte och felet ligger på `file`.
     $item = bildvidskapandetSkapa($anvandare, $container, $konto);
+
+    // Itemets text räknas mot kvoten (issue 1303), så gränsen sätts efter att
+    // itemet skapats: förbrukningen plus 10 byte.
+    sättPlangräns('free', 'storage_bytes', UsageCounter::usedBytes($konto->id) + 10);
 
     actingAs($anvandare)
         ->post("/containers/{$container->ulid}/items/{$item->ulid}/attachments", [

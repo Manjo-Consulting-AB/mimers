@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Usage\AdjustUsage;
 use Database\Factories\UsageCounterFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -48,6 +49,40 @@ class UsageCounter extends Model
             'metadata_bytes' => 'integer',
         ];
     }
+
+    /**
+     * Förbrukningen som planens `storage_bytes` gäller: filer och text
+     * tillsammans ([[ADR-0081 All lagrad data räknas mot kvoten]] § 1). Det
+     * enda stället som lägger ihop de två kolumnerna — varje jämförelse med
+     * planens gräns går hit. Saknas räknarraden är förbrukningen noll.
+     *
+     * `$lock` ger en låsande current read; anropas bara inne i en
+     * transaktion när läsningen ska serialisera samtidiga skrivare.
+     */
+    public static function usedBytes(int $accountId, bool $lock = false): int
+    {
+        $query = self::query()->where('account_id', $accountId);
+
+        if ($lock) {
+            // Raden ska finnas innan den låses: ett FOR UPDATE på en saknad
+            // rad tar ett gaplås, och två första skrivningar på ett nytt konto
+            // kan då dödlåsa mot varandras INSERT. AdjustUsage utan delta
+            // skapar raden race-fritt (upsert) och ändrar inget.
+            (new AdjustUsage)->handle($accountId);
+
+            $query->lockForUpdate();
+        }
+
+        $row = $query->first(['storage_bytes', 'metadata_bytes']);
+
+        return $row === null ? 0 : (int) $row->storage_bytes + (int) $row->metadata_bytes;
+    }
+
+    /**
+     * Samma summa som SQL-uttryck, för frågor som joinar `usage_counter`
+     * (kvotvarningarna). Formuleringen hör ihop med usedBytes() ovan.
+     */
+    public const USED_BYTES_SQL = 'COALESCE(usage_counter.storage_bytes, 0) + COALESCE(usage_counter.metadata_bytes, 0)';
 
     /**
      * Sanningen som `storage_bytes` cachar: summan av bytena för kontots
