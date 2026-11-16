@@ -224,10 +224,10 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
     preg_match_all("/key: '(\w+)'/", $vy, $träffar);
 
     // Två lägen sedan issue 327 · [[ADR-0067 Itemfliken utan listläge]] § 1:
-    // trädet är förvalet och kartan det andra. De två sista är zoomnivåerna i
+    // trädet är förvalet och kartan det andra. De tre sista är zoomnivåerna i
     // den fulla kartan (issue 393 · [[ADR-0082 Kartan är relationernas yta]]
-    // § 4), som har sin egen växel och inte hör till lägena.
-    expect($träffar[1])->toBe(['tree', 'map', 'focus', 'neighbourhood']);
+    // § 4 och 394), som har sin egen växel och inte hör till lägena.
+    expect($träffar[1])->toBe(['tree', 'map', 'focus', 'neighbourhood', 'all']);
 });
 
 /*

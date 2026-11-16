@@ -144,6 +144,11 @@ const props = defineProps({
      * med `view=map`, ett item som mitt och `depth=2`.
      */
     neighbourhood: { type: Object, default: null },
+    /*
+     * Hela containern `{nodes, edges, truncated}` (issue 394 · § 6 och 8), eller
+     * `null`: servern skickar det bara med `view=map` och `depth=all`.
+     */
+    graph: { type: Object, default: null },
     /* Item-ULID → status: `ok` eller `overdue`. Bara i kartläget, annars `{}`. */
     statuses: { type: Object, required: true },
     /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
@@ -445,14 +450,32 @@ const depthLevels = computed(() => {
     const query = filterQuery.value;
     const tail = query === '' ? '' : `&${query}`;
     const focus = props.map?.center.kind === 'item' ? `&focus=${props.map.center.ulid}` : '';
-
-    return [
+    const levels = [
         { key: 'focus', label: t('item.depth.focus'), href: `${base.value}?view=map${focus}${tail}` },
-        { key: 'neighbourhood', label: t('item.depth.neighbourhood'), href: `${base.value}?view=map${focus}&depth=2${tail}` },
     ];
+
+    // *Neighbourhood* har ett item som mitt; kring containern finns den inte.
+    if (focus !== '') {
+        levels.push({ key: 'neighbourhood', label: t('item.depth.neighbourhood'), href: `${base.value}?view=map${focus}&depth=2${tail}` });
+    }
+
+    levels.push({ key: 'all', label: t('item.depth.all'), href: `${base.value}?view=map${focus}&depth=all${tail}` });
+
+    return levels;
 });
 
 const showGraph = computed(() => props.neighbourhood !== null && props.map?.center.kind === 'item');
+
+/* *Whole container*: `graph` är serverns läsning av `depth=all`. */
+const showWhole = computed(() => props.graph !== null);
+
+const depthCurrent = computed(() => {
+    if (showWhole.value) {
+        return 'all';
+    }
+
+    return showGraph.value ? 'neighbourhood' : 'focus';
+});
 
 /*
  * *+N till* kring containern leder till trädet. Kring ett item fäller
@@ -664,9 +687,8 @@ const overflowHref = computed(() => base.value);
                     `depth` står i adressen.
                 -->
                 <ItemMapDepthSwitch
-                    v-if="map.center.kind === 'item'"
                     :levels="depthLevels"
-                    :current="showGraph ? 'neighbourhood' : 'focus'"
+                    :current="depthCurrent"
                     :label="t('item.depth.label')"
                     class="mb-3"
                 />
@@ -679,7 +701,18 @@ const overflowHref = computed(() => base.value);
                     :container-ulid="container.ulid"
                 />
 
-                <div :class="showGraph ? 'md:hidden' : ''">
+                <ItemGraph
+                    v-if="showWhole"
+                    mode="container"
+                    :nodes="graph.nodes"
+                    :edges="graph.edges"
+                    :truncated="graph.truncated"
+                    :center="map.center.kind === 'item' ? map.center.ulid : null"
+                    :query="filter.q"
+                    :container-ulid="container.ulid"
+                />
+
+                <div :class="showGraph || showWhole ? 'md:hidden' : ''">
                     <ItemMap
                         :map="map"
                         :statuses="statuses"
