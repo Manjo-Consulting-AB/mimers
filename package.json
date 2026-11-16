@@ -24,6 +24,6 @@
     },
     "dependencies": {
         "d3-force": "^3.0.1",
-        "lucide": "^1.59.0"
+        "lucide": "^1.72.0"
     }
 }
