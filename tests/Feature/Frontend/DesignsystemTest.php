@@ -176,7 +176,7 @@ function designItemsektionerna(): array
     return [
         'components/ItemAttachmentSection.vue',
         'components/ItemLoanSection.vue',
-        'components/ItemLinkSection.vue',
+        'components/ItemLinkForm.vue',
         'pages/Containers/Items/Show.vue',
     ];
 }

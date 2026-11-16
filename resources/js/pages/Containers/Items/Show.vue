@@ -10,7 +10,6 @@ import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemActionMenu from '../../../components/ItemActionMenu.vue';
 import ItemFieldGrid from '../../../components/ItemFieldGrid.vue';
 import ItemIcon from '../../../components/ItemIcon.vue';
-import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
 import ItemNotes from '../../../components/ItemNotes.vue';
@@ -62,8 +61,9 @@ defineOptions({
  * kostnadsfliken också växeln *Include child items* och ättlingarnas
  * kostnadsrader (`descendantCosts`) samt summorna per valuta över det som
  * visas (`costTotals`) — samma växel och samma composable som *Documents*.
- * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
- * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
+ * Relationerna har ingen flik sedan issue 1339 · [[ADR-0082 Kartan är
+ * relationernas yta]]: de läggs till och knyts upp i den fulla kartan. De
+ * övriga bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
  * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
  * inte färgar resten av sidan. Ordningen på ytorna är itemets egna uppgifter,
  * sedan relationerna, sedan utlåningen, sedan schemana, sedan bilagorna.
@@ -83,11 +83,10 @@ defineOptions({
  * med bara `read` får alla falska och ser ingen skrivyta alls; en
  * `write`-mottagare ser redigeringen men inte raderingsknappen.
  *
- * **`can.create` ritar två ytor** (issue 58 § Beslut 7): länken *Nytt item
- * under det här*, som går till skapandeformuläret med `?parent`, och
- * relationsformuläret inuti ItemLinkSection. Båda är samma grind som
+ * **`can.create` ritar länken *Nytt item under det här*** (issue 58 § Beslut
+ * 7), som går till skapandeformuläret med `?parent`. Grinden är den
  * `ItemController::store()` prövar mot föräldern, så en `create`-mottagare
- * som nått det här itemet ser dem och en `read`-mottagare inte.
+ * som nått det här itemet ser den och en `read`-mottagare inte.
  *
  * **Raderingen bekräftas och säger vad som händer** (§ Beslut 8). Den är mjuk
  * — `deleted_at` sätts och ingenting annat ([[ADR-0008 Soft delete och
@@ -121,7 +120,7 @@ defineOptions({
  * strukturen blir en utfällbar rad ovanför itemet och kartan flyttar in på
  * översikten (issue 335 · [[ADR-0068 Itemets sida och skapandet]] § 2 och 5).
  *
- * **Sidan är en flikrad med sju flikar** (issue 102, 116 och 154 ·
+ * **Sidan är en flikrad med sex flikar** (issue 102, 116 och 154 ·
  * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
  * taggarna, relationerna, utlåningen, schemana och bilagorna på en enda lång
  * sida; nu ligger var och en i sin flik, och raden byggs av `UiTabs` (issue
@@ -281,8 +280,6 @@ const props = defineProps({
      * redan filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
      */
     links: { type: Object, required: true },
-    /* Items användaren får ändra och som inte redan är kopplade. */
-    counterparts: { type: Array, required: true },
     /*
      * Itemets scheman ur App\Http\Resources\ScheduleResource, sorterade på
      * titel — samma lista och samma ordning som `/api` ger (issue 63a
@@ -425,7 +422,7 @@ const props = defineProps({
      * proppen null och skalet ritar ingen knapp.
      *
      * Vyn bygger inga rader själv. Adresserna — som `?parent=` till
-     * skapandeformuläret och `?tab=` till relations- och bilageflikarna — är
+     * skapandeformuläret och `?tab=` till bilageflikarna — är
      * flikarnas egna, och `?path=` följer med ur samma skäl som i `tabs` ovan:
      * den som står på en väg ska stanna på den.
      */
@@ -451,13 +448,6 @@ const props = defineProps({
      * App\Support\Item\ItemStatus: item-ULID → `ok` eller `overdue`.
      */
     itemMapStatuses: { type: Object, required: true },
-    /*
-     * Relationsflikens läge (issue 156): `list` eller `focus`, ur serverns
-     * läsning av `?view=`. Läget väljer vilken yta fliken visar under `md:` —
-     * kartan eller sektionen — och ingenting i svaret: noderna behövs i båda
-     * lägena, för högerpanelen ritar dem över `md:`.
-     */
-    linkView: { type: String, required: true },
 });
 
 const { t } = useTranslations();
@@ -524,21 +514,6 @@ const historyHref = computed(() => tabs.value.find((tab) => tab.key === 'history
  */
 const notesUrl = computed(
     () => `/containers/${props.container.ulid}/items/${props.item.ulid}/notes`,
-);
-
-/*
- * Adressen till relationsfliken — växelns *Lista* och flikraden (issue 156 ·
- * [[M23 Mobilen och kartan]] § 156).
- *
- * Hämtad ur `tabs` och inte byggd en gång till, av samma skäl som
- * `informationHref` ovan: flikens adress bär den aktuella förekomsten
- * (`?path=` skrivs före `tab=`), och en egen sträng här hade varit en andra
- * upplaga av samma regel. Reservvärdet är itemets egen sökväg och kan bara nås
- * om fliken tagits bort ur raden, vilket ItemflikTest fäller.
- */
-const relationsHref = computed(
-    () => tabs.value.find((tab) => tab.key === 'relations')?.href
-        ?? `/containers/${props.container.ulid}/items/${props.item.ulid}?tab=relations`,
 );
 
 /*
@@ -619,27 +594,12 @@ const panelGridClass = computed(() => {
 });
 
 /*
- * Relationsflikens två lägen (issue 156), till växeln under `md:`: *Lista* är
- * sektionen och förvalet — adressen UTAN `view`, samma val som översiktsfliken
- * gör med `tab` (issue 100) — och *Fokus* är kartan.
- *
- * Läget står i querysträngen (`?view=focus`), som varje annat läge i den här
- * produkten: ett läge man kan länka till är ett läge man kan dela. Adressen
- * byggs ur `relationsHref`, så den bär den aktuella förekomsten och
- * `ItemViewSwitch` får samma sträng som flikraden står i — den väljer den
- * aktuella raden genom att jämföra adresser.
- */
-const linkViews = computed(() => [
-    { key: 'list', label: t('item.map.view.list'), href: relationsHref.value },
-    { key: 'focus', label: t('item.map.view.focus'), href: `${relationsHref.value}&view=focus` },
-]);
-
-/*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har sju flikar** i den ordning [[ADR-0068 Itemets sida och
- * skapandet]] § 4 anger: Overview, Relations, Documents, Costs, To do, Loans,
- * History. Informationsfliken och taggfliken utgår (issue 332): fälten ritas
+ * **Raden har sex flikar** i den ordning [[ADR-0068 Itemets sida och
+ * skapandet]] § 4 anger, utan Relations sedan issue 1339 · [[ADR-0082 Kartan
+ * är relationernas yta]] § 1: Overview, Documents, Costs, To do, Loans,
+ * History. En gammal `?tab=relations` ger översikten. Informationsfliken och taggfliken utgår (issue 332): fälten ritas
  * på översikten och taggarna i huvudet. Nycklarna i adressen (`attachments`,
  * `schedules`) står still; ett `?tab=` som inte längre är någon fliks ger
  * översikten, som varje annat okänt värde.
@@ -682,7 +642,6 @@ const tabs = computed(() => {
 
     return [
         { key: 'overview', label: t('item.show.overview'), href: `${base}${here}`, count: null },
-        { key: 'relations', label: t('item.links.heading'), href: tabHref('relations'), count: rows(props.links.parent.length + props.links.child.length + props.links.related.length) },
         { key: 'attachments', label: t('item.attachment.heading'), href: tabHref('attachments'), count: rows(props.attachments.length) },
         { key: 'costs', label: t('item.cost.heading'), href: tabHref('costs'), count: rows(props.costs.length) },
         { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: rows(props.schedules.length) },
@@ -1141,8 +1100,8 @@ function toggleFavorite() {
                 ItemPlacementsPanel.vue). Under brytpunkten är högerkolumnen
                 dold, och panelen ritas därför en gång till här i
                 mittenkolumnen — samma mönster och samma skäl som kartan,
-                som står i högerpanelen från `lg:`, på översikten och i
-                relationsfliken under (FokuskartaTest). Samma yta två gånger på samma skärm
+                som står i högerpanelen från `lg:` och på översikten
+                (FokuskartaTest). Samma yta två gånger på samma skärm
                 hade varit samma väg två gånger, och därför bär den här
                 kopian `lg:hidden` (utom när kartan är hopfälld).
 
@@ -1284,28 +1243,6 @@ function toggleFavorite() {
                 </Link>
             </section>
 
-            <!--
-                Relationerna (issue 58 § Beslut 9), i sin egen flik. Sedan
-                issue 155 ritar sektionen dem som en figur — föräldrarna,
-                itemet självt, barnen och de relaterade — och får därför
-                itemets namn till noden i mitten ([[M23 Mobilen och kartan]]
-                § 155).
-            -->
-            <ItemLinkSection
-                v-if="activeTab === 'relations'"
-                :container-ulid="container.ulid"
-                :item-ulid="item.ulid"
-                :item-name="item.name"
-                :links="links"
-                :counterparts="counterparts"
-                :can="can"
-                :item-map="itemMap"
-                :statuses="itemMapStatuses"
-                :overflow-href="mapFocusHref"
-                :view="linkView"
-                :views="linkViews"
-            />
-
             <!-- Bilagorna (issue 60 § Beslut 1): itemets innehåll och inte en egen
                  vy. `container.account` är containerns ägarkonto — sektionens
                  förval när användaren är medlem i det. -->
@@ -1438,8 +1375,7 @@ function toggleFavorite() {
         <!--
             Kartans plats (issue 156, 181, 335): kartan i högerpanelen från
             `lg:`. Under `lg:` är panelen dold med flit — där står kartan på
-            översikten (ADR-0068 § 5) och, som ett läge, i relationsfliken
-            (se ItemLinkSection.vue), och samma karta två gånger på samma
+            översikten (ADR-0068 § 5), och samma karta två gånger på samma
             skärm hade varit samma nod två gånger.
 
             Strukturen, itemet och kartan står i samma ordning i källan på

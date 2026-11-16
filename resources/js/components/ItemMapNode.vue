@@ -81,9 +81,15 @@ const props = defineProps({
      * dagens kort. Under `md:` gäller `md` på alla storlekar.
      */
     size: { type: String, default: 'md' },
+    /*
+     * Sant när kortet får *Unlink* (issue 1339 · [[ADR-0082 Kartan är
+     * relationernas yta]] § 3). Servern har prövat `update` på båda ändarna;
+     * kortet ritar bara knappen och rapporterar klicket.
+     */
+    unlinkable: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['open-menu']);
+const emit = defineEmits(['open-menu', 'unlink']);
 
 const { t } = useTranslations();
 
@@ -262,6 +268,21 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
             >
                 <UiIcon name="open" :size="16" />
             </Link>
+
+            <!--
+                *Unlink*, i kortets nedre högra hörn — mitten har plusmenyn
+                där, och mitten har ingen koppling till sig själv. Knappen
+                öppnar bekräftelsen i kartan; kortet raderar ingenting.
+            -->
+            <button
+                v-if="unlinkable && !current"
+                type="button"
+                class="absolute bottom-0 right-0 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-pill text-danger outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :aria-label="t('item.links.unlink_node', { name: node.name })"
+                @click="emit('unlink', { node, trigger: $event.currentTarget })"
+            >
+                <UiIcon name="close" :size="16" />
+            </button>
 
             <!--
                 Plusmenyn, i kortets nedre högra hörn och efter ögat i

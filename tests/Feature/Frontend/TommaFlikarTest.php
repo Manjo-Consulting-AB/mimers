@@ -40,7 +40,6 @@ function tommaFlikarFlikar(): array
 {
     // fil, början av blocket, meningens nyckel, åtgärdens ord, rättigheten, formulärets första fält
     return [
-        'Relations' => ['components/ItemLinkSection.vue', '<UiEmptyState v-else', 'item.links.empty', 'item.show.add_relation', 'can.update && counterparts.length > 0', 'item'],
         'Documents' => ['components/ItemAttachmentSection.vue', '<UiEmptyState v-if="rows.length === 0"', 'item.attachment.empty', 'item.show.add_document', 'can.create', 'attachment-file'],
         'Costs' => ['components/ItemCostSection.vue', '<UiEmptyState v-if="visibleCosts.length === 0"', 'item.cost.empty', 'item.show.add_cost', 'can.create', 'cost-incurred-on'],
         'Loans' => ['components/ItemLoanSection.vue', '<UiEmptyState v-else', 'item.loan.not_lent', 'item.loan.form_heading', 'can.create', 'borrower_name'],
@@ -133,13 +132,11 @@ it('ritar inget tomt läge i en flik med rader', function () {
     $kostnader = tommaFlikarKod('components/ItemCostSection.vue');
     $historik = tommaFlikarKod('pages/Containers/Items/Show.vue');
     $uppgifter = tommaFlikarKod('components/ScheduleListSection.vue');
-    $relationer = tommaFlikarKod('components/ItemLinkSection.vue');
     $utlaning = tommaFlikarKod('components/ItemLoanSection.vue');
 
     expect($bilagor)->toMatch('~</UiEmptyState>\s*<ul v-else~');
     expect($kostnader)->toMatch('~</UiEmptyState>\s*<ul v-else~');
     expect($historik)->toMatch('~</UiEmptyState>\s*<ul v-else~');
     expect($uppgifter)->toMatch('~</UiEmptyState>.*?<div v-else class="mt-6~s');
-    expect($relationer)->toMatch('~<template v-if="hasAny">.*?</template>\s*<UiEmptyState v-else~s');
     expect($utlaning)->toMatch('~<div v-if="openLoan".*?<UiEmptyState v-else~s');
 });

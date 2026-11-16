@@ -20,7 +20,7 @@ use function Pest\Laravel\withoutVite;
  * och [[ADR-0063 Itemets karta i containerkartans form]] § 1, 3, 5 och 6,
  * App\Http\Controllers\ItemController::show(), App\Actions\Item\ResolveItemMap,
  * App\Support\Item\ItemStatus samt resources/js/components/ItemMap.vue,
- * ItemMapPanel.vue och ItemLinkSection.vue.
+ * ItemMapPanel.vue.
  *
  * **Filen prövar tre saker.** Det första är svaret: `itemMap` är
  * containerkartans form med itemet som mitt — `center`, `container`, `path`,
@@ -317,7 +317,7 @@ it('bär den aktuella förekomsten i mittens menyrader', function () {
                 ->where('itemMap.rows.0.key', 'item')
                 ->where('itemMap.rows.1.key', 'parent_item')
                 ->where('itemMap.rows.2.key', 'relation')
-                ->where('itemMap.rows.2.href', "{$bas}?path={$förekomst}&tab=relations")
+                ->where('itemMap.rows.2.href', "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation")
         );
 });
 
@@ -391,16 +391,11 @@ it('skickar alla noder och låter den smala formen kapa till fyra', function () 
 // --- läget: Fokus eller Lista --------------------------------------------
 
 /*
- * Klart när: "på mobil växlar relationsfliken mellan *Fokus* och *Lista*".
- *
- * Läget står i querysträngen (`?view=focus`) och ingenstans annat — samma
- * konstruktion som `?view=tree` i itemfliken (issue 154) och `?path=` i issue
- * 95. Servern läser strängen en gång och skickar svaret som `linkView`.
- *
- * Ett okänt värde är listan, aldrig ett fel: den som klickade på en gammal
- * länk är inte här.
+ * Relationsfliken är borta (issue 1339 · [[ADR-0082 Kartan är relationernas
+ * yta]] § 1), och med den växeln *List/Focus*: servern skickar varken
+ * `linkView` eller `counterparts` till itemets sida.
  */
-it('läser relationsflikens läge ur querysträngen', function () {
+it('skickar inget läge och inget motpartsurval till itemets sida', function () {
     withoutVite();
 
     [, $anvandare, $container] = fokuskartaKontext();
@@ -408,16 +403,9 @@ it('läser relationsflikens läge ur querysträngen', function () {
 
     $url = fokuskartaUrl($container, $motorn);
 
-    foreach ([
-        $url => 'list',
-        "{$url}?view=focus" => 'focus',
-        "{$url}?view=list" => 'list',
-        "{$url}?view=map" => 'list',
-        "{$url}?view[]=focus" => 'list',
-        "{$url}?tab=relations&view=focus" => 'focus',
-    ] as $adress => $läge) {
+    foreach ([$url, "{$url}?view=focus", "{$url}?tab=relations&view=focus"] as $adress) {
         actingAs($anvandare)->get($adress)->assertOk()->assertInertia(
-            fn (AssertableInertia $page) => $page->where('linkView', $läge)
+            fn (AssertableInertia $page) => $page->missing('linkView')->missing('counterparts')
         );
     }
 });
@@ -586,17 +574,15 @@ it('lämnar containerkartan oförändrad utan compact', function () {
  * `itemMapStatuses` och containerns ULID till båda ytorna. `overflowHref` är
  * hela kartan med itemet som mitt.
  */
-it('ritar ItemMap compact i högerpanelen och i fokusläget', function () {
+it('ritar ItemMap compact i högerpanelen', function () {
     $vy = fokuskartaKod('pages/Containers/Items/Show.vue');
     $panelen = fokuskartaKod('components/ItemMapPanel.vue');
-    $sektionen = fokuskartaKod('components/ItemLinkSection.vue');
 
     expect($vy)->toContain('<ItemMapPanel')
         ->toContain(':map="itemMap"')
         ->toContain(':statuses="itemMapStatuses"')
         ->toContain(':container-ulid="container.ulid"')
         ->toContain(':overflow-href="mapFocusHref"')
-        ->toContain(':item-map="itemMap"')
         ->toContain('?view=map&focus=${props.item.ulid}');
 
     expect($panelen)->toContain("import ItemMap from './ItemMap.vue'")
@@ -606,14 +592,6 @@ it('ritar ItemMap compact i högerpanelen och i fokusläget', function () {
         ->toContain(':statuses="statuses"')
         ->toContain(':container-ulid="containerUlid"')
         ->toContain("t('item.map.heading')");
-
-    expect($sektionen)->toContain("import ItemMap from './ItemMap.vue'")
-        ->toContain('<ItemMap')
-        ->toContain(':map="itemMap"')
-        ->toContain(':statuses="statuses"')
-        ->toContain(':container-ulid="containerUlid"')
-        ->toContain('compact')
-        ->toContain("focusing ? 'hidden md:block' : ''");
 
     // Panelen ställer ingen egen fråga.
     foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {

@@ -276,13 +276,12 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Sju flikar sedan issue 332 ([[ADR-0068 Itemets sida och skapandet]]
-    // § 4): Overview, Relations, Documents, Costs, Tasks, Loans, History.
-    // Informations- och taggfliken har utgått; nycklarna `attachments` och
-    // `schedules` står still.
+    // Sex flikar sedan issue 1339 ([[ADR-0082 Kartan är relationernas yta]]
+    // § 1): Overview, Documents, Costs, Tasks, Loans, History. Relationsfliken
+    // har utgått, som informations- och taggfliken före den (issue 332);
+    // nycklarna `attachments` och `schedules` står still.
     expect(itemflikNycklar($vy))->toBe([
         'overview',
-        'relations',
         'attachments',
         'costs',
         'schedules',
@@ -292,7 +291,6 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     expect(itemflikEtiketter($vy))->toBe([
         'item.show.overview',
-        'item.links.heading',
         'item.attachment.heading',
         'item.cost.heading',
         'item.schedule.heading',
@@ -302,7 +300,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     // Och de visade orden är ADR:ens.
     expect(array_map(fn (string $nyckel): string => trans("ui.{$nyckel}", [], 'en'), itemflikEtiketter($vy)))
-        ->toBe(['Overview', 'Relations', 'Documents', 'Costs', 'Tasks', 'Loans', 'History']);
+        ->toBe(['Overview', 'Documents', 'Costs', 'Tasks', 'Loans', 'History']);
 
     foreach (itemflikEtiketter($vy) as $nyckel) {
         $mening = trans("ui.{$nyckel}", [], 'en');
@@ -329,7 +327,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['relations', 'attachments', 'costs', 'schedules', 'loans', 'history']);
+    expect($träffar[1])->toBe(['attachments', 'costs', 'schedules', 'loans', 'history']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -363,7 +361,7 @@ it('har fliken Kostnader i itemets flikrad', function () {
     expect($nycklar)->toContain('costs');
 
     // Före Tasks, Loans och History (ADR-0068 § 4).
-    expect(array_search('costs', $nycklar, true))->toBe(3);
+    expect(array_search('costs', $nycklar, true))->toBe(2);
     expect($nycklar[count($nycklar) - 1])->toBe('history');
 
     $rad = itemflikRader($vy)['costs'];
@@ -401,7 +399,6 @@ it('alla sex befintliga propar når sin flik', function () {
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
         'overview' => ['<ItemFieldGrid', ':item="item"'],
-        'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
@@ -472,7 +469,6 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
     expect($rader['overview'])->toContain('count: null');
 
     $listor = [
-        'relations' => ['props.links'],
         'attachments' => ['props.attachments'],
         'schedules' => ['props.schedules'],
         'loans' => ['props.loanHistory', 'props.openLoan'],

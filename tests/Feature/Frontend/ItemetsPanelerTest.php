@@ -186,23 +186,14 @@ it('ställer kartan på översikten under lg och inte från lg', function () {
     expect($vy)->toContain("mapCollapsed ? 'mt-6' : 'mt-6 lg:hidden'");
 });
 
-it('lämnar relationsfliken oförändrad när kartan flyttar in på översikten', function () {
+it('har ingen relationsflik och ritar ingen relationssektion när kartan flyttar in på översikten', function () {
     $vy = itemetspanelerKod('pages/Containers/Items/Show.vue');
-    $sektion = itemetspanelerKod('components/ItemLinkSection.vue');
 
-    // Relationsfliken ritar sin egen karta som ett läge och är inte rörd av
-    // panelerna: översikten ritar ingen relationssektion, och sektionen ritar
-    // ingen `ItemMapPanel`.
-    $start = (int) strpos($vy, "<section v-if=\"activeTab === 'overview'\"");
-    $slut = (int) strpos($vy, '</section>', $start);
+    // Relationsfliken är borta (issue 1339 · [[ADR-0082 Kartan är
+    // relationernas yta]] § 1) och kartan på översikten är dess ersättare.
+    expect($vy)->not->toContain('<ItemLinkSection');
+    expect($vy)->not->toContain("activeTab === 'relations'");
 
-    expect(substr($vy, $start, $slut - $start))->not->toContain('<ItemLinkSection');
-    expect($vy)->toContain("v-if=\"activeTab === 'relations'\"");
-    expect($sektion)->not->toContain('ItemMapPanel');
-    expect($sektion)->not->toContain('collapsed');
-    expect($sektion)->toContain("focusing ? 'hidden md:block' : ''")
-        ->toContain('<ItemMap');
-
-    // Och kartan på översikten är den enda nya ytan för den.
+    // Kartan på översikten är den enda ytan för den.
     expect(substr_count($vy, '<ItemMapPanel'))->toBe(2);
 });

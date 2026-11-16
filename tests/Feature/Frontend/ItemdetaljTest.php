@@ -312,7 +312,7 @@ it('bär plusknappens meny med radadresser på ett item', function () {
             ->where('create.rows', [
                 ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"],
                 ['key' => 'parent_item', 'href' => "/containers/{$container->ulid}/items/create?child={$motorn->ulid}"],
-                ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
+                ['key' => 'relation', 'href' => "/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}&add=relation"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments&create=1"],
                 ['key' => 'schedule', 'href' => "{$bas}?tab=schedules&create=1"],
                 // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:

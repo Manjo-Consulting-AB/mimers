@@ -720,7 +720,7 @@ it('släpper det gamla CHECK-villkoret och sätter ett som tar related', functio
 
 /*
  * Klart när: ingen förekomst av det gamla ordet finns i `app/`,
- * `resources/js/components/ItemLinkSection.vue`, `lang/` eller `routes/`.
+ * `resources/js/components/ItemLinkForm.vue`, `lang/` eller `routes/`.
  *
  * Provet läser källan, för det är formen regeln gäller: ett ord i en
  * kommentar eller i en nyckel kan ingen körning leta efter. Sökningen är
@@ -735,7 +735,7 @@ it('har inte kvar det gamla ordet i koden, språkfilerna eller rutterna', functi
         ...File::allFiles(app_path()),
         ...File::allFiles(lang_path()),
         ...File::allFiles(base_path('routes')),
-        new SplFileInfo(resource_path('js/components/ItemLinkSection.vue')),
+        new SplFileInfo(resource_path('js/components/ItemLinkForm.vue')),
     ];
 
     $träffar = [];

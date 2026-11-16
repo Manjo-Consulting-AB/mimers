@@ -1,9 +1,13 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { Link } from '@inertiajs/vue3';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { Link, router } from '@inertiajs/vue3';
 import CreateMenu from './CreateMenu.vue';
+import ItemLinkForm from './ItemLinkForm.vue';
 import ItemMapEdges from './ItemMapEdges.vue';
 import ItemMapNode from './ItemMapNode.vue';
+import UiConfirmDialog from './UiConfirmDialog.vue';
+import UiIcon from './UiIcon.vue';
+import UiSheet from './UiSheet.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { mapLayout, rowWidth } from '../support/mapLayout.js';
 
@@ -90,10 +94,16 @@ import { mapLayout, rowWidth } from '../support/mapLayout.js';
  * *Open in map* med `compact`, som leder till hela kartan med itemet som mitt
  * (ADR-0063 § 6).
  *
- * ***+N till* visas när `total` är större än antalet ritade noder** och leder
- * till `overflowHref` — relationsfliken kring ett item och listläget kring
- * containern utan `compact`, och containerns kartläge med itemet som mitt med
- * `compact`.
+ * ***+N till* visas när `total` är större än antalet ritade noder.** Kring ett
+ * item i den fulla formen fäller den ut gruppen till en lista med alla dess
+ * items i kartans ram (`?expand=<slag>`, issue 1339 · [[ADR-0082 Kartan är
+ * relationernas yta]] § 3); i den smala formen leder den till `overflowHref`,
+ * containerns kartläge med itemet som mitt, och kring containern till trädet.
+ *
+ * ***Unlink* finns bara i den fulla formen** (ADR-0082 § 3): på varje kort
+ * runt mitten och på varje rad i den utfällda listan, bakom appens
+ * bekräftelsedialog. Servern prövar `update` på båda itemen och skickar
+ * `unlinkable`; vyn ritar bara det den fått. Den smala formen får ingen.
  *
  * **Vägen till mitten står ovanför kartan** (issue 298 · ADR-0059:s beslut 9):
  * containerns namn först, som leder till kartan utan `focus`, sedan varje led i
@@ -124,6 +134,24 @@ const props = defineProps({
      * linjelager, inget öga, ingen väg och högst fyra noder per grupp.
      */
     compact: { type: Boolean, default: false },
+    /*
+     * Gruppen *+N till* fällde ut, `{kind, nodes: [{ulid, name, icon,
+     * icon_color}]}` med ALLA dess items, eller null (issue 1339 · [[ADR-0082
+     * Kartan är relationernas yta]] § 3). Ritas som lista i kartans ram.
+     */
+    expanded: { type: Object, default: null },
+    /*
+     * ULID:erna på korten och raderna som får *Unlink*: servern prövar
+     * `update` på mitten och på varje motpart. Tom i den kompakta formen och
+     * för den som inte får ändra — ingen annan regel finns i vyn.
+     */
+    unlinkable: { type: Array, default: () => [] },
+    /*
+     * Formulärets underlag, `{counterparts}`, när adressen bär `add=relation`,
+     * mitten är ett item och hon får ändra det — annars null. Formuläret öppnas
+     * i ett ark över kartan (ADR-0082 § 3).
+     */
+    linkForm: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -147,6 +175,94 @@ const openHref = (node) => `${base.value}/${node.ulid}`;
  * noden och ögat öppnar itemets sida; i den smala formen är kortets mål
  * itemets sida och ögat ritas inte.
  */
+
+/*
+ * *+N till* (issue 1339 · ADR-0082 § 3). Kring ett item i den fulla formen
+ * fäller den ut gruppen i kartans ram (`?expand=<slag>`); i den smala formen
+ * och kring containern leder den till `overflowHref`, som förut.
+ */
+const moreHref = (kind) => (
+    !props.compact && props.map.center.kind === 'item'
+        ? `${base.value}?view=map&focus=${props.map.center.ulid}&expand=${kind}${filterTail.value}`
+        : props.overflowHref
+);
+
+/* Adressen utan `expand` — *Collapse* i den utfällda listan. */
+const collapseHref = computed(
+    () => `${base.value}?view=map&focus=${props.map.center.ulid}${filterTail.value}`,
+);
+
+/*
+ * *Unlink* (issue 1339 · ADR-0082 § 3): bara i den fulla formen, och bara för
+ * de ULID:er servern släppt igenom. Bekräftelsen är appens egen dialog
+ * (ADR-0068 § 6) och säger att bara kopplingen försvinner.
+ */
+const canUnlink = (node) => !props.compact && props.unlinkable.includes(node.ulid);
+
+const unlinkTarget = ref(null);
+const unlinkTrigger = ref(null);
+const unlinking = ref(false);
+
+function askUnlink({ node, trigger }) {
+    unlinkTarget.value = node;
+    unlinkTrigger.value = trigger;
+}
+
+function unlink() {
+    const node = unlinkTarget.value;
+
+    if (node === null) {
+        return;
+    }
+
+    router.delete(`${base.value}/${props.map.center.ulid}/links/${node.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { unlinking.value = true; },
+        onFinish: () => {
+            unlinking.value = false;
+            unlinkTarget.value = null;
+        },
+    });
+}
+
+/*
+ * Formuläret för en ny relation, i ett ark över kartan. Arket öppnas av en
+ * ÄNDRING av `open` — ett ark som föds öppet visas aldrig — så `formOpen`
+ * börjar falskt och sätts efter monteringen. Att stänga leder till kartan
+ * utan `add`; en sparad relation gör det genom serverns omdirigering.
+ */
+const formOpen = ref(false);
+const sheetTrigger = { focus() {} };
+
+onMounted(() => {
+    nextTick(() => {
+        formOpen.value = props.linkForm !== null;
+    });
+});
+
+watch(() => props.linkForm, (form) => {
+    formOpen.value = form !== null;
+});
+
+const closing = ref(false);
+
+function closeLinkForm() {
+    if (props.linkForm === null || closing.value) {
+        return;
+    }
+
+    router.get(collapseHref.value, {}, {
+        replace: true,
+        preserveScroll: true,
+        onStart: () => { closing.value = true; },
+        onFinish: () => { closing.value = false; },
+    });
+}
+
+const expandedLabel = computed(() => (
+    props.expanded === null ? '' : t(`item.links.group.${props.expanded.kind}`)
+));
+
 const nodeHref = (node) => (props.compact ? openHref(node) : focusHref(node));
 const nodeOpenHref = (node) => (props.compact ? null : openHref(node));
 
@@ -427,13 +543,15 @@ function closeMenu() {
                         :size="nodeSize"
                         :href="nodeHref(node)"
                         :open-href="nodeOpenHref(node)"
+                        :unlinkable="canUnlink(node)"
                         @open-menu="openMenu"
+                        @unlink="askUnlink"
                     />
                 </ul>
 
                 <Link
                     v-if="moreParents > 0"
-                    :href="overflowHref"
+                    :href="moreHref('parent')"
                     class="mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
                 >
                     {{ t('item.map.more', { count: moreParents }) }}
@@ -471,7 +589,9 @@ function closeMenu() {
                             :size="nodeSize"
                             :href="focusHref(node)"
                             :open-href="openHref(node)"
+                            :unlinkable="canUnlink(node)"
                             @open-menu="openMenu"
+                            @unlink="askUnlink"
                         />
                     </ul>
 
@@ -507,12 +627,14 @@ function closeMenu() {
                             :size="nodeSize"
                             :href="focusHref(node)"
                             :open-href="openHref(node)"
+                            :unlinkable="canUnlink(node)"
                             @open-menu="openMenu"
+                            @unlink="askUnlink"
                         />
 
                         <li v-if="moreRelated > 0">
                             <Link
-                                :href="overflowHref"
+                                :href="moreHref('related')"
                                 class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
                             >
                                 {{ t('item.map.more', { count: moreRelated }) }}
@@ -543,13 +665,15 @@ function closeMenu() {
                         :size="nodeSize"
                         :href="nodeHref(node)"
                         :open-href="nodeOpenHref(node)"
+                        :unlinkable="canUnlink(node)"
                         @open-menu="openMenu"
+                        @unlink="askUnlink"
                     />
                 </ul>
 
                 <Link
                     v-if="moreChildren > 0"
-                    :href="overflowHref"
+                    :href="moreHref('child')"
                     class="mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
                 >
                     {{ t('item.map.more', { count: moreChildren }) }}
@@ -575,18 +699,81 @@ function closeMenu() {
                 :status="statusFor(node)"
                 :href="nodeHref(node)"
                 :open-href="nodeOpenHref(node)"
+                :unlinkable="canUnlink(node)"
                 @open-menu="openMenu"
+                @unlink="askUnlink"
             />
 
             <li v-if="moreRelated > 0">
                 <Link
-                    :href="overflowHref"
+                    :href="moreHref('related')"
                     class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
                 >
                     {{ t('item.map.more', { count: moreRelated }) }}
                 </Link>
             </li>
         </ul>
+
+        <!--
+            Hela gruppen (issue 1339 · [[ADR-0082 Kartan är relationernas
+            yta]] § 3): *+N till* fäller ut gruppen till en lista med alla dess
+            items, i kartans ram. Listan är också kartans textform för
+            tangentbord och skärmläsare. Varje rad länkar till itemet som mitt
+            och har *Unlink* när servern släppt igenom den. Motparter utanför
+            omfånget finns inte i listan: servern har filtrerat den.
+        -->
+        <section
+            v-if="expanded !== null"
+            data-map-expanded
+            class="mt-6 rounded-card border border-border bg-surface px-4 py-3"
+        >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-title font-medium text-ink">
+                    {{ t('item.map.legend', { kind: expandedLabel, count: expanded.nodes.length }) }}
+                </h2>
+
+                <Link
+                    :href="collapseHref"
+                    class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+                >
+                    {{ t('item.map.collapse') }}
+                </Link>
+            </div>
+
+            <ul class="mt-2 flex flex-col">
+                <li
+                    v-for="node in expanded.nodes"
+                    :key="node.ulid"
+                    class="flex flex-wrap items-center justify-between gap-2 border-t border-border first:border-t-0"
+                >
+                    <Link
+                        :href="focusHref(node)"
+                        class="flex min-h-11 min-w-0 items-center rounded-control px-1 text-body font-medium text-accent hover:underline"
+                    >
+                        <span class="truncate">{{ node.name }}</span>
+                    </Link>
+
+                    <span class="flex items-center gap-1">
+                        <Link
+                            :href="openHref(node)"
+                            :aria-label="t('item.map.open', { name: node.name })"
+                            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control text-accent hover:bg-surface-sunken"
+                        >
+                            <UiIcon name="open" :size="16" />
+                        </Link>
+
+                        <button
+                            v-if="canUnlink(node)"
+                            type="button"
+                            class="inline-flex min-h-11 items-center rounded-control px-2 text-meta text-danger hover:underline"
+                            @click="askUnlink({ node, trigger: $event.currentTarget })"
+                        >
+                            {{ t('item.links.remove') }}
+                        </button>
+                    </span>
+                </li>
+            </ul>
+        </section>
 
         <!--
             Teckenförklaringen: de tre slagen med gruppens `total`, och ⇄
@@ -631,6 +818,40 @@ function closeMenu() {
             här: arket öppnas av en ÄNDRING av `open`, och ett ark som monteras
             med `open` redan sant hinner aldrig se den.
         -->
+        <!--
+            Ny relation (issue 1339 · [[ADR-0082 Kartan är relationernas yta]]
+            § 3): formuläret i ett ark över kartan. Arket är monterat hela
+            tiden, och formuläret ritas bara när servern skickat underlaget
+            — `add=relation`, ett item som mitt och `update` på det.
+        -->
+        <UiSheet
+            v-if="!compact"
+            :open="formOpen"
+            :heading="t('item.links.form_heading')"
+            :trigger="sheetTrigger"
+            @close="closeLinkForm"
+        >
+            <ItemLinkForm
+                v-if="linkForm !== null"
+                :container-ulid="containerUlid"
+                :item-ulid="map.center.ulid"
+                :counterparts="linkForm.counterparts"
+                @cancel="closeLinkForm"
+            />
+        </UiSheet>
+
+        <UiConfirmDialog
+            :open="unlinkTarget !== null"
+            :heading="t('item.links.remove_heading', { name: unlinkTarget?.name ?? '' })"
+            :body="t('item.links.remove_confirm')"
+            :confirm-label="t('item.links.remove')"
+            tone="danger"
+            :pending="unlinking"
+            :trigger="unlinkTrigger"
+            @confirm="unlink"
+            @cancel="unlinkTarget = null"
+        />
+
         <CreateMenu
             :open="menuOpen"
             :trigger="menuTrigger"

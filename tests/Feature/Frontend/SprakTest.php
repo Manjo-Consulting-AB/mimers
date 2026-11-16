@@ -1264,9 +1264,7 @@ it('hämtar kartans strängar ur ui.php', function () {
         'js/components/ItemMap.vue',
         'js/components/ItemMapNode.vue',
         'js/components/ItemMapPanel.vue',
-        // Växelns eget namn slås upp av relationsfliken, som äger läget, och
-        // lägenas etiketter av vyn, som bygger deras adresser.
-        'js/components/ItemLinkSection.vue',
+        'js/components/ItemLinkForm.vue',
         'js/pages/Containers/Items/Show.vue',
     ] as $fil) {
         preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
@@ -1277,9 +1275,10 @@ it('hämtar kartans strängar ur ui.php', function () {
     }
 
     expect($nycklar)->toContain('item.map.heading')
-        ->toContain('item.map.view.label')
-        ->toContain('item.map.view.focus')
-        ->toContain('item.map.view.list')
+        ->toContain('item.map.collapse')
+        ->toContain('item.links.remove')
+        ->toContain('item.links.remove_heading')
+        ->toContain('item.links.unlink_node')
         ->toContain('item.map.node_menu')
         ->toContain('item.map.more')
         ->toContain('item.map.open_full');
@@ -1292,8 +1291,8 @@ it('hämtar kartans strängar ur ui.php', function () {
     expect(Lang::get('ui.item.map.kind.parent', [], 'en'))->toBe('Parent')
         ->and(Lang::get('ui.item.map.kind.child', [], 'en'))->toBe('Child')
         ->and(Lang::get('ui.item.map.kind.related', [], 'en'))->toBe('Related')
-        ->and(Lang::get('ui.item.map.view.list', [], 'en'))->toBe('List')
-        ->and(Lang::get('ui.item.map.view.focus', [], 'en'))->toBe('Focus');
+        ->and(Lang::get('ui.item.map.collapse', [], 'en'))->toBe('Show fewer')
+        ->and(Lang::get('ui.item.links.remove', [], 'en'))->toBe('Unlink');
 
     // *+N till* bär talet, nodens knapp namnger noden och *Open in map* är
     // länken till hela kartan (ADR-0063 § 6).
