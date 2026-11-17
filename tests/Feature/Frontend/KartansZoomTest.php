@@ -218,14 +218,14 @@ it('lägger Neighbourhood ut radiellt utan simulering, och ritar ringarna (issue
     expect(kartanszoomFunktion('forceLayout'))->toContain('forceSimulation(simNodes)')
         ->and($grafen)->toContain('whole.value ? forceLayout() : radial.value.positions');
 
-    // Ringarna ritas under kanterna: helt svarta, 4.5 breda, utan opacitet.
+    // Ringarna ritas under kanterna: helt svarta, 2.25 breda, utan opacitet.
     expect($grafen)->toContain('data-item-graph-rings')
         ->toContain('v-for="(radius, index) in rings"');
 
     $start = (int) strpos($grafen, 'data-item-graph-rings');
     $ringar = substr($grafen, $start, (int) strpos($grafen, '</g>', $start) - $start);
     expect($ringar)->toContain('stroke="#000"')
-        ->toContain('stroke-width="4.5"');
+        ->toContain('stroke-width="2.25"');
     expect(str_contains($ringar, 'opacity'))->toBeFalse();
 
     expect(strpos($grafen, 'data-item-graph-rings'))->toBeLessThan((int) strpos($grafen, 'v-for="line in lines"'));
