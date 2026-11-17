@@ -41,7 +41,8 @@ import { loadIcon } from './itemIconPresentation.js';
  * containern, bara att läsa, och **samma nod som *Neighbourhood*** — en rund
  * platta med itemets ikon. Status `overdue` är en liten prick i `danger` nere
  * till höger; `ok` har ingen. Namnen har fast storlek på skärmen och ritas
- * från början under `ALL_NAMES_BELOW` noder, annars från `LABEL_ZOOM`.
+ * från början under `ALL_NAMES_BELOW` noder, annars från `LABEL_ZOOM`; i
+ * *Neighbourhood* ritas alla namn från start.
  * **Panoreringen och zoomen gäller båda lägena** (issue 396 · § 7). Bilden
  * panoreras med dra eller piltangenterna och zoomas med hjul, nyp, knapparna
  * `+` och `−` eller tangenterna `+` och `−`, till som mest fem steg över
@@ -417,6 +418,7 @@ function startView() {
 const layerTransform = computed(() => `translate(${view.value.x} ${view.value.y}) scale(${view.value.k})`);
 
 const showNames = computed(() => view.value.k >= LABEL_ZOOM
+    || !whole.value
     || (whole.value && props.nodes.length < ALL_NAMES_BELOW));
 
 /* Skärmpixlar → viewBox-enheter (preserveAspectRatio `meet`). */
@@ -609,9 +611,8 @@ function go(event, href) {
                             cy="0"
                             :r="radius"
                             fill="none"
-                            stroke="var(--color-border)"
-                            stroke-width="18"
-                            opacity="0.6"
+                            stroke="#000"
+                            stroke-width="4.5"
                         />
                     </g>
 

@@ -92,8 +92,8 @@ it('ritar linjerna som kartan: heldragna till struktur och streckade till relate
     expect($grafen)->toContain("line.related ? 'var(--color-ink-subtle)' : 'var(--color-accent)'")
         ->toContain("line.related ? '6 5' : undefined");
 
-    // Färgerna är designsystemets token och aldrig hex.
-    expect($grafen)->not->toMatch('/#[0-9a-fA-F]{3,6}\b/');
+    // Färgerna är designsystemets token och aldrig hex — utom ringarnas svarta (issue 1376).
+    expect(str_replace('stroke="#000"', '', $grafen))->not->toMatch('/#[0-9a-fA-F]{3,6}\b/');
 });
 
 it('gör noderna till länkar som går att nå med tangentbordet och som visar namn och status', function () {
@@ -218,10 +218,15 @@ it('lägger Neighbourhood ut radiellt utan simulering, och ritar ringarna (issue
     expect(kartanszoomFunktion('forceLayout'))->toContain('forceSimulation(simNodes)')
         ->and($grafen)->toContain('whole.value ? forceLayout() : radial.value.positions');
 
-    // Ringarna ritas under kanterna i en dämpad token.
+    // Ringarna ritas under kanterna: helt svarta, 4.5 breda, utan opacitet.
     expect($grafen)->toContain('data-item-graph-rings')
-        ->toContain('v-for="(radius, index) in rings"')
-        ->toContain('stroke="var(--color-border)"');
+        ->toContain('v-for="(radius, index) in rings"');
+
+    $start = (int) strpos($grafen, 'data-item-graph-rings');
+    $ringar = substr($grafen, $start, (int) strpos($grafen, '</g>', $start) - $start);
+    expect($ringar)->toContain('stroke="#000"')
+        ->toContain('stroke-width="4.5"');
+    expect(str_contains($ringar, 'opacity'))->toBeFalse();
 
     expect(strpos($grafen, 'data-item-graph-rings'))->toBeLessThan((int) strpos($grafen, 'v-for="line in lines"'));
 });
@@ -333,6 +338,7 @@ it('ritar alla namn under 40 noder och annars från LABEL_ZOOM (issue 397)', fun
     expect($grafen)->toContain('const ALL_NAMES_BELOW = 40;')
         ->toContain('view.value.k >= LABEL_ZOOM')
         ->toContain('props.nodes.length < ALL_NAMES_BELOW')
+        ->toContain('|| !whole.value')
         ->toContain('(showNames || node.hit || node.isCenter) && node.ulid !== active');
 });
 
