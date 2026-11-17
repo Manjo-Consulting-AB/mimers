@@ -612,7 +612,7 @@ function go(event, href) {
                             :r="radius"
                             fill="none"
                             stroke="#000"
-                            stroke-width="4.5"
+                            stroke-width="2.25"
                         />
                     </g>
 
