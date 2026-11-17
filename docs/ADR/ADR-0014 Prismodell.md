@@ -1,6 +1,6 @@
 # ADR-0014 Prismodell
 
-**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · [[ADR-index]]
 
 ## Kontext
 

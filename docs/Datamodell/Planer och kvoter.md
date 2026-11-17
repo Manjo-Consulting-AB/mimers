@@ -2,7 +2,7 @@
 
 Vad varje plan tillåter, hur förbrukning räknas, och vad som händer när någon slutar betala. Läs [[Datamodell – översikt]] först.
 
-Beslut bakom detta: [[ADR-0014 Prismodell]], [[ADR-0009 Kvoter och livscykel]], [[ADR-0081 All lagrad data räknas mot kvoten]].
+Beslut bakom detta: [[ADR-0014 Prismodell]], [[ADR-0086 Pro, Pro+ och grundarpris]], [[ADR-0009 Kvoter och livscykel]], [[ADR-0081 All lagrad data räknas mot kvoten]].
 
 ## Varför det här byggs i MVP fast betalning inte gör det
 
@@ -15,7 +15,7 @@ Rättighetslagret byggs alltså nu. Betalflödet kopplas på när det finns någ
 | Kolumn | Typ |
 |---|---|
 | id | |
-| code | VARCHAR(40) UNIQUE — `free`, `pro`, `broker`, `yard`, `charter` |
+| code | VARCHAR(40) UNIQUE — `free`, `pro`, `pro_plus`, `pro_founder`, `pro_plus_founder`, `broker`, `yard`, `charter` |
 | name | VARCHAR(100) |
 | price_amount | BIGINT — minsta valutaenhet |
 | price_currency | CHAR(3) |
@@ -29,24 +29,26 @@ Ett nytt B2B-erbjudande ska vara en ny rad i den här tabellen, inte ny kod. Det
 
 ## Gränserna i MVP
 
-| | Free | Pro |
-|---|---|---|
-| Containers | 1 | obegränsat |
-| Utrymme | 1 GB | 25 GB |
-| Max filstorlek | 10 MB | 64 MB |
-| Delade användare per container | 1 | obegränsat |
-| Påminnelser och ICS | ja | ja |
-| Export | ja | ja |
-| Registrera kostnader | ja | ja |
-| Kostnadsrapporter | nej | ja |
-| Webhooks | nej | ja |
-| PDF-pärm | nej | ja |
-| Ägarbyte | nej | ja |
-| Utlåningspåminnelser | nej | ja |
+| | Free | Pro | Pro+ |
+|---|---|---|---|
+| Listpris per år | 0 | 39 € | 69 € |
+| Grundarpris per år | — | 19 € | 39 € |
+| Containers | 1 | obegränsat | obegränsat |
+| Utrymme | 1 GB | 10 GB | 50 GB |
+| Max filstorlek | 10 MB | 64 MB | 64 MB |
+| Delade användare per container | 1 | obegränsat | obegränsat |
+| Påminnelser och ICS | ja | ja | ja |
+| Export | ja | ja | ja |
+| Registrera kostnader | ja | ja | ja |
+| Kostnadsrapporter | nej | ja | ja |
+| Webhooks | nej | ja | ja |
+| PDF-pärm | nej | ja | ja |
+| Ägarbyte | nej | ja | ja |
+| Utlåningspåminnelser | nej | ja | ja |
 
 Pro-taket på 64 MB är satt av servern, inte av prismodellen: `upload_max_filesize` hos inleed står på 64M, se [[Pipeline]] § Uppladdningsgränser. Det tekniska taket i `config/files.php` är samma tal, och `max_file_bytes` ska aldrig ligga över det — en plangräns som aldrig hinner slå i blir ett HTTP-fel istället för ett förklarat kvotmeddelande. Byter vi hostingplattform kan talet justeras om kunderna efterfrågar det.
 
-Pro ligger på **39–49 €/år**. Påminnelser och export är medvetet fria: påminnelserna skapar vanan, exporten skapar förtroendet. Se [[ADR-0014 Prismodell]].
+Grundarpriserna är egna rader, `pro_founder` och `pro_plus_founder`, med `is_public = false` och samma `limits` som `pro` och `pro_plus`. Ett pris byts genom en ny rad, aldrig genom att en befintlig skrivs om, så att en löpande prenumeration behåller sitt pris. Påminnelser och export är fria på alla nivåer. Se [[ADR-0086 Pro, Pro+ och grundarpris]].
 
 B2B-nivåerna finns i [[ADR-0014 Prismodell]] och byggs inte i MVP.
 
@@ -140,4 +142,4 @@ Skicka fler än en varning. Radering av flera års dokumentation efter ett enda 
 
 Vid accept av ett ägarbyte kontrolleras mottagarens plan. Ryms inte containern nekas överlåtelsen med felkod — ett gratiskonto ska inte kunna ärva en pärm på åtta gigabyte.
 
-Mottagaren får **tolv månader Pro** som del av överlämningen. Båtaffären blir därmed kundanskaffningskanal: säljaren betalar redan, köparen ärver en välfylld pärm hon inte vill förlora, och när året går ut har hon ett års egen historik i den.
+Mottagaren får **tolv månader** som del av överlämningen: har kontot redan Pro eller Pro+ förlängs den planen, annars ges Pro. Bonusen sänker aldrig planen, se [[ADR-0086 Pro, Pro+ och grundarpris]] § 7. Båtaffären blir därmed kundanskaffningskanal: säljaren betalar redan, köparen ärver en välfylld pärm hon inte vill förlora, och när året går ut har hon ett års egen historik i den.
