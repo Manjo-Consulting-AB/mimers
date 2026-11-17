@@ -292,6 +292,7 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
             <button
                 v-if="rows.length > 0"
                 type="button"
+                data-item-map-menu
                 class="absolute bottom-0 right-0 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-pill text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :aria-label="t('item.map.node_menu', { name: node.name })"
                 @click="emit('open-menu', { rows, trigger: $event.currentTarget, name: node.name })"

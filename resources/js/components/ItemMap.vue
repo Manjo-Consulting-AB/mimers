@@ -232,7 +232,19 @@ function unlink() {
  * utan `add`; en sparad relation gör det genom serverns omdirigering.
  */
 const formOpen = ref(false);
-const sheetTrigger = { focus() {} };
+const mapRoot = ref(null);
+
+/*
+ * Arket öppnas efter en Inertia-navigering, så knappen som öppnade menyn finns
+ * inte kvar — men mittkortets plusknapp ritas om på samma plats. Triggern slår
+ * upp den vid varje anrop; saknas knappen faller arket tillbaka till sitt
+ * ofästa läge utan fel.
+ */
+const menuButton = () => mapRoot.value?.querySelector('[data-item-map-menu]') ?? null;
+const sheetTrigger = {
+    getBoundingClientRect: () => menuButton()?.getBoundingClientRect(),
+    focus: () => menuButton()?.focus(),
+};
 
 onMounted(() => {
     nextTick(() => {
@@ -448,7 +460,7 @@ function closeMenu() {
 </script>
 
 <template>
-    <div>
+    <div ref="mapRoot">
         <!--
             Vägen till mitten (issue 298 · ADR:ns beslut 9): containern först,
             sedan leden från roten ned till mitten. Varje led utom det sista
