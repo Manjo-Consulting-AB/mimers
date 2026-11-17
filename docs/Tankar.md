@@ -2,7 +2,7 @@
 
 Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rätt dokument — datamodellen om den beskriver *vad*, en ADR om den beskriver *varför* — och stryks härifrån. Står något kvar som redan är avgjort blir filen värdelös som lista över vad som faktiskt återstår.
 
-Öppna frågor som redan hör hemma i ett beslut bor där, inte här: S3-frågan och prispunkten i [[Översikt]] § Öppna frågor, och de fem sakerna att verifiera hos inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
+Öppna frågor som redan hör hemma i ett beslut bor där, inte här: S3-frågan i [[Översikt]] § Öppna frågor, och de fem sakerna att verifiera hos inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
 
 ## Öppet
 
@@ -27,6 +27,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 - **Ska `webhook` stå kvar som kanal i `notification_delivery` och `notification_preference`?** Sedan issue 37b bor webhookleveranserna i en egen tabell, `webhook_delivery`, med en rad per endpoint och notis. Ingen kod skriver längre en rad med `channel = 'webhook'` i `notification_delivery`. CHECK-villkoren i båda tabellerna tillåter ändå `('email', 'webhook')`, och `NotificationDelivery::CHANNELS` har kvar `CHANNEL_WEBHOOK`. [[Notiser]] § notification_delivery säger sedan PR #1097 att kanalen bara är `email`, så dokumentet och schemat säger olika saker. Att strama åt villkoret är billigt, men det stänger en väg som kanske behövs. Om webhooks ska kunna styras per mottagare eller per notistyp via `notification_preference`, eller bli en kanal bland andra i samma kö, är värdet rätt där det står. Frågan är alltså inte schemat utan om webhooks ska förbli en kontonivåfunktion vid sidan av notiskedjan ([[ADR-0010 Notisarkitektur]]), eller bli en kanal som användaren väljer per notis. Svaret avgör om villkoren stramas åt eller om dokumentet rättas tillbaka. Restes när #1097 mergades, 2026-11-12.
 
 - **Vad gör kortkommandot `N`, och vart leder plusknappen på containerns flikar?** [[ADR-0074 Registrering i vyn]] § 7 sköt båda till efter att *To do*, *Items* och *Documents* är byggda. När M55 är byggd är alla tre klara ([[M52 Registrering i vyn]], [[M54 Registrering i vyn - Items]], [[M55 Registrering i vyn - Documents]]), och *Costs* ([[M56 Registrering i vyn - Costs]]) är den fjärde. Frågan är då fortfarande öppen och gäller nu också *Costs*. Plusknappen (`CreateTarget::forContainerTab()`) leder i dag till `/items/create` från *Items* och till itemets bilageflik från *Documents*, fast flikarna får ett eget formulär i M54 och M55. På *Costs* leder plusknappen i dag till itemets kostnadsflik, fast fliken får ett eget formulär i M56. Ska den fälla ut flikens formulär, och ska `N` göra detsamma på den flik man står på? Vad händer på flikar utan formulär? Restes 2026-11-12.
+
+- **Vad ska sidan om vart pengarna går innehålla?** [[ADR-0086 Pro, Pro+ och grundarpris]] § 6 bestämmer att sidan ska finnas: vad priset betalar för (lagring i Sverige och Frankrike, backup, support, utveckling), att vi inte har annonser eller säljer data, löftet att befintliga kunder aldrig får höjt pris, och att export och påminnelser är fria på alla nivåer. Det som inte är bestämt: om sidan ska visa siffror, till exempel ungefärlig kostnad per kund och år eller hur stor del av priset som går till lagring, betalning och drift, eller bara principer. Var sidan ska ligga, som en egen sida, en del av prissidan eller båda. Om den ska uppdateras löpande, och vem som gör det. Den ska finnas innan betalflödet öppnar. Restes 2026-11-18.
 
 ## Avgjort och flyttat
 

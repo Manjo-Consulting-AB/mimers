@@ -62,5 +62,4 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 
 ## Öppna frågor
 
-- Exakt prispunkt inom 39–49 €/år.
 - B2B-priser är resonerade uppskattningar, inte marknadsdata.
