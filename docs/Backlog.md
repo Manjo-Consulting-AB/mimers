@@ -83,6 +83,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M62 Kartan är relationernas yta]] | **392–394** | relationsfliken bort och redigeringen i den fulla kartan, zoomnivåerna *Neighbourhood* och *Whole container* med `d3-force` — bygger [[ADR-0082 Kartan är relationernas yta]] |
 | [[M63 Itemets släkt]] | **395–397** | grannskapet utan stegräkning och ritat som ett radialt träd med ringar efter avstånd, och hela containern med samma nod — bygger [[ADR-0083 Grannskapet är itemets släkt]] och [[ADR-0084 Hela containern med itemets ikon]] |
 | [[M64 Profilen bär kontot]] | **398** | kontosidan bort, personkontots namn och valuta på profilsidan och ett lager för språk, tidszon och enhetssystem — bygger [[ADR-0085 Profilen bär personkontot]] |
+| [[M65 Pro+ och grundarpris]] | **399** | planraderna för Pro, Pro+ och grundarpriserna, och bonusen vid ägarbyte som aldrig sänker planen — bygger [[ADR-0086 Pro, Pro+ och grundarpris]] |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
