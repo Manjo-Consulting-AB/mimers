@@ -8,6 +8,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
+use App\Support\Mcp\ContainerGate;
 use App\Support\Mcp\Cursor;
 use App\Support\Mcp\McpToolException;
 use App\Support\Mcp\ToolKind;
@@ -60,14 +61,16 @@ class ContainersTree extends McpTool
 
         $container = Container::query()->with('account')->where('ulid', $args['container'])->first();
 
-        // Åtkomsten prövas per item nedan; här räcker det att agenten alls
-        // har en rad för gruppen i containern. Ingen rad är en container
-        // agenten inte vet finns.
-        $enabled = $container !== null && AgentContainerGrant::query()
-            ->where('agent_id', $agent->id)
-            ->where('container_id', $container->id)
-            ->where('group', $this->group->value)
-            ->exists();
+        // Samma grind som containers_list (ContainerGate), därtill en grant i
+        // items-gruppen. Åtkomsten prövas sedan per item nedan. Ingen
+        // åtkomst är en container agenten inte vet finns.
+        $enabled = $container !== null
+            && app(ContainerGate::class)->reaches($agent, $container)
+            && AgentContainerGrant::query()
+                ->where('agent_id', $agent->id)
+                ->where('container_id', $container->id)
+                ->where('group', $this->group->value)
+                ->exists();
 
         if (! $enabled) {
             throw new McpToolException('resource.not_found');

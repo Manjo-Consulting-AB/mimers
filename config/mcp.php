@@ -10,7 +10,7 @@
  * **`enabled` är en switch per miljö.** Koden rullas ut med den av, och MCP
  * öppnas först när testarna godkänt den på staging (Riktning 17). Är den
  * falsk svarar klientregistreringen, godkännandet och `/.well-known/`-metadatan
- * 404 — se App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled.
+ * 404 — se App\Mcp\Middleware\EnsureMcpEnabled.
  *
  * **Redirect-URI:erna är `https` och tillhör en domän i listan.** Undantaget är
  * loopback-adresserna, som klienter på samma maskin (Claude Code) använder

@@ -1,6 +1,5 @@
 <?php
 
-use App\Actions\Agent\ResolveAgentAccess;
 use App\Models\Agent;
 use App\Models\AgentAccountGrant;
 use App\Models\AgentContainerGrant;
@@ -9,6 +8,7 @@ use App\Models\Item;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Support\Agent\AgentGroup;
+use App\Support\Mcp\ContainerGate;
 use App\Support\Mcp\Cursor;
 use App\Support\Mcp\Hints;
 use App\Support\Mcp\McpRateLimiter;
@@ -244,7 +244,7 @@ it('bär ingen undantagstext i server.error', function () {
     mcpEgenContainer($agent);
 
     // Rättighetsprövningen kastar ett undantag med en text som inte får ut.
-    app()->bind(ResolveAgentAccess::class, fn () => throw new RuntimeException('hemlig-text-123'));
+    app()->bind(ContainerGate::class, fn () => throw new RuntimeException('hemlig-text-123'));
 
     $svar = mcpVerktyg($token, 'containers_list');
     $fel = mcpFel($svar);
@@ -456,6 +456,26 @@ it('visar inga items användaren inte når i containers_tree', function () {
     $svar = mcpResultat(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid]));
 
     expect(collect($svar['items'])->pluck('name')->all())->toBe(['Delat']);
+});
+
+it('listar och öppnar en container där medlemmen bara har en item-delning', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+
+    [, $agare] = mcpKonto('pro');
+    $container = Container::factory()->for($agare->accounts()->first(), 'account')->create();
+    mcpSlaPaI($agent, $container);
+    $delat = Item::factory()->create(['container_id' => $container->id, 'name' => 'Delat']);
+    $rad = beviljaAccess($container, $anvandare, 'read', 'member');
+    $rad->forceFill(['item_id' => $delat->id, 'agent_level' => 'read'])->save();
+
+    $lista = mcpResultat(mcpVerktyg($token, 'containers_list'));
+
+    expect(collect($lista['containers'])->pluck('ulid')->all())->toBe([$container->ulid])
+        ->and($lista['containers'][0]['owned_by_user'])->toBeFalse();
+
+    $trad = mcpResultat(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid]));
+
+    expect(collect($trad['items'])->pluck('name')->all())->toBe(['Delat']);
 });
 
 it('svarar resource.not_found för en container agenten inte är påslagen i', function () {

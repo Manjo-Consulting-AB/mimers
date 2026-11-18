@@ -63,6 +63,10 @@ final class McpRateLimiter
         }
 
         if ($kind === ToolKind::Upload) {
+            // Nyckeln förutsätter Laravels hashning i ThrottleRequests:
+            // md5(limiterName . key) med `uploads` och användarens id som
+            // nyckel. Ändras den hashningen delar vi inte längre hink med
+            // den befintliga `uploads`-gränsen.
             $buckets[] = [
                 md5('uploads'.$agent->user_id),
                 (int) config('files.upload_rate_limit_per_minute', 60),

@@ -18,7 +18,7 @@ use Laravel\Mcp\Facades\Mcp;
  * anslutningar, bakom guarden `mcp` (Passport). En Sanctum-token är ingen
  * Passport-token och ger 401. `ResolveAgent` hittar agentraden och sätter
  * `last_used_at`. Med `mcp.enabled` falsk svarar `/mcp` 404, se
- * App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled.
+ * App\Mcp\Middleware\EnsureMcpEnabled.
  *
  * Passports egna rutter (`/oauth/authorize`, `/oauth/token`) registreras av
  * `laravel/passport`; godkännandesidan och PKCE-grinden hängs på dem i
