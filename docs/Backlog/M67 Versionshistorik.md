@@ -82,7 +82,7 @@ GitHub #1408. **Läget:** en agents skrivning sparar inte agenten som aktör, oc
 
 **Läs:** [[ADR-0088 Versionshistorik för items]] § Riktning 4 och 5, [[ADR-0087 MCP-server för agenter]] § Riktning 3, 9, 10 och 15
 
-**Axlar:** `ambiguity` low · `blast_radius` contained · `risk_class` elevated (agentens skrivrättigheter)
+**Axlar:** `ambiguity` low · `blast_radius` cross-module (MCP-verktygen och skurvens aktör) · `risk_class` elevated (agentens skrivrättigheter)
 
 **Klart när:** en agents `items_update` sparar `replaced_by_agent_id`; användarens skrivning direkt efter agentens ger en ny version; `items_versions_list` avvisas för en agent som inte når containern; `items_versions_restore` kräver samma rättighet som `items_update`; kontraktsprovet har de två verktygen; hela sviten är grön.
 
