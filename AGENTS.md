@@ -162,6 +162,8 @@ Implementationen ligger i `bootstrap/app.php` (`withExceptions`), `App\Support\A
 
 Serverrenderat innehåll — mejl, ICS, PDF — väljer språk från mottagarens `locale`, inte från requestens `Accept-Language`.
 
+MCP-svaren bär dessutom `hint`, en fast engelsk mening per kod till agenten; REST-API:et har ingen. Se [ADR-0087](docs/ADR/ADR-0087%20MCP-server%20f%C3%B6r%20agenter.md) Riktning 18.
+
 ## Sådant som är lätt att göra fel
 
 - **Kvoter räknas på uppladdande konto**, inte på containerns ägare.

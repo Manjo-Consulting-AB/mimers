@@ -92,6 +92,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0084 Hela containern med itemets ikon]] | *Whole container* ritar varje nod som *Neighbourhood*: rund platta med itemets ikon i dess färg, statusen `overdue` som en prick, tydliga namn i fast skärmstorlek, alla namn direkt under 40 noder, raka linjer enligt ADR-0061 § 5, zoomens tak sänkt från 8 till fem knappsteg (`1.25 ** 5`) | Items, kartan |
 | [[ADR-0085 Profilen bär personkontot]] | Kontosidan tas bort; profilen bär personkontots namn (eget fält, märkt som synligt för andra) och valuta; språk, tidszon och enhetssystem utan *Följ kontots …*, sparas bara till `user` med kontot som reservvärde; ingen omdirigering från `/settings/accounts`; policyn prövar kontoskrivningen; organisationskonton får egen flik när de finns | Konton, inställningar |
 | [[ADR-0086 Pro, Pro+ och grundarpris]] | Gratis 1 GB, Pro 10 GB 39 €, Pro+ 50 GB 69 €; grundarpris 19/39 € första året och via inbjudningskod; prisbyte är en ny planrad; befintliga kunder får aldrig höjt pris; öppen sida om vart pengarna går; ägarbytets bonus sänker aldrig planen | [[Planer och kvoter]] |
+| [[ADR-0087 MCP-server för agenter]] | Fjärrserver med OAuth på `mimers.app/mcp`; grupperade verktyg över hela API:et; MCP kan stängas per container; agenten loggas som agent; endast Pro och Pro+; agenten börjar utan åtkomst och slås på per container och per agent; papperskorgen kan aldrig tömmas av en agent | Konton och åtkomst, API |
 
 ## Om att ändra ett beslut
 

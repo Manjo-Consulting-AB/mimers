@@ -30,7 +30,7 @@ Outboxen. Vad som hänt, till vem.
 | user_id | FK NULL | Mottagare. NULL för rena webhook-händelser till ett konto. |
 | account_id | FK | |
 | container_id | FK NULL | |
-| type | VARCHAR(60) | `task.due`, `task.overdue`, `loan.due`, `quota.warning`, `transfer.requested`, `account.inactive`, `container.deleted` |
+| type | VARCHAR(60) | `task.due`, `task.overdue`, `loan.due`, `quota.warning`, `transfer.requested`, `account.inactive`, `container.deleted`, `agent.connected`, `agent.deleted`, `agent.access_lost` |
 | subject_type, subject_id | | Vad notisen handlar om — oftast en `schedule_occurrence` |
 | payload | JSON | Data för mallen. **Ingen färdig text.** Renderas per kanal och språk vid leverans. |
 | dedupe_key | VARCHAR(191) UNIQUE NULL | Hindrar dubbletter när minutcronen kör om |
@@ -40,6 +40,8 @@ Outboxen. Vad som hänt, till vem.
 Index: `(user_id, created_at)`.
 
 `container.deleted` skickas till varje person med giltig åtkomst till en container som raderas med kontot, av [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14. Payload: containerns namn som ögonblicksbild, och skälet `owner_deleted` eller `account_inactive`. `container_id` är `NULL`, eftersom containern inte finns kvar.
+
+Tre typer gäller agenter, [[ADR-0087 MCP-server för agenter]] Riktning 14. `agent.connected` går till användaren som mejl när en ny agent ansluts, och kan inte stängas av eller samlas i `digest`. `agent.deleted` går till agentens användare, och till containerns ägare när det är någon annan, i appen och som mejl; notisen i appen kan inte stängas av eftersom den släpper raderingstaket, mejlet kan det. `agent.access_lost` går till medlemmar vars agenter tappar åtkomst när en ägare nedgraderar, en gång per ägare.
 
 `dedupe_key` är inte valfri. Cronen kör varje minut, och en generator som frågar "vilka förekommer förfaller idag" kommer att svara likadant sextio gånger i timmen.
 

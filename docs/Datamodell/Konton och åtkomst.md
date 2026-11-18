@@ -276,6 +276,7 @@ De fyra åtkomstformerna utöver ägarskap. En rad per beviljad åtkomst — och
 | grantee_id | BIGINT UNSIGNED | Polymorf: en person, eller en hel organisation |
 | level | VARCHAR(20) | `read` \| `create` \| `write` \| `delete`. En ladder, inte fria flaggor |
 | kind | VARCHAR(20) | `member` \| `managed` \| `guest` |
+| agent_level | VARCHAR(20) NULL | Ägarens tak för medlemmens agenter, på samma ladder och aldrig högre än `level`. `NULL` = inga av medlemmens agenter når containern. [[ADR-0087 MCP-server för agenter]] Riktning 6 |
 | expires_at | TIMESTAMP NULL | Satt för `guest`. Utgången access nekas i kod, raderas av städjobb. |
 | granted_by_user_id | FK NULL | `NULL` när personen raderats |
 | revoked_at | TIMESTAMP NULL | |
@@ -295,6 +296,7 @@ Delning med någon som inte har konto.
 | item_id | FK → item NULL | Speglar `container_access.item_id` — `NULL` = hela containern |
 | email | VARCHAR(255) | |
 | level | VARCHAR(20) | Samma ladder som `container_access.level` |
+| agent_level | VARCHAR(20) NULL | Taket för den inbjudnas agenter. `AcceptInvitation` för över det till `container_access.agent_level`. `NULL` = ingen agentåtkomst |
 | token_hash | CHAR(64) | SHA-256 av token. Klartexten skickas i mejlet och lagras aldrig. |
 | status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | expires_at | TIMESTAMP | |
@@ -372,6 +374,7 @@ Krävs av B2B och av ägarbyten — i en mäklarsituation är det ett värde i s
 | action | VARCHAR(60) | `container.transferred`, `access.revoked`, `container.purged`, … Öppet namnrum, inget CHECK |
 | subject_type | VARCHAR(40) NULL | Domännamn (`container_access`), aldrig ett klassnamn |
 | subject_id | CHAR(26) NULL | Subjektets ULID |
+| agent_id | BIGINT UNSIGNED NULL | Agenten som gjorde handlingen för `user_id`s räkning. Identifierare utan främmande nyckel, som `user_id`. [[ADR-0087 MCP-server för agenter]] Riktning 3 |
 | meta | JSON | Aldrig e-postadresser — loggen läses av hela ägarkontot |
 | created_at | | |
 
@@ -417,6 +420,63 @@ Säkerhetsloggen: systemets anteckning om missbruk, intrång och olagligt inneh�
 Index: `(user_id, created_at)`, `(ip_group, created_at)`, `(created_at)`.
 
 **Append-only.** Ingen `updated_at`, ingen `deleted_at`: en logg som kan ändras är inget bevis. Den enda vägen in är `RecordSecurityEvent`.
+
+## agent
+
+En ansluten AI-agent, en MCP-klient som användaren godkänt via OAuth. Se [[ADR-0087 MCP-server för agenter]] Riktning 3, 6 och 12. Agenten börjar utan åtkomst: en saknad rättighetsrad betyder ingen åtkomst.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| user_id | FK | Cascade |
+| account_id | FK | Personkontot. Cascade |
+| oauth_client_id | | Passports klient. Ett nytt godkännande från samma klient återanvänder raden; ersätts klienten byts värdet |
+| name | VARCHAR(100) | Klientens namn vid registreringen. Användaren kan byta det |
+| create_containers | BOOLEAN | Standard falsk. Rätten att skapa containrar |
+| paused_at | TIMESTAMP NULL | Satt = pausad, varje anrop avvisas |
+| last_used_at | TIMESTAMP NULL | Skrivs högst en gång per minut |
+| read_audience_until | TIMESTAMP NULL | Slutet på fönstret för `agent_read_audience` |
+| created_at, updated_at | | |
+
+UNIQUE `(user_id, oauth_client_id)`. När raden raderas återkallas klientens tokens.
+
+### agent_account_grant
+
+Vad agenten får göra, per grupp. Grupperna är `items`, `schedules`, `costs`, `loans`, `files` och `containers`.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| agent_id | FK | Cascade |
+| group | VARCHAR(20) | |
+| level | VARCHAR(20) | `read` \| `create` \| `write` \| `delete`, samma ladder som `container_access.level`. Ingen rad = ingen åtkomst |
+
+UNIQUE `(agent_id, group)`.
+
+### agent_container_grant
+
+Var agenten får göra det, en ögonblicksbild från containerns inställningar.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| agent_id | FK | Cascade |
+| container_id | FK | Cascade |
+| group | VARCHAR(20) | |
+| level | VARCHAR(20) | Aldrig högre än kontots. Ingen rad = ingen åtkomst i containern |
+
+UNIQUE `(agent_id, container_id, group)`.
+
+### agent_read_audience
+
+Snittet av de personer som når allt agenten har läst under fönstret. Ligger i databasen, aldrig i cachen. Se Riktning 10, *Kopiering*.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| agent_id | FK | Cascade |
+| user_id | FK | Cascade |
+
+UNIQUE `(agent_id, user_id)`. Fönstret är `agent.read_audience_until`.
+
+**Upplösningen.** Agentens nivå är den lägsta av kontots, containerns, ägarens tak och användarens egen, och ingen alls när agenten är pausad eller när användarens eller ägarens plan inte är Pro eller Pro+, se [[ADR-0087 MCP-server för agenter]] Riktning 4 och 6.
 
 ## usage_metric
 
