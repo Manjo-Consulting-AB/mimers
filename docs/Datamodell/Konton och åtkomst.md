@@ -6,7 +6,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 
 ## account
 
-Ägarenheten i systemet. Ett privatkonto är bara ett konto med en enda medlem — samma tabell som ett varv med tolv anställda. Planer, kvoter och fakturering hänger här, aldrig på användaren.
+Ägarenheten i systemet. **Ett konto har exakt en användare, och en användare har exakt ett konto.** Det är Tonys regel, 2026-11-18 (*"EN ANVÄNDARE PER KONTO!"*), och den gäller produkten, inte bara läget i dag. `account_user` står kvar som tabell, men att den är många-till-många är ingen öppning för flera konton per person eller flera personer per konto. Ändras regeln krävs en ADR. Planer, kvoter och fakturering hänger här, aldrig på användaren.
 
 | Kolumn | Typ | Not |
 |---|---|---|
@@ -27,7 +27,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 
 ## user
 
-En person. Tillhör ett konto via `account_user` — modellerat som många-till-många eftersom en varvsanställd i förlängningen kan finnas i flera organisationer.
+En person. Tillhör ett konto via `account_user` — modellerat som många-till-många i schemat, men en användare har exakt ett konto och ett konto exakt en användare (Tony 2026-11-18, se § account ovan). Tabellformen öppnar inte för flera konton per person.
 
 | Kolumn | Typ | Not |
 |---|---|---|

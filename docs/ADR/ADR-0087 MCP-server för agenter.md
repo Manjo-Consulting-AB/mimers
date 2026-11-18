@@ -54,7 +54,7 @@ Att HTTP-transporten fungerar på inleed verifieras på servern innan något byg
 Förbuden gäller oavsett vilka rättigheter användaren eller ägaren ger.
 
 - *Radera får den, tömma papperskorgen aldrig.* En agent med raderingsrätt får radera items och containrar. Allt hamnar i papperskorgen och går att återställa. Agenten får aldrig tömma papperskorgen eller rensa något ur den.
-- *Containrar.* Agenten får radera en container bara om användaren själv får det. `ContainerPolicy::delete` släpper bara igenom medlemmar i ägarkontot. Inga konton har mer än en medlem i dag (Tony 2026-11-18), så det är containerns ägare, och en agent kan aldrig radera någon annans container. Datamodellen tillåter flera medlemmar i ett konto (`account_user`, roller för organisationskonton). Kommer sådana konton ska regeln prövas igen, eftersom alla medlemmars agenter då kan radera kontots containrar. Att radera en delad container är användarens beslut när hen gett agenten rätten, eftersom containern landar i papperskorgen.
+- *Containrar.* Agenten får radera en container bara om användaren själv får det. `ContainerPolicy::delete` släpper bara igenom medlemmar i ägarkontot. Inga konton har mer än en medlem i dag (Tony 2026-11-18), så det är containerns ägare, och en agent kan aldrig radera någon annans container. Datamodellen tillåter flera medlemmar i ett konto (`account_user`, roller för organisationskonton). Kommer sådana konton ska regeln prövas igen, men de kommer inte utan en ny ADR: ett konto har exakt en användare ([[Konton och åtkomst]] § account, Tony 2026-11-18). Skälet till att regeln skulle prövas är att alla medlemmars agenter då kan radera kontots containrar. Att radera en delad container är användarens beslut när hen gett agenten rätten, eftersom containern landar i papperskorgen.
 - *Inga kontoinställningar.* Agenten får inte skriva eller ändra något i kontots inställningar och kan alltså inte radera eller ändra ett konto, en plan eller betalningen.
 - *Ingen åtkomst åt andra.* Agenten får inte bjuda in personer eller ändra någons åtkomst.
 - *Inga bilder som rensas direkt.* Containerns bild och profilbilden rensas med `PurgeAttachment` utan att gå via papperskorgen. Agenten får inte byta eller ta bort dem.
@@ -94,7 +94,7 @@ Text som andra har skrivit kan innehålla instruktioner till agenten. Servern ka
 
 - Servern jämför vilka som ser itemet och dess underträd före och efter flytten. Tillkommer någon avvisas agentens anrop med en egen felkod (AGENTS.md § Felformat).
 - Flyttar som inte ändrar vilka som ser underträdet, och flyttar som tar bort åtkomst, är tillåtna.
-- Användaren kan alltid göra samma flytt själv i appen. Där gäller frågan om flyttvarning i [[Tankar]].
+- Användaren kan alltid göra samma flytt själv i appen. Där varnar flyttväljaren före flytten, se uppföljningen i [[ADR-0069 Flytta ett item inom containern]].
 - Samma prövning gäller varje annan handling som flyttar ett item till en ny förälder eller en annan container, inte bara själva flyttverktyget.
 - Det gäller också en ny föräldrakant via relationsverktyget. Ett item får ha flera föräldrar (`LinkItems` § Beslut 6), så en extra förälder under ett delat item vidgar åtkomsten utan att itemet flyttas.
 - Prövningen jämför mängder, inte antal. Får en ny person åtkomst avvisas anropet, även om färre ser itemet efteråt.

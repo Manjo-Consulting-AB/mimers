@@ -75,3 +75,7 @@ Tonys beslut 2026-11-13. Itemets flikar *Documents*, *To do* och *Costs* lade in
 - **Plusmenyn och snabbknapparna.** Raderna för bilaga, uppgift och kostnad leder till fliken med `create=1`, som fäller ut formuläret eller fokuserar snabbraden.
 - **Undantaget.** *Nytt barnitem* från strukturpanelen på itemets sida leder fortfarande till sidan `/items/create`, men sidan ritar containerns låga hjälte (`hero: 'compact'`), så att layouten är densamma som på itemets sida. Detsamma gäller itemets redigeringssida.
 - **Konsekvens.** Issue 374–378 i [[M58 Registrering i vyn - itemets flikar]].
+
+## Tillägg 2026-11-18: plusknappen och `N`
+
+Tonys beslut 2026-11-18, som besvarar det § 7 sköt upp. Plusknappen på *To do*, *Items*, *Documents* och *Costs* öppnar flikens eget formulär i vyn (#1400). `N` gör samma sak som plusknappen på varje sida som har en (#1401). Flikar utan plusknapp har inget `N`.

@@ -82,7 +82,7 @@ Att flytten avvisar krockarna i § 5 regel 6 och 7 håller den till en sak. En f
 - `AuditLog` får typen `item.moved`. Historikflikarna och den globala historiken behöver ordet för den.
 - Felkoderna `item_move.*` får översättningar i `lang/en/ui.php`, så att webben kan visa dem.
 - `ItemController` ger varje nod i strukturen `can_update` utöver `can_create`.
-- **Öppen fråga:** ska flytten varna när den ändrar vem som ser underträdet (§ 7)? En sådan varning får inte avslöja det [[ADR-0028 Åtkomst på itemnivå]] säger att vyn inte får avslöja, till exempel hur mycket en mottagare inte når. Frågan står i [[Tankar]].
+- **Flyttvarning:** besvarad 2026-11-18, se uppföljningen sist i ADR:en. Väljaren varnar utan att avslöja det [[ADR-0028 Åtkomst på itemnivå]] säger att vyn inte får avslöja.
 - Att flytta ett item till en annan container ingår inte. Det hänger ihop med frågan om relationer mellan containrar i [[Tankar]] och med [[ADR-0053 Flytt och kopiering]].
 
 ## Alternativ
@@ -96,3 +96,7 @@ Att flytten avvisar krockarna i § 5 regel 6 och 7 håller den till en sak. En f
 **Behandla en flytt till en befintlig förälder som en borttagning av den gamla placeringen.** Valdes bort. Det är inte en flytt, och borttagningen har redan en plats på relationsfliken.
 
 **Kräva `create` i stället för `write` på den nya föräldern, som när ett barn skapas.** Valdes bort. En flytt flyttar in ett befintligt underträd och utvidgar därmed förälderns delning, och den som ändrar en länk ska ha `write` i båda ändar.
+
+## Uppföljning 2026-11-18: flyttvarningen
+
+Tonys beslut 2026-11-18. Flyttväljaren säger till före flytten när någon får ny åtkomst. Ägarkontot ser namnen, och en mottagare med begränsad åtkomst ser bara att fler får åtkomst. Inget läcker, eftersom den som flyttar redan når målet. Flytten stoppas aldrig för en människa (#1402).
