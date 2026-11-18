@@ -291,6 +291,17 @@ return [
         ],
 
         /*
+         * Issue 400 · MCP. `agent.connected` går bara som mejl — klockan får
+         * aldrig en `in_app`-rad för den (App\Support\Notification\
+         * NotificationPreferences) — men SprakTest kräver en mening åt varje
+         * `TYPE_`-konstant, och en typ utan ord är en typ någon lägger till
+         * kanalen för utan att märka att texten saknas.
+         */
+        'agent' => [
+            'connected' => ':client is connected as an agent',
+        ],
+
+        /*
          * M27 · issue 245 — the `/inbox` page, see [[ADR-0054 Inboxen]] § 4, 6
          * and 7.
          *
@@ -2036,6 +2047,47 @@ return [
                 'fits' => 'Everything fits within Free.',
                 'cleanup_link' => 'Choose yourself what has to go',
             ],
+        ],
+    ],
+
+    /*
+     * Issue 400 · MCP-anslutningen, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 5, 12 och 19 och resources/js/pages/Mcp/Authorize.vue.
+     *
+     * A branch of its own at the top level: the consent page sits outside
+     * `/settings` (it is reached by an OAuth client, not by the menu), and
+     * its words are about the connection, not about an agent's rights — those
+     * come with issue 407. `agents_*` names the page issue 407 builds; the
+     * link is there already because the user is told where the rights will
+     * be set, even before the page exists.
+     */
+    'mcp' => [
+        'authorize' => [
+            'title' => 'Connect an agent',
+            'heading' => 'Connect :client',
+            'intro' => ':client wants to connect to your Mimers account as an agent.',
+            'no_access' => 'A newly connected agent has no access. You decide what it may do, and in which containers, under Agents in the settings. Nothing is shared until you turn it on there.',
+            'logged_in_as' => 'Signed in as :email',
+            'approve' => 'Connect agent',
+            'deny' => 'Cancel',
+            'reconnect_heading' => 'This agent is already connected',
+            'reconnect_body' => 'Connecting the same client again reuses the agent you already have — its name, its access and its pause stay as they are.',
+            'choose_heading' => 'Which agent should :client use?',
+            'choose_new' => 'Connect as a new agent',
+            'choose_new_disabled' => 'You already have :max agents, the maximum. Replace one of them instead.',
+            'choose_replace' => 'Replace an existing agent',
+            'replace_paused' => ':name (paused)',
+            'pro_heading' => 'MCP requires Pro',
+            'pro_body' => 'Agents that read and write in Mimers are part of Pro and Pro+. Upgrade your plan to connect :client.',
+            'pro_link' => 'See plans',
+            'limit_heading' => 'You already have :max agents',
+            'limit_body' => 'An account can have at most :max connected agents. Disconnect one under Agents, or replace one of the agents below when you connect :client.',
+            'agents_link' => 'Go to Agents',
+        ],
+        'disconnected' => [
+            'title' => 'Agent disconnected',
+            'heading' => 'The agent has been disconnected',
+            'body' => 'Its access and its tokens no longer work. You can connect a new agent from the same client whenever you want — it starts without access.',
         ],
     ],
 

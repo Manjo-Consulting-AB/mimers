@@ -203,6 +203,29 @@ class SecurityLog extends Model
     public const ACTION_USER_DELETION_REQUESTED = 'user.deletion_requested';
 
     /**
+     * En agent anslöts — ett nytt godkännande, eller samma klient som
+     * ansluter på nytt, se [[ADR-0087 MCP-server för agenter]] Riktning 12 och
+     * issue 400. Skrivs av App\Actions\Agent\ConnectAgent.
+     *
+     * `meta` bär agentens ULID och namn och aldrig ett token.
+     */
+    public const ACTION_AGENT_CONNECTED = 'agent.connected';
+
+    /**
+     * En ny klient ersatte en befintlig agent: raden behöll namn, rättigheter
+     * och paus, och den gamla klientens tokens återkallades. Skrivs av
+     * App\Actions\Agent\ConnectAgent.
+     */
+    public const ACTION_AGENT_REPLACED = 'agent.replaced';
+
+    /**
+     * En agent kopplades bort och raden raderades med sina tokens. Skrivs av
+     * App\Actions\Agent\DisconnectAgent — från `/settings/agents` (issue 407)
+     * eller från mejlets signerade länk (issue 400).
+     */
+    public const ACTION_AGENT_DISCONNECTED = 'agent.disconnected';
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

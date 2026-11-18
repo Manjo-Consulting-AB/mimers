@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\User;
+use App\Support\Notification\NotificationPreferences;
 use App\Support\Notification\UnsubscribeLink;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -65,14 +66,28 @@ class NotificationMail extends Mailable
 
     public function headers(): Headers
     {
+        $url = $this->unsubscribeUrl();
+
+        // Ett obligatoriskt mejl har ingen avregistrering: länken hade lett
+        // till 404 (UnsubscribeController känner bara preferensytans typer),
+        // och en One-Click-länk som inte går att använda är sämre än ingen
+        // (RFC 8058). Se NotificationPreferences::isMandatoryEmail().
+        if ($url === null) {
+            return new Headers;
+        }
+
         return new Headers(text: [
-            'List-Unsubscribe' => "<{$this->unsubscribeUrl()}>",
+            'List-Unsubscribe' => "<{$url}>",
             'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click',
         ]);
     }
 
-    private function unsubscribeUrl(): string
+    private function unsubscribeUrl(): ?string
     {
+        if (app(NotificationPreferences::class)->isMandatoryEmail($this->type)) {
+            return null;
+        }
+
         // Samma URL i sidfoten och List-Unsubscribe-headern — beräknad en gång
         // så att `expires` aldrig hinner skilja sig mellan de två.
         return $this->unsubscribeUrl ??= app(UnsubscribeLink::class)->for($this->user, $this->type);

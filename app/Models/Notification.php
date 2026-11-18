@@ -69,6 +69,19 @@ class Notification extends Model
     public const TYPE_CONTENT_MOVING = 'container.content_moving';
 
     /**
+     * En ny agent anslöts, se [[ADR-0087 MCP-server för agenter]] Riktning 14
+     * och issue 400 § 5. Går bara som mejl, kan inte stängas av i
+     * App\Support\Notification\NotificationPreferences och samlas aldrig i
+     * veckosammanfattningen.
+     *
+     * **Ingen `in_app`-kanal.** Klockan i appen visar inte anslutningar; ett
+     * nytt godkännande är något användaren själv just gjorde, och den enda
+     * ytan som behöver säga det är mejlet — som också bär den signerade
+     * bortkopplingslänken.
+     */
+    public const TYPE_AGENT_CONNECTED = 'agent.connected';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

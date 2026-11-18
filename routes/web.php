@@ -40,6 +40,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
+use App\Http\Controllers\Mcp\DisconnectAgentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
@@ -2312,6 +2313,22 @@ Route::post('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::
     ->middleware('signed')
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('notifications.unsubscribe');
+
+/*
+ * Issue 400 · Bortkoppling av en agent ur mejlet, se
+ * App\Http\Controllers\Mcp\DisconnectAgentController och
+ * [[ADR-0087 MCP-server för agenter]] Riktning 12.
+ *
+ * **Utanför `auth`-gruppen med flit**, som avanmälan ovan: länken finns för
+ * att en kapad session ska kunna stängas av, och den som får mejlet är inte
+ * nödvändigtvis inloggad. Signaturen är hela skyddet — den gäller i sju dagar
+ * och bara för den agenten, och en ändrad eller utgången URL avvisas av
+ * `signed` innan någon rad rörs. `{agent}` binds på ULID via
+ * #[RouteKey('ulid')] på App\Models\Agent.
+ */
+Route::get('/agents/disconnect/{agent}', DisconnectAgentController::class)
+    ->middleware('signed')
+    ->name('mcp.agents.disconnect');
 
 /*
  * Issue 36b · ICS-kalenderfeed, se App\Http\Controllers\CalendarFeedDownloadController,

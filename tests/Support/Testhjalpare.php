@@ -38,6 +38,7 @@ use App\Actions\Trash\PurgeContent;
 use App\Console\PurgesExpiredTrash;
 use App\Mail\NotificationMail;
 use App\Models\Account;
+use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
@@ -52,13 +53,23 @@ use App\Models\Plan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
+use App\Models\Subscription;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Testing\TestResponse;
+use Laravel\Passport\Client;
+use Laravel\Passport\ClientRepository;
 use PragmaRX\Google2FA\Google2FA;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\get;
+use function Pest\Laravel\post;
+use function Pest\Laravel\withoutVite;
 use function Pest\Laravel\withToken;
 
 // --- Testinfrastruktur --------------------------------------------------
@@ -651,4 +662,268 @@ function vueFilInnehall(string $sokvag): string
     }
 
     return $innehall;
+}
+
+// --- tests/Feature/Mcp ------------------------------------------------
+
+/*
+ * Issue 400 · OAuth-flödet mot MCP. Hjälparna bor här och inte i en enskild
+ * testfil därför att fyra filer under tests/Feature/Mcp använder samma flöde:
+ * klientregistreringen, PKCE, godkännandet och bortkopplingen. Pest lägger
+ * alla testfiler i samma namnrymd, så prefixet `mcp` håller dem åtskilda från
+ * grannfilernas hjälpare.
+ */
+
+/**
+ * Passport signerar varje token med ett nyckelpar under storage/, och sviten
+ * har inga nycklar incheckade. De skapas en gång per testkörning — inte per
+ * test — eftersom `passport:keys` genererar ett 4096-bitars RSA-par.
+ */
+function mcpSakerstallNycklar(): void
+{
+    if (! is_file(storage_path('oauth-private.key')) || ! is_file(storage_path('oauth-public.key'))) {
+        Artisan::call('passport:keys', ['--force' => true]);
+    }
+}
+
+/**
+ * Ett personkonto med en medlem och, om `$plan` inte är `free`, en aktiv
+ * prenumeration på den planen. Free-planen kräver ingen fixture — planraderna
+ * kommer ur migrationen.
+ *
+ * @return array{0: Account, 1: User}
+ */
+function mcpKonto(string $plan = 'free'): array
+{
+    $konto = Account::factory()->create(['type' => 'personal']);
+    $anvandare = User::factory()->create();
+    $konto->users()->attach($anvandare, ['role' => 'owner']);
+
+    if ($plan !== 'free') {
+        Subscription::factory()
+            ->for($konto)
+            ->for(Plan::where('code', $plan)->firstOrFail())
+            ->create();
+    }
+
+    return [$konto, $anvandare];
+}
+
+/**
+ * En publik OAuth-klient, registrerad på samma väg som den dynamiska
+ * registreringen använder — utan klienthemlighet, som klienterna är.
+ *
+ * @param  array<int, string>|null  $redirectUris
+ */
+function mcpKlient(string $namn = 'Claude', ?array $redirectUris = null): Client
+{
+    return app(ClientRepository::class)->createAuthorizationCodeGrantClient(
+        name: $namn,
+        redirectUris: $redirectUris ?? ['https://claude.ai/api/mcp/auth_callback'],
+        confidential: false,
+        enableDeviceFlow: false,
+    );
+}
+
+/**
+ * PKCE-utmaningen för en verifierare: BASE64URL(SHA256(verifier)).
+ */
+function mcpUtmaning(string $verifierare): string
+{
+    return rtrim(strtr(base64_encode(hash('sha256', $verifierare, true)), '+/', '-_'), '=');
+}
+
+/**
+ * Klientens första registrerade redirect-URI. `redirect_uris` är en accessor
+ * på Passports Client-modell och syns därför inte som en deklarerad property
+ * för PHPStan; läs den genom `getAttribute()` på ett ställe i stället.
+ */
+function mcpRedirectUri(Client $klient): string
+{
+    $uris = array_values((array) $klient->getAttribute('redirect_uris'));
+
+    return (string) ($uris[0] ?? '');
+}
+
+/**
+ * Auktoriseringsförfrågan (GET /oauth/authorize) som en inloggad användare.
+ * `plain` skickas igenom som det är, så att ett prov kan se att grinden
+ * avvisar det.
+ */
+function mcpAuktorisera(
+    User $anvandare,
+    Client $klient,
+    ?string $redirectUri = null,
+    string $verifierare = 'test-verifierare-0000000000000000000000000000000000000000',
+    string $metod = 'S256',
+): TestResponse {
+    withoutVite();
+    mcpSakerstallNycklar();
+
+    $redirectUri ??= mcpRedirectUri($klient);
+    $utmaning = $metod === 'S256' ? mcpUtmaning($verifierare) : $verifierare;
+
+    $query = http_build_query([
+        'client_id' => $klient->getKey(),
+        'redirect_uri' => $redirectUri,
+        'response_type' => 'code',
+        'scope' => 'mcp:use',
+        'state' => 'tillstand',
+        'code_challenge' => $utmaning,
+        'code_challenge_method' => $metod,
+    ]);
+
+    return somAnvandare($anvandare)->get('/oauth/authorize?'.$query);
+}
+
+/**
+ * Propparna på godkännandesidan, lästa ur Inertias rotvy.
+ *
+ * @return array<string, mixed>
+ */
+function mcpSidprops(TestResponse $svar): array
+{
+    /** @var array{props: array<string, mixed>} $sida */
+    $sida = $svar->assertOk()->viewData('page');
+
+    return $sida['props'];
+}
+
+/**
+ * Godkännandet (POST /oauth/authorize). `$val` är `new` eller
+ * `replace:<ulid>`, precis som formuläret skickar det.
+ *
+ * @param  array<string, mixed>  $props
+ * @param  array<string, mixed>  $extra
+ */
+function mcpGodkann(
+    User $anvandare,
+    array $props,
+    ?string $val = null,
+    array $extra = [],
+): TestResponse {
+    $kropp = array_merge([
+        'client_id' => $props['client']['id'],
+        'auth_token' => $props['authToken'],
+    ], $extra);
+
+    if ($val !== null) {
+        $kropp['agent_choice'] = $val;
+    }
+
+    return somAnvandare($anvandare)->post('/oauth/authorize', $kropp);
+}
+
+/**
+ * Koden ur godkännandets redirect till klientens `redirect_uri`.
+ */
+function mcpKod(TestResponse $svar): string
+{
+    $location = (string) $svar->headers->get('Location');
+    parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+
+    expect($query['code'] ?? null)->toBeString('Godkännandet gav ingen kod.');
+
+    return (string) $query['code'];
+}
+
+/**
+ * Byter en auktoriseringskod mot tokens (POST /oauth/token).
+ */
+function mcpVaxlaKod(
+    Client $klient,
+    string $kod,
+    string $redirectUri,
+    string $verifierare = 'test-verifierare-0000000000000000000000000000000000000000',
+): TestResponse {
+    return post('/oauth/token', [
+        'grant_type' => 'authorization_code',
+        'client_id' => $klient->getKey(),
+        'redirect_uri' => $redirectUri,
+        'code' => $kod,
+        'code_verifier' => $verifierare,
+    ]);
+}
+
+/**
+ * Förnyar en refresh-token (POST /oauth/token).
+ */
+function mcpFornya(Client $klient, string $refreshToken): TestResponse
+{
+    return post('/oauth/token', [
+        'grant_type' => 'refresh_token',
+        'client_id' => $klient->getKey(),
+        'refresh_token' => $refreshToken,
+    ]);
+}
+
+/**
+ * Ett helt godkänt flöde: sidan, godkännandet och tokenbytet. Returnerar
+ * agenten och tokens.
+ *
+ * @return array{agent: Agent, client: Client, props: array<string, mixed>, access_token: string, refresh_token: string, redirect_uri: string}
+ */
+function mcpAnslut(
+    User $anvandare,
+    ?Client $klient = null,
+    ?string $val = null,
+): array {
+    $klient ??= mcpKlient();
+    $redirectUri = mcpRedirectUri($klient);
+
+    $props = mcpSidprops(mcpAuktorisera($anvandare, $klient, $redirectUri));
+    $kod = mcpKod(mcpGodkann($anvandare, $props, $val));
+
+    $tokens = mcpVaxlaKod($klient, $kod, $redirectUri);
+
+    $tokens->assertOk();
+    $data = $tokens->json();
+
+    return [
+        'agent' => Agent::query()
+            ->where('user_id', $anvandare->getKey())
+            ->where('oauth_client_id', $klient->getKey())
+            ->sole(),
+        'client' => $klient,
+        'props' => $props,
+        'access_token' => (string) $data['access_token'],
+        'refresh_token' => (string) $data['refresh_token'],
+        'redirect_uri' => $redirectUri,
+    ];
+}
+
+/**
+ * En provrutt bakom guarden `mcp`. Den registreras i testet och finns inte i
+ * appen — issue 400 bygger anslutningen, inte endpointen (issue 402).
+ */
+function mcpProvrutt(): void
+{
+    Route::middleware('auth:mcp')->get('/__mcp-prova', fn () => response()->json([
+        'anvandare' => auth('mcp')->id(),
+    ]));
+}
+
+/**
+ * Det signerade bortkopplingslänken så som mejlet bär den: räknad ur
+ * payloadens `agent_ulid`. Samma anrop som
+ * resources/views/mail/notification.blade.php gör.
+ */
+function mcpBortkopplingslank(string $agentUlid): string
+{
+    return URL::temporarySignedRoute(
+        'mcp.agents.disconnect',
+        now()->addDays(7),
+        ['agent' => $agentUlid],
+    );
+}
+
+/**
+ * Mejlets HTML för en notis, renderad ur samma mailable som leveransloopen
+ * använder.
+ */
+function mcpMejlhtml(Notification $notis): string
+{
+    $anvandare = User::query()->findOrFail($notis->user_id);
+
+    return (new NotificationMail($anvandare, $notis->type, $notis->payload))->render();
 }

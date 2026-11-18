@@ -2,6 +2,7 @@
 
 namespace App\Actions\Account;
 
+use App\Actions\Agent\RevokeAgentTokens;
 use App\Actions\Security\RecordSecurityEvent;
 use App\Models\PasswordChange;
 use App\Models\SecurityLog;
@@ -65,6 +66,7 @@ class ConfirmPasswordChange
 {
     public function __construct(
         private readonly RecordSecurityEvent $recordSecurityEvent,
+        private readonly RevokeAgentTokens $revokeAgentTokens,
     ) {}
 
     /**
@@ -127,6 +129,13 @@ class ConfirmPasswordChange
             // genom ett lösenord alls, och den som byter lösenord efter ett
             // intrång menar att varje sådan väg ska stängas.
             $user->tokens()->delete();
+
+            // Agenternas OAuth-tokens, i samma transaktion och av samma skäl
+            // (issue 400 § 7 · [[ADR-0087 MCP-server för agenter]]
+            // Riktning 12). Raderna i `agent` och deras rättigheter står kvar:
+            // agenten ansluter till samma rad igen, och det är skillnaden mot
+            // en bortkoppling, som raderar den.
+            $this->revokeAgentTokens->forUser($user);
 
             // [[ADR-0043 Tre loggar]] § Säkerhetsloggen: raden bär bara om ett
             // lösenord fanns före — aldrig ett lösenord, en hash, en kod eller
