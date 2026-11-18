@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Mcp\Middleware;
+namespace App\Mcp\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
@@ -33,6 +33,7 @@ class EnsureMcpEnabled
             '.well-known/*',
             'oauth/authorize',
             'oauth/register',
+            'mcp',
         )) {
             abort(404);
         }

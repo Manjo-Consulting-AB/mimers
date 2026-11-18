@@ -8,7 +8,7 @@ use function Pest\Laravel\postJson;
 /*
  * Issue 400 · klientregistreringen och MCP-switchen, se [[ADR-0087
  * MCP-server för agenter]] Riktning 5, 17 och 19 och
- * App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled.
+ * App\Mcp\Middleware\EnsureMcpEnabled.
  *
  * Varje "Klart när"-punkt i issuen har ett namngivet prov: switchen svarar
  * 404, och en redirect-URI utanför listan eller över `http` (utom localhost)

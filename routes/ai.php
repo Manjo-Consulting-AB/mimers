@@ -1,5 +1,7 @@
 <?php
 
+use App\Mcp\Middleware\ResolveAgent;
+use App\Mcp\Servers\MimersServer;
 use Laravel\Mcp\Facades\Mcp;
 
 /*
@@ -12,13 +14,16 @@ use Laravel\Mcp\Facades\Mcp;
  * (RFC 7591) på `POST /oauth/register` — paketets egna implementationer, som
  * prövar redirect-URI:erna mot `mcp.redirect_domains`.
  *
- * **Ingen MCP-endpoint än.** `Mcp::web('/mcp', ...)` och verktygen kommer i
- * issue 402; den här issuen bygger anslutningen som ger en token, inte ytan
- * token används på. Att registrera servern här hade varit en endpoint utan
- * verktyg.
+ * **Endpointen `/mcp`** (issue 402): Streamable HTTP utan långlivade
+ * anslutningar, bakom guarden `mcp` (Passport). En Sanctum-token är ingen
+ * Passport-token och ger 401. `ResolveAgent` hittar agentraden och sätter
+ * `last_used_at`. Med `mcp.enabled` falsk svarar `/mcp` 404, se
+ * App\Mcp\Middleware\EnsureMcpEnabled.
  *
  * Passports egna rutter (`/oauth/authorize`, `/oauth/token`) registreras av
  * `laravel/passport`; godkännandesidan och PKCE-grinden hängs på dem i
  * App\Providers\AppServiceProvider.
  */
 Mcp::oauthRoutes();
+
+Mcp::web('/mcp', MimersServer::class)->middleware(['auth:mcp', ResolveAgent::class]);

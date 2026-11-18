@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\CountRouteView;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogSlowRequests;
@@ -10,6 +9,7 @@ use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\SetSecurityHeaders;
 use App\Http\Middleware\ThrottleWrites;
 use App\Http\Middleware\UpdateLastActiveAt;
+use App\Mcp\Middleware\EnsureMcpEnabled;
 use App\Support\Api\ApiError;
 use App\Support\Api\ValidationErrorMapper;
 use Illuminate\Auth\AuthenticationException;
@@ -108,7 +108,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // rutten.
         $middleware->append(SetSecurityHeaders::class);
 
-        // Issue 400 · MCP-switchen, se App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled
+        // Issue 400 · MCP-switchen, se App\Mcp\Middleware\EnsureMcpEnabled
         // och [[ADR-0087 MCP-server för agenter]] Riktning 17. Global och inte
         // i web- eller api-gruppen: `.well-known`-rutterna och
         // `oauth/authorize` ägs av paketen, och en grind per rutt hade varit
@@ -163,6 +163,17 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiError::response('validation.failed', [
                 'fields' => ValidationErrorMapper::fields($e),
             ], $e->status);
+        });
+
+        // Issue 402 · `/mcp` svarar 401 i stället för att skicka till
+        // inloggningen. `WWW-Authenticate` sätts av paketets middleware på
+        // rutten och pekar på resursmetadatan.
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if (! $request->is('mcp')) {
+                return null;
+            }
+
+            return ApiError::response('auth.unauthenticated', [], 401);
         });
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {
