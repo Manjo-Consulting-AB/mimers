@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
 use App\Support\Agent\AgentLevels;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Vilken nivå har agenten i en grupp för en container, eller för ett item i
@@ -32,12 +33,13 @@ use App\Support\Agent\AgentLevels;
  * inte har det (Riktning 4). Planerna prövas vid varje anrop, så en
  * nedgradering tar åtkomsten utan att någon rad ändras.
  *
- * **Ägarens tak läser alla giltiga rader.** En medlem kan ha en
- * container-bred rad och rader per item, och `agent_level` sitter på varje.
- * Taket är den högsta `agent_level` bland användarens giltiga rader i
- * containern; användarens egen nivå (lager 4) kapar sedan per item, så ett
- * item där hen bara har `read` ger aldrig agenten mer. Taket gäller medlemmens
- * agenter gemensamt, aldrig en agent för sig (Riktning 6, *Takets regler*).
+ * **Ägarens tak räknas på de rader som täcker itemet.** `agent_level` sitter
+ * på varje `container_access`-rad. För en container är det de container-breda
+ * raderna; för ett item de container-breda plus rader på itemet självt eller
+ * på en förfader (`parent`-kanter uppåt). Taket är den lägsta `agent_level`
+ * bland dem, och en täckande rad med NULL stänger ute agenten helt — annars
+ * kunde en item-rad med högt tak lyfta en container-bred rad som ägaren
+ * stängt. Taket gäller medlemmens agenter gemensamt (Riktning 6, *Takets regler*).
  *
  * Inkorgen är användarens egen när hen äger den; någon annans inkorg ger
  * `ResolveItemScope` ingen åtkomst alls.
@@ -78,12 +80,16 @@ class ResolveAgentAccess
             return null;
         }
 
+        if ($item !== null && (int) $item->container_id !== (int) $container->id) {
+            return null;
+        }
+
         $scope = $this->resolveItemScope->handle($user, $container);
         $userLevel = $item === null ? $scope->unrestrictedLevel() : $scope->levelFor($item->id);
 
         $ceiling = $this->isOwnContainer($agent, $container)
             ? AccessLevel::DELETE
-            : $this->ownerCeiling($agent, $container);
+            : $this->ownerCeiling($agent, $container, $item);
 
         return AgentLevels::min($accountLevel, $containerLevel, $ceiling, $userLevel);
     }
@@ -97,23 +103,58 @@ class ResolveAgentAccess
         return $agent->user->accounts()->whereKey($container->account_id)->exists();
     }
 
-    private function ownerCeiling(Agent $agent, Container $container): ?string
+    private function ownerCeiling(Agent $agent, Container $container, ?Item $item): ?string
     {
         $user = $agent->user;
         $accountIds = $user->accounts->pluck('id')->map(fn ($id): int => (int) $id)->all();
 
-        $ceiling = null;
+        $itemIds = $item === null ? [] : $this->selfAndAncestors((int) $item->id);
 
-        $levels = ContainerAccess::query()
+        $rows = ContainerAccess::query()
             ->where('container_id', $container->id)
-            ->whereNotNull('agent_level')
-            ->validFor($user, $accountIds)
-            ->pluck('agent_level');
+            ->where(function ($query) use ($itemIds): void {
+                $query->whereNull('item_id');
 
-        foreach ($levels as $level) {
-            $ceiling = $ceiling === null ? $level : AccessLevel::max($ceiling, $level);
+                if ($itemIds !== []) {
+                    $query->orWhereIn('item_id', $itemIds);
+                }
+            })
+            ->validFor($user, $accountIds)
+            ->get(['agent_level']);
+
+        if ($rows->isEmpty()) {
+            return null;
         }
 
-        return $ceiling;
+        return AgentLevels::min(...$rows->pluck('agent_level')->all());
+    }
+
+    /**
+     * @return list<int> itemet självt och dess förfäder längs `parent`-kanter
+     */
+    private function selfAndAncestors(int $itemId): array
+    {
+        $seen = [$itemId => true];
+        $frontier = [$itemId];
+
+        while ($frontier !== []) {
+            $parents = DB::table('item_link')
+                ->whereIn('to_item_id', $frontier)
+                ->where('relation', 'parent')
+                ->pluck('from_item_id');
+
+            $frontier = [];
+
+            foreach ($parents as $parent) {
+                $parent = (int) $parent;
+
+                if (! isset($seen[$parent])) {
+                    $seen[$parent] = true;
+                    $frontier[] = $parent;
+                }
+            }
+        }
+
+        return array_keys($seen);
     }
 }

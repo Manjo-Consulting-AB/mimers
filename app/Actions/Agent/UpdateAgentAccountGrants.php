@@ -47,6 +47,8 @@ class UpdateAgentAccountGrants
         }
 
         DB::transaction(function () use ($agent, $levels, $createContainers): void {
+            Agent::query()->whereKey($agent->id)->lockForUpdate()->first();
+
             foreach ($levels as $group => $level) {
                 $this->setGroup($agent, (string) $group, $level);
             }

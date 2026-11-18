@@ -35,21 +35,25 @@ class ApplyAgentContainerGrants
     {
         $this->validate($levels);
 
-        $account = $agent->accountGrants()->pluck('level', 'group')->all();
+        return DB::transaction(function () use ($agent, $container, $levels): array {
+            // Lås agentraden så en samtidig sänkning på kontot väntar:
+            // invarianten container ≤ konto ska hålla.
+            Agent::query()->whereKey($agent->id)->lockForUpdate()->first();
 
-        $rows = [];
+            $account = $agent->accountGrants()->pluck('level', 'group')->all();
 
-        foreach (AgentGroup::cases() as $group) {
-            $accountLevel = $account[$group->value] ?? null;
-            $wanted = $levels === null ? $accountLevel : ($levels[$group->value] ?? null);
-            $level = $wanted === null ? null : AgentLevels::cap($wanted, $accountLevel);
+            $rows = [];
 
-            if ($level !== null) {
-                $rows[$group->value] = $level;
+            foreach (AgentGroup::cases() as $group) {
+                $accountLevel = $account[$group->value] ?? null;
+                $wanted = $levels === null ? $accountLevel : ($levels[$group->value] ?? null);
+                $level = $wanted === null ? null : AgentLevels::cap($wanted, $accountLevel);
+
+                if ($level !== null) {
+                    $rows[$group->value] = $level;
+                }
             }
-        }
 
-        DB::transaction(function () use ($agent, $container, $rows): void {
             AgentContainerGrant::query()
                 ->where('agent_id', $agent->id)
                 ->where('container_id', $container->id)
@@ -63,9 +67,9 @@ class ApplyAgentContainerGrants
                 $grant->level = $level;
                 $grant->save();
             }
-        });
 
-        return $rows;
+            return $rows;
+        });
     }
 
     /**

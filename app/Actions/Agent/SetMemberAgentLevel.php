@@ -31,7 +31,7 @@ class SetMemberAgentLevel
     {
         $this->assertHumanCaller();
 
-        if ($access->container_id !== $container->id) {
+        if ((int) $access->container_id !== (int) $container->id) {
             throw ApiException::make('container_access.not_in_container', ['access' => $access->ulid], 404);
         }
 

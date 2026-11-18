@@ -174,6 +174,41 @@ it('kapar per item med användarens nivå för itemet', function () {
     expect((new ResolveAgentAccess(new ResolveItemScope))->handle($agent, AgentGroup::Items, $container, $item))->toBe('read');
 });
 
+it('låter en item-rad med högt tak inte lyfta en container-bred rad med agent_level NULL', function () {
+    [$konto, $anvandare] = mcpKonto('pro');
+    [$agarkonto] = mcpKonto('pro');
+    $container = Container::factory()->for($agarkonto, 'account')->create();
+    $item = Item::factory()->create(['container_id' => $container->id]);
+    $annat = Item::factory()->create(['container_id' => $container->id]);
+
+    $bred = beviljaAccess($container, $anvandare, 'delete', 'member');
+    $bred->agent_level = null;
+    $bred->save();
+
+    $itemRad = beviljaAccess($container, $anvandare, 'delete', 'member');
+    $itemRad->item_id = $item->id;
+    $itemRad->agent_level = 'delete';
+    $itemRad->save();
+
+    $agent = rattighetsAgent($anvandare, $konto);
+    sattKontonivaer($agent, ['items' => 'delete']);
+    sattContainernivaer($agent, $container, ['items' => 'delete']);
+
+    $resolver = new ResolveAgentAccess(new ResolveItemScope);
+
+    expect($resolver->handle($agent, AgentGroup::Items, $container))->toBeNull()
+        ->and($resolver->handle($agent, AgentGroup::Items, $container, $item))->toBeNull()
+        ->and($resolver->handle($agent, AgentGroup::Items, $container, $annat))->toBeNull();
+});
+
+it('ger ingen åtkomst när itemet hör till en annan container än den agenten har rader i', function () {
+    [, , $agent, $container] = egenContainerMedAgent('delete');
+    $annan = Container::factory()->for($container->account, 'account')->create();
+    $item = Item::factory()->create(['container_id' => $annan->id]);
+
+    expect((new ResolveAgentAccess(new ResolveItemScope))->handle($agent, AgentGroup::Items, $container, $item))->toBeNull();
+});
+
 it('ger ingen åtkomst utan rad i agent_container_grant, oavsett kontots nivå', function () {
     [, , $agent, $container] = egenContainerMedAgent('delete');
     AgentContainerGrant::query()->where('agent_id', $agent->id)->delete();
