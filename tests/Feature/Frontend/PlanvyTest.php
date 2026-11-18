@@ -187,8 +187,40 @@ it('visar det valda kontots plan med namn, pris och period', function () {
 
     expect($pro['plan']['code'])->toBe('pro')
         ->and($pro['plan']['period'])->toBe('year')
-        ->and($pro['plan']['price'])->toBe('€49.00');
+        ->and($pro['plan']['price'])->toBe('€39.00');
 });
+
+/*
+ * Namnet slås upp i vyn på `plan.names.{code}`, så provet kontrollerar att
+ * planens kod når vyn och att katalogen har ett riktigt namn för den — en
+ * saknad nyckel visas annars som den råa nyckeln.
+ */
+it('har ett namn i katalogen för varje betald plankod', function (string $kod, string $namn) {
+    withoutVite();
+
+    [$konto, $anvandare] = planvyKonto();
+
+    Subscription::factory()
+        ->for($konto)
+        ->for(Plan::where('code', $kod)->firstOrFail())
+        ->create();
+
+    $props = planvyProps($anvandare, $konto);
+
+    expect($props['plan']['code'])->toBe($kod);
+
+    $nyckel = "ui.plan.names.{$kod}";
+    $visat = trans($nyckel, [], 'en');
+
+    expect($visat)->not->toBe($nyckel, "{$nyckel} saknas")
+        ->and($visat)->not->toStartWith('plan.names.')
+        ->and($visat)->toBe($namn);
+})->with([
+    'pro' => ['pro', 'Pro'],
+    'pro_plus' => ['pro_plus', 'Pro+'],
+    'pro_founder' => ['pro_founder', 'Pro'],
+    'pro_plus_founder' => ['pro_plus_founder', 'Pro+'],
+]);
 
 /*
  * Klart när: alla nio nycklar i `plan.limits` visas, fyra som förbrukning och
@@ -264,10 +296,10 @@ it('visar en obegränsad gräns som obegränsat och aldrig som en stapel', funct
 
     $props = planvyProps($anvandare, $konto);
 
-    // Pro:s utrymme är 25 GB och förbrukningen 2 GB: stapeln finns och är
-    // 8 procent, inte full.
-    expect($props['usage']['storage']['percent'])->toBe(8)
-        ->and($props['usage']['storage']['limitLabel'])->toBe('25 GB')
+    // Pro:s utrymme är 10 GB och förbrukningen 2 GB: stapeln finns och är
+    // 20 procent, inte full.
+    expect($props['usage']['storage']['percent'])->toBe(20)
+        ->and($props['usage']['storage']['limitLabel'])->toBe('10 GB')
         ->and($props['usage']['storage']['usedLabel'])->toBe('2 GB');
 
     // Ett plan utan tak på utrymmet: ingen andel, ingen etikett att rita en

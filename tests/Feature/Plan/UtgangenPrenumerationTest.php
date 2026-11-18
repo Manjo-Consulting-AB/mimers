@@ -116,7 +116,7 @@ it('planresursen följer modellen', function () {
 it('kvoten följer planen', function () {
     Storage::fake('files');
     // Gratisplanens totalkvot sänks så att en uppladdning spränger den — ett
-    // Pro hade haft 25 GB och passerat.
+    // Pro hade haft 10 GB och passerat.
     sättPlangräns('free', 'storage_bytes', 10 * 1024 * 1024);
 
     Carbon::setTestNow('2026-10-08 12:00:00');

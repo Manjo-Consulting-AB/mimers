@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\DB;
  * plan, containern flyttas, förbrukningen flyttas mellan räknarna (den enda
  * vägen in i dem är App\Actions\Usage\AdjustUsage), åtkomsterna återkallas
  * och den kvarhållna åtkomsten skapas om sådan begärts, och mottagaren får
- * tolv månader Pro. Sist i transaktionen skrivs `audit_log`-raden för
+ * ett år Pro (ADR-0086 § 7). Sist i transaktionen skrivs `audit_log`-raden för
  * `container.transferred` (issue 40 § Beslut 9) — efter att containern
  * flyttats och innan transaktionen stängs, så loggen aldrig kan beskriva
  * ett ägarbyte som inte hände. Bonusspärren ("en gång per mottagande konto",
@@ -548,16 +548,17 @@ class AcceptOwnershipTransfer
     }
 
     /**
-     * Beslut 9 och [[ADR-0014 Prismodell]]: mottagaren får tolv månader Pro.
+     * Beslut 9, [[ADR-0014 Prismodell]] och [[ADR-0086 Pro, Pro+ och
+     * grundarpris]] § 7: mottagaren får ett år Pro, men aldrig en lägre plan.
      * Bonusen ges dock **en gång per mottagande konto** — annars kan en
      * Pro-användare ringa den mellan egna konton och förlänga sin Pro-tid
      * gratis, se [[ADR-0017 Missbruksvektorer]] § 4 och issue 49.
      *
      * Saknar kontot en subscription-rad skapas en aktiv Pro-rad från idag.
-     * Har kontot redan en aktiv Pro-rad FÖRLÄNGS perioden med ett år från
+     * Har kontot redan en aktiv rad på en betald plan FÖRLÄNGS perioden med ett år från
      * `max(now(), current_period_end)` — se nedan — aldrig från ett värde som
      * redan passerat. Ligger raden i något annat läge (uppsagd, obetald eller
-     * en annan plan) sätts den till Pro, aktiv, från idag. `account.status`
+     * free) sätts den till Pro, aktiv, från idag. `account.status`
      * rörs aldrig — ett `read_only`-konto blir inte aktivt av att få en
      * container, och här nekas accepten redan i Beslut 3.
      *
@@ -606,7 +607,13 @@ class AcceptOwnershipTransfer
             return true;
         }
 
-        if ($subscription->status === 'active' && $subscription->plan_id === $pro->id) {
+        // ADR-0086 § 7: bonusen sänker aldrig planen. En aktiv rad på en
+        // betald plan (pro, pro_plus eller en grundarplan) förlängs på
+        // SAMMA plan; allt annat ger Pro från idag.
+        $aktivBetald = $subscription->status === 'active'
+            && Plan::query()->whereKey($subscription->plan_id)->where('code', '!=', 'free')->exists();
+
+        if ($aktivBetald) {
             // Beslut 3 (issue 265): ett år räknas från det SENARE av nu och
             // slutet. Låg slutet redan i det förflutna — ett Pro som löpt ut —
             // hade `current_period_end->addYear()` lagt den nya perioden i det

@@ -14,8 +14,8 @@ use InvalidArgumentException;
  * issuen. Kontrollerna som läser gränserna är 27, förbrukningsräknaren 26.
  */
 
-it('migrationen skapar planerna free och pro utan seeder', function () {
-    expect(DB::table('plan')->count())->toBe(2);
+it('migrationen skapar planerna free, pro och de tre nya utan seeder', function () {
+    expect(DB::table('plan')->count())->toBe(5);
     expect(DB::table('plan')->where('code', 'free')->exists())->toBeTrue();
     expect(DB::table('plan')->where('code', 'pro')->exists())->toBeTrue();
 });
@@ -24,7 +24,7 @@ it('en omkörd migration dubblerar inte planraderna', function () {
     $migration = require database_path('migrations/2026_09_03_030000_create_plan_table.php');
     $migration->seedPlans();
 
-    expect(DB::table('plan')->count())->toBe(2);
+    expect(DB::table('plan')->count())->toBe(5);
     expect(DB::table('plan')->where('code', 'free')->count())->toBe(1);
     expect(DB::table('plan')->where('code', 'pro')->count())->toBe(1);
 });
@@ -73,7 +73,7 @@ it('gränserna är exakt dokumentets tal', function () {
     expect($free->planLimit('max_file_bytes'))->toBe(10 * 1024 * 1024);
     expect($free->planLimit('shared_users_per_container'))->toBe(1);
 
-    expect($pro->planLimit('storage_bytes'))->toBe(25 * 1024 * 1024 * 1024);
+    expect($pro->planLimit('storage_bytes'))->toBe(10 * 1024 * 1024 * 1024);
     expect($pro->planLimit('max_file_bytes'))->toBe(64 * 1024 * 1024);
 });
 
@@ -87,7 +87,7 @@ it('priset är minsta valutaenhet plus valutakod', function () {
     expect($free->billing_period)->toBe('year');
 
     expect($pro->price_amount)->toBeInt();
-    expect($pro->price_amount)->toBe(4900);
+    expect($pro->price_amount)->toBe(3900);
     expect($pro->price_currency)->toBe('EUR');
     expect($pro->billing_period)->toBe('year');
 });
@@ -168,4 +168,53 @@ it('subscription bär en ulid och aldrig ett löpnummer utåt', function () {
     expect($subscription->ulid)->toBeString();
     expect(strlen($subscription->ulid))->toBe(26);
     expect($subscription->getRouteKeyName())->toBe('ulid');
+});
+
+const PRO_PLUS_KODER = [
+    'pro_plus' => ['Pro+', 50, 6900, true],
+    'pro_founder' => ['Pro', 10, 1900, false],
+    'pro_plus_founder' => ['Pro+', 50, 3900, false],
+];
+
+it('de tre nya planraderna har lagring, pris och synlighet enligt ADR-0086', function () {
+    foreach (PRO_PLUS_KODER as $kod => [$namn, $gb, $pris, $publik]) {
+        $plan = Plan::where('code', $kod)->firstOrFail();
+
+        expect($plan->name)->toBe($namn)
+            ->and($plan->planLimit('storage_bytes'))->toBe($gb * 1024 * 1024 * 1024)
+            ->and($plan->price_amount)->toBe($pris)
+            ->and($plan->price_currency)->toBe('EUR')
+            ->and($plan->billing_period)->toBe('year')
+            ->and((bool) $plan->is_public)->toBe($publik);
+    }
+});
+
+it('de tre nya raderna har samma limits som pro utom storage_bytes', function () {
+    $pro = Plan::where('code', 'pro')->firstOrFail()->limits;
+    unset($pro['storage_bytes']);
+
+    expect($pro)->toHaveKey('pending_invitations');
+
+    foreach (array_keys(PRO_PLUS_KODER) as $kod) {
+        $limits = Plan::where('code', $kod)->firstOrFail()->limits;
+        unset($limits['storage_bytes']);
+
+        expect($limits)->toEqual($pro);
+    }
+});
+
+it('down återställer pro och tar bort de tre raderna, och up ger samma resultat igen', function () {
+    $migration = require database_path('migrations/2026_11_17_000000_add_pro_plus_and_founder_plans.php');
+    $fore = DB::table('plan')->orderBy('code')->get(['code', 'price_amount', 'limits'])->toArray();
+
+    $migration->down();
+
+    $pro = Plan::where('code', 'pro')->firstOrFail();
+    expect($pro->planLimit('storage_bytes'))->toBe(25 * 1024 * 1024 * 1024)
+        ->and($pro->price_amount)->toBe(4900)
+        ->and(DB::table('plan')->count())->toBe(2);
+
+    $migration->up();
+
+    expect(DB::table('plan')->orderBy('code')->get(['code', 'price_amount', 'limits'])->toArray())->toEqual($fore);
 });

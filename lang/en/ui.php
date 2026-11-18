@@ -1913,6 +1913,9 @@ return [
         'names' => [
             'free' => 'Free',
             'pro' => 'Pro',
+            'pro_plus' => 'Pro+',
+            'pro_founder' => 'Pro',
+            'pro_plus_founder' => 'Pro+',
             'broker' => 'Broker',
             'yard' => 'Yard',
             'charter' => 'Charter',
