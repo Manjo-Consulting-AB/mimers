@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Agent;
+use Illuminate\Support\Facades\DB;
+
 use function Pest\Laravel\getJson;
 
 /*
@@ -135,4 +138,24 @@ it('gör en raderad agentrads access- och refresh-token obrukbara', function () 
     mcpFornya($flode['client'], $flode['refresh_token'])
         ->assertStatus(400)
         ->assertJsonPath('error', 'invalid_grant');
+});
+
+it('lämnar tokens giltiga när agentraden raderas förbi Eloquent', function () {
+    /*
+     * Provet dokumenterar vad som gäller, inte vad vi vill: raderingen går
+     * förbi Eloquent, precis som en kaskad i databasen (`ON DELETE CASCADE`)
+     * gör, så `Agent::deleting` avfyrar aldrig och tokens återkallas inte. Det
+     * är skillnaden mot raderingen ovan. En token utan agentrad avvisas först
+     * när issue 402 kräver att raden finns vid varje anrop.
+     */
+    [, $anvandare] = mcpKonto('pro');
+    $flode = mcpAnslut($anvandare);
+
+    DB::table('agent')->where('id', $flode['agent']->getKey())->delete();
+
+    expect(Agent::query()->count())->toBe(0);
+
+    mcpProvrutt();
+    auth()->forgetGuards();
+    getJson('/__mcp-prova', ['Authorization' => 'Bearer '.$flode['access_token']])->assertOk();
 });

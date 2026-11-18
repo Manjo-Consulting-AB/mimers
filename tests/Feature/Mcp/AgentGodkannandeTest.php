@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Agent\AgentConnectionRefusedException;
+use App\Actions\Agent\ConnectAgent;
 use App\Models\Account;
 use App\Models\Agent;
 use App\Models\Notification;
@@ -8,6 +10,7 @@ use App\Models\NotificationPreference;
 use App\Models\SecurityLog;
 use App\Models\User;
 use App\Support\Notification\NotificationPreferences;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Laravel\Passport\Client;
 
@@ -264,6 +267,29 @@ it('skapar ingen rad när ett godkännande avvisas av Passport', function () {
         ->assertForbidden();
 
     expect(Agent::query()->count())->toBe(0);
+});
+
+it('utfärdar ingen användbar kod när godkännandet avvisas efter Passport', function () {
+    [, $anvandare] = mcpKonto('pro');
+    $klient = mcpKlient();
+
+    $props = mcpSidprops(mcpAuktorisera($anvandare, $klient));
+
+    // Det enda som kan vägra EFTER att Passport har utfärdat koden är att
+    // tillståndet hann ändras mellan grinden och skrivningen. Koden ska då
+    // rullas tillbaka i samma transaktion — inte lämnas kvar att byta mot
+    // tokens utan en agentrad bakom sig.
+    $vagran = Mockery::mock(ConnectAgent::class);
+    $vagran->shouldReceive('handle')->andThrow(
+        new AgentConnectionRefusedException(AgentConnectionRefusedException::REASON_LIMIT),
+    );
+    app()->instance(ConnectAgent::class, $vagran);
+
+    mcpGodkann($anvandare, $props, 'new')->assertForbidden();
+
+    expect(Agent::query()->count())->toBe(0)
+        ->and(DB::table('oauth_auth_codes')->count())->toBe(0)
+        ->and(DB::table('oauth_access_tokens')->count())->toBe(0);
 });
 
 it('loggar in en gäst och leder tillbaka till godkännandet', function () {

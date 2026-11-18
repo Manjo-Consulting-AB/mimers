@@ -33,6 +33,14 @@ use Laravel\Passport\Token;
  * är därför `booted()` nedan finns, och därför en hård radering inte lämnar
  * en fungerande token efter sig.
  *
+ * **Hörnet: en kaskad i databasen avfyrar inga händelser.** `booted()` fångar
+ * Eloquents radering (`$agent->delete()`), inte `ON DELETE CASCADE`. Raderas
+ * personkontot eller personen försvinner agentraden därför utan att
+ * `deleting` körs, och tokens ligger kvar i `oauth_access_tokens`. Blir de
+ * obrukbara beror det på att personen själv är borta — en raderad
+ * personkonto-rad lämnar alltså giltiga tokens utan agentrad. Issue 402
+ * stänger hörnet genom att kräva att agentraden finns vid varje anrop.
+ *
  * Den ENDA vägen in är actions under `App\Actions\Agent`, så allt är uteslutet
  * ur `#[Fillable]` och sätts explicit — samma resonemang som
  * App\Models\Notification.
@@ -49,11 +57,11 @@ class Agent extends Model
     protected $table = 'agent';
 
     /**
-     * Rättigheterna och tokens följer raden. En radering — från
-     * `/settings/agents` (issue 407), från mejlets signerade länk
-     * (`App\Actions\Agent\DisconnectAgent`) eller från en kaskad i databasen
-     * — ska lämna varken en användbar access token eller refresh token efter
-     * sig.
+     * Rättigheterna och tokens följer raden. En Eloquent-radering — från
+     * `/settings/agents` (issue 407) eller från mejlets signerade länk
+     * (`App\Actions\Agent\DisconnectAgent`) — ska lämna varken en användbar
+     * access token eller refresh token efter sig. En kaskad i databasen
+     * avfyrar däremot ingen `deleting`-händelse; se klassens docblock.
      */
     protected static function booted(): void
     {

@@ -2325,10 +2325,22 @@ Route::post('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::
  * och bara för den agenten, och en ändrad eller utgången URL avvisas av
  * `signed` innan någon rad rörs. `{agent}` binds på ULID via
  * #[RouteKey('ulid')] på App\Models\Agent.
+ *
+ * **GET visar bara bekräftelsen; POST kopplar bort.** Mejlskannrar och
+ * länkförhandsvisningar hämtar länkar automatiskt, så en GET som raderade
+ * hade låtit dem stänga av en legitim agent. POST:en går till samma
+ * signerade URL och bär därför samma skydd; CSRF är avstängt av samma skäl
+ * som på avanmälan — den som klickar i mejlet har ingen session att skicka
+ * en token ur, och signaturen är hela skyddet (Beslut 1).
  */
-Route::get('/agents/disconnect/{agent}', DisconnectAgentController::class)
+Route::get('/agents/disconnect/{agent}', [DisconnectAgentController::class, 'confirm'])
     ->middleware('signed')
     ->name('mcp.agents.disconnect');
+
+Route::post('/agents/disconnect/{agent}', [DisconnectAgentController::class, 'store'])
+    ->middleware('signed')
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->name('mcp.agents.disconnect.store');
 
 /*
  * Issue 36b · ICS-kalenderfeed, se App\Http\Controllers\CalendarFeedDownloadController,

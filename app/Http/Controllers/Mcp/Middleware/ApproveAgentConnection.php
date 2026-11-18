@@ -9,6 +9,7 @@ use App\Models\Agent;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Laravel\Passport\Bridge\Client;
 use Laravel\Passport\Bridge\Scope;
 use Laravel\Passport\Bridge\User;
@@ -37,6 +38,15 @@ use Symfony\Component\HttpFoundation\Response;
  * däremot skrivs — raden, säkerhetsloggen och mejlet — sker först när
  * Passport har svarat med en `code` i redirecten: en agent ska inte finnas
  * förrän anslutningen faktiskt blev godkänd.
+ *
+ * **Koden och raden hör till samma transaktion.** Passport skriver
+ * auktoriseringskoden innan svaret går ut, så en vägran EFTER `$next` får
+ * inte sväljas: då hade klienten kunnat byta en kod mot tokens utan att
+ * någon `agent`-rad fanns, förbi både plan- och takgrinden. `$next` och
+ * `ConnectAgent` ligger därför i samma `DB::transaction`; en vägran rullar
+ * tillbaka koden och ger 403. Tillståndet kan ha hunnit ändras mellan
+ * kontrollen och skrivningen — en annan flik kopplade bort den sista
+ * agenten, eller ett samtidigt godkännande tog den sista platsen.
  *
  * **Samma klient igen skickar inget mejl.** `App\Actions\Agent\ConnectAgent`
  * känner igen raden på `(user_id, oauth_client_id)` och återanvänder den.
@@ -92,21 +102,22 @@ class ApproveAgentConnection
 
         $replaceUlid = $this->replacementChoice($request, $state);
 
-        $response = $next($request);
+        try {
+            return DB::transaction(function () use ($request, $next, $user, $client, $replaceUlid): Response {
+                $response = $next($request);
 
-        if ($this->isApproved($response)) {
-            try {
-                $this->connect->handle($user, $client, $replaceUlid);
-            } catch (AgentConnectionRefusedException) {
-                // Tillståndet hann ändras mellan kontrollen och skrivningen
-                // (en annan flik kopplade bort den sista agenten, eller en
-                // tolfte godkändes samtidigt). Koden är redan utfärdad; nästa
-                // anslutning prövar igen. Att kasta här hade gjort ett
-                // lyckat godkännande till ett 500.
-            }
+                if ($this->isApproved($response)) {
+                    // Kastar AgentConnectionRefusedException om tillståndet
+                    // hann ändras: då rullas också koden som Passport just
+                    // skrev, och inget svar med `code=` går ut.
+                    $this->connect->handle($user, $client, $replaceUlid);
+                }
+
+                return $response;
+            });
+        } catch (AgentConnectionRefusedException) {
+            abort(403);
         }
-
-        return $response;
     }
 
     /**

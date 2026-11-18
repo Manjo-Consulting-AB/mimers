@@ -3,9 +3,11 @@
 use App\Models\Agent;
 use App\Models\Notification;
 use App\Models\SecurityLog;
+use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\post;
 use function Pest\Laravel\travel;
 use function Pest\Laravel\withoutVite;
 
@@ -51,7 +53,15 @@ it('kopplar bort agenten utan inloggning', function () {
 
     auth()->forgetGuards();
 
-    get($lank)->assertOk();
+    // Länken får inte radera något när den hämtas: skannrar och
+    // länkförhandsvisningar gör samma GET. Sidan visar bekräftelsen.
+    get($lank)
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('Mcp/DisconnectConfirm'));
+
+    expect(Agent::query()->count())->toBe(1);
+
+    post($lank)->assertOk();
 
     expect(Agent::query()->count())->toBe(0)
         ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_AGENT_DISCONNECTED)->sole()->meta)

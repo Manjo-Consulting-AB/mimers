@@ -4,7 +4,6 @@ namespace App\Actions\Agent;
 
 use App\Actions\Notification\CreateNotification;
 use App\Actions\Security\RecordSecurityEvent;
-use App\Models\Account;
 use App\Models\Agent;
 use App\Models\Notification;
 use App\Models\SecurityLog;
@@ -44,6 +43,11 @@ use Laravel\Passport\Client;
  * **Allt i EN transaktion.** Raden, säkerhetsloggen och notisen hör till
  * samma händelse: en agent utan loggrad är ett tyst spår, och ett mejl om en
  * anslutning som rullades tillbaka vore ett löfte systemet inte höll.
+ *
+ * **Taket räknas under lås.** En ny rad prövar plan och tak en gång till
+ * sedan personraden låsts, så två samtidiga godkännanden från olika klienter
+ * inte båda ser nio agenter och skriver den elfte. Uniknyckeln
+ * `(user_id, oauth_client_id)` är spärren för samma klient.
  */
 class ConnectAgent
 {
@@ -80,7 +84,7 @@ class ConnectAgent
             throw new AgentConnectionRefusedException(AgentConnectionRefusedException::REASON_LIMIT);
         }
 
-        return $this->create($user, $client, $state['account']);
+        return $this->create($user, $client);
     }
 
     private function recordReconnect(Agent $agent): Agent
@@ -134,10 +138,33 @@ class ConnectAgent
         });
     }
 
-    private function create(User $user, Client $client, Account $account): Agent
+    private function create(User $user, Client $client): Agent
     {
         try {
-            return DB::transaction(function () use ($user, $client, $account): Agent {
+            return DB::transaction(function () use ($user, $client): Agent {
+                // Lås personraden innan taket räknas: utan låset är
+                // kontrollen en läs-sedan-skriv, och två samtidiga
+                // godkännanden från olika klienter kan båda se nio rader och
+                // skriva den elfte. Läsningen sker efter låset, så den som
+                // väntar får det antal som gäller när turen kommer.
+                User::query()->whereKey($user->getKey())->lockForUpdate()->first();
+
+                $state = $this->inspect->handle($user, $client);
+
+                if ($state['requires_pro']) {
+                    throw new AgentConnectionRefusedException(AgentConnectionRefusedException::REASON_PLAN);
+                }
+
+                if ($state['existing'] instanceof Agent) {
+                    return $this->recordReconnect($state['existing']);
+                }
+
+                if ($state['limit_reached']) {
+                    throw new AgentConnectionRefusedException(AgentConnectionRefusedException::REASON_LIMIT);
+                }
+
+                $account = $state['account'];
+
                 $agent = new Agent;
                 $agent->user_id = $user->getKey();
                 $agent->account_id = $account->getKey();

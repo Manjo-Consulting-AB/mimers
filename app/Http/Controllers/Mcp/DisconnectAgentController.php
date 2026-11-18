@@ -19,13 +19,31 @@ use Inertia\Response;
  * agenten. En ändrad eller utgången länk avvisas av `signed`-middlewaret och
  * rör ingenting.
  *
+ * **Länken raderar ingenting när den hämtas.** Mejlskannrar och
+ * länkförhandsvisningar hämtar länkar automatiskt; en GET som kopplade bort
+ * hade låtit dem stänga av en legitim agent. `confirm()` ritar därför bara en
+ * bekräftelseknapp, och `store()` — som POSTar mot samma signerade URL,
+ * alltså med samma skydd — är den som raderar. Det skyddar också mot en
+ * kapad session på samma sätt som förut: utan signaturen går ingen av
+ * rutterna att anropa.
+ *
  * **Raden raderas och tokens återkallas**, se App\Actions\Agent\
- * DisconnectAgent. Sidan säger vad som hände; den är den enda ytan en
+ * DisconnectAgent. Sidan efteråt säger vad som hände; den är den enda ytan en
  * utloggad person kan mötas av efter klicket.
  */
 class DisconnectAgentController
 {
-    public function __invoke(
+    public function confirm(Agent $agent, Request $request): Response
+    {
+        return Inertia::render('Mcp/DisconnectConfirm', [
+            'agentName' => $agent->name,
+            // Den signerade URL:en som sidan kom in på — POST:en går till
+            // exakt samma adress, så signaturen gäller oförändrad.
+            'actionUrl' => $request->fullUrl(),
+        ]);
+    }
+
+    public function store(
         Agent $agent,
         Request $request,
         DisconnectAgent $disconnect,

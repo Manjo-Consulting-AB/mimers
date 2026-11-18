@@ -2084,6 +2084,15 @@ return [
             'limit_body' => 'An account can have at most :max connected agents. Disconnect one under Agents, or replace one of the agents below when you connect :client.',
             'agents_link' => 'Go to Agents',
         ],
+        // Mejlets signerade bortkoppling går först till en bekräftelse:
+        // länken får inte radera något när en skanner hämtar den.
+        'disconnect_confirm' => [
+            'title' => 'Disconnect the agent?',
+            'heading' => 'Disconnect :agent?',
+            'body' => ':agent loses its access and its tokens stop working at once. A new connection from the same client starts without access.',
+            'confirm' => 'Disconnect agent',
+            'cancel' => 'Keep the agent',
+        ],
         'disconnected' => [
             'title' => 'Agent disconnected',
             'heading' => 'The agent has been disconnected',
