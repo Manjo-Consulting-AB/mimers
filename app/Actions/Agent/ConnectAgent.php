@@ -18,7 +18,7 @@ use Laravel\Passport\Client;
  * Skapar eller återanvänder agentraden efter ett godkänt OAuth-flöde, se
  * [[ADR-0087 MCP-server för agenter]] Riktning 12 och issue 400 § 4 och 5.
  *
- * **Tre fall, och bara ett av dem skickar mejl.**
+ * **Tre fall, och två av dem skickar mejl.**
  *
  * 1. *Samma klient igen.* Raden hittas på `(user_id, oauth_client_id)` och
  *    återanvänds med namn, rättigheter och paus. Ingen ny rad, inget mejl —
@@ -27,8 +27,12 @@ use Laravel\Passport\Client;
  *    eftersom det är en anslutning (Riktning 12).
  * 2. *Ny klient som ersätter en befintlig.* Radens `oauth_client_id` byts,
  *    den gamla klientens tokens återkallas, och raden behåller namn,
- *    rättigheter och paus. `agent.replaced` skrivs i säkerhetsloggen. Inget
- *    mejl: agenten är inte ny, bara klienten framför den.
+ *    rättigheter och paus. `agent.replaced` skrivs i säkerhetsloggen. Mejlet
+ *    `agent.connected` skickas ändå: en ersättning är just det fall mejlet
+ *    och bortkopplingslänken finns för — en kapad session som ansluter
+ *    angriparens egen klient — och värre än en ny agent, eftersom den nya
+ *    klienten ärver radens rättigheter och påslag i stället för att börja
+ *    från noll. Utan mejlet har användaren varken signal eller länk.
  * 3. *Ny klient, ny agent.* En rad skapas, `agent.connected` skrivs och
  *    användaren får notisen `agent.connected` som mejl. Mejlet går inte att
  *    stänga av och samlas aldrig i veckosammanfattningen, se
@@ -132,6 +136,26 @@ class ConnectAgent
                     'client' => $agent->name,
                     'replaced_client_id' => $previousClientId,
                 ],
+            );
+
+            // Ersättningen skickar samma notis som en ny agent: det är den
+            // vägen användaren får veta att någon anslöt en klient, och
+            // länken i mejlet kopplar bort raden. `dedupeKey: null` därför
+            // att en ersättning är en engångshändelse — samma ULID kan bära
+            // flera ersättningar, och nyckeln `agent.connected:<ulid>` från
+            // den ursprungliga anslutningen får inte sluka det nya mejlet.
+            $this->createNotification->handle(
+                type: Notification::TYPE_AGENT_CONNECTED,
+                account: $agent->account,
+                user: $user,
+                payload: [
+                    'agent_ulid' => $agent->ulid,
+                    // Namnet på klienten som anslöts, inte radens namn:
+                    // raden behåller sitt namn och kan heta något annat.
+                    'client' => Str::limit((string) $client->name, 100, ''),
+                    'connected_at' => now()->toDayDateTimeString(),
+                ],
+                dedupeKey: null,
             );
 
             return $agent;

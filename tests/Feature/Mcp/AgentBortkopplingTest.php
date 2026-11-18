@@ -2,6 +2,7 @@
 
 use App\Models\Agent;
 use App\Models\Notification;
+use App\Models\NotificationDelivery;
 use App\Models\SecurityLog;
 use Inertia\Testing\AssertableInertia;
 
@@ -71,6 +72,65 @@ it('kopplar bort agenten utan inloggning', function () {
     mcpProvrutt();
     auth()->forgetGuards();
     getJson('/__mcp-prova', ['Authorization' => 'Bearer '.$flode['access_token']])->assertUnauthorized();
+});
+
+it('skickar ett nytt mejl vid ersättning och låter länken koppla bort raden', function () {
+    [, $anvandare] = mcpKonto('pro');
+
+    $forsta = mcpAnslut($anvandare, mcpKlient('Claude'));
+    $agent = $forsta['agent'];
+
+    $ursprunglig = Notification::query()
+        ->where('type', Notification::TYPE_AGENT_CONNECTED)
+        ->sole();
+
+    // En ny klient ersätter agenten. Raden behåller sitt ULID, men
+    // anslutningen är en ny händelse och ska ge ett nytt mejl — annars har
+    // användaren ingen signal om att en kapad session bytt ut klienten.
+    $ny = mcpKlient('ChatGPT');
+    $svar = mcpGodkann($anvandare, mcpSidprops(mcpAuktorisera($anvandare, $ny)), 'replace:'.$agent->ulid);
+
+    $svar->assertRedirect();
+
+    $nyaTokens = mcpVaxlaKod($ny, mcpKod($svar), mcpRedirectUri($ny));
+    $nyaTokens->assertOk();
+
+    $notiser = Notification::query()->where('type', Notification::TYPE_AGENT_CONNECTED)->get();
+
+    expect($notiser)->toHaveCount(2)
+        ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_AGENT_CONNECTED)->count())->toBe(1)
+        ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_AGENT_REPLACED)->count())->toBe(1);
+
+    $ersattning = $notiser->firstWhere('id', '!=', $ursprunglig->id);
+
+    expect($ersattning->user_id)->toBe($anvandare->id)
+        ->and($ersattning->payload['agent_ulid'])->toBe($agent->ulid)
+        // Klienten som anslöts, inte radens namn.
+        ->and($ersattning->payload['client'])->toBe('ChatGPT');
+
+    $leverans = NotificationDelivery::query()->where('notification_id', $ersattning->id)->sole();
+
+    expect($leverans->channel)->toBe(NotificationDelivery::CHANNEL_EMAIL)
+        ->and($leverans->digest)->toBeFalse();
+
+    // Länken i ersättningsmejlet gäller raden, och kopplar bort den utan
+    // inloggning.
+    $lank = mcpLankUrMejl(mcpMejlhtml($ersattning));
+
+    expect($lank)->toContain($agent->ulid);
+
+    auth()->forgetGuards();
+
+    post($lank)->assertOk();
+
+    expect(Agent::query()->count())->toBe(0)
+        ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_AGENT_DISCONNECTED)->sole()->meta)
+        ->toMatchArray(['agent_ulid' => $agent->ulid]);
+
+    // Den nya klientens tokens slutade fungera med raden.
+    mcpProvrutt();
+    auth()->forgetGuards();
+    getJson('/__mcp-prova', ['Authorization' => 'Bearer '.$nyaTokens->json('access_token')])->assertUnauthorized();
 });
 
 it('gör ingenting när signaturen är ändrad', function () {
