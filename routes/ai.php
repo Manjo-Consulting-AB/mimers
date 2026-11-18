@@ -1,7 +1,11 @@
 <?php
 
+use App\Mcp\Http\AttachmentDownloadController;
 use App\Mcp\Middleware\ResolveAgent;
 use App\Mcp\Servers\MimersServer;
+use App\Support\Mcp\AttachmentDownloadLink;
+use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
 
 /*
@@ -27,3 +31,16 @@ use Laravel\Mcp\Facades\Mcp;
 Mcp::oauthRoutes();
 
 Mcp::web('/mcp', MimersServer::class)->middleware(['auth:mcp', ResolveAgent::class]);
+
+/*
+ * Issue 403 · Nedladdningsadressen för bilagor över 10 MB, se
+ * App\Support\Mcp\AttachmentDownloadLink. `signed` är autentiseringen;
+ * kontrollern prövar åtkomsten på nytt och spärrar adressen efter en
+ * användning. På filoriginen när en sådan finns, som övriga användarfiler.
+ */
+$mcpFiler = ($host = AttachmentDownloadLink::host()) !== null ? Route::domain($host) : Route::prefix('');
+
+$mcpFiler
+    ->get('/mcp-files/{attachment}/{agent}', AttachmentDownloadController::class)
+    ->middleware([SubstituteBindings::class, 'signed'])
+    ->name(AttachmentDownloadLink::ROUTE);

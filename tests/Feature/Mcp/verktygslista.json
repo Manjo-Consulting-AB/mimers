@@ -1,5 +1,45 @@
 [
     {
+        "name": "attachments_get",
+        "parameters": {
+            "attachment": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "attachment"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "categories_list",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "cursor": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "container"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
         "name": "containers_list",
         "parameters": {
             "cursor": {
@@ -31,6 +71,237 @@
                 "minimum": 1,
                 "maximum": 5,
                 "type": "integer"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "container"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "costs_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "history_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "items_get",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "offset": {
+                "minimum": 0,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "items_search",
+        "parameters": {
+            "category": {
+                "type": "string"
+            },
+            "container": {
+                "type": "string"
+            },
+            "cursor": {
+                "type": "string"
+            },
+            "due_after": {
+                "type": "string"
+            },
+            "due_before": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            },
+            "loan_status": {
+                "type": "string"
+            },
+            "q": {
+                "type": "string"
+            },
+            "tags": {
+                "type": "array"
+            },
+            "task_status": {
+                "type": "string"
+            }
+        },
+        "required": [],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "loans_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "occurrences_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "relations_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "schedules_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "tags_list",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "cursor": {
+                "type": "string"
             },
             "limit": {
                 "minimum": 1,

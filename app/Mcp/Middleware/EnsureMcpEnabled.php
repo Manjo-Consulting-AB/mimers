@@ -34,6 +34,7 @@ class EnsureMcpEnabled
             'oauth/authorize',
             'oauth/register',
             'mcp',
+            'mcp-files/*',
         )) {
             abort(404);
         }
