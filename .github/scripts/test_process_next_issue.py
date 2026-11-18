@@ -993,6 +993,125 @@ def test_granskad_sha_som_inte_ar_head_spärrar():
         p.GRANSKAD_SHA.pop("999", None)
 
 
+class _Svar:
+    def __init__(self, stdout="", returncode=0):
+        self.stdout, self.stderr, self.returncode = stdout, "", returncode
+
+
+def _ci_falska(head_sha, svar_per_anrop):
+    """Falsk run_cmd för pr_far_mergas(): etiketter, och check-runs för
+    `head_sha` ur `svar_per_anrop` i tur och ordning (sista upprepas). Den
+    gamla commitens cancelled-checkar finns bara under sin egen SHA och ska
+    aldrig läsas. Returnerar (falska, frågade_shas)."""
+    fragade = []
+    kvar = list(svar_per_anrop)
+
+    def falska(args, **kw):
+        if args[:3] == ["gh", "pr", "view"]:
+            return _Svar(json.dumps({"labels": [{"name": "review:approved"}]}))
+        if args[:2] == ["gh", "pr"] and "checks" in args:
+            raise AssertionError("gh pr checks läser PR:en, inte commiten")
+        if args[:2] == ["gh", "api"] and "/check-runs" in args[2]:
+            sha = args[2].split("/commits/")[1].split("/")[0]
+            fragade.append(sha)
+            if sha != head_sha:
+                return _Svar(json.dumps({"check_runs": [
+                    {"name": "test", "status": "completed", "conclusion": "cancelled"}]}))
+            runs = kvar.pop(0) if len(kvar) > 1 else kvar[0]
+            return _Svar(json.dumps({"check_runs": runs}))
+        raise AssertionError(f"oväntat anrop: {args}")
+    return falska, fragade
+
+
+def _kor_pr_far_mergas(head_sha, svar_per_anrop):
+    original = (p.run_cmd, p.time.sleep)
+    falska, fragade = _ci_falska(head_sha, svar_per_anrop)
+    p.run_cmd, p.time.sleep = falska, (lambda s: None)
+    p.GRANSKAD_SHA["999"] = head_sha
+    try:
+        return p.pr_far_mergas("999", head_sha), fragade
+    finally:
+        p.run_cmd, p.time.sleep = original
+        p.GRANSKAD_SHA.pop("999", None)
+
+
+def test_ny_sha_utan_runs_vantas_in_och_mergas():
+    """PR #1413: förra commitens checkar var cancelled, den nya hade inga än.
+    Kön ska vänta in den nya commitens runs, inte läsa läget som rött."""
+    ny = "c" * 40
+    gron = [{"name": "test", "status": "completed", "conclusion": "success"},
+            {"name": "migreringar", "status": "completed", "conclusion": "success"}]
+    pagar = [{"name": "test", "status": "in_progress", "conclusion": None},
+             {"name": "migreringar", "status": "queued", "conclusion": None}]
+    ok, fragade = _kor_pr_far_mergas(ny, [[], [], pagar, pagar, gron])
+    assert ok is True
+    assert set(fragade) == {ny}, "checkar från en äldre SHA får aldrig läsas"
+    assert len(fragade) == 5
+
+
+def test_ny_sha_med_rod_check_spärrar():
+    ny = "d" * 40
+    rod = [{"name": "test", "status": "completed", "conclusion": "failure"},
+           {"name": "migreringar", "status": "completed", "conclusion": "success"}]
+    ok, _ = _kor_pr_far_mergas(ny, [[], rod])
+    assert ok is False
+
+
+def test_ny_sha_som_aldrig_far_runs_spärrar_efter_taket():
+    ny = "e" * 40
+    original = (p.run_cmd, p.time.sleep, p.time.monotonic)
+    falska, _ = _ci_falska(ny, [[]])
+    klocka = [0.0]
+
+    def sov(s):
+        klocka[0] += s
+    p.run_cmd, p.time.sleep, p.time.monotonic = falska, sov, (lambda: klocka[0])
+    p.GRANSKAD_SHA["999"] = ny
+    try:
+        assert p.pr_far_mergas("999", ny) is False
+        assert p.CI_REGISTRERING_TIMEOUT <= klocka[0] < p.CI_VANT_TIMEOUT
+    finally:
+        p.run_cmd, p.time.sleep, p.time.monotonic = original
+        p.GRANSKAD_SHA.pop("999", None)
+
+
+def test_ci_lage():
+    def lage(runs, kod=0):
+        original = p.run_cmd
+        p.run_cmd = lambda args, **kw: _Svar(json.dumps({"check_runs": runs}), kod)
+        try:
+            return p.ci_lage("f" * 40)
+        finally:
+            p.run_cmd = original
+    klar = lambda c: {"name": "x", "status": "completed", "conclusion": c}
+    assert lage([]) == "saknas"
+    assert lage([klar("success"), klar("skipped")]) == "gron"
+    assert lage([klar("success"), {"name": "y", "status": "queued", "conclusion": None}]) == "pagar"
+    assert lage([klar("cancelled")]) == "rod"
+    assert lage([klar("success")], kod=1) == "olasbar"
+
+
+def test_ci_lases_bara_per_commit():
+    """`gh pr checks` läser PR:en och såg den gamla commitens checkar (PR #1413).
+    Inget ställe i kön får vänta in eller läsa CI den vägen."""
+    rader = [r.strip() for r in _kalla().splitlines()
+             if '"gh", "pr", "checks"' in r and not r.strip().startswith("#")]
+    assert rader == [], rader
+    assert "filter=latest" in _funktionskropp("ci_lage")
+
+
+def test_mergesparren_eskalerar_inte_okand_som_rott():
+    """Tomma steg på HEAD och CI som inte är rött ska vänta in och pröva igen,
+    och eskaleringstexten får bara säga rött när CI är det."""
+    kropp = _funktionskropp("hantera_mergesparr")
+    okand = kropp.index('typ == "okand"')
+    assert "ci_lage(head_sha)" in kropp[okand:okand + 200]
+    assert "merga_om_tillatet(pr_number)" in kropp[okand:okand + 900]
+    kalla = _kalla()
+    assert 'CI blev rött."' not in kalla
+    assert 'CI blev rött.",' not in kalla
+
+
 def test_godkannande_foraldrat():
     godkant = {"event": "labeled", "label": {"name": "review:approved"}, "created_at": "2026-09-25T23:05:00Z"}
     fore = {"event": "committed", "committer": {"date": "2026-09-25T22:58:00Z"}}
@@ -1145,7 +1264,7 @@ def test_modellanropen_har_tak():
     evigt hållet lås."""
     assert "timeout=AGENT_TIMEOUT" in _funktionskropp("call_deepseek")
     assert "timeout=AGENT_TIMEOUT" in _funktionskropp("call_claude_direct")
-    assert "timeout=CI_VANT_TIMEOUT" in _funktionskropp("pr_far_mergas")
+    assert "CI_VANT_TIMEOUT" in _funktionskropp("vanta_in_ci")
 
 
 def test_arkitektbanan_mergar_bara_kons_egna_godkanda_pr_efter_undantag():

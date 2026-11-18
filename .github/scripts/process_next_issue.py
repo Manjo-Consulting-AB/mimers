@@ -152,6 +152,14 @@ AGENT_TIMEOUT = 90 * 60
 # hålla låset.
 CI_VANT_TIMEOUT = 30 * 60
 
+# Hur länge en commit utan en enda registrerad check-run väntas in innan läget
+# läses som "inga checkar". Actions registrerar körningen inom sekunder efter en
+# push, men inte alltid före kön frågar: PR #1413 mergeprövades 19:50:30 och
+# fick sina check-runs 19:51:02. Kortare än CI_VANT_TIMEOUT, så att en commit
+# som aldrig får CI inte håller låset en halvtimme.
+CI_REGISTRERING_TIMEOUT = 10 * 60
+CI_POLL_INTERVALL = 15
+
 # CI-stegen mergespärren kan åtgärda själv. Namnen måste vara exakt de i
 # .github/workflows/ci.yml - test_process_next_issue.py vaktar det.
 CI_STEG_OMFANG = "Diffen ligger innanför omfångsrutan"
@@ -1939,7 +1947,8 @@ def atgarda_arkitektsvar(pr_number):
                      f"### {NOTIS_MERGESPARR}\nÅtgärdsloopen löste fynden, men "
                      "antingen blev CI inte grönt eller så saknades `review:approved` vid "
                      "mergetillfället. Mergar inte automatiskt."], cwd=REPO_ROOT)
-            eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
+            eskalera(issue_num, pr_number, worktree_path, branch_name,
+                     f"Åtgärdat men {mergesparr_orsak(pr_number)}.")
     finally:
         # Också vid sys.exit() ur eskalera() och vid ^C: statusetiketten får
         # aldrig bli kvar och påstå att något fortfarande kör. En merged PR
@@ -2399,7 +2408,10 @@ def pr_far_mergas(pr_number, head_sha=""):
     hunnit starta (PR #112, ren race: mergad 14:25:32, testjobbet klart
     14:27:01). "no checks reported" strax efter en push betyder att Actions
     inte registrerat körningen än, inte att inga checkar finns - då väntar vi
-    och försöker igen i stället för att läsa det som grönt.
+    och försöker igen i stället för att läsa det som grönt. Samma race bytte
+    form i PR #1413: `gh pr checks --watch` läste den förra commitens avbrutna
+    checkar som rött. CI läses därför numera ur check-runs för just head_sha
+    (vanta_in_ci()), aldrig ur PR:en.
     """
     pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"],
                             cwd=REPO_ROOT).stdout)
@@ -2422,21 +2434,76 @@ def pr_far_mergas(pr_number, head_sha=""):
     elif not godkannandet_galler_koden(pr_number):
         return False
 
-    for attempt in range(3):
-        try:
-            result = run_cmd(
-                ["gh", "pr", "checks", pr_number, "--watch", "--interval", "15"],
-                check=False, cwd=REPO_ROOT, timeout=CI_VANT_TIMEOUT,
-            )
-        except TimeoutError as e:
-            print(f"!! CI blev inte klar inom {CI_VANT_TIMEOUT // 60} minuter: {e} - mergar inte.")
-            return False
-        output = ((result.stdout or "") + (result.stderr or "")).lower()
-        if "no checks reported" in output and attempt < 2:
-            time.sleep(15)
-            continue
-        return result.returncode == 0
+    if not head_sha:
+        head_sha = run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+                           check=False, cwd=REPO_ROOT).stdout.strip()
+    if not head_sha:
+        print(f"!! Kunde inte läsa HEAD för PR #{pr_number} - mergar inte.")
+        return False
+
+    lage = vanta_in_ci(head_sha)
+    if lage == "gron":
+        return True
+    if lage == "rod":
+        print(f"!! CI är rött på {head_sha[:8]} - mergar inte.")
+    else:
+        print(f"!! CI på {head_sha[:8]} blev inte klar (läge: {lage}) - mergar inte.")
     return False
+
+
+def ci_lage(sha):
+    """Läget för CI på exakt `sha`, läst ur check-runs för just den commiten.
+    Ren läsning, ingen väntan.
+
+    Returnerar "gron", "rod", "pagar" (någon check-run är inte klar), "saknas"
+    (inga check-runs registrerade än) eller "olasbar".
+
+    `filter=latest` ger den senaste körningen per checknamn: en cancelled eller
+    röd körning som ersatts av en omkörning räknas inte. Checkar från en äldre
+    commit räknas aldrig, eftersom frågan ställs mot `sha` och inte mot PR:en.
+    Det är skillnaden mot `gh pr checks`, som läste den gamla commitens
+    avbrutna checkar som rött innan Actions registrerat den nya (PR #1413).
+    """
+    res = run_cmd(["gh", "api", f"repos/{GH_REPO}/commits/{sha}/check-runs?filter=latest&per_page=100"],
+                  check=False, cwd=REPO_ROOT)
+    if res.returncode != 0:
+        return "olasbar"
+    try:
+        checkar = json.loads(res.stdout).get("check_runs") or []
+    except (ValueError, AttributeError):
+        return "olasbar"
+    if not checkar:
+        return "saknas"
+    if any(c.get("status") != "completed" for c in checkar):
+        return "pagar"
+    if all(c.get("conclusion") in ("success", "skipped", "neutral") for c in checkar):
+        return "gron"
+    return "rod"
+
+
+def vanta_in_ci(sha):
+    """Väntar tills CI på `sha` är klar och returnerar ci_lage():s slutliga svar.
+
+    Ersätter `gh pr checks --watch`, som tittar på PR:en i stället för på en
+    commit. Strax efter en push har den nya commiten inga check-runs än, och då
+    svarade `--watch` med den förra commitens checkar - avbrutna av
+    concurrency-regeln, alltså rött - och kön eskalerade en PR vars CI blev
+    grön nio minuter senare (PR #1413). Samma race som PR #112, i ny form.
+
+    "saknas" och "olasbar" väntas in i högst CI_REGISTRERING_TIMEOUT, "pagar" i
+    högst CI_VANT_TIMEOUT räknat från början. Bara "gron" och "rod" är svar;
+    allt annat efter taket betyder att CI aldrig blev klar.
+    """
+    start = time.monotonic()
+    while True:
+        lage = ci_lage(sha)
+        if lage in ("gron", "rod"):
+            return lage
+        gatt = time.monotonic() - start
+        tak = CI_VANT_TIMEOUT if lage == "pagar" else CI_REGISTRERING_TIMEOUT
+        if gatt >= tak:
+            return lage
+        time.sleep(CI_POLL_INTERVALL)
 
 
 def merga_om_tillatet(pr_number):
@@ -2525,6 +2592,22 @@ def klassa_ci_fel(steg):
     return "annat"
 
 
+def mergesparr_orsak(pr_number):
+    """Eskaleringens orsakstext, läst ur CI-läget på PR:ens HEAD.
+
+    "CI blev rött" stod förut ovillkorligt, också när CI var grönt eller inte
+    ens startat (PR #1413) - och skickade Tony att leta efter ett fel som inte
+    fanns. Texten säger nu bara rött när check-runs på HEAD faktiskt är röda.
+    """
+    head_sha = run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+                       check=False, cwd=REPO_ROOT).stdout.strip()
+    lage = ci_lage(head_sha) if head_sha else "olasbar"
+    if lage == "rod":
+        return "CI blev rött"
+    return (f"mergespärren slog till fast CI inte är rött (CI-läge på HEAD: {lage}) - "
+            "se cron-loggen")
+
+
 def hantera_mergesparr(issue_num, issue_body, pr_number, pr_body, branch_name, worktree_path):
     """Försök lösa en slagen mergespärr innan den når Tony. Returnerar True om
     PR:en blev mergad.
@@ -2554,6 +2637,14 @@ def hantera_mergesparr(issue_num, issue_body, pr_number, pr_body, branch_name, w
     steg, anteckningar = misslyckade_ci_steg(head_sha) if head_sha else ([], [])
     typ = klassa_ci_fel(steg)
     print(f"--> Mergespärren: CI-felet klassat som '{typ}' ({steg}).")
+
+    if typ == "okand" and head_sha and ci_lage(head_sha) != "rod":
+        # Inga fallerade steg och CI inte rött: spärren slog till av något annat
+        # än rött CI - oftast att CI inte hunnit starta eller bli klar på en ny
+        # commit (PR #1413). Vänta in och pröva mergen en gång till i stället
+        # för att eskalera ett rött CI som inte finns.
+        print(f"--> CI på {head_sha[:8]} är inte rött - väntar in och prövar mergen igen.")
+        return merga_om_tillatet(pr_number)
 
     if typ == "omfang":
         send_pushover(f"🏛️ Issue #{issue_num}: omfångsgrinden fällde PR #{pr_number} - frågar arkitekten.")
@@ -3324,7 +3415,7 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
                  cwd=REPO_ROOT)
         eskalera(
             issue_num, pr_number, worktree_path, branch_name,
-            f"Godkänd av {godkand_av} men CI blev rött.",
+            f"Godkänd av {godkand_av} men {mergesparr_orsak(pr_number)}.",
         )
 
     cleanup_worktree(worktree_path, branch_name)
