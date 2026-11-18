@@ -27,6 +27,14 @@ class ContainersTree extends McpTool
 
     protected ?AgentGroup $group = AgentGroup::Items;
 
+    /**
+     * Högst så många items prövas mot åtkomsten per anrop. Varje prövning är
+     * några frågor, så i en stor container där agenten når få items hade ett
+     * anrop annars kostat lika mycket som hela containern. Nås taket får
+     * agenten en `next_cursor` och fortsätter därifrån.
+     */
+    private const MAX_EXAMINED = 200;
+
     public function schema(JsonSchema $schema): array
     {
         return [
@@ -48,7 +56,7 @@ class ContainersTree extends McpTool
 
         $depth = (int) ($args['depth'] ?? 2);
         $limit = (int) ($args['limit'] ?? Cursor::DEFAULT_LIMIT);
-        $after = Cursor::decode($args['cursor'] ?? null);
+        $after = Cursor::decode($args['cursor'] ?? null, 2);
 
         $container = Container::query()->with('account')->where('ulid', $args['container'])->first();
 
@@ -65,7 +73,7 @@ class ContainersTree extends McpTool
             throw new McpToolException('resource.not_found');
         }
 
-        $items = Item::query()->where('container_id', $container->id)->get()->keyBy('id');
+        $items = Item::query()->select(['id', 'ulid', 'name', 'container_id'])->where('container_id', $container->id)->get()->keyBy('id');
 
         $parentsOf = [];
 
@@ -118,11 +126,20 @@ class ContainersTree extends McpTool
         $rows = [];
         $more = false;
         $last = null;
+        $examined = 0;
 
         foreach ($order as $id) {
             if ($after !== null && [$depthOf[$id], $id] <= $after) {
                 continue;
             }
+
+            if (count($rows) === $limit || $examined === self::MAX_EXAMINED) {
+                $more = true;
+                break;
+            }
+
+            $examined++;
+            $last = [$depthOf[$id], $id];
 
             $item = $items[$id];
             $level = $this->levelIn($agent, $container, $item);
@@ -131,12 +148,6 @@ class ContainersTree extends McpTool
                 continue;
             }
 
-            if (count($rows) === $limit) {
-                $more = true;
-                break;
-            }
-
-            $last = [$depthOf[$id], $id];
             $rows[] = ['id' => $id, 'ulid' => $item->ulid, 'name' => $item->name, 'depth' => $depthOf[$id]];
         }
 

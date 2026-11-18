@@ -40,7 +40,7 @@ class ResolveAgent
 
         if ($agent === null) {
             return response()->json(['error' => ['code' => 'auth.unauthenticated', 'data' => new \stdClass]], 401)
-                ->header('WWW-Authenticate', 'Bearer realm="mcp"');
+                ->header('WWW-Authenticate', 'Bearer realm="mcp", resource_metadata="'.route('mcp.oauth.protected-resource.nested', ['path' => $request->path()]).'"');
         }
 
         $interval = (int) config('mcp.last_used_interval_seconds', 60);

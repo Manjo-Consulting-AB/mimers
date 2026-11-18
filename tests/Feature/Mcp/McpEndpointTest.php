@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Support\Agent\AgentGroup;
+use App\Support\Mcp\Cursor;
 use App\Support\Mcp\Hints;
 use App\Support\Mcp\McpRateLimiter;
 use App\Support\Mcp\ToolError;
@@ -171,7 +172,9 @@ it('svarar 401 när agentraden saknas men tokenen finns', function () {
     [$agent, $token] = mcpAgentMedToken();
     DB::table('agent')->where('id', $agent->id)->delete();
 
-    mcpAnropa($token, 'tools/list')->assertUnauthorized();
+    $svar = mcpAnropa($token, 'tools/list')->assertUnauthorized();
+    expect($svar->headers->get('WWW-Authenticate'))
+        ->toContain('Bearer')->toContain('resource_metadata');
 });
 
 it('svarar på initialize med appens release som serverInfo.version', function () {
@@ -461,4 +464,52 @@ it('svarar resource.not_found för en container agenten inte är påslagen i', f
 
     expect(mcpFel(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid]))['code'])
         ->toBe('resource.not_found');
+});
+
+it('avvisar en markör från ett annat verktyg med validation.failed', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    [$container] = mcpTrad($agent);
+
+    $listmarkor = Cursor::encode([5]);
+    $tradmarkor = Cursor::encode([1, 5]);
+
+    expect(mcpFel(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid, 'cursor' => $listmarkor]))['code'])
+        ->toBe('validation.failed')
+        ->and(mcpFel(mcpVerktyg($token, 'containers_list', ['cursor' => $tradmarkor]))['code'])
+        ->toBe('validation.failed');
+});
+
+it('prövar högst ett tak av items per anrop i containers_tree och ger next_cursor', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+
+    [, $agare] = mcpKonto('pro');
+    $container = Container::factory()->for($agare->accounts()->first(), 'account')->create();
+    mcpSlaPaI($agent, $container);
+
+    $delat = Item::factory()->create(['container_id' => $container->id, 'name' => 'Delat']);
+    for ($n = 0; $n < 250; $n++) {
+        Item::factory()->create(['container_id' => $container->id, 'name' => 'Dolt '.$n]);
+    }
+    $rad = beviljaAccess($container, $anvandare, 'read', 'member');
+    $rad->forceFill(['item_id' => $delat->id, 'agent_level' => 'read'])->save();
+
+    DB::enableQueryLog();
+    $forsta = mcpResultat(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid]));
+    $fragor = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    // Taket på 200 prövade items: de dolda går inte att fylla en sida med,
+    // så anropet slutar i förtid och pekar vidare.
+    expect($forsta['next_cursor'])->toBeString()
+        ->and($fragor)->toBeLessThan(1500);
+
+    $namn = collect($forsta['items'])->pluck('name')->all();
+    $markor = $forsta['next_cursor'];
+    while ($markor !== null) {
+        $svar = mcpResultat(mcpVerktyg($token, 'containers_tree', ['container' => $container->ulid, 'cursor' => $markor]));
+        $namn = array_merge($namn, collect($svar['items'])->pluck('name')->all());
+        $markor = $svar['next_cursor'];
+    }
+
+    expect($namn)->toBe(['Delat']);
 });

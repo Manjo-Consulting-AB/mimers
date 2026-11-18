@@ -26,9 +26,10 @@ final class Cursor
     }
 
     /**
+     * @param  int  $length  antal element markören ska ha; en markör från ett annat verktyg har ett annat antal
      * @return list<int>|null null utan markör
      */
-    public static function decode(?string $cursor): ?array
+    public static function decode(?string $cursor, int $length = 1): ?array
     {
         if ($cursor === null || $cursor === '') {
             return null;
@@ -36,7 +37,7 @@ final class Cursor
 
         $decoded = json_decode((string) base64_decode(strtr($cursor, '-_', '+/'), true), true);
 
-        if (! is_array($decoded) || $decoded === [] || array_filter($decoded, fn ($v): bool => ! is_int($v)) !== []) {
+        if (! is_array($decoded) || count($decoded) !== $length || array_filter($decoded, fn ($v): bool => ! is_int($v)) !== []) {
             throw ValidationException::withMessages(['cursor' => 'invalid']);
         }
 

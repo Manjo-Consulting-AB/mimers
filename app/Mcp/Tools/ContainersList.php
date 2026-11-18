@@ -42,7 +42,7 @@ class ContainersList extends McpTool
         ]);
 
         $limit = (int) ($args['limit'] ?? Cursor::DEFAULT_LIMIT);
-        $after = Cursor::decode($args['cursor'] ?? null)[0] ?? 0;
+        $after = Cursor::decode($args['cursor'] ?? null, 1)[0] ?? 0;
 
         $candidateIds = AgentContainerGrant::query()
             ->where('agent_id', $agent->id)
