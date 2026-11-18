@@ -20,6 +20,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | currency | CHAR(3) | Kontots valuta, förval `SEK`; den globala summan uttrycks i den ([[ADR-0037 Valutans arv]]). En aktiv ISO 4217-kod, se [[ADR-0078 Valutor ur ISO 4217]]. |
 | status | VARCHAR(20) | `active` \| `read_only` \| `closed` |
 | read_only_reason | VARCHAR(40) NULL | `payment_failed`, `over_quota`, `inactivity` |
+| versioning_max_versions | TINYINT UNSIGNED | Högsta antal versioner per item, 0–20, där 0 är av. Förval 3, även för befintliga konton. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
 | registration_ip | VARCHAR(45) NULL | IP:n registreringen kom från, IPv6 ryms i textform. Sätts vid registrering, nollas av `prune-registration-ips` — se [[Registerförteckning]] |
 | created_at, updated_at | | |
 
@@ -251,6 +252,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | cover_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
 | icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case, som `item.icon`. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0064 Containerns ikon]] |
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
+| versioning_max_versions | TINYINT UNSIGNED NULL | `NULL` följer kontot, 0 stänger av versionshistoriken i containern, och ett tal får inte överstiga kontots. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.

@@ -84,9 +84,9 @@ Ett avstämningsjobb bör räkna om summorna nattetid och larma vid avvikelse. R
 
 **Bytena belastar det uppladdande kontot** via `attachment.billed_account_id`, inte containerns ägare. Se [[Filer och lagring]].
 
-**Så räknas en rad i `metadata_bytes`:** antalet byte (UTF-8) i radens fritextkolumner plus ett fast påslag på **256 byte per rad**. De räknade tabellerna är `container`, `category`, `tag`, `item`, `schedule`, `cost_entry` och `loan`. `schedule_occurrence` räknar bara `completion_note`, utan påslag. Systemets egna tabeller räknas inte (notiser, loggar, besök, favoriter), och inte heller kopplingsrader utan text (`item_tag`, `item_link`, beroenden).
+**Så räknas en rad i `metadata_bytes`:** antalet byte (UTF-8) i radens fritextkolumner plus ett fast påslag på **256 byte per rad**. De räknade tabellerna är `container`, `category`, `tag`, `item`, `item_version`, `schedule`, `cost_entry` och `loan`. `schedule_occurrence` räknar bara `completion_note`, utan påslag. Systemets egna tabeller räknas inte (notiser, loggar, besök, favoriter), och inte heller kopplingsrader utan text (`item_tag`, `item_link`, beroenden).
 
-Raden belastar kontot som skapade den, via radens `billed_account_id` — utom containerraden, som belastar ägaren (`container.account_id`). Slängda rader räknas tills de raderas för gott, precis som bilagor.
+Raden belastar kontot som skapade den, via radens `billed_account_id` — utom containerraden, som belastar ägaren (`container.account_id`), och utom `item_version`, som belastar containerns ägare genom `billed_account_id` satt vid skapandet ([[ADR-0088 Versionshistorik för items]] Riktning 3). Slängda rader räknas tills de raderas för gott, precis som bilagor.
 
 Kvoten mäter logisk storlek — vad användaren upplever sig lagra. Faktisk diskförbrukning är lägre tack vare dedup. Fakturera på det första, kapacitetsplanera på det andra.
 
