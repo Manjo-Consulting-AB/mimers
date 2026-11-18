@@ -71,6 +71,22 @@ use Laravel\Sanctum\HasApiTokens;
  * skriver den, och regeln om vem som får skriva den är rutten (`auth`), inte
  * en lista i modellen. Standardvärdet `true` speglar kolumnens `DEFAULT` — se
  * `$attributes` nedan.
+ *
+ * **Passports `HasApiTokens` används INTE här, av design** (issue 400 ·
+ * [[ADR-0087 MCP-server för agenter]] Riktning 5). Passport och Sanctum har
+ * båda en trait med samma namn, och båda definierar `tokens()`,
+ * `createToken()`, `tokenCan()` och `withAccessToken()` — men med olika
+ * betydelse. Befintlig kod bygger på Sanctums: `ConfirmPasswordChange` tar
+ * bort `$user->tokens()`, och API:et skapar tokens med
+ * `$user->createToken('api')`. Att byta trait hade tyst bytt tabell bakom de
+ * anropen.
+ *
+ * Guarden `mcp` behöver bara EN av Passports metoder: `withAccessToken()`,
+ * som fäster den validerade token på användaren. Sanctums trait har redan en
+ * sådan med samma signatur (den fäster Sanctums token på samma sätt), så
+ * Passport-guarden fungerar mot den orörda modellen. Passports tokens nås i
+ * stället genom `App\Models\Agent::accessTokens()` och
+ * `App\Actions\Agent\RevokeAgentTokens` — aldrig genom `$user->tokens()`.
  */
 #[Fillable(['name', 'email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end', 'show_upcoming_tasks'])]
 #[Hidden(['password_hash', 'totp_secret'])]

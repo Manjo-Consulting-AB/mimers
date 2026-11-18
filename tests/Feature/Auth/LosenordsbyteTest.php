@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Account\RequestPasswordChange;
+use App\Models\Agent;
 use App\Models\PasswordChange;
 use App\Models\SecurityLog;
 use App\Models\TotpRecoveryCode;
@@ -17,6 +18,7 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\post;
 use function Pest\Laravel\put;
 use function Pest\Laravel\travel;
@@ -778,4 +780,41 @@ it('lämnar inga lösenordsfält i gamla inmatningen vid en 429', function () {
 
     // Motprovet: ett fält som inte är ett lösenord fylls i igen.
     $svar->assertSessionHasInput('code', '123456');
+});
+
+/*
+ * Issue 400 § 7 · Agenternas OAuth-tokens återkallas i samma transaktion som
+ * Sanctums, och raderna i `agent` står kvar: agenten ansluter till samma rad
+ * igen, med sina rättigheter. `$user->tokens()` betyder fortfarande Sanctums
+ * tokens — Passports `HasApiTokens` används inte på modellen.
+ */
+it('återkallar agenternas tokens men lämnar raderna kvar vid lösenordsbyte', function () {
+    Notification::fake();
+    config(['mcp.enabled' => true]);
+    mcpSakerstallNycklar();
+
+    [, $user] = mcpKonto('pro');
+    $user->update(['password_hash' => 'gammalt-losenord']);
+
+    $flode = mcpAnslut($user);
+
+    // Sanctums token, som `$user->tokens()` läser — den ska bort den också.
+    $user->createToken('mobil');
+
+    somAnvandare($user);
+
+    $länk = losenordsBegär($user);
+
+    get($länk)->assertRedirect('/settings/security');
+
+    mcpProvrutt();
+    auth()->forgetGuards();
+
+    getJson('/__mcp-prova', ['Authorization' => 'Bearer '.$flode['access_token']])->assertUnauthorized();
+    mcpFornya($flode['client'], $flode['refresh_token'])
+        ->assertStatus(400)
+        ->assertJsonPath('error', 'invalid_grant');
+
+    expect(Agent::query()->count())->toBe(1)
+        ->and($user->fresh()->tokens()->count())->toBe(0);
 });

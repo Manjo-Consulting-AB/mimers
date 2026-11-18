@@ -40,6 +40,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
+use App\Http\Controllers\Mcp\DisconnectAgentController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
@@ -2312,6 +2313,34 @@ Route::post('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::
     ->middleware('signed')
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('notifications.unsubscribe');
+
+/*
+ * Issue 400 · Bortkoppling av en agent ur mejlet, se
+ * App\Http\Controllers\Mcp\DisconnectAgentController och
+ * [[ADR-0087 MCP-server för agenter]] Riktning 12.
+ *
+ * **Utanför `auth`-gruppen med flit**, som avanmälan ovan: länken finns för
+ * att en kapad session ska kunna stängas av, och den som får mejlet är inte
+ * nödvändigtvis inloggad. Signaturen är hela skyddet — den gäller i sju dagar
+ * och bara för den agenten, och en ändrad eller utgången URL avvisas av
+ * `signed` innan någon rad rörs. `{agent}` binds på ULID via
+ * #[RouteKey('ulid')] på App\Models\Agent.
+ *
+ * **GET visar bara bekräftelsen; POST kopplar bort.** Mejlskannrar och
+ * länkförhandsvisningar hämtar länkar automatiskt, så en GET som raderade
+ * hade låtit dem stänga av en legitim agent. POST:en går till samma
+ * signerade URL och bär därför samma skydd; CSRF är avstängt av samma skäl
+ * som på avanmälan — den som klickar i mejlet har ingen session att skicka
+ * en token ur, och signaturen är hela skyddet (Beslut 1).
+ */
+Route::get('/agents/disconnect/{agent}', [DisconnectAgentController::class, 'confirm'])
+    ->middleware('signed')
+    ->name('mcp.agents.disconnect');
+
+Route::post('/agents/disconnect/{agent}', [DisconnectAgentController::class, 'store'])
+    ->middleware('signed')
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->name('mcp.agents.disconnect.store');
 
 /*
  * Issue 36b · ICS-kalenderfeed, se App\Http\Controllers\CalendarFeedDownloadController,

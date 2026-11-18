@@ -86,6 +86,25 @@ final class NotificationPreferences
     private const UNKNOWN_DEFAULT = ['enabled' => true, 'digest' => false];
 
     /**
+     * Typer som alltid går som mejl, oavsett vad preferensmodellen säger, och
+     * aldrig samlas i veckosammanfattningen. `agent.connected` är den första,
+     * se [[ADR-0087 MCP-server för agenter]] Riktning 14 och
+     * [[Notiser]] § notification: "kan inte stängas av eller samlas i
+     * `digest`" — mejlet är det som visar att någon anslöt en klient, och en
+     * avstängd kanal hade gjort en kapad session tyst.
+     *
+     * **De står inte i EMAIL_DEFAULTS.** Listan där är preferensytans
+     * nycklar (issue 31b § Beslut 2), och en typ som inte går att välja ska
+     * inte ritas som en växel. Att ett försök att stänga av den ändå inte
+     * biter prövas här i stället för i vyn.
+     *
+     * @var array<int, string>
+     */
+    private const MANDATORY_EMAIL_TYPES = [
+        Notification::TYPE_AGENT_CONNECTED,
+    ];
+
+    /**
      * Typerna preferensytan handlar om — nycklarna i EMAIL_DEFAULTS, i den
      * ordning listan ska ritas (issue 31b § Beslut 2). Typnamnrymden är öppen
      * (issue 30 § Beslut 4), så det här är listan över KÄNDA typer, inte en
@@ -144,7 +163,24 @@ final class NotificationPreferences
      */
     public function isEnabled(?User $user, string $type, string $channel): bool
     {
+        // Ett obligatoriskt mejl går före varje rad: `agent.connected` är
+        // säkerhetsinformation om en anslutning, inte en prenumeration.
+        if ($channel === NotificationDelivery::CHANNEL_EMAIL && $this->isMandatoryEmail($type)) {
+            return true;
+        }
+
         return $this->resolve($user, $type, $channel)['enabled'];
+    }
+
+    /**
+     * Går typen alltid som mejl? Används av App\Mail\NotificationMail för att
+     * inte sätta en avregistreringslänk på ett mejl som ändå inte kan stängas
+     * av — en One-Click-länk som leder till 404 är sämre än ingen länk
+     * (RFC 8058).
+     */
+    public function isMandatoryEmail(string $type): bool
+    {
+        return in_array($type, self::MANDATORY_EMAIL_TYPES, true);
     }
 
     /**
@@ -160,6 +196,10 @@ final class NotificationPreferences
     public function digest(?User $user, string $type, string $channel): bool
     {
         if ($channel === NotificationDelivery::CHANNEL_IN_APP) {
+            return false;
+        }
+
+        if ($this->isMandatoryEmail($type)) {
             return false;
         }
 

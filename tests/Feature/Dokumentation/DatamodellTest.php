@@ -26,6 +26,15 @@ function ramverketsTabeller(): array
         'job_batches',
         'failed_jobs',
         'personal_access_tokens',
+        // Passports OAuth-tabeller (issue 400). De är serverns bokföring av
+        // klienter, koder och tokens — som `personal_access_tokens` — och
+        // beskrivs inte i datamodellen. Domänraden är `agent`, se
+        // [[Konton och åtkomst]] § agent.
+        'oauth_auth_codes',
+        'oauth_access_tokens',
+        'oauth_refresh_tokens',
+        'oauth_clients',
+        'oauth_device_codes',
     ];
 }
 
@@ -127,6 +136,11 @@ it('bär ramverkets tabeller och de borttagna tabellerna som två uttalade listo
         'job_batches',
         'failed_jobs',
         'personal_access_tokens',
+        'oauth_auth_codes',
+        'oauth_access_tokens',
+        'oauth_refresh_tokens',
+        'oauth_clients',
+        'oauth_device_codes',
     ]);
 
     expect(borttagnaTabeller())->toBe(['users', 'examples']);

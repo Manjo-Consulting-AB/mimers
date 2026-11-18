@@ -3,16 +3,23 @@
 namespace App\Providers;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Http\Controllers\Mcp\AuthorizeController;
+use App\Http\Controllers\Mcp\Middleware\ApproveAgentConnection;
+use App\Http\Controllers\Mcp\Middleware\RequireS256CodeChallenge;
 use App\Listeners\RecordsScheduleHeartbeat;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Monitoring\QueryTracker;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\Passport;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -42,6 +49,71 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRegistrationRateLimiting();
         $this->configureScheduleHeartbeat();
         $this->configurePerformanceLogging();
+        $this->configureMcp();
+    }
+
+    /**
+     * Issue 400 · OAuth-servern för MCP-klienterna, se [[ADR-0087
+     * MCP-server för agenter]] Riktning 5 och 12.
+     *
+     * **Livslängderna.** Access-token gäller en timme och refresh-token trettio
+     * dagar; Passport roterar refresh-token vid varje användning
+     * (`Passport::$revokeRefreshTokenAfterUse` är sann som standard), så en
+     * stulen refresh-token går inte att använda två gånger.
+     *
+     * **Godkännandevyn.** Passports egen blade ersätts av appens sida i
+     * `resources/js/pages/Mcp/Authorize.vue`, renderad av
+     * App\Http\Controllers\Mcp\AuthorizeController. `SimpleViewResponse`
+     * accepterar en `Responsable`, men kontraktet säger en Symfony-respons —
+     * därför `toResponse()` här i stället för att lita på att mellanlagret
+     * råkar finnas.
+     *
+     * **Två grindar läggs på Passports rutter.** `RequireS256CodeChallenge`
+     * stänger `plain` före auktoriseringsservern, och
+     * `ApproveAgentConnection` gör godkännandet till en agentrad.
+     * `booted()` behövs: Passport registrerar sina rutter i sin egen
+     * `boot()`, och rutterna finns inte förrän alla leverantörer har bootat.
+     * Middlewaren läggs EFTER rutternas egna — `web` och `auth:web` — så
+     * sessionen finns när den läser `authToken`.
+     */
+    private function configureMcp(): void
+    {
+        if (! class_exists(Passport::class)) {
+            return;
+        }
+
+        Passport::tokensExpireIn(now()->addHour());
+        Passport::refreshTokensExpireIn(now()->addDays(30));
+
+        Passport::authorizationView(
+            fn (array $parameters): SymfonyResponse => app(AuthorizeController::class)($parameters)->toResponse(request()),
+        );
+
+        $this->app->booted(function (): void {
+            $this->appendMiddlewareToRoute(
+                'passport.authorizations.authorize',
+                RequireS256CodeChallenge::class,
+            );
+
+            $this->appendMiddlewareToRoute(
+                'passport.authorizations.approve',
+                ApproveAgentConnection::class,
+            );
+        });
+    }
+
+    /**
+     * @param  class-string  $middleware
+     */
+    private function appendMiddlewareToRoute(string $name, string $middleware): void
+    {
+        $route = Route::getRoutes()->getByName($name);
+
+        if (! $route instanceof RoutingRoute) {
+            return;
+        }
+
+        $route->middleware([$middleware]);
     }
 
     /**

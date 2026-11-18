@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled;
 use App\Http\Middleware\CountRouteView;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogSlowRequests;
@@ -106,6 +107,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // här bra globalt: den läser bara svaret och aldrig den matchade
         // rutten.
         $middleware->append(SetSecurityHeaders::class);
+
+        // Issue 400 · MCP-switchen, se App\Http\Controllers\Mcp\Middleware\EnsureMcpEnabled
+        // och [[ADR-0087 MCP-server för agenter]] Riktning 17. Global och inte
+        // i web- eller api-gruppen: `.well-known`-rutterna och
+        // `oauth/authorize` ägs av paketen, och en grind per rutt hade varit
+        // fem ställen att glömma. Den läser bara config och svarar 404.
+        $middleware->append(EnsureMcpEnabled::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Issue 387 · Felrapportering till Sentry, ADR-0079 § 1. Utan DSN gör

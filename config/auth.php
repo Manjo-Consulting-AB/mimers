@@ -42,6 +42,22 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        /*
+         * MCP-agenterna, se [[ADR-0087 MCP-server för agenter]] Riktning 5 och
+         * issue 400. Passport validerar en OAuth-token ur `oauth_access_tokens`;
+         * Sanctums `auth:sanctum` läser `personal_access_tokens` och ser
+         * aldrig den. Den egna guarden är alltså gränsen mellan de två: en
+         * Passport-token släpps inte in på `/api` och en Sanctum-token inte på
+         * `/mcp`.
+         *
+         * `passport.guard` är `web` — det är sessionen som godkänner
+         * anslutningen, inte den här guarden.
+         */
+        'mcp' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

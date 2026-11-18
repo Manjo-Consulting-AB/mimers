@@ -64,6 +64,22 @@ return [
         'line_no_date' => 'The account ":account" is being downgraded. The files and entries it added to ":container" (:bytes) will move to your storage. You can remove anything you don\'t want before then.',
         'action' => 'Go to Mimers',
     ],
+    /*
+     * Agenten som anslöts, se [[ADR-0087 MCP-server för agenter]] Riktning 14
+     * och issue 400 § 5. Mejlet kan inte stängas av och samlas aldrig i
+     * `digest` — App\Support\Notification\NotificationPreferences håller
+     * båda. Den signerade bortkopplingslänken renderas av
+     * resources/views/mail/notification.blade.php ur `agent_ulid` i
+     * payloaden; orden under `disconnect` hör till den.
+     */
+    'agent_connected' => [
+        'subject' => ':client connected to your Mimers account',
+        'greeting' => 'Hello!',
+        'line' => ':client connected to your Mimers account as an agent on :connected_at. A new agent starts without access: you decide what it may do, and in which containers, under Agents in the settings.',
+        'action' => 'Manage agents',
+        'disconnect' => 'If you did not connect this agent, disconnect it here:',
+        'disconnect_link' => 'Disconnect the agent',
+    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',
