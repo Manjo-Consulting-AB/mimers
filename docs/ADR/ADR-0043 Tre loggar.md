@@ -63,7 +63,7 @@ En gäst ser alltså sina egna handlingar och inget annat. Den som förlorat åt
 
 ### Säkerhetsloggen
 
-**Den loggar det som rör konton och det som lämnar systemet:** lyckade och misslyckade inloggningar, inlösta magic links, tvåfaktor som slås på eller av, byte av lösenord och e-post när de finns, skickade inbjudningar, exporter, webhooks som skapas och tas bort, tömd lagring, och **nedladdningar av filer ur en container som användaren inte äger**. Det sista är den enda läsning som loggas. Det är genom den som innehåll sprids vidare via delning.
+**Den loggar det som rör konton och det som lämnar systemet:** lyckade och misslyckade inloggningar, inlösta magic links, tvåfaktor som slås på eller av, byte av lösenord och e-post när de finns, skickade inbjudningar, exporter, webhooks som skapas och tas bort, agenter som ansluts, kopplas bort eller får ändrade rättigheter på kontot ([[ADR-0087 MCP-server för agenter]] Riktning 12), tömd lagring, och **nedladdningar av filer ur en container som användaren inte äger**. Det sista är den enda läsning som loggas. Det är genom den som innehåll sprids vidare via delning.
 
 **Ingen rå IP-adress och ingen rå webbläsarsträng sparas.** IP-adressen skrivs som en pseudonym, `ip_group`: de första sexton hexatecknen av `hash_hmac('sha256', $ip, config('app.key'))`. Det är samma formel som missbruksrapporten redan använder, så grupperna i rapporten och i loggen är samma grupper. Webbläsarsträngen tolkas när raden skrivs till ett kort enhetsnamn, som *Firefox · macOS*, och själva strängen kastas.
 
