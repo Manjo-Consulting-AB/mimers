@@ -2451,6 +2451,23 @@ def pr_far_mergas(pr_number, head_sha=""):
     return False
 
 
+def senaste_per_namn(checkar):
+    """Den senaste check-runnen per checknamn (högst id = skapad sist).
+
+    `filter=latest` räcker inte: det väljer senaste försöket per check suite,
+    och varje `edited`-händelse på PR:en startar en ny workflow-körning - en
+    egen suite - som avbryter den förra via concurrency-regeln. De avbrutna
+    ligger kvar på samma commit (sett på PR #1413 efter tre kroppsredigeringar:
+    två cancelled och en success för `test` på samma SHA).
+    """
+    senaste = {}
+    for c in checkar:
+        namn = c.get("name")
+        if namn not in senaste or (c.get("id") or 0) > (senaste[namn].get("id") or 0):
+            senaste[namn] = c
+    return list(senaste.values())
+
+
 def ci_lage(sha):
     """Läget för CI på exakt `sha`, läst ur check-runs för just den commiten.
     Ren läsning, ingen väntan.
@@ -2458,8 +2475,8 @@ def ci_lage(sha):
     Returnerar "gron", "rod", "pagar" (någon check-run är inte klar), "saknas"
     (inga check-runs registrerade än) eller "olasbar".
 
-    `filter=latest` ger den senaste körningen per checknamn: en cancelled eller
-    röd körning som ersatts av en omkörning räknas inte. Checkar från en äldre
+    Bara den senaste körningen per checknamn räknas (senaste_per_namn()): en
+    cancelled eller röd körning som ersatts av en nyare räknas inte. Checkar från en äldre
     commit räknas aldrig, eftersom frågan ställs mot `sha` och inte mot PR:en.
     Det är skillnaden mot `gh pr checks`, som läste den gamla commitens
     avbrutna checkar som rött innan Actions registrerat den nya (PR #1413).
@@ -2469,7 +2486,7 @@ def ci_lage(sha):
     if res.returncode != 0:
         return "olasbar"
     try:
-        checkar = json.loads(res.stdout).get("check_runs") or []
+        checkar = senaste_per_namn(json.loads(res.stdout).get("check_runs") or [])
     except (ValueError, AttributeError):
         return "olasbar"
     if not checkar:
@@ -2547,7 +2564,7 @@ def misslyckade_ci_steg(sha):
     try:
         res = run_cmd(["gh", "api", f"repos/{GH_REPO}/commits/{sha}/check-runs?per_page=100"],
                       cwd=REPO_ROOT)
-        checkar = json.loads(res.stdout).get("check_runs") or []
+        checkar = senaste_per_namn(json.loads(res.stdout).get("check_runs") or [])
         steg, anteckningar = [], []
         for c in checkar:
             if c.get("conclusion") in ("success", "skipped", "neutral"):

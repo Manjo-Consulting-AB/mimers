@@ -1085,6 +1085,14 @@ def test_ci_lage():
             p.run_cmd = original
     klar = lambda c: {"name": "x", "status": "completed", "conclusion": c}
     assert lage([]) == "saknas"
+    # PR #1413 efter tre kroppsredigeringar: varje `edited` är en egen suite,
+    # och filter=latest lämnar de avbrutna kvar på samma SHA.
+    assert lage([{"id": 1, "name": "test", "status": "completed", "conclusion": "success"},
+                 {"id": 3, "name": "test", "status": "completed", "conclusion": "cancelled"},
+                 {"id": 4, "name": "test", "status": "completed", "conclusion": "success"},
+                 {"id": 2, "name": "migreringar", "status": "completed", "conclusion": "success"}]) == "gron"
+    assert lage([{"id": 4, "name": "test", "status": "completed", "conclusion": "success"},
+                 {"id": 5, "name": "test", "status": "queued", "conclusion": None}]) == "pagar"
     assert lage([klar("success"), klar("skipped")]) == "gron"
     assert lage([klar("success"), {"name": "y", "status": "queued", "conclusion": None}]) == "pagar"
     assert lage([klar("cancelled")]) == "rod"
@@ -1097,7 +1105,8 @@ def test_ci_lases_bara_per_commit():
     rader = [r.strip() for r in _kalla().splitlines()
              if '"gh", "pr", "checks"' in r and not r.strip().startswith("#")]
     assert rader == [], rader
-    assert "filter=latest" in _funktionskropp("ci_lage")
+    assert "senaste_per_namn(" in _funktionskropp("ci_lage")
+    assert "senaste_per_namn(" in _funktionskropp("misslyckade_ci_steg")
 
 
 def test_mergesparren_eskalerar_inte_okand_som_rott():
