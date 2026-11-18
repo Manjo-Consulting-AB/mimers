@@ -18,7 +18,7 @@ final class Hints
         'agent.paused' => 'This agent is paused by the user. Stop and tell the user to resume it on /settings/agents.',
         'agent.forbidden' => 'This agent is never allowed to do this. Ask the user to do it in the app.',
         'agent.move_widens_access' => 'This move would give more people access. Ask the user to make it in the app.',
-        'agent.copy_widens_access' => 'This copy would give more people access. Ask the user to make it in the app.',
+        'agent.copy_widens_access' => 'You have read content that some people who can see this target cannot. Ask the user to make this change in the app, or search with the container filter before writing here.',
         'agent.rate_limited' => 'Too many requests. Wait retry_after_seconds before calling again.',
         'agent.delete_limit' => 'The agent has reached its limit for deletions. Stop deleting and tell the user.',
         'plan.mcp_unavailable' => 'The user\'s plan does not include MCP access. Tell the user that Pro or Pro+ is required.',

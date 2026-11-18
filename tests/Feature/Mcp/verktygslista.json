@@ -16,6 +16,32 @@
         }
     },
     {
+        "name": "categories_create",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "parent": {
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "required": [
+            "container",
+            "name"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "categories_list",
         "parameters": {
             "container": {
@@ -37,6 +63,57 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "categories_update",
+        "parameters": {
+            "category": {
+                "type": "string"
+            },
+            "container": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "parent": {
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            }
+        },
+        "required": [
+            "container",
+            "category"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "containers_create",
+        "parameters": {
+            "description": {
+                "type": "string"
+            },
+            "kind": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "name"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
@@ -88,6 +165,62 @@
         }
     },
     {
+        "name": "containers_update",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "costs_create",
+        "parameters": {
+            "amount": {
+                "type": "string"
+            },
+            "currency": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "incurred_on": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "supplier": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "incurred_on",
+            "amount",
+            "description"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "costs_list",
         "parameters": {
             "cursor": {
@@ -109,6 +242,37 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "costs_update",
+        "parameters": {
+            "amount": {
+                "type": "string"
+            },
+            "cost": {
+                "type": "string"
+            },
+            "currency": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "incurred_on": {
+                "type": "string"
+            },
+            "supplier": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "cost"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
@@ -136,6 +300,65 @@
         }
     },
     {
+        "name": "items_create",
+        "parameters": {
+            "category": {
+                "type": "string"
+            },
+            "container": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "icon": {
+                "type": "string"
+            },
+            "icon_color": {
+                "type": "string"
+            },
+            "manufacturer": {
+                "type": "string"
+            },
+            "model": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "notes": {
+                "type": "string"
+            },
+            "parent": {
+                "type": "string"
+            },
+            "position_note": {
+                "type": "string"
+            },
+            "purchased_at": {
+                "type": "string"
+            },
+            "serial_number": {
+                "type": "string"
+            },
+            "tags": {
+                "type": "array"
+            },
+            "warranty_until": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "name"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "items_get",
         "parameters": {
             "item": {
@@ -153,6 +376,48 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "items_move",
+        "parameters": {
+            "from_parent": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "to_parent": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "to_parent"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "items_notes_update",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "notes": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
@@ -199,6 +464,100 @@
         }
     },
     {
+        "name": "items_update",
+        "parameters": {
+            "category": {
+                "type": "string"
+            },
+            "cover": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "icon": {
+                "type": "string"
+            },
+            "icon_color": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "manufacturer": {
+                "type": "string"
+            },
+            "model": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            },
+            "notes": {
+                "type": "string"
+            },
+            "position_note": {
+                "type": "string"
+            },
+            "purchased_at": {
+                "type": "string"
+            },
+            "serial_number": {
+                "type": "string"
+            },
+            "tags": {
+                "type": "array"
+            },
+            "warranty_until": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "loans_create",
+        "parameters": {
+            "borrower_email": {
+                "type": "string"
+            },
+            "borrower_name": {
+                "type": "string"
+            },
+            "due_at": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "lent_at": {
+                "type": "string"
+            },
+            "note": {
+                "type": "string"
+            },
+            "returned_at": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "borrower_name",
+            "lent_at"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "loans_list",
         "parameters": {
             "cursor": {
@@ -220,6 +579,44 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "loans_return",
+        "parameters": {
+            "loan": {
+                "type": "string"
+            },
+            "returned_at": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "loan"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "occurrences_complete",
+        "parameters": {
+            "completion_note": {
+                "type": "string"
+            },
+            "occurrence": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "occurrence"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
@@ -247,6 +644,30 @@
         }
     },
     {
+        "name": "relations_create",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "other": {
+                "type": "string"
+            },
+            "relation": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "other",
+            "relation"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "relations_list",
         "parameters": {
             "cursor": {
@@ -268,6 +689,74 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "relations_remove",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "other": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "other"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "schedules_create",
+        "parameters": {
+            "anchor_date": {
+                "type": "string"
+            },
+            "gtd_list": {
+                "type": "string"
+            },
+            "interval_count": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "interval_unit": {
+                "type": "string"
+            },
+            "is_active": {
+                "type": "boolean"
+            },
+            "item": {
+                "type": "string"
+            },
+            "lead_days": {
+                "minimum": 0,
+                "maximum": 365,
+                "type": "integer"
+            },
+            "notes": {
+                "type": "string"
+            },
+            "recurrence_type": {
+                "type": "string"
+            },
+            "title": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "title",
+            "recurrence_type"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
@@ -295,6 +784,52 @@
         }
     },
     {
+        "name": "schedules_update",
+        "parameters": {
+            "anchor_date": {
+                "type": "string"
+            },
+            "default_gtd_list": {
+                "type": "string"
+            },
+            "interval_count": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "interval_unit": {
+                "type": "string"
+            },
+            "is_active": {
+                "type": "boolean"
+            },
+            "lead_days": {
+                "minimum": 0,
+                "maximum": 365,
+                "type": "integer"
+            },
+            "notes": {
+                "type": "string"
+            },
+            "recurrence_type": {
+                "type": "string"
+            },
+            "schedule": {
+                "type": "string"
+            },
+            "title": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "schedule"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "tags_list",
         "parameters": {
             "container": {
@@ -316,6 +851,26 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "tags_set",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "tags": {
+                "type": "array"
+            }
+        },
+        "required": [
+            "item",
+            "tags"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     }
 ]

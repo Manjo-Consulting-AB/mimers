@@ -41,6 +41,10 @@ class HistoryList extends ReadsItems
         ]);
 
         [$item] = $this->readableItem($agent, $args['item']);
+
+        // Listan lämnade ut itemets innehåll — notera vilka som når det
+        // (Riktning 10, *Kopiering*).
+        $this->noteReads($agent, [$item]);
         $limit = (int) ($args['limit'] ?? Cursor::DEFAULT_LIMIT);
         $offset = Cursor::decode($args['cursor'] ?? null, 1)[0] ?? 0;
 

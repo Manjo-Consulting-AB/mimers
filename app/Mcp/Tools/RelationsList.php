@@ -41,6 +41,10 @@ class RelationsList extends ReadsItems
 
         [$item] = $this->readableItem($agent, $args['item']);
 
+        // Listan lämnade ut itemets innehåll — notera vilka som når det
+        // (Riktning 10, *Kopiering*).
+        $this->noteReads($agent, [$item]);
+
         $paths = new ItemPaths($agent, $this->group);
         $all = [];
 

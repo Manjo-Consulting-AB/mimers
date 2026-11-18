@@ -11,10 +11,15 @@ use App\Models\Item;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
 use App\Support\Agent\AgentLevels;
+use App\Support\Agent\CopyGate;
+use App\Support\Agent\ItemAudience;
+use App\Support\Agent\ReadAudience;
+use App\Support\Mcp\AgentAudit;
 use App\Support\Mcp\McpRateLimiter;
 use App\Support\Mcp\McpToolException;
 use App\Support\Mcp\ToolError;
 use App\Support\Mcp\ToolKind;
+use Closure;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -102,6 +107,84 @@ abstract class McpTool extends Tool
     }
 
     abstract protected function run(Request $request, Agent $agent): Response|ResponseFactory;
+
+    /**
+     * Actionerna verktyget anropar, som klassnamn. Tom för ett verktyg som
+     * bara läser. `ForbudTest` läser listan och fäller ett verktyg vars namn
+     * eller action hör till en förbjuden domän
+     * (App\Support\Mcp\ForbiddenDomains, [[ADR-0087 MCP-server för agenter]]
+     * Riktning 7).
+     *
+     * @return list<class-string>
+     */
+    public function actions(): array
+    {
+        return [];
+    }
+
+    /**
+     * Notera vad en läsning lämnade ut, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 10, *Kopiering*: för varje item verktyget svarade med sparas
+     * vilka personer som når det, och snittet prövas före varje skrivning.
+     *
+     * Flera items i samma svar bidrar med SITT snitt — personerna som når
+     * allt svaret lämnade ut. Ett tomt svar noterar ingenting: det finns
+     * ingen mängd att snitta mot, och en tom mängd hade stängt varje
+     * skrivning.
+     *
+     * @param  list<Item>  $items  de items svaret lämnade ut
+     */
+    protected function noteReads(Agent $agent, array $items): void
+    {
+        $audiences = [];
+        $audience = app(ItemAudience::class);
+
+        foreach ($items as $item) {
+            $container = $item->container;
+
+            if ($container !== null) {
+                $audiences[] = $audience->forItem($container, $item);
+            }
+        }
+
+        if ($audiences === []) {
+            return;
+        }
+
+        $intersection = array_shift($audiences);
+
+        foreach ($audiences as $audience) {
+            $intersection = array_values(array_intersect($intersection, $audience));
+        }
+
+        app(ReadAudience::class)->note($agent, $intersection);
+    }
+
+    /**
+     * Kopieringsspärren: når någon utanför agentens lässnitt målet efter
+     * skrivningen är anropet `agent.copy_widens_access`, se
+     * App\Support\Agent\CopyGate.
+     *
+     * @param  list<int>  $audienceAfterWrite
+     */
+    protected function guardCopy(Agent $agent, array $audienceAfterWrite): void
+    {
+        app(CopyGate::class)->assert($agent, $audienceAfterWrite);
+    }
+
+    /**
+     * Skriv och märk historikraderna med agenten, se
+     * App\Support\Mcp\AgentAudit.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $write
+     * @return T
+     */
+    protected function writeAsAgent(Agent $agent, ?int $containerId, Closure $write): mixed
+    {
+        return app(AgentAudit::class)->run($agent, $containerId, $write);
+    }
 
     /**
      * Agentens nivå i verktygets grupp, via den enda som svarar.

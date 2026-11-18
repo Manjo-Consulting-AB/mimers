@@ -57,6 +57,12 @@ class AttachmentsGet extends McpTool
             throw new McpToolException('resource.not_found');
         }
 
+        // Bilagans innehåll är itemets innehåll (ADR-0028: beroendena följer
+        // itemet) — notera vilka som når det (Riktning 10, *Kopiering*).
+        if ($item !== null) {
+            $this->noteReads($agent, [$item]);
+        }
+
         $file = $attachment->storedFile;
         $meta = [
             'ulid' => $attachment->ulid,
