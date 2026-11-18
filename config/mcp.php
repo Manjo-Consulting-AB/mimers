@@ -40,4 +40,38 @@ return [
     'authorization_server' => env('MCP_AUTHORIZATION_SERVER'),
 
     'max_agents_per_account' => (int) env('MCP_MAX_AGENTS_PER_ACCOUNT', 10),
+
+    /*
+     * Gränserna per slag av verktyg, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 13 och issue 402. Varje post är `[antal, sekunder]`; en
+     * agent eller ett konto måste hålla sig under alla poster för sitt slag.
+     * `agent` nyckas på agentens anslutning och `account` på personkontot, så
+     * att en agent i en loop varken stryper användarens egen app eller hens
+     * andra agenter. Uppladdning räknas dessutom i den befintliga
+     * `uploads`-gränsen (config/files.php).
+     */
+    'rate_limits' => [
+        'read' => [
+            'agent' => [[120, 60]],
+            'account' => [[300, 60]],
+        ],
+        'write' => [
+            'agent' => [[30, 60], [500, 3600]],
+            'account' => [[60, 60]],
+        ],
+        'delete' => [
+            'agent' => [[20, 3600]],
+            'account' => [[40, 3600]],
+        ],
+        'upload' => [
+            'agent' => [[10, 60]],
+            'account' => [],
+        ],
+    ],
+
+    /*
+     * Hur ofta `agent.last_used_at` skrivs, i sekunder. En skrivning per
+     * anrop hade gjort varje läsning till en UPDATE.
+     */
+    'last_used_interval_seconds' => 60,
 ];

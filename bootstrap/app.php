@@ -165,6 +165,17 @@ return Application::configure(basePath: dirname(__DIR__))
             ], $e->status);
         });
 
+        // Issue 402 · `/mcp` svarar 401 i stället för att skicka till
+        // inloggningen. `WWW-Authenticate` sätts av paketets middleware på
+        // rutten och pekar på resursmetadatan.
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if (! $request->is('mcp')) {
+                return null;
+            }
+
+            return ApiError::response('auth.unauthenticated', [], 401);
+        });
+
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if (! $request->is('api/*')) {
                 return null;

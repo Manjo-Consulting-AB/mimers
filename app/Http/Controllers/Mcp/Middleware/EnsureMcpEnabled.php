@@ -33,6 +33,7 @@ class EnsureMcpEnabled
             '.well-known/*',
             'oauth/authorize',
             'oauth/register',
+            'mcp',
         )) {
             abort(404);
         }
