@@ -41,3 +41,7 @@ I dag har varje användare exakt ett konto. Det enda som skapar en rad i `accoun
 - **Båda lagren på profilsidan.** Ärligare mot datamodellen, men dubbleringen står kvar och har bara flyttat till en sida.
 - **Kontonamnet följer personens namn.** Tar bort ett fält, men den som vill visa ett annat namn för andra än sitt eget kan då inte göra det.
 - **Behålla kontosidan för framtida organisationskonton.** Bygger för något som inte finns. När ett organisationskonto går att skapa får det en egen flik.
+
+## Uppföljning 2026-11-18
+
+Kontexten säger att varje användare i dag har exakt ett konto. Från och med 2026-11-18 är det en regel och inte ett läge: en användare har ett konto och ett konto en användare (Tony: *"EN ANVÄNDARE PER KONTO!"*). Se [[Konton och åtkomst]] § account. Ändras regeln krävs en ny ADR.

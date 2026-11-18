@@ -38,3 +38,7 @@ Att Tony aldrig kört ramverk förut väger lätt när han inte är den som knac
 **Node 20 + TypeScript.** Delad typning med en framtida frontend och bättre passform för API-först. Valdes bort på grund av driftprofilen på delad hosting och för att ramverkskonventioner väger tyngre i den här arbetsmodellen.
 
 **Eget ramverk i ren PHP.** Tonys tidigare erfarenhet. Valdes bort — utan konventioner blir delegerad implementation spretig.
+
+## Uppföljning 2026-11-18
+
+Servern hos inleed kör MariaDB 11.4.13 (`11.4.13-MariaDB-cll-lve`), uppgraderad från 10.6.27 som kontexten anger. Migreringsvakten kör `mariadb:11.4`. Kontexten är oförändrad.

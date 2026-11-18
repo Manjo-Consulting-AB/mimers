@@ -53,7 +53,7 @@ En rad per notis **och kanal**. Det är här idempotensen bor.
 |---|---|---|
 | id | | |
 | notification_id | FK | |
-| channel | VARCHAR(20) | `email` eller `in_app`. Webhookleveranser bor i `webhook_delivery`. |
+| channel | VARCHAR(20) | `email`, `in_app` eller `webhook`. `webhook` skrivs inte här i dag, eftersom webhookleveranserna bor i `webhook_delivery`. Värdet står kvar i CHECK-villkoret och i `NotificationDelivery::CHANNELS`, eftersom Pro-användare erbjuds webhooks och de ska kunna väljas per notistyp genom `notification_preference` (Tony 2026-11-18). |
 | digest | BOOLEAN | Förval false. Sant för en rad som ingår i veckosammanfattningen i stället för ett direkt mejl. |
 | status | VARCHAR(20) | `pending` \| `sent` \| `failed` \| `suppressed` |
 | attempts | SMALLINT UNSIGNED | |
