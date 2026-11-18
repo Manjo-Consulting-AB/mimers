@@ -98,6 +98,64 @@ it('visar aldrig ett item användaren inte når, i någon sökning, väg eller a
     mcpFel(mcpVerktyg($token, 'items_get', ['item' => $dolt->ulid]));
 });
 
+it('lämnar aldrig ut ett grannitem som ägartaket gömmer, varken i path, parents, children, relations eller sökning', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    [$agarkonto] = mcpKonto('pro');
+    $container = Container::factory()->for($agarkonto, 'account')->create(['name' => 'Ägarens']);
+    mcpSlaPaI($agent, $container);
+
+    $bred = beviljaAccess($container, $anvandare, 'delete', 'member');
+    $bred->agent_level = 'delete';
+    $bred->save();
+
+    $rot = lasItem($container, 'Fynd rot');
+    $synlig = lasItem($container, 'Fynd synlig');
+    $syskon = lasItem($container, 'Fynd syskon');
+    $dold = lasItem($container, 'Fynd dold');
+    $doltBarn = lasItem($container, 'Fynd dolt barn');
+
+    // Ägaren stänger ute agenten från `dold` (och därmed dess ättlingar).
+    $dold_rad = beviljaAccess($container, $anvandare, 'delete', 'member');
+    $dold_rad->item_id = $dold->id;
+    $dold_rad->agent_level = null;
+    $dold_rad->save();
+
+    $lank = fn (Item $fran, Item $till, string $relation) => DB::table('item_link')->insert([
+        'from_item_id' => $fran->id, 'to_item_id' => $till->id, 'relation' => $relation,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $lank($rot, $synlig, 'parent');
+    $lank($synlig, $syskon, 'parent');
+    $lank($synlig, $dold, 'parent');
+    $lank($dold, $doltBarn, 'parent');
+    $lank($synlig, $dold, 'related');
+    // Kedjan förbi det dolda itemet: rot → dold → dolt barn.
+    $lank($rot, $dold, 'parent');
+
+    $svar = [
+        'get' => mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $synlig->ulid])),
+        'relations' => mcpResultat(mcpVerktyg($token, 'relations_list', ['item' => $synlig->ulid])),
+        'sok' => mcpResultat(mcpVerktyg($token, 'items_search', ['q' => 'Fynd'])),
+    ];
+
+    expect(collect($svar['get']['children'])->pluck('name')->all())->toBe(['Fynd syskon'])
+        ->and(collect($svar['get']['parents'])->pluck('name')->all())->toBe(['Fynd rot'])
+        ->and($svar['get']['relations'])->toBe([])
+        ->and(collect($svar['sok']['items'])->pluck('name')->sort()->values()->all())->toBe(['Fynd rot', 'Fynd synlig', 'Fynd syskon'])
+        ->and(collect($svar['sok']['items'])->firstWhere('name', 'Fynd synlig')['path'])->toBe('Fynd rot');
+
+    $text = json_encode($svar);
+
+    foreach ([$dold, $doltBarn] as $dolt) {
+        expect(str_contains($text, $dolt->ulid))->toBeFalse();
+        expect(str_contains($text, $dolt->name))->toBeFalse();
+    }
+
+    // Det dolda itemet och dess barn nås inte direkt heller.
+    mcpFel(mcpVerktyg($token, 'items_get', ['item' => $dold->ulid]));
+    mcpFel(mcpVerktyg($token, 'items_get', ['item' => $doltBarn->ulid]));
+});
+
 it('ger fulla sidor när agenten saknar påslag i några av användarens containrar', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
 
