@@ -191,6 +191,38 @@ it('visar det valda kontots plan med namn, pris och period', function () {
 });
 
 /*
+ * Namnet slås upp i vyn på `plan.names.{code}`, så provet kontrollerar att
+ * planens kod når vyn och att katalogen har ett riktigt namn för den — en
+ * saknad nyckel visas annars som den råa nyckeln.
+ */
+it('har ett namn i katalogen för varje betald plankod', function (string $kod, string $namn) {
+    withoutVite();
+
+    [$konto, $anvandare] = planvyKonto();
+
+    Subscription::factory()
+        ->for($konto)
+        ->for(Plan::where('code', $kod)->firstOrFail())
+        ->create();
+
+    $props = planvyProps($anvandare, $konto);
+
+    expect($props['plan']['code'])->toBe($kod);
+
+    $nyckel = "ui.plan.names.{$kod}";
+    $visat = trans($nyckel, [], 'en');
+
+    expect($visat)->not->toBe($nyckel, "{$nyckel} saknas")
+        ->and($visat)->not->toStartWith('plan.names.')
+        ->and($visat)->toBe($namn);
+})->with([
+    'pro' => ['pro', 'Pro'],
+    'pro_plus' => ['pro_plus', 'Pro+'],
+    'pro_founder' => ['pro_founder', 'Pro'],
+    'pro_plus_founder' => ['pro_plus_founder', 'Pro+'],
+]);
+
+/*
  * Klart när: alla nio nycklar i `plan.limits` visas, fyra som förbrukning och
  * fem som ingår/ingår inte (Beslut 4).
  *
