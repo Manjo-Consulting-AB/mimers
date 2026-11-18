@@ -2,8 +2,19 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\AttachmentsGet;
+use App\Mcp\Tools\CategoriesList;
 use App\Mcp\Tools\ContainersList;
 use App\Mcp\Tools\ContainersTree;
+use App\Mcp\Tools\CostsList;
+use App\Mcp\Tools\HistoryList;
+use App\Mcp\Tools\ItemsGet;
+use App\Mcp\Tools\ItemsSearch;
+use App\Mcp\Tools\LoansList;
+use App\Mcp\Tools\OccurrencesList;
+use App\Mcp\Tools\RelationsList;
+use App\Mcp\Tools\SchedulesList;
+use App\Mcp\Tools\TagsList;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Contracts\Transport;
 
@@ -26,6 +37,17 @@ class MimersServer extends Server
     protected array $tools = [
         ContainersList::class,
         ContainersTree::class,
+        AttachmentsGet::class,
+        CategoriesList::class,
+        CostsList::class,
+        HistoryList::class,
+        ItemsGet::class,
+        ItemsSearch::class,
+        LoansList::class,
+        OccurrencesList::class,
+        RelationsList::class,
+        SchedulesList::class,
+        TagsList::class,
     ];
 
     public function __construct(Transport $transport)

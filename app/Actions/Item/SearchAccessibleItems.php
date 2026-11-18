@@ -6,6 +6,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -79,15 +80,31 @@ class SearchAccessibleItems
      * Alla items användaren når vars fem sökbara kolumner matchar $q,
      * sorterade på namn.
      *
+     * **`$onlyContainerIds` kom med issue 403** (MCP-verktyget `items_search`).
+     * Den begränsar sökningen till de containers i listan, i själva frågan:
+     * dels bland containrarna omfånget löses upp för, dels som ett villkor på
+     * `item.container_id`. Ett filter på svaret efteråt hade gjort sidindelning
+     * och antal fel. En tom lista ger ett tomt svar, aldrig en obegränsad
+     * sökning. Utan parametern (`null`) söker actionen som förut — appens
+     * sökning är oförändrad. Listan vidgar aldrig åtkomsten: den skär bara
+     * ner det användaren redan når.
+     *
+     * **`$refine` kom med samma issue** och lägger ytterligare filter (taggar,
+     * kategori, uppgifter, utlåning) på sökfrågan, efter åtkomstvillkoren och
+     * aldrig i stället för dem.
+     *
+     * @param  list<int>|null  $onlyContainerIds
+     * @param  (Closure(Builder<Item>): void)|null  $refine
      * @return Collection<int, Item>
      */
-    public function handle(User $user, string $q): Collection
+    public function handle(User $user, string $q, ?array $onlyContainerIds = null, ?Closure $refine = null): Collection
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containerIds = Container::query()
             ->accessibleBy($user, $accountIds)
             ->listable()
+            ->when($onlyContainerIds !== null, fn (Builder $query) => $query->whereIn('id', $onlyContainerIds))
             ->pluck('id')
             ->all();
 
@@ -107,8 +124,9 @@ class SearchAccessibleItems
         }
 
         return Item::search($q)
-            ->query(function (Builder $query) use ($user, $accountIds, $unrestrictedContainerIds, $itemIds) {
+            ->query(function (Builder $query) use ($user, $accountIds, $unrestrictedContainerIds, $itemIds, $onlyContainerIds, $refine) {
                 $query
+                    ->when($onlyContainerIds !== null, fn (Builder $query) => $query->whereIn('item.container_id', $onlyContainerIds))
                     ->whereHas('container', function (Builder $query) use ($user, $accountIds) {
                         /** @var Builder<Container> $query */
                         $query->accessibleBy($user, $accountIds);
@@ -125,6 +143,10 @@ class SearchAccessibleItems
                         }
                     })
                     ->with(['category', 'createdByAccount', 'tags']);
+
+                if ($refine !== null) {
+                    $refine($query);
+                }
             })
             ->orderBy('name')
             ->get();
