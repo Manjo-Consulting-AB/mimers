@@ -183,3 +183,19 @@ GitHub #1397. **Läget:** testarna kan inte prova delade containrar och ägarens
 **Klart när:** `testkonto:skapa --mcp` skapar två Pro-användare och en delad container med `agent_level` `read`; utan `--mcp` skapas samma konto som i dag och de befintliga proven är gröna; `deploy.sh` skapar nycklarna när de saknas och rör dem inte när de finns; hela sviten är grön.
 
 **Beror på:** 400 (#1387), 408 (#1395), #1386
+
+---
+
+### 416. Agentens rättigheter på kontot i säkerhetsloggen
+
+Uppföljning från granskningen av PR #1413, antagen av Tony 2026-11-18. GitHub #1415. **Läget:** `UpdateAgentAccountGrants` loggar ingenting, så en agent som fått `delete` i varje grupp lämnar bara `agent.connected` efter sig.
+
+**Lösningen:** `UpdateAgentAccountGrants` skriver `agent.grants_changed` i säkerhetsloggen, en gång per ändring och bara när något ändrades. Raden bär gammal och ny nivå per grupp, `create_containers` och hur många containerrader som sänktes, men ingen fritext. Ändringar i en container står i händelseloggen.
+
+**Läs:** [[ADR-0087 MCP-server för agenter]] § Riktning 12, [[ADR-0043 Tre loggar]] § Säkerhetsloggen
+
+**Axlar:** `risk_class` none
+
+**Klart när:** en ändring av rättigheterna på kontot ger en rad `agent.grants_changed` med gammal och ny nivå; en oförändrad sparning ger ingen rad; raden har ingen fritext; hela sviten är grön.
+
+**Beror på:** 401 (#1388)
