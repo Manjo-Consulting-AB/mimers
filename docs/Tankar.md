@@ -18,9 +18,9 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Vad ska sidan om vart pengarna går innehålla?** [[ADR-0086 Pro, Pro+ och grundarpris]] § 6 bestämmer att sidan ska finnas: vad priset betalar för (lagring i Sverige och Frankrike, backup, support, utveckling), att vi inte har annonser eller säljer data, löftet att befintliga kunder aldrig får höjt pris, och att export och påminnelser är fria på alla nivåer. Det som inte är bestämt: om sidan ska visa siffror, till exempel ungefärlig kostnad per kund och år eller hur stor del av priset som går till lagring, betalning och drift, eller bara principer. Var sidan ska ligga, som en egen sida, en del av prissidan eller båda. Om den ska uppdateras löpande, och vem som gör det. Den ska finnas innan betalflödet öppnar. Restes 2026-11-18.
 
-- **MCP-server för agenter.** Förslaget samlas i [[ADR-0087 MCP-server för agenter]]. Frågorna från diskussionen 2026-11-18 är besvarade där, utom fritext som skrivs över (nästa punkt).
+- **MCP-server för agenter.** Förslaget samlas i [[ADR-0087 MCP-server för agenter]]. Frågorna från diskussionen 2026-11-18 är besvarade där. Fritext som skrivs över besvaras i [[ADR-0088 Versionshistorik för items]].
 
-- **Fritext som skrivs över går inte att få tillbaka.** Papperskorgen fångar radering men inte redigering. Skriver någon, eller en agent via [[ADR-0087 MCP-server för agenter]], över ett items beskrivning finns ingen tidigare version, och `audit_log` bär aldrig fritext. Möjliga svar är en versionshistorik för fritext, eller att en agent bara får lägga till text och aldrig skriva över. Tony 2026-11-18: tas senare.
+- **Relationer som tas bort går inte att få tillbaka.** `UnlinkItems` raderar hårt, och varken papperskorgen eller [[ADR-0088 Versionshistorik för items]] fångar det. Det gäller både användaren och en agent via [[ADR-0087 MCP-server för agenter]]. Möjliga svar är att mjukradera relationen eller att versionera relationerna. Inget är bestämt.
 
 ## Avgjort och flyttat
 

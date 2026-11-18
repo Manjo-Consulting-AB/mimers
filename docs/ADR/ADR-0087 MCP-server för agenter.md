@@ -86,7 +86,7 @@ Text som andra har skrivit kan innehålla instruktioner till agenten. Servern ka
   - Taket räknar anrop, men en container som raderas tar allt den innehåller till papperskorgen. Notisen räknar därför upp innehållet och inte bara containern.
   - Ett avvisat försök över taket räknas inte som en radering och förlänger inte tillfället. Annars skickas notisen aldrig, och då släpps taket aldrig.
 - *Allt syns och går att ångra.* Riktning 8: notis, *raderat av agent X* och återställning på en gång. Allt agenten gör loggas som agenten (Riktning 3).
-- *Kvar:* redigering som skriver över fritext (1b) täcks inte av detta. Det gör inte heller en relation som tas bort, eftersom `item_link` raderas hårt (`UnlinkItems`), eller taggar som ersätts. Båda är skrivningar och går inte via papperskorgen.
+- *Kvar:* redigering som skriver över fritext (1b) och taggar som ersätts täcks inte av detta. De besvaras av versionshistoriken i [[ADR-0088 Versionshistorik för items]]. En relation som tas bort står kvar som öppen, eftersom `item_link` raderas hårt (`UnlinkItems`) och varken papperskorgen eller versionerna fångar det ([[Tankar]]).
 
 ### Riktning 10, en agent får inte flytta eller kopiera så att någon får ny åtkomst (Tony 2026-11-18)
 
@@ -213,10 +213,10 @@ Bygger på AGENTS.md § Felformat i API:et.
 
 ## Frågorna från diskussionen och var de besvaras
 
-Alla utom 1b är besvarade 2026-11-18.
+Alla är besvarade 2026-11-18. 1b besvaras i [[ADR-0088 Versionshistorik för items]], utom relationer som tas bort.
 
 1. **Prompt injection.** Agenten läser text som andra har skrivit: i delade containrar, och längre fram e-post via [[Maila Mimers]]. Ett item kan innehålla instruktioner till agenten, och agenten har skrivverktyg. Hanteras i Riktning 9.
-   - 1b. **Redigering skriver över.** Papperskorgen skyddar inte mot att en agent skriver över ett items fritext, och `audit_log` bär aldrig fritext. Tony 2026-11-18: tas senare och står i [[Tankar]].
+   - 1b. **Redigering skriver över.** Papperskorgen skyddar inte mot att en agent skriver över ett items fritext, och `audit_log` bär aldrig fritext. Tony 2026-11-18: besvarad av [[ADR-0088 Versionshistorik för items]] för fritext och taggar. Relationer som tas bort står kvar i [[Tankar]].
    - 1c. **Flytt som ändrar åtkomst.** Besvarad i Riktning 10.
    - 1d. **Kopiering som ändrar åtkomst.** En agent kan läsa i en container och skriva innehållet i en som fler ser. Besvarad i Riktning 10 (Tony 2026-11-18): servern minns vilka som når det agenten har läst. Att i stället göra skrivning i delade containrar till en egen rättighet valdes bort, eftersom det inte täcker items som delats enskilt.
 2. **Delade containrar.** Besvarad i Riktning 6: ägaren avgör vid inbjudan och sätter ett tak för medlemmens agenter. Skälet var att en medlems agent annars skickar ägarens innehåll till en tredje part.

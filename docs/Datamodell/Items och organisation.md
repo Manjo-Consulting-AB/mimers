@@ -33,6 +33,29 @@ Index: `(container_id, deleted_at)`, `(container_id, category_id, deleted_at)`, 
 
 **Position modelleras inte som en egen entitet.** "Akterruffen" är en tagg eller kategori som användaren hittat på; systemet vet inte att det är en plats. Se [[ADR-0004 Fria taggar och kategorier]]. Kartfunktionen ligger utanför MVP och kan byggas ovanpå taggarna senare utan schemaändring.
 
+## item_version
+
+Läget före en ändring av ett item, så att en överskrivning går att få tillbaka. Tabellen och dess regler står i [[ADR-0088 Versionshistorik för items]]. Versionerna räknas mot **containerns ägare** (Riktning 3), och skrivningar som kommer tätt blir en version (Riktning 4).
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT PK | |
+| ulid | CHAR(26) UNIQUE | |
+| item_id | FK → item, cascade | |
+| billed_account_id | FK → account | Containerns ägare när versionen skapades |
+| name, description, notes, manufacturer, model, serial_number, position_note | samma typer som på `item` | |
+| purchased_at, warranty_until | DATE NULL | |
+| category_id | FK → category NULL, nullOnDelete | |
+| cover_attachment_id | FK → attachment NULL, nullOnDelete | |
+| icon, icon_color | som på `item` | |
+| tag_ids | JSON | Taggarnas löpnummer, sorterade |
+| replaced_by_user_id | FK → user NULL, nullOnDelete | Den som skrev ändringen som ersatte versionen |
+| replaced_by_agent_id | BIGINT UNSIGNED NULL | Agenten, utan främmande nyckel, som `audit_log.agent_id` |
+| replaced_at | TIMESTAMP | Senaste skrivningen i skurven |
+| created_at | TIMESTAMP | |
+
+Index `(item_id, created_at)`.
+
 ## category
 
 Hierarkisk, per container. Ett item tillhör högst en kategori — det är hela skillnaden mot taggar.
