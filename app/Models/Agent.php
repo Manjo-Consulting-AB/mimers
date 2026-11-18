@@ -76,6 +76,7 @@ class Agent extends Model
     protected function casts(): array
     {
         return [
+            'create_containers' => 'boolean',
             'paused_at' => 'datetime',
             'last_used_at' => 'datetime',
         ];
@@ -98,6 +99,26 @@ class Agent extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /**
+     * Vad agenten får göra, per grupp. En saknad rad betyder ingen åtkomst.
+     *
+     * @return HasMany<AgentAccountGrant, $this>
+     */
+    public function accountGrants(): HasMany
+    {
+        return $this->hasMany(AgentAccountGrant::class);
+    }
+
+    /**
+     * Var agenten får göra det, per container och grupp.
+     *
+     * @return HasMany<AgentContainerGrant, $this>
+     */
+    public function containerGrants(): HasMany
+    {
+        return $this->hasMany(AgentContainerGrant::class);
     }
 
     /**

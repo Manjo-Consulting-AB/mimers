@@ -3,6 +3,7 @@
 namespace App\Actions\Audit;
 
 use App\Models\Account;
+use App\Models\Agent;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
@@ -29,6 +30,10 @@ use App\Models\User;
  * jobb orsakat, och resursen hittar då inte på en systemanvändare (Beslut
  * 11).
  *
+ * `agent_id` är agenten som handlade för `user_id`:s räkning (issue 401,
+ * [[ADR-0087 MCP-server för agenter]] Riktning 3); NULL när en person gjorde
+ * det själv.
+ *
  * `item_id` (issue 107) sätts när händelsen hör till ett item, oavsett
  * subjekt — itemet självt eller något som hänger på det. Kolumnen är en
  * identifierare utan främmande nyckel, som `subject_id`: raden ska överleva
@@ -52,6 +57,7 @@ class RecordAuditEvent
         ?string $subjectType = null,
         ?string $subjectUlid = null,
         array $meta = [],
+        ?Agent $agent = null,
     ): AuditLog {
         $log = new AuditLog;
         $log->action = $action;
@@ -59,6 +65,7 @@ class RecordAuditEvent
         $log->user_id = $user?->id;
         $log->container_id = $container?->id;
         $log->item_id = $item?->id;
+        $log->agent_id = $agent?->id;
         $log->subject_type = $subjectType;
         $log->subject_id = $subjectUlid;
         $log->meta = $meta;
