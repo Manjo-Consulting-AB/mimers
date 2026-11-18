@@ -155,6 +155,10 @@ class AcceptInvitation
             'kind' => 'member',
             'expires_at' => null,
         ]);
+        // Ägarens tak för medlemmens agenter följer med inbjudan (issue 401,
+        // [[ADR-0087 MCP-server för agenter]] Riktning 6). Utanför
+        // `#[Fillable]` som resten av nycklarna ägaren sätter.
+        $access->agent_level = $invitation->agent_level;
         $access->container_id = $invitation->container_id;
         $access->item_id = $invitation->item_id;
         $access->granted_by_user_id = $invitation->invited_by_user_id;

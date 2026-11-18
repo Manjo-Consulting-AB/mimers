@@ -10,6 +10,7 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\User;
+use App\Support\Access\AccessLevel;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -104,6 +105,16 @@ class UpdateContainerAccess
 
         if ($changes === null) {
             return $access;
+        }
+
+        // Sänks `level` under ägarens tak för medlemmens agenter sänks taket
+        // till samma nivå (issue 401, ADR-0087 Riktning 6): taket är aldrig
+        // högre än raden egen nivå.
+        $agentLevelFrom = $access->agent_level;
+
+        if ($access->agent_level !== null && AccessLevel::rank($access->agent_level) > AccessLevel::rank($access->level)) {
+            $access->agent_level = $access->level;
+            $changes['agent_level_lowered'] = ['from' => $agentLevelFrom, 'to' => $access->level];
         }
 
         DB::transaction(function () use ($container, $access, $actor, $changes): void {

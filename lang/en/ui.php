@@ -3064,6 +3064,12 @@ return [
                 'granted' => ':user gave someone access',
                 'updated' => ':user changed :fields on an access',
                 'revoked' => ':user revoked an access',
+                'agent_level_changed' => ':user changed what a member\'s agents may do in the container',
+            ],
+
+            'agent' => [
+                'enabled_in_container' => ':user turned an agent on in the container',
+                'disabled_in_container' => ':user turned an agent off in the container',
             ],
 
             'attachment' => [

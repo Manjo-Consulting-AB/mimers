@@ -292,6 +292,13 @@ class AuditLog extends Model
      */
     public const ACTION_ACCESS_UPDATED = 'access.updated';
 
+    // Issue 401 — agenternas rättigheter ([[ADR-0087 MCP-server för agenter]]).
+    public const ACTION_ACCESS_AGENT_LEVEL_CHANGED = 'access.agent_level_changed';
+
+    public const ACTION_AGENT_ENABLED_IN_CONTAINER = 'agent.enabled_in_container';
+
+    public const ACTION_AGENT_DISABLED_IN_CONTAINER = 'agent.disabled_in_container';
+
     /**
      * Inbjudan skickades. `item_id` är satt när inbjudan gäller ett enskilt
      * item.
