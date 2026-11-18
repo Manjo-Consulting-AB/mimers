@@ -283,3 +283,78 @@ it('migrationen är additiv — ett nytt konto har transfer_bonus_granted_at som
     expect($konto->fresh()->transfer_bonus_granted_at)->toBeNull();
     expect($konto->getCasts()['transfer_bonus_granted_at'] ?? null)->toBe('datetime');
 });
+
+/*
+ * Issue 399 · ADR-0086 § 7: bonusen sänker aldrig planen.
+ */
+it('en aktiv rad på en högre eller grundarplan förlängs ett år på samma plan', function (string $kod) {
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    $plan = Plan::where('code', $kod)->firstOrFail();
+    $slut = now()->addMonths(3)->startOfSecond();
+    Subscription::factory()->for($köparkonto)->for($plan)->create([
+        'status' => 'active',
+        'current_period_end' => $slut,
+    ]);
+
+    bonusAccepteraTill($köparkonto, $köparHeaders);
+
+    $rad = Subscription::query()->where('account_id', $köparkonto->id)->sole();
+
+    expect($rad->plan_id)->toBe($plan->id)
+        ->and($rad->status)->toBe('active')
+        ->and($rad->current_period_end->equalTo($slut->copy()->addYear()))->toBeTrue();
+})->with(['pro_plus', 'pro_founder', 'pro_plus_founder']);
+
+it('en rad på free, cancelled eller past_due ger Pro från idag', function (string $kod, string $status) {
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    Subscription::factory()->for($köparkonto)->for(Plan::where('code', $kod)->firstOrFail())->create([
+        'status' => $status,
+        'current_period_end' => now()->addMonths(3),
+    ]);
+
+    bonusAccepteraTill($köparkonto, $köparHeaders);
+
+    $rad = Subscription::query()->where('account_id', $köparkonto->id)->sole();
+
+    expect($rad->plan->code)->toBe('pro')
+        ->and($rad->status)->toBe('active')
+        ->and($rad->current_period_end->greaterThanOrEqualTo(now()->addYear()->subMinute()))->toBeTrue();
+})->with([
+    ['free', 'active'],
+    ['pro_plus', 'cancelled'],
+    ['pro_plus', 'past_due'],
+]);
+
+it('bonusen ges fortfarande bara en gång även på Pro+', function () {
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    $plan = Plan::where('code', 'pro_plus')->firstOrFail();
+    $slut = now()->addMonths(3)->startOfSecond();
+    Subscription::factory()->for($köparkonto)->for($plan)->create(['status' => 'active', 'current_period_end' => $slut]);
+
+    bonusAccepteraTill($köparkonto, $köparHeaders);
+    bonusAccepteraTill($köparkonto, $köparHeaders);
+
+    expect(Subscription::query()->where('account_id', $köparkonto->id)->sole()->current_period_end->equalTo($slut->copy()->addYear()))->toBeTrue();
+});
+
+it('ett konto över 10 GB nekas på Pro men tar emot samma container på Pro+', function (string $kod, int $status) {
+    $tio = 10 * 1024 * 1024 * 1024;
+
+    [$säljare, $säljarAnvändare, $container] = bonusSäljare();
+    bonusBilaga($container, $säljare, $säljarAnvändare, 5000);
+
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    Subscription::factory()->for($köparkonto)->for(Plan::where('code', $kod)->firstOrFail())->create([
+        'status' => 'active',
+        'current_period_end' => now()->addMonths(3),
+    ]);
+    UsageCounter::factory()->create(['account_id' => $köparkonto->id, 'container_count' => 0, 'storage_bytes' => $tio - 1000]);
+
+    $överföring = skapaÄgarbyteRad($container, ['to_account_id' => $köparkonto->id, 'to_email' => null]);
+    $svar = postJson("/api/transfers/{$överföring->ulid}/accept", [], $köparHeaders);
+
+    $svar->assertStatus($status);
+    if ($status === 403) {
+        expect($svar->json('error.code'))->toBe('quota.storage_exceeded');
+    }
+})->with([['pro', 403], ['pro_plus', 200]]);

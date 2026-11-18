@@ -187,7 +187,7 @@ it('visar det valda kontots plan med namn, pris och period', function () {
 
     expect($pro['plan']['code'])->toBe('pro')
         ->and($pro['plan']['period'])->toBe('year')
-        ->and($pro['plan']['price'])->toBe('€49.00');
+        ->and($pro['plan']['price'])->toBe('€39.00');
 });
 
 /*
@@ -264,10 +264,10 @@ it('visar en obegränsad gräns som obegränsat och aldrig som en stapel', funct
 
     $props = planvyProps($anvandare, $konto);
 
-    // Pro:s utrymme är 25 GB och förbrukningen 2 GB: stapeln finns och är
-    // 8 procent, inte full.
-    expect($props['usage']['storage']['percent'])->toBe(8)
-        ->and($props['usage']['storage']['limitLabel'])->toBe('25 GB')
+    // Pro:s utrymme är 10 GB och förbrukningen 2 GB: stapeln finns och är
+    // 20 procent, inte full.
+    expect($props['usage']['storage']['percent'])->toBe(20)
+        ->and($props['usage']['storage']['limitLabel'])->toBe('10 GB')
         ->and($props['usage']['storage']['usedLabel'])->toBe('2 GB');
 
     // Ett plan utan tak på utrymmet: ingen andel, ingen etikett att rita en
