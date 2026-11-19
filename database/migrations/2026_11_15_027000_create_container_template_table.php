@@ -30,9 +30,14 @@ use Illuminate\Support\Facades\Schema;
  * App\Support\Usage\MetadataSize bär den i ACCOUNT_COLUMNS, inte i COLUMNS,
  * eftersom COLUMNS är listan över tabeller som hänger på en container.
  *
- * Mjukradering enligt [[ADR-0008 Soft delete och papperskorg]]: en borttagen
- * mall räknas mot kvoten tills den gallras, precis som allt annat mjukraderat
- * ([[ADR-0081 All lagrad data räknas mot kvoten]] § 3).
+ * Mjukradering enligt [[ADR-0008 Soft delete och papperskorg]] är ett skydd
+ * mot buggar, men till skillnad från annat mjukraderat släpper mallen sina
+ * byte vid borttagningen (issue 421). Papperskorgen får ingen ny typ, så
+ * mallen kan inte återställas och gallras aldrig; byte som räknades vidare
+ * hade då aldrig släppts. App\Support\Usage\MetadataSize ger en slängd mall
+ * vikten noll och App\Support\Usage\CountedRows räknar bara levande mallar.
+ * Avvikelsen från [[ADR-0081 All lagrad data räknas mot kvoten]] § 3 ska
+ * skrivas in i [[Items och organisation]] § container_template.
  */
 return new class extends Migration
 {

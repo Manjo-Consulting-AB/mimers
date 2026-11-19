@@ -77,6 +77,15 @@ final class MetadataSize
      * en kolumn som inte finns. Den som lägger till en kontonivåtabell här
      * får den räknad i avstämningen utan att röra flyttarna.
      *
+     * **En mjukraderad mall väger noll**, till skillnad från allt annat
+     * mjukraderat ([[ADR-0081 All lagrad data räknas mot kvoten]] § 3). En
+     * mall går inte att återställa och har inget gallringsjobb, så byte som
+     * räknades vidare skulle aldrig släppas: användaren hade betalat för
+     * något hon varken ser eller kan ta tillbaka. Regeln står här och inte
+     * bara i anroparen, eftersom `ofAttributes()` är den enda definitionen
+     * av vad en rad väger. Avvikelsen från ADR-0081 § 3 ska skrivas in i
+     * [[Items och organisation]] § container_template.
+     *
      * @var array<string, list<string>>
      */
     public const ACCOUNT_COLUMNS = [
@@ -126,6 +135,13 @@ final class MetadataSize
      */
     public static function ofAttributes(string $table, array $attributes): int
     {
+        // En mjukraderad mall räknas inte — se ACCOUNT_COLUMNS ovan. Regeln
+        // gäller bara `container_template`: alla andra tabeller räknar sina
+        // slängda rader tills de raderas för gott (ADR-0081 § 3).
+        if ($table === 'container_template' && ($attributes['deleted_at'] ?? null) !== null) {
+            return 0;
+        }
+
         $bytes = 0;
 
         foreach (self::columnsFor($table) as $column) {

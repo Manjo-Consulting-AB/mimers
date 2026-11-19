@@ -107,9 +107,11 @@ class ContainerTemplateController extends Controller
     }
 
     /**
-     * DELETE /api/templates/{template} — 204, ingen kropp. Mjuk radering; raden
-     * räknas mot kvoten tills den gallras ([[ADR-0081 All lagrad data räknas
-     * mot kvoten]] § 3), men upptar ingen av de 50 platserna.
+     * DELETE /api/templates/{template} — 204, ingen kropp. Mjuk radering;
+     * raden upptar ingen av de 50 platserna och släpper sina byte, eftersom
+     * en mall inte går att återställa och aldrig gallras (issue 421; se
+     * App\Actions\Template\DeleteTemplate). Avvikelsen från ADR-0081 § 3 står
+     * i App\Support\Usage\MetadataSize.
      */
     public function destroy(ContainerTemplate $template, DeleteTemplate $deleteTemplate): Response
     {

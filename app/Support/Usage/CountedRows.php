@@ -21,6 +21,13 @@ use Illuminate\Support\Facades\DB;
  * (ADR-0081 § 3). Frågorna går därför genom query builder och inte genom
  * Eloquent, vars SoftDeletes-scope hade dolt dem.
  *
+ * **Undantaget är `container_template`** (issue 421): en mjukraderad mall går
+ * inte att återställa och har inget gallringsjobb, så den släpper sina byte
+ * vid borttagningen i stället — och frågan här räknar bara `deleted_at IS
+ * NULL`. Regeln står också i App\Support\Usage\MetadataSize, som ger en
+ * slängd mall vikten noll; de två måste säga samma sak, annars rättar
+ * avstämningen sönder räknaren.
+ *
  * Betalaren är `billed_account_id`, utom för `container` där den är ägaren
  * (`container.account_id`). För `schedule_occurrence` är kolumnen NULL tills
  * en anteckning skrivits, och en rad utan betalare räknas inte.
@@ -63,13 +70,20 @@ final class CountedRows
         // — de itererar MetadataSize::COLUMNS, inte countedTables() — så den
         // NULL-kolumnen läses bara av den som själv väljer tabellen.
         if (isset(MetadataSize::ACCOUNT_COLUMNS[$table])) {
-            return DB::table($table)->select([
-                "{$table}.id",
-                "{$table}.billed_account_id as payer_id",
-                "{$table}.account_id as owner_id",
-                DB::raw('NULL as container_id'),
-                ...$text,
-            ]);
+            // En mjukraderad mall är borta för användaren: den syns inte i
+            // listningen, går inte att återställa och ska inte betalas för.
+            // Varje kontonivåtabell följer samma regel — i dag bär
+            // ACCOUNT_COLUMNS bara `container_template` — till skillnad från
+            // containertabellerna (ADR-0081 § 3), se klassens docblock.
+            return DB::table($table)
+                ->whereNull("{$table}.deleted_at")
+                ->select([
+                    "{$table}.id",
+                    "{$table}.billed_account_id as payer_id",
+                    "{$table}.account_id as owner_id",
+                    DB::raw('NULL as container_id'),
+                    ...$text,
+                ]);
         }
 
         $query = DB::table($table);

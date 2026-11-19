@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\ReconcilesUsageCounters;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
@@ -7,6 +8,7 @@ use App\Support\Usage\CountedRows;
 use App\Support\Usage\MetadataSize;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\postJson;
 
 /*
@@ -60,12 +62,47 @@ it('hittar mallen genom billed_account_id och räknar den i summan per konto', f
     expect($summor[$ägare->id])->toBe(MetadataSize::of($container) + MetadataSize::of($mall));
 });
 
-it('räknar en mjukraderad mall tills den gallras', function () {
-    $ägare = Account::factory()->create();
-    $mall = ContainerTemplate::factory()->forAccount($ägare)->create();
-    $mall->delete();
+it('släpper mallens byte när den mjukraderas, så avstämningen går jämnt ut', function () {
+    [$account, , $headers, $container] = mallKontext();
 
-    $summor = CountedRows::bytesPerAccount();
+    // Utgångsläget: containern är en fabriksrad som aldrig bokfördes, så
+    // avstämningen får sätta räknaren en gång. Sedan är den sanningen.
+    (new ReconcilesUsageCounters)->handle();
 
-    expect($summor[$ägare->id])->toBe(MetadataSize::of($mall));
+    $före = (int) DB::table('usage_counter')
+        ->where('account_id', $account->id)
+        ->value('metadata_bytes');
+
+    $response = postJson('/api/templates', [
+        'container' => $container->ulid,
+        'name' => 'Båtmall',
+    ], $headers)->assertCreated();
+
+    $mall = ContainerTemplate::query()->where('ulid', $response->json('data.ulid'))->firstOrFail();
+
+    expect((int) DB::table('usage_counter')
+        ->where('account_id', $account->id)
+        ->value('metadata_bytes'))
+        ->toBe($före + MetadataSize::of($mall));
+
+    deleteJson("/api/templates/{$mall->ulid}", [], $headers)->assertNoContent();
+
+    // Räknaren är tillbaka på värdet före sparandet: en mall går inte att
+    // återställa och gallras aldrig, så den släpper byten vid borttagningen
+    // i stället för att räknas vidare (avvikelsen från ADR-0081 § 3).
+    expect((int) DB::table('usage_counter')
+        ->where('account_id', $account->id)
+        ->value('metadata_bytes'))
+        ->toBe($före);
+
+    // Den gemensamma frågan hittar inte längre mallen, så avstämningen har
+    // inget att rätta — räknaren och raderna säger samma sak.
+    expect(CountedRows::query('container_template')->get())->toBeEmpty();
+
+    (new ReconcilesUsageCounters)->handle();
+
+    expect((int) DB::table('usage_counter')
+        ->where('account_id', $account->id)
+        ->value('metadata_bytes'))
+        ->toBe($före);
 });

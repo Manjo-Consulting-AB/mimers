@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\DB;
  *
  * Raden skrivs genom App\Support\Usage\MetadataLedger så att
  * `metadata_bytes` följer namnbytet — namnet är fritext och räknas
- * ([[ADR-0081 All lagrad data räknas mot kvoten]] § 2).
+ * ([[ADR-0081 All lagrad data räknas mot kvoten]] § 2). Bara levande mallar
+ * går att döpa om, så raden väger som vanligt; en slängd mall väger noll
+ * (se App\Support\Usage\MetadataSize).
  *
  * **Ingen `Gate::authorize()`.** Behörigheten prövas av anroparen; mallen nås
  * bara genom App\Models\ContainerTemplate::scopeMemberOf() i routebindningen,
