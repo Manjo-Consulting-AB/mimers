@@ -92,7 +92,11 @@ class SearchController extends Controller
         // bad aldrig om containern och ska svara med samma antal frågor som förut
         // (Beslut 2, Klart när). Webbsidan får sin container i en enda extra fråga,
         // konstant över antalet träffar.
-        $items->loadMissing('container');
+        //
+        // Fältens relationer laddas av samma skäl (issue 418): ItemResource
+        // bär `fields` och hade annars gjort en lazy-load per träff, så
+        // frågeantalet växte med antalet resultat.
+        $items->loadMissing(['container.fields', 'ownFields', 'fieldValues']);
 
         return Inertia::render('Search', [
             'q' => $q,

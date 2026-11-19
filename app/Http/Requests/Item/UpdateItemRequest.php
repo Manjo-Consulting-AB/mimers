@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Item;
 
+use App\Actions\Field\ItemFieldInput;
 use App\Models\Item;
 use App\Models\Tag;
 use Illuminate\Foundation\Http\FormRequest;
@@ -73,6 +74,15 @@ use Illuminate\Validation\Rule;
  * papperskorg]] lovar ska gå att återställa — kommer bilagan tillbaka ska
  * omslaget göra det med. Samma skillnad mellan "rör det inte" och "töm det"
  * som `category` bär för `/api`.
+ *
+ * `fields` (issue 418 · [[ADR-0089 Egna fält på items]] § Riktning 3 och 9)
+ * is a list of `{ "field": <field-ULID>, "value": … }`. An OMITTED `fields`
+ * leaves every value alone; the entries that ARE present are the only ones
+ * touched. The value is validated against the field's type by
+ * App\Actions\Field\ItemFieldInput, so a text value in a number field is
+ * `validation.numeric` on `fields.N.value`. A field from another container,
+ * another item's own field or the trash gives `field.not_applicable` on
+ * `fields.N.field`. `null` and `''` both mean "empty": the row is removed.
  */
 class UpdateItemRequest extends FormRequest
 {
@@ -81,6 +91,35 @@ class UpdateItemRequest extends FormRequest
         // App\Policies\ContainerPolicy::update() decides authorization in
         // the controller, not here — see issue 13a § Beslut 2.
         return true;
+    }
+
+    /**
+     * En tom sträng är samma sak som `null` — båda betyder "töm fältet"
+     * ([[ADR-0089 Egna fält på items]] § Riktning 9). Normaliseringen sker
+     * före valideringen, så ett tomt värde i ett talfält eller datumfält
+     * passerar `nullable` i stället för att falla på typregeln.
+     *
+     * Ett flyttal i ett talfält görs samtidigt om till en decimalsträng utan
+     * exponent, så att omfångsregeln prövar samma siffror som databasen tar
+     * emot (se App\Actions\Field\ItemFieldInput::normalizeNumbers()).
+     */
+    protected function prepareForValidation(): void
+    {
+        $fields = $this->input('fields');
+
+        if (! is_array($fields)) {
+            return;
+        }
+
+        foreach ($fields as $index => $entry) {
+            if (is_array($entry) && ($entry['value'] ?? null) === '') {
+                $fields[$index]['value'] = null;
+            }
+        }
+
+        $this->merge([
+            'fields' => ItemFieldInput::normalizeNumbers($this->route('container'), $this->route('item'), $fields),
+        ]);
     }
 
     /**
@@ -143,6 +182,9 @@ class UpdateItemRequest extends FormRequest
             ];
         }
 
-        return $rules;
+        return array_merge(
+            $rules,
+            ItemFieldInput::rules($this->route('container'), $this->route('item'), $this->input('fields')),
+        );
     }
 }

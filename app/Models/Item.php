@@ -280,6 +280,27 @@ class Item extends Model
     }
 
     /**
+     * Itemets fältvärden — en rad per fält som har ett värde, oavsett om
+     * fältet är containerns eller itemets eget, se [[ADR-0089 Egna fält på
+     * items]] § Riktning 9 och issue 418.
+     *
+     * Relationen finns för App\Http\Resources\ItemResource: värdena läses
+     * per `item_field_id` i minnet i stället för en fråga per fält. Raden
+     * adresseras med item och fält och har ingen egen `ulid`.
+     *
+     * Ett värde i ett fält som ligger i papperskorgen finns kvar här medan
+     * definitionen är raderad; resursen ritar det inte, eftersom fältet
+     * självt saknas i `container.fields` och `ownFields`. Det kommer
+     * tillbaka med fältet ([[ADR-0089 Egna fält på items]] § Riktning 3).
+     *
+     * @return HasMany<ItemFieldValue, $this>
+     */
+    public function fieldValues(): HasMany
+    {
+        return $this->hasMany(ItemFieldValue::class);
+    }
+
+    /**
      * Ett items egna fält följer itemet till papperskorgen och tillbaka, se
      * [[ADR-0089 Egna fält på items]] § Riktning 2 och 3 och
      * [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26:

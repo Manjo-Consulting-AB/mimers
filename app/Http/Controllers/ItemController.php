@@ -732,7 +732,7 @@ class ItemController extends Controller
         // En enda rad, men ladda relationerna uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som
         // Api\ItemController::show().
-        $item->loadMissing(['category', 'createdByAccount', 'tags']);
+        $item->loadMissing(['category', 'createdByAccount', 'tags', 'container.fields', 'ownFields', 'fieldValues']);
 
         $user = $request->user();
 
@@ -1774,12 +1774,12 @@ class ItemController extends Controller
         // lista betyder "inga taggar" och inte "rör dem inte" (§ Beslut 6).
         $tags = Tag::whereIn('ulid', $request->validated('tags') ?? [])->get();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child', 'another', 'return']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child', 'another', 'return', 'fields']));
 
         // En cykel eller självlänk rullar tillbaka hela skapandet och blir ett
         // fältfel på `child` (ADR-0080 § 5).
         try {
-            $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child);
+            $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child, $request->validated('fields') ?? []);
         } catch (ApiException $e) {
             // Textkvoten (issue 1303) hör till namnfältet; cykelfelet till `child`.
             throw ValidationException::withMessages([
@@ -1841,7 +1841,7 @@ class ItemController extends Controller
 
         // En enda rad, men ladda relationerna uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som show().
-        $item->loadMissing(['category', 'createdByAccount', 'tags']);
+        $item->loadMissing(['category', 'createdByAccount', 'tags', 'container.fields', 'ownFields', 'fieldValues']);
 
         $user = $request->user();
 
@@ -1926,7 +1926,7 @@ class ItemController extends Controller
     {
         Gate::authorize('update', $item);
 
-        $item->fill($request->safe()->except(['category', 'tags', 'cover']));
+        $item->fill($request->safe()->except(['category', 'tags', 'cover', 'fields']));
 
         // Kategorin och omslaget rörs bara när nyckeln finns i requesten:
         // ett UTELÄMNAT fält lämnar värdet orörda medan ett uttryckligen
@@ -1960,6 +1960,7 @@ class ItemController extends Controller
                 $request->user(),
                 $request->has('tags'),
                 Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
+                $request->validated('fields') ?? [],
             );
         } catch (ApiException $e) {
             // Textkvoten (issue 1303) hör till namnfältet.

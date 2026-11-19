@@ -3,6 +3,7 @@
 namespace App\Actions\Item;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Field\SyncItemFieldValues;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Category;
@@ -47,6 +48,7 @@ class CreateItem
         private readonly RecordAuditEvent $recordAuditEvent,
         private readonly SyncItemTags $syncItemTags,
         private readonly LinkItems $linkItems,
+        private readonly SyncItemFieldValues $syncItemFieldValues,
     ) {}
 
     /**
@@ -62,6 +64,11 @@ class CreateItem
      *                            kartan]]), redan uppslaget och auktoriserat.
      *                            Ett `ApiException` från länken rullar
      *                            tillbaka hela skapandet.
+     * @param  list<array{field: string, value?: mixed}>  $fields  Fältvärdena
+     *                                                             ur kroppen,
+     *                                                             redan
+     *                                                             validerade
+     *                                                             (issue 418).
      */
     public function handle(
         Container $container,
@@ -72,15 +79,24 @@ class CreateItem
         Collection $tags,
         ?Item $parent,
         ?Item $child = null,
+        array $fields = [],
     ): Item {
-        DB::transaction(function () use ($container, $account, $actor, $item, $category, $tags, $parent, $child): void {
+        DB::transaction(function () use ($container, $account, $actor, $item, $category, $tags, $parent, $child, $fields): void {
             $item->container_id = $container->id;
             $item->category_id = $category?->id;
             $item->created_by_user_id = $actor->id;
             $item->created_by_account_id = $account->id;
             // Betalaren är det agerande kontot (ADR-0081 § 3), samma som författaren.
             $item->billed_account_id = $account->id;
+            // Relationen sätts i minnet: fältvärdena nedan behöver
+            // containern, och den är redan uppslagen.
+            $item->setRelation('container', $container);
             MetadataLedger::save($item);
+
+            // Fältvärdena hör till itemet och skrivs i SAMMA transaktion, så
+            // att ett item med halva fältmängden aldrig finns (issue 418).
+            // Ett tomt värde tar bort raden; ett fält som inte nämns rörs inte.
+            $this->syncItemFieldValues->handle($item, $fields);
 
             // Först itemet, sedan det som hänger på det: listan sorterar
             // nyaste raden först, så itemets egen rad hamnar underst av de
