@@ -5,6 +5,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemVersion;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
 use App\Models\User;
@@ -450,4 +451,30 @@ it('ett konto med en levande fil på 100 och en slängd på 50 stäms av till 15
 
     expect(avstamningRad($account->id)->storage_bytes)->toBe(150);
     $logg->shouldNotHaveReceived('warning');
+});
+
+it('en item_version-rad räknas i avstämningen', function () {
+    // Issue 411 · [[ADR-0088 Versionshistorik för items]] Riktning 3: en
+    // version räknas som itemraden och belastar containerns ägare. Raden
+    // skapas med fabriken — applikationen sparar inga versioner ännu (412) —
+    // och `avstamningText()` känner inte till tabellen, så räknaren sätts
+    // UTAN versionens vikt och avstämningen ska rätta upp den.
+    [$account, $user, , $item] = avstamningSetup();
+
+    $version = ItemVersion::factory()->for($item, 'item')->create([
+        'billed_account_id' => $account->id,
+        'description' => 'En text som väger',
+    ]);
+
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => 0,
+        'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
+    ]);
+
+    (new ReconcilesUsageCounters)->handle();
+
+    expect((int) avstamningRad($account->id)->metadata_bytes)
+        ->toBe(avstamningText($account) + MetadataSize::of($version));
 });

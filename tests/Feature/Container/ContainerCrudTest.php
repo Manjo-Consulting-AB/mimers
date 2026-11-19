@@ -559,6 +559,9 @@ it('har inte fått någon annan kolumn än description', function () {
         'template_source_id',
         'ulid',
         'updated_at',
+        // Issue 411 · [[ADR-0088 Versionshistorik för items]] Riktning 1:
+        // containerns eget tak för versionshistoriken, NULL = följ kontot.
+        'versioning_max_versions',
     ]);
 });
 

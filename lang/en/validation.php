@@ -20,4 +20,13 @@ return [
     // vilka koder som finns. Nyckeln är regelns felkod på webben — i API:et
     // heter den `currency.invalid` (App\Support\Api\ValidationErrorMapper).
     'iso_currency' => 'Choose a currency from the list.',
+
+    // App\Http\Requests\Container\UpdateContainerVersioningRequest, se issue
+    // 411 · [[ADR-0088 Versionshistorik för items]] Riktning 1. Containerns
+    // tak får aldrig ligga över kontots. Nyckeln är felkoden: API-höljet
+    // skulle svara `versioning.above_account` om rutten låg på `/api`, och
+    // webben visar samma mening ur den här filen.
+    'versioning' => [
+        'above_account' => 'The container cannot keep more versions than the account allows.',
+    ],
 ];

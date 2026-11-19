@@ -239,6 +239,24 @@ class Item extends Model
     }
 
     /**
+     * Itemets versioner, nyast först — ögonblicksbilderna före varje ändring
+     * ([[ADR-0088 Versionshistorik för items]] och issue 411).
+     *
+     * Ingen SoftDeletes på `item_version`: en version tas bort för gott och
+     * går aldrig via papperskorgen. Ordningen är `created_at` fallande med
+     * `id` som andrasortering, så två versioner inom samma sekund ändå får en
+     * stabil ordning.
+     *
+     * @return HasMany<ItemVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(ItemVersion::class)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+    }
+
+    /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
      * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
      * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel

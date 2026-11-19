@@ -52,14 +52,15 @@ final class CountedRows
         $query = DB::table($table);
 
         // Vägen från raden till dess container. Items, kategorier, taggar och
-        // kostnader bär `container_id` själva; scheman och utlåningar går
-        // genom sitt item, och förekomsterna genom sitt schema.
+        // kostnader bär `container_id` själva; scheman, utlåningar och
+        // itemversioner går genom sitt item, och förekomsterna genom sitt
+        // schema.
         match ($table) {
             'schedule_occurrence' => $query
                 ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
                 ->join('item', 'item.id', '=', 'schedule.item_id')
                 ->join('container', 'container.id', '=', 'item.container_id'),
-            'schedule', 'loan' => $query
+            'schedule', 'loan', 'item_version' => $query
                 ->join('item', 'item.id', '=', "{$table}.item_id")
                 ->join('container', 'container.id', '=', 'item.container_id'),
             default => $query->join('container', 'container.id', '=', "{$table}.container_id"),

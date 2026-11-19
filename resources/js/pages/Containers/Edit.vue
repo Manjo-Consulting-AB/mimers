@@ -11,6 +11,7 @@ import CurrencyField from '../../components/CurrencyField.vue';
 import FormField from '../../components/FormField.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
 import ItemIconPicker from '../../components/ItemIconPicker.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
@@ -133,6 +134,11 @@ const props = defineProps({
     can: { type: Object, required: true },
     /* Avsnittet *Agents* (issue 408), `null` utan Pro hos båda eller med MCP av. */
     agents: { type: Object, default: null },
+    /* Versionshistorikens tak (issue 411 · [[ADR-0088 Versionshistorik för
+       items]] Riktning 1): `{max, accountLimit}`. `max` är containerns EGET
+       värde — `null` är *Follow account* — och `accountLimit` är kontots tak
+       som valen ritar sig ur. */
+    versioning: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -328,6 +334,107 @@ watch(currencyToAdd, (code) => {
 
 function removeCurrency(code) {
     saveCurrencies(selectedCurrencies.value.filter((currency) => currency !== code));
+}
+
+// --- Versionshistorik (issue 411 · ADR-0088 Riktning 1) --------------------
+//
+// Containerns tak för versionshistoriken. Valet sparas DIREKT — en väljare,
+// inte text, så ingen *Save* (Tonys regel 2026-11-14, #1245) — och
+// formulärets osparade text ligger kvar.
+//
+// *Follow account* är `null`, *Off* är 0 och talen går upp till kontots tak.
+// Att SÄNKA värdet eller stänga av tar bort överskottet (issue 414), så det
+// valet frågar först med `UiConfirmDialog`. En höjning frågar aldrig.
+const versioningPending = ref(false);
+const versioningStatus = ref(null);
+const versioningError = ref(null);
+const versioningConfirmOpen = ref(false);
+const versioningTrigger = ref(null);
+const versioningChoice = ref(undefined);
+
+const selectedVersioning = computed(
+    () => (props.versioning.max === null ? 'follow' : String(props.versioning.max)),
+);
+
+/* Vad som gäller i dag, räknat som App\Support\Versioning\VersionLimit::for():
+   0 på endera nivån ger 0, annars det lägre av kontots och containerns. */
+const effectiveVersioning = computed(() => {
+    const own = props.versioning.max;
+    const account = props.versioning.accountLimit;
+
+    if (account === 0) {
+        return 0;
+    }
+
+    if (own === null) {
+        return account;
+    }
+
+    if (own === 0) {
+        return 0;
+    }
+
+    return Math.min(account, own);
+});
+
+function onVersioningChange(event) {
+    const raw = event.target.value;
+    const value = raw === 'follow' ? null : Number(raw);
+
+    versioningStatus.value = null;
+    versioningError.value = null;
+    versioningTrigger.value = event.target;
+
+    const lowers = value !== null && (value === 0 || value < effectiveVersioning.value);
+
+    if (! lowers) {
+        saveVersioning(value);
+
+        return;
+    }
+
+    versioningChoice.value = value;
+    versioningConfirmOpen.value = true;
+}
+
+function confirmVersioning() {
+    versioningConfirmOpen.value = false;
+    saveVersioning(versioningChoice.value);
+}
+
+/* Avbrottet sätter tillbaka väljaren till det sparade värdet: `:value` bindes
+   mot proppen, och proppen ändrades aldrig. */
+function cancelVersioning() {
+    versioningConfirmOpen.value = false;
+
+    if (versioningTrigger.value) {
+        versioningTrigger.value.value = selectedVersioning.value;
+    }
+}
+
+function saveVersioning(value) {
+    router.patch(`/containers/${props.container.ulid}/versioning`, { versioning_max_versions: value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            versioningPending.value = true;
+        },
+        onFinish: () => {
+            versioningPending.value = false;
+        },
+        onSuccess: () => {
+            versioningStatus.value = 'saved';
+        },
+        onError: (errors) => {
+            versioningError.value = errors.versioning_max_versions ?? null;
+
+            // Servern nekade valet: väljaren går tillbaka till det sparade
+            // värdet, så vyn inte visar ett tak som inte gäller.
+            if (versioningTrigger.value) {
+                versioningTrigger.value.value = selectedVersioning.value;
+            }
+        },
+    });
 }
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
@@ -630,6 +737,59 @@ async function destroy() {
         <p v-else-if="currenciesStatus" role="status" class="mt-2 text-sm text-ink-subtle">
             {{ t('container.edit.currencies_saved') }}
         </p>
+    </section>
+
+    <!--
+        Versionshistorikens tak (issue 411 · [[ADR-0088 Versionshistorik för
+        items]] Riktning 1). Avsnittet ritas ur `can.delete`, samma grind som
+        raderingen: versionshistoriken är ägarkontots val, och en inbjuden med
+        `write` ser det inte. Valet sparas direkt (#1245); att sänka värdet
+        eller stänga av frågar först, eftersom överskottet tas bort (issue 414).
+    -->
+    <section v-if="can.delete" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('container.edit.versioning') }}</h2>
+
+        <p class="mt-1 text-sm text-ink-subtle">{{ t('container.edit.versioning_description') }}</p>
+
+        <div class="mt-4 flex flex-col gap-1">
+            <label for="container-versioning" class="text-sm font-medium text-ink">
+                {{ t('container.edit.versioning_label') }}
+            </label>
+
+            <select
+                id="container-versioning"
+                :value="selectedVersioning"
+                :disabled="versioningPending"
+                class="self-start rounded border border-border bg-surface px-3 py-2 text-ink"
+                @change="onVersioningChange"
+            >
+                <option value="follow">
+                    {{ t('container.edit.versioning_follow', { count: versioning.accountLimit }) }}
+                </option>
+                <option value="0">{{ t('container.edit.versioning_off') }}</option>
+                <option v-for="value in versioning.accountLimit" :key="value" :value="String(value)">
+                    {{ value }}
+                </option>
+            </select>
+        </div>
+
+        <p v-if="versioningError" role="alert" class="mt-2 text-sm text-danger">{{ versioningError }}</p>
+
+        <p v-else-if="versioningStatus" role="status" class="mt-2 text-sm text-ink-subtle">
+            {{ t('container.edit.versioning_saved') }}
+        </p>
+
+        <UiConfirmDialog
+            :open="versioningConfirmOpen"
+            :heading="t('container.edit.versioning_confirm_heading')"
+            :body="t('container.edit.versioning_confirm_body')"
+            :confirm-label="t('container.edit.versioning_confirm_action')"
+            tone="danger"
+            :pending="versioningPending"
+            :trigger="versioningTrigger"
+            @confirm="confirmVersioning"
+            @cancel="cancelVersioning"
+        />
     </section>
 
     <ContainerAgentsSection v-if="agents" :container-ulid="container.ulid" :section="agents" />
