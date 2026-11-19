@@ -831,6 +831,21 @@ Route::middleware('auth')->group(function () {
         ->name('settings.storage.destroy');
 
     /*
+     * Issue 411 · Kontots tak för versionshistoriken, se
+     * App\Http\Controllers\Settings\StorageController::updateVersioning(),
+     * [[ADR-0088 Versionshistorik för items]] Riktning 1 och
+     * App\Http\Requests\Settings\UpdateStorageVersioningRequest.
+     *
+     * **PATCH och inget `{account}`-led.** Rutten ligger under samma sida som
+     * rensningen men väljer konto ur kroppen: lagringsytans väljare byter
+     * konto med `?account=`, och en rutt som krävde kontot i sökvägen hade
+     * blivit en andra adress till samma inställning. Valet sparas direkt
+     * (Tonys regel 2026-11-14, #1245) — ingen Save-knapp.
+     */
+    Route::patch('/settings/storage/versioning', [StorageController::class, 'updateVersioning'])
+        ->name('settings.storage.versioning');
+
+    /*
      * Issue 65a · Notisinställningarna — personens kanalval, veckosammanfattning
      * och tysta timmar, se
      * App\Http\Controllers\Settings\NotificationSettingsController.
@@ -1595,6 +1610,20 @@ Route::middleware('auth')->group(function () {
      */
     Route::put('/containers/{container}/currencies', [ContainerCurrencyController::class, 'update'])
         ->name('containers.currencies.update');
+
+    /*
+     * Issue 411 · Containerns tak för versionshistoriken, se
+     * App\Http\Controllers\ContainerController::updateVersioning() och
+     * [[ADR-0088 Versionshistorik för items]] Riktning 1.
+     *
+     * **Egen rutt och inte ett fält i PATCH ovan**, av samma skäl som
+     * valutan och ikonen: valet sparas DIREKT (Tonys regel 2026-11-14,
+     * #1245), och formulärets osparade text ligger kvar orörd. Grinden är
+     * `ContainerPolicy::delete` — bara ägarkontots egna medlemmar får röra
+     * taket.
+     */
+    Route::patch('/containers/{container}/versioning', [ContainerController::class, 'updateVersioning'])
+        ->name('containers.versioning.update');
 
     /*
      * Issue 62b § Beslut 4 · Raderingen. Mjuk, utan kaskad (issue 8), och bär

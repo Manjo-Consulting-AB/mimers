@@ -70,6 +70,7 @@ class Account extends Model
     {
         return [
             'transfer_bonus_granted_at' => 'datetime',
+            'versioning_max_versions' => 'integer',
         ];
     }
 

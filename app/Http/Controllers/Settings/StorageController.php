@@ -8,6 +8,7 @@ use App\Actions\Trash\PurgeContent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
+use App\Http\Requests\Settings\UpdateStorageVersioningRequest;
 use App\Http\Resources\StorageEntryResource;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -169,6 +170,15 @@ class StorageController extends Controller
 
             'usage' => $readPlanUsage->handle($account)['usage']['storage'],
 
+            // Kontots tak för versionshistoriken (issue 411 · [[ADR-0088
+            // Versionshistorik för items]] Riktning 1). `limit` är den övre
+            // gränsen ur config — samma tal som PATCH-rutten validerar mot,
+            // så vyn och servern inte kan säga olika saker.
+            'versioning' => [
+                'max' => (int) $account->versioning_max_versions,
+                'limit' => (int) config('konton.versioning.max_versions_limit'),
+            ],
+
             'removed' => $request->session()->get(self::REMOVED_SESSION_KEY),
         ]);
     }
@@ -260,6 +270,40 @@ class StorageController extends Controller
                 'removed' => $removed,
                 'storageLabel' => Number::fileSize($storageBytes),
             ]);
+    }
+
+    /**
+     * PATCH /settings/storage/versioning — kontots tak för versionshistoriken,
+     * 302 tillbaka till lagringsytan med kontot kvar i adressen.
+     *
+     * **Kontot kommer ur kroppen och inte ur sökvägen**, till skillnad från
+     * rensningen nedan: rutten har inget `{account}`-led, och sidan väljer
+     * konto i en väljare. `UpdateStorageVersioningRequest` har redan bevisat
+     * att ULID:n tillhör användaren, så en obehörig har fått 403 före både
+     * valideringen och det här uppslaget.
+     *
+     * **Grinden är medlemskap** (`AccountPolicy::manageStorage`), samma
+     * minimikrav som rensningen: versionshistoriken är kontots inställning och
+     * en `member` får ändra den. Ingen read_only-kontroll — att sänka taket
+     * minskar lagringen och är samma sorts handling som att rensa bilagor
+     * (issue 28 § Beslut 4).
+     *
+     * Ingen version rörs här. Att sänka taket tar bort överskottet först i
+     * issue 414; den här rutten skriver bara `account.versioning_max_versions`.
+     */
+    public function updateVersioning(UpdateStorageVersioningRequest $request): RedirectResponse
+    {
+        $account = Account::query()
+            ->where('ulid', $request->validated('account'))
+            ->firstOrFail();
+
+        Gate::authorize('manageStorage', $account);
+
+        $account->versioning_max_versions = (int) $request->validated('versioning_max_versions');
+        $account->save();
+
+        return redirect()
+            ->route('settings.storage', ['account' => $account->ulid]);
     }
 
     /**

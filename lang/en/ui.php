@@ -2239,6 +2239,21 @@ return [
         'account_label' => 'Account',
         'usage_heading' => 'Storage space',
 
+        // Version history (issue 411 · [[ADR-0088 Versionshistorik för items]]
+        // Riktning 1). The number is saved the moment it is chosen — a
+        // picker, not text, so no Save (Tony's rule 2026-11-14, #1245). The
+        // sentence says where the versions are counted: against the
+        // account's storage, not as extra.
+        'versioning' => [
+            'heading' => 'Version history',
+            'description' => 'How many earlier versions of each item are kept. They are counted toward the account\'s storage.',
+            'label' => 'Versions per item',
+            'saved' => 'The version limit has been saved.',
+            'confirm_heading' => 'Lower the version limit?',
+            'confirm_body' => 'Versions beyond the new limit are removed. This cannot be undone.',
+            'confirm_action' => 'Lower the limit',
+        ],
+
         'list_heading' => 'Attachments',
         'list_intro' => 'Largest first. Tick what can go — the forty holiday photos can, the inspection report cannot.',
         'empty' => 'The account has no attachments.',
@@ -2533,6 +2548,22 @@ return [
             'currencies_add' => 'Add a currency',
             'currencies_remove' => 'Remove',
             'currencies_saved' => 'The currencies for costs have been saved.',
+
+            // Issue 411 · [[ADR-0088 Versionshistorik för items]] Riktning 1.
+            // The container's own limit for the version history. *Follow
+            // account* is `null`, *Off* is 0, and a number can only be chosen
+            // up to the account's limit. The choice saves at once (#1245);
+            // lowering it or turning it off first asks, because the versions
+            // above the new limit are removed (issue 414).
+            'versioning' => 'Version history',
+            'versioning_description' => 'Follow the account, turn it off for this container, or choose a lower number of versions per item.',
+            'versioning_label' => 'Versions per item',
+            'versioning_follow' => 'Follow account (:count)',
+            'versioning_off' => 'Off',
+            'versioning_saved' => 'The version limit has been saved.',
+            'versioning_confirm_heading' => 'Lower the version limit?',
+            'versioning_confirm_body' => 'Versions beyond the new limit are removed. This cannot be undone.',
+            'versioning_confirm_action' => 'Lower the limit',
 
             // Issue 101: the seven sections that did not fit in the tab row are
             // gathered here — categories, tags, sharing, the calendar link, the

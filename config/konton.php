@@ -86,4 +86,22 @@ return [
 
     'registration' => env('ACCOUNT_REGISTRATION', 'invite_only'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Versionshistorikens tak
+    |--------------------------------------------------------------------------
+    |
+    | Det högsta värde `account.versioning_max_versions` får sättas till, och
+    | därmed också det högsta antal versioner per item som går att välja
+    | ([[ADR-0088 Versionshistorik för items]] Riktning 1). Talet ligger i
+    | config och inte som en konstant i kontrollern: det är samma gräns som
+    | valideringen och vyn ritar ur, och en kopia i JavaScript vore en andra
+    | sanning (utformad av Claude, ADR-0088).
+    |
+    */
+
+    'versioning' => [
+        'max_versions_limit' => 20,
+    ],
+
 ];

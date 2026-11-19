@@ -95,6 +95,7 @@ class Container extends Model
         return [
             'cover_focus_x' => 'integer',
             'cover_focus_y' => 'integer',
+            'versioning_max_versions' => 'integer',
         ];
     }
 

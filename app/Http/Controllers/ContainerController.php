@@ -7,6 +7,7 @@ use App\Actions\Attachment\ListRecentImages;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Container\CreateContainer;
+use App\Actions\Container\SetContainerVersioning;
 use App\Actions\Container\TrashContainer;
 use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
@@ -16,6 +17,7 @@ use App\Actions\User\ReadOverviewPanels;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
+use App\Http\Requests\Container\UpdateContainerVersioningRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemResource;
 use App\Models\Account;
@@ -582,6 +584,16 @@ class ContainerController extends Controller
             'accountCurrency' => $container->account->currency,
             // Avsnittet *Agents* (issue 408); `null` ritar inget.
             'agents' => ContainerAgentController::section($request->user(), $container),
+            // Versionshistorikens tak (issue 411 · [[ADR-0088
+            // Versionshistorik för items]] Riktning 1). `max` är containerns
+            // EGET värde — `null` betyder *Follow account* — och
+            // `accountLimit` är kontots tak, som valen ritar sig ur. Inget
+            // värde kopieras: frågan vad som gäller ställs av
+            // App\Support\Versioning\VersionLimit::for().
+            'versioning' => [
+                'max' => $container->versioning_max_versions,
+                'accountLimit' => (int) $container->account->versioning_max_versions,
+            ],
             'can' => [
                 // Formuläret ritar sig ur den här; se docblocken ovan om varför
                 // grinden och flaggan inte är samma fråga.
@@ -630,6 +642,34 @@ class ContainerController extends Controller
         return redirect()
             ->route('containers.edit', $container)
             ->with('status', 'container-updated');
+    }
+
+    /**
+     * PATCH /containers/{container}/versioning — containerns tak för
+     * versionshistoriken, 302 tillbaka till redigeringssidan.
+     *
+     * **Egen rutt och inte ett fält i formulärets PATCH**, av samma skäl som
+     * valutor och ikon: valet sparas DIREKT (Tonys regel 2026-11-14, #1245)
+     * och formulärets osparade text ska ligga kvar orörd.
+     *
+     * Grinden ligger i App\Actions\Container\SetContainerVersioning och är
+     * `ContainerPolicy::delete`: bara ägarkontots egna medlemmar får ändra
+     * taket, och den som bara får skriva i containern varken ser avsnittet
+     * eller når rutten.
+     *
+     * `validated()` ger en sträng ur en `<select>`, så talet castas här.
+     * `null` är *Follow account* och skrivs som `null` — aldrig som 0.
+     */
+    public function updateVersioning(
+        UpdateContainerVersioningRequest $request,
+        Container $container,
+        SetContainerVersioning $setContainerVersioning,
+    ): RedirectResponse {
+        $value = $request->validated('versioning_max_versions');
+
+        $setContainerVersioning->handle($container, $value === null ? null : (int) $value);
+
+        return redirect()->route('containers.edit', $container);
     }
 
     /**

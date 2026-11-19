@@ -39,6 +39,12 @@ final class MetadataSize
         'category' => ['name'],
         'tag' => ['name'],
         'item' => ['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'position_note'],
+        // En version väger som itemraden: de tre fritextkolumnerna och
+        // `field_values` (issue 411 · [[ADR-0088 Versionshistorik för items]]
+        // Riktning 3). `tag_ids` är löpnummer i JSON och räknas inte, samma
+        // regel som för kopplingsrader ([[ADR-0081 All lagrad data räknas mot
+        // kvoten]] § 2).
+        'item_version' => ['name', 'description', 'notes', 'field_values'],
         'schedule' => ['title', 'notes'],
         'schedule_occurrence' => ['completion_note'],
         'cost_entry' => ['description', 'supplier'],
