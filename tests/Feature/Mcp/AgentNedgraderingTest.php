@@ -111,6 +111,23 @@ it('låter läsverktygen lyckas och avvisar skrivverktygen vid past_due', functi
         ->and($item->refresh()->name)->toBe('Motorn');
 })->skip('Väntar på egen issue: felkodsbytet till auth.forbidden kräver ändring i app/Mcp/** (utanför rutan). Tills dess ger ResolveAgentAccess agent.forbidden.');
 
+it('låter läsverktygen lyckas och avvisar skrivverktygen vid past_due, med dagens felkod agent.forbidden', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    $container = mcpEgenContainer($agent);
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn']);
+
+    Subscription::query()->where('account_id', $agent->account_id)->update(['status' => 'past_due']);
+    app(StartDowngrade::class)->handle($agent->account, 'payment_failed');
+
+    mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $item->ulid]));
+    mcpResultat(mcpVerktyg($token, 'containers_list'));
+
+    // ResolveAgentAccess kapar nivån till `read`; felkoden blir agent.forbidden
+    // tills felkodsbytet till auth.forbidden görs i en egen issue.
+    expect(nedgSkriv($token, $item)['code'])->toBe('agent.forbidden')
+        ->and($item->refresh()->name)->toBe('Motorn');
+});
+
 it('låter samma token fungera igen efter en uppgradering, med samma rättigheter', function () {
     [$agent, $token] = mcpAgentMedToken();
     $container = mcpEgenContainer($agent);
