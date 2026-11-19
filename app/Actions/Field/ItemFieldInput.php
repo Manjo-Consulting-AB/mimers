@@ -25,6 +25,11 @@ use Illuminate\Support\Collection;
  * Uppslaget görs av App\Actions\Field\FieldRules::applicableFields(), samma
  * mängd som App\Actions\Field\SyncItemFieldValues skriver mot.
  *
+ * **Samma fält två gånger i listan är ett formfel** (`validation.distinct`):
+ * `SyncItemFieldValues` är en rad per item och fält, så två poster för samma
+ * fält hade gett två INSERT mot samma unika nyckel. Requesten stoppar det
+ * innan actionen nås.
+ *
  * **Ingen `Gate::authorize()`.** Behörigheten prövas av kontrollern.
  */
 final class ItemFieldInput
@@ -40,7 +45,7 @@ final class ItemFieldInput
         $rules = [
             'fields' => ['sometimes', 'array'],
             'fields.*' => ['array'],
-            'fields.*.field' => ['required', 'string'],
+            'fields.*.field' => ['required', 'string', 'distinct'],
             // Nyckeln måste finnas. Ett `value: null` eller en tom sträng är
             // giltigt och betyder "töm fältet" — ett UTELÄMNAT `value` är
             // däremot ett formfel, för då vet servern inte vad klienten vill.
@@ -61,6 +66,7 @@ final class ItemFieldInput
             $rules["fields.{$index}.field"] = [
                 'required',
                 'string',
+                'distinct',
                 new FieldAppliesToItem($applicable),
             ];
 
@@ -103,18 +109,62 @@ final class ItemFieldInput
     }
 
     /**
+     * Ett JSON-tal kommer in som `int` eller `float`, och ett flyttal kan
+     * bära exponent när det kastas till sträng: `1e3` blir `1000.0`, men
+     * `1.0E+15` blir `"1.0E+15"`. Omfångsregeln prövar strängen, så ett
+     * flyttal i ett TALFÄLT görs om till en decimalsträng utan exponent
+     * FÖRE valideringen — annars hade ett giltigt `1000.0` fallit på
+     * regexen bara för att det skrevs med exponent. Ett för stort tal
+     * faller fortfarande på sina heltalssiffror i stället för i databasen.
+     *
+     * Bara talfält normaliseras, så ett flyttal i ett textfält ger
+     * alltjämt `validation.string`.
+     *
+     * @param  array<mixed>  $input
+     * @return array<mixed>
+     */
+    public static function normalizeNumbers(Container $container, ?Item $item, array $input): array
+    {
+        $numbers = self::fields($container, $item, $input)
+            ->filter(fn (ItemField $field): bool => $field->type === 'number');
+
+        if ($numbers->isEmpty()) {
+            return $input;
+        }
+
+        foreach ($input as $index => $entry) {
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $ulid = $entry['field'] ?? null;
+            $value = $entry['value'] ?? null;
+
+            if (is_string($ulid) && is_float($value) && $numbers->has($ulid)) {
+                $input[$index]['value'] = sprintf('%.6F', $value);
+            }
+        }
+
+        return $input;
+    }
+
+    /**
      * Värdets regler för ett fält, per typ ([[ADR-0089 Egna fält på items]]
      * § Riktning 1 och 9).
      *
-     * Talet prövas både mot `DECIMAL(20,6)`:s skala (`decimal:0,6`) och mot
-     * dess omfång: 14 heltalssiffror och 6 decimaler, aldrig ett flyttal.
+     * Talet prövas som en decimalsträng med högst 14 heltalssiffror och 6
+     * decimaler — precis det `DECIMAL(20,6)` rymmer. En regex i stället för
+     * `between`/`decimal` därför att de jämför som flyttal: gränsen
+     * avrundades till 1e14 och släppte igenom ett 15-siffrigt tal som
+     * databasen sedan avvisade med 500. Ett flyttal normaliseras av
+     * normalizeNumbers() innan regeln ser det.
      *
      * @return list<mixed>
      */
     public static function valueRules(ItemField $field): array
     {
         return match ($field->type) {
-            'number' => ['present', 'nullable', 'numeric', 'decimal:0,6', 'between:-99999999999999.999999,99999999999999.999999'],
+            'number' => ['present', 'nullable', 'numeric', 'regex:/^[+-]?\d{1,14}(\.\d{1,6})?$/'],
             'date' => ['present', 'nullable', 'date_format:Y-m-d'],
             // `text` är standardtypen; de två andra har egna regler ovan.
             default => ['present', 'nullable', 'string', 'max:'.config('fields.text_max_length')],

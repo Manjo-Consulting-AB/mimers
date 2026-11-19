@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Container\CreateContainer;
+use App\Actions\Field\SyncItemFieldValues;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -361,4 +362,93 @@ it('loggar fältets ULID men aldrig värdet i item.updated', function () {
 
     expect($meta['fields'])->toBe([$fält->ulid])
         ->and($rad->meta)->not->toContain('Hemlig färg');
+});
+
+it('avvisar samma fält två gånger i fields med validation.distinct', function () {
+    [, , $headers, $container] = faltVardenKontext();
+    $item = faltVardenItem($container);
+    $fält = faltVardenFalt($container, 'Color', 'text');
+
+    $response = patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}", [
+        'fields' => [
+            ['field' => $fält->ulid, 'value' => 'Blå'],
+            ['field' => $fält->ulid, 'value' => 'Röd'],
+        ],
+    ], $headers);
+
+    $response->assertStatus(422);
+
+    $fel = $response->json('error.data.fields');
+
+    // Båda posterna pekas ut: det är listan som är fel, inte en av dem.
+    expect(collect($fel['fields.0.field'])->pluck('code')->all())->toContain('validation.distinct')
+        ->and(collect($fel['fields.1.field'])->pluck('code')->all())->toContain('validation.distinct')
+        ->and(ItemFieldValue::query()->count())->toBe(0);
+});
+
+it('låter sista posten vinna när actionen får samma fält två gånger', function () {
+    // Requesten stoppar dubbletten, men MCP och import når actionen direkt.
+    // Utan spårning av skrivna rader blev den andra posten en INSERT mot
+    // samma unika nyckel — ett databasundantag, alltså 500.
+    [, , , $container] = faltVardenKontext();
+    $item = faltVardenItem($container);
+    $fält = faltVardenFalt($container, 'Color', 'text');
+
+    $ändrade = DB::transaction(fn (): array => app(SyncItemFieldValues::class)->handle($item, [
+        ['field' => $fält->ulid, 'value' => 'Blå'],
+        ['field' => $fält->ulid, 'value' => 'Röd'],
+    ]));
+
+    $rader = ItemFieldValue::query()->where('item_id', $item->id)->get();
+
+    expect($rader)->toHaveCount(1)
+        ->and($rader->first()->value_text)->toBe('Röd')
+        ->and($ändrade)->toBe([$fält->ulid]);
+});
+
+it('avvisar ett tal som inte ryms i DECIMAL(20,6) i stället för att nå databasen', function () {
+    [$account, , $headers, $container] = faltVardenKontext();
+    $tal = faltVardenFalt($container, 'Weight', 'number');
+
+    // 15 heltalssiffror; kolumnen rymmer 14 + 6. `between` jämförde som
+    // flyttal, avrundade gränsen till 1e14 och lät talet nå databasen, som
+    // svarade "out of range" — en 500 i stället för ett fältfel.
+    $response = postJson("/api/containers/{$container->ulid}/items", [
+        'name' => 'Motorn',
+        'account' => $account->ulid,
+        'fields' => [['field' => $tal->ulid, 'value' => '100000000000000']],
+    ], $headers);
+
+    $response->assertStatus(422);
+
+    $fel = $response->json('error.data.fields');
+
+    expect(collect($fel['fields.0.value'])->pluck('code')->all())->toContain('validation.regex')
+        ->and(ItemFieldValue::query()->count())->toBe(0);
+});
+
+it('normaliserar ett flyttal med exponent innan omfånget prövas', function () {
+    [$account, , $headers, $container] = faltVardenKontext();
+    $tal = faltVardenFalt($container, 'Weight', 'number');
+
+    // 1e5 kommer in som flyttal. Utan normalisering hade strängen "1.0E+5"
+    // fallit på regexen trots att 100000 ryms i kolumnen.
+    postJson("/api/containers/{$container->ulid}/items", [
+        'name' => 'Motorn',
+        'account' => $account->ulid,
+        'fields' => [['field' => $tal->ulid, 'value' => 1e5]],
+    ], $headers)->assertCreated();
+
+    $item = Item::query()->where('name', 'Motorn')->firstOrFail();
+    $rad = ItemFieldValue::query()->where('item_id', $item->id)->firstOrFail();
+
+    expect($rad->value_number)->toBe('100000.000000');
+
+    // 1.0E+15 är 16 heltalssiffror och ska avvisas på samma sätt.
+    $response = patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}", [
+        'fields' => [['field' => $tal->ulid, 'value' => 1.0E+15]],
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.data.fields')['fields.0.value'][0]['code'])->toBe('validation.regex');
 });

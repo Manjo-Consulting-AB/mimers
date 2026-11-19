@@ -71,7 +71,8 @@ use Illuminate\Validation\Rule;
  * is a list of `{ "field": <field-ULID>, "value": … }`. The value is
  * validated against the FIELD's type, so the rules are built per index by
  * App\Actions\Field\ItemFieldInput — a text field gets `max`, a number
- * `numeric`/`decimal:0,6`, a date `date_format:Y-m-d`. A field from
+ * `numeric` plus the range `DECIMAL(20,6)` holds, a date
+ * `date_format:Y-m-d`. A field from
  * another container, another item's own field or the trash gives
  * `field.not_applicable` on `fields.N.field`. A NEW item has no own fields
  * yet, so only the container's fields apply here. `null` and `''` both
@@ -93,6 +94,10 @@ class StoreItemRequest extends FormRequest
      * ([[ADR-0089 Egna fält på items]] § Riktning 9). Normaliseringen sker
      * före valideringen, så ett tomt värde i ett talfält eller datumfält
      * passerar `nullable` i stället för att falla på typregeln.
+     *
+     * Ett flyttal i ett talfält görs samtidigt om till en decimalsträng utan
+     * exponent, så att omfångsregeln prövar samma siffror som databasen tar
+     * emot (se App\Actions\Field\ItemFieldInput::normalizeNumbers()).
      */
     protected function prepareForValidation(): void
     {
@@ -108,7 +113,9 @@ class StoreItemRequest extends FormRequest
             }
         }
 
-        $this->merge(['fields' => $fields]);
+        $this->merge([
+            'fields' => ItemFieldInput::normalizeNumbers($this->route('container'), null, $fields),
+        ]);
     }
 
     /**

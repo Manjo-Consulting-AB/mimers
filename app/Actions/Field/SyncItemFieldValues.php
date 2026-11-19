@@ -33,6 +33,13 @@ use Illuminate\Support\Collection;
  * (App\Actions\Field\ItemFieldInput), men actionen är också en ingång för
  * MCP och importer och får inte lita på att varje anropare validerade.
  *
+ * **Samma fält två gånger i listan är inget fel här.** Det finns en rad per
+ * item och fält, så den sista posten vinner; `$rows` uppdateras efter varje
+ * skrivning i stället för att läsas en gång före loopen. Utan det hade två
+ * poster för samma fält gett två INSERT mot samma unika nyckel och ett
+ * databasundantag. Requesten avvisar dubbletten tidigare
+ * (`validation.distinct`); hit når den bara från MCP och import.
+ *
  * Metoden förutsätter att itemet redan är sparat (`id` satt) och att
  * anroparen står i en transaktion, som MetadataLedger gör.
  */
@@ -73,6 +80,9 @@ class SyncItemFieldValues
                 if ($row !== null) {
                     MetadataLedger::release($row);
                     $row->delete();
+                    // Raden finns inte längre, så en senare post för samma
+                    // fält måste skapa en ny i stället för att uppdatera.
+                    $rows->forget($field->id);
                     $changed[] = $field->ulid;
                 }
 
@@ -87,6 +97,11 @@ class SyncItemFieldValues
             $row->fill($this->attributes($field->type, $value));
 
             MetadataLedger::save($row);
+
+            // Nästa post för samma fält ska hitta DEN HÄR raden, inte den
+            // läsning som gjordes före loopen — annars blir det en andra
+            // INSERT mot unique(item_id, item_field_id).
+            $rows->put($field->id, $row);
 
             $changed[] = $field->ulid;
         }

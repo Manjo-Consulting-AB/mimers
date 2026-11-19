@@ -98,6 +98,10 @@ class UpdateItemRequest extends FormRequest
      * ([[ADR-0089 Egna fält på items]] § Riktning 9). Normaliseringen sker
      * före valideringen, så ett tomt värde i ett talfält eller datumfält
      * passerar `nullable` i stället för att falla på typregeln.
+     *
+     * Ett flyttal i ett talfält görs samtidigt om till en decimalsträng utan
+     * exponent, så att omfångsregeln prövar samma siffror som databasen tar
+     * emot (se App\Actions\Field\ItemFieldInput::normalizeNumbers()).
      */
     protected function prepareForValidation(): void
     {
@@ -113,7 +117,9 @@ class UpdateItemRequest extends FormRequest
             }
         }
 
-        $this->merge(['fields' => $fields]);
+        $this->merge([
+            'fields' => ItemFieldInput::normalizeNumbers($this->route('container'), $this->route('item'), $fields),
+        ]);
     }
 
     /**
