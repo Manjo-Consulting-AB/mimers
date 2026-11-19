@@ -140,7 +140,7 @@ it('stänger andras agenter ute från en ägare på Gratis och återställer dem
 
     // Agentens egen plan är Pro, men ägarens är det inte: åtkomsten är borta.
     $svar = mcpVerktyg($token, 'items_get', ['item' => $item->ulid]);
-    expect(mcpFel($svar)['code'])->not->toBe('');
+    expect(mcpFel($svar)['code'])->toBe('resource.not_found');
     expect($svar->json('result.isError'))->toBeTrue();
 
     // `agent_level` och agentens rader står kvar.
