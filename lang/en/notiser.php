@@ -63,6 +63,9 @@ return [
         'line' => 'The account ":account" is being downgraded. On :moves_on, the files and entries it added to ":container" (:bytes) move to your storage. You can remove anything you don\'t want before then.',
         'line_no_date' => 'The account ":account" is being downgraded. The files and entries it added to ":container" (:bytes) will move to your storage. You can remove anything you don\'t want before then.',
         'action' => 'Go to Mimers',
+        // Issue 409: bara när det nedgraderade kontot har en agent. Vyn lägger
+        // meningen efter den vanliga raden.
+        'mcp_line' => 'Agents connected to ":account" lose their MCP access when its plan ends.',
     ],
     /*
      * Agenten som anslöts, se [[ADR-0087 MCP-server för agenter]] Riktning 14
@@ -98,6 +101,18 @@ return [
         'line' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored.',
         'line_containers' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored. The deleted containers held :container_items items in total.',
         'action' => 'Open the trash',
+    ],
+    /*
+     * En ägare gick till Gratis och användarens agenter tappade åtkomsten till
+     * ägarens containrar (issue 409 · [[ADR-0087 MCP-server för agenter]]
+     * Riktning 11 och 14). En notis per ägare, inte per container. Inget går
+     * förlorat: åtkomsten är tillbaka när ägaren har Pro igen.
+     */
+    'agent_access_lost' => [
+        'subject' => 'Your agents lost access to :owner\'s containers',
+        'greeting' => 'Hello!',
+        'line' => 'Your agents can no longer reach the containers owned by :owner, because their plan no longer includes MCP. Nothing was deleted, and the access returns if the plan does.',
+        'action' => 'Manage agents',
     ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',

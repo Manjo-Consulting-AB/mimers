@@ -95,6 +95,15 @@ class Notification extends Model
     public const TYPE_AGENT_DELETED = 'agent.deleted';
 
     /**
+     * Ägaren av en container gick till Gratis och användarens agenter tappade
+     * åtkomsten dit, se [[ADR-0087 MCP-server för agenter]] Riktning 11 och 14
+     * och issue 409. En notis per användare och ägare, inte per container.
+     * Går i appen och som mejl, och ingen av kanalerna kan stängas av — se
+     * App\Support\Notification\NotificationPreferences.
+     */
+    public const TYPE_AGENT_ACCESS_LOST = 'agent.access_lost';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

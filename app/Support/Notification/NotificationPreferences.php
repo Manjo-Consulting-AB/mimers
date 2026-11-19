@@ -106,6 +106,9 @@ final class NotificationPreferences
      */
     private const MANDATORY_EMAIL_TYPES = [
         Notification::TYPE_AGENT_CONNECTED,
+        // `agent.access_lost` (issue 409): agenten har tappat åtkomsten och
+        // användaren ska få veta det, inte välja bort det.
+        Notification::TYPE_AGENT_ACCESS_LOST,
     ];
 
     /**
@@ -125,6 +128,7 @@ final class NotificationPreferences
      */
     private const MANDATORY_IN_APP_TYPES = [
         Notification::TYPE_AGENT_DELETED,
+        Notification::TYPE_AGENT_ACCESS_LOST,
     ];
 
     /**

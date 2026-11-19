@@ -9,7 +9,7 @@
 {{-- Knappen går till papperskorgen när det som raderats kan återställas där
      (issue 406 § 4); de andra typerna behåller appens startsida. --}}
 @php($actionUrl = match ($type) {
-    'agent.connected' => url('/settings/agents'),
+    'agent.connected', 'agent.access_lost' => url('/settings/agents'),
     'agent.deleted' => url('/trash'),
     default => config('app.url'),
 })
@@ -19,6 +19,12 @@
 @php($replace = $type === 'container.content_moving' && isset($payload['bytes']) ? [...$payload, 'bytes' => \Illuminate\Support\Number::fileSize((int) $payload['bytes'], 1)] : $payload)
 
 {{ trans($lineKey, $replace) }}
+
+{{-- Issue 409 · varningen vid nedgradering nämner MCP, men bara när kontot
+     har en agent (StartDowngrade sätter `mcp` i payloaden). --}}
+@if ($type === 'container.content_moving' && ! empty($payload['mcp']))
+{{ trans('notiser.container_content_moving.mcp_line', ['account' => $payload['account'] ?? '']) }}
+@endif
 
 <x-mail::button :url="$actionUrl">
 {{ trans("notiser.{$key}.action") }}
