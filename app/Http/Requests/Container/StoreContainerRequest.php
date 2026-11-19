@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Container;
 
+use App\Http\Requests\Template\TemplateContentRules;
 use App\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -44,6 +45,14 @@ use Illuminate\Validation\Rule;
  * klientskickat `template_source_id` i requestkroppen är alltså ett fält
  * `validated()` aldrig innehåller, och når därmed aldrig
  * App\Models\Container.
+ *
+ * `template` och `template_content` kom med issue 421 (§ 5) och är en ANNAN
+ * mallsort än `template_source_id`: de fyller containern med en kopia av
+ * kategorier och fält och lämnar ingen pekare efter sig
+ * ([[ADR-0089 Egna fält på items]] § Riktning 6). Båda är frivilliga; skickas
+ * ingen av dem skapas containern som förut. Reglerna för innehållet delas med
+ * App\Http\Requests\Template\ApplyTemplateRequest genom
+ * App\Http\Requests\Template\TemplateContentRules.
  *
  * `icon` och `icon_color` (issue 314 · [[ADR-0064 Containerns ikon]] § 1
  * och 2) valideras ordagrant som itemets (StoreItemRequest): `icon` är ett
@@ -98,6 +107,27 @@ class StoreContainerRequest extends FormRequest
             'icon' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
             'icon_color' => ['nullable', Rule::in(Item::ICON_COLORS)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
+
+            // Issue 421 § 5 · En valfri mall eller ett inbyggt förslag att
+            // fylla den nya containern med ([[ADR-0089 Egna fält på items]]
+            // § Riktning 6). BÅDA är frivilliga — ett anrop utan dem skapar
+            // en tom container precis som förut — men de får inte skickas
+            // tillsammans: rutten har inget rimligt svar på vilken som
+            // skulle gälla. `template` prövas mot användarens konton, så en
+            // mall hon inte når är ett valideringsfel och aldrig en läsning
+            // av någon annans innehåll.
+            'template' => [
+                'nullable',
+                'string',
+                'prohibits:template_content',
+                Rule::exists('container_template', 'ulid')->where(
+                    fn ($query) => $query
+                        ->whereNull('deleted_at')
+                        ->whereIn('account_id', $this->user()?->accounts()->pluck('account.id')->all() ?? [])
+                ),
+            ],
+            'template_content' => ['nullable', 'array'],
+            ...TemplateContentRules::rules('template_content.'),
         ];
     }
 }

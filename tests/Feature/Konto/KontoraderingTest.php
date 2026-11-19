@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\ContainerTemplate;
 use App\Models\CostEntry;
 use App\Models\Invitation;
 use App\Models\Item;
@@ -738,6 +739,27 @@ it('usage_counter, subscription och medlemskap försvinner med kontot', function
     expect(DB::table('usage_counter')->where('account_id', $konto->id)->exists())->toBeFalse();
     expect(DB::table('subscription')->where('account_id', $konto->id)->exists())->toBeFalse();
     expect(DB::table('account_user')->where('account_id', $konto->id)->exists())->toBeFalse();
+});
+
+/*
+ * Issue 421 · Mallarna hör till kontot och följer det i graven.
+ *
+ * `container_template.account_id` och `billed_account_id` är ON DELETE
+ * RESTRICT, och en mjukraderad mall står kvar i tabellen — utan städningen
+ * fastnar kontolivscykelns nattliga jobb på integritetsnyckeln.
+ */
+
+it('ett konto med mallar, levande och mjukraderade, raderas', function () {
+    [$konto] = kontoraderingVilande();
+    ContainerTemplate::factory()->forAccount($konto)->create();
+    ContainerTemplate::factory()->forAccount($konto)->create()->delete();
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    kontoraderingKör();
+
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+    expect(DB::table('container_template')->where('account_id', $konto->id)->exists())->toBeFalse();
+    expect(DB::table('container_template')->where('billed_account_id', $konto->id)->exists())->toBeFalse();
 });
 
 /*

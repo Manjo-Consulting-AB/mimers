@@ -115,6 +115,23 @@ class Account extends Model
     }
 
     /**
+     * Kontots mallar — containers kategorier och fält som sparats för att
+     * användas igen, se [[ADR-0089 Egna fält på items]] § Riktning 6 och
+     * [[Items och organisation]] § container_template (issue 421).
+     *
+     * Relationen bär ingen åtkomst: mallar nås bara av kontots medlemmar,
+     * och frågan ställs genom App\Models\ContainerTemplate::scopeMemberOf().
+     * En mjukraderad mall är inte med (SoftDeletes globala scope) och
+     * upptar därför ingen av de 50 platserna.
+     *
+     * @return HasMany<ContainerTemplate, $this>
+     */
+    public function templates(): HasMany
+    {
+        return $this->hasMany(ContainerTemplate::class);
+    }
+
+    /**
      * Den plan som gäller för kontot just nu — aldrig null.
      *
      * Reglerna, i ordning (issue 25 § Beslut 6): inga subscription-rad →
