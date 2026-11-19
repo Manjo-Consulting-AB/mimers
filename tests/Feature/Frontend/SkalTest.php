@@ -334,9 +334,9 @@ it('svarar på varje sektion i settingsSections efter två klick', function () {
 
     // Användaren är `owner`: webhookarnas sida kräver ett förval
     // (App\Policies\AccountPolicy::manageWebhooks()).
-    $konto = Account::factory()->create();
-    $anvandare = User::factory()->create();
-    $konto->users()->attach($anvandare, ['role' => 'owner']);
+    // Agentsidan (issue 407) kräver Pro och `mcp.enabled`; annars är den 404.
+    config(['mcp.enabled' => true]);
+    [, $anvandare] = mcpKonto('pro');
 
     // Klick ett: /settings, som landar på profilen.
     actingAs($anvandare)->get('/settings')->assertRedirect('/settings/profile');

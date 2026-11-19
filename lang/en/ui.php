@@ -1277,6 +1277,7 @@ return [
             // are about what leaves the system, but one is about the person and
             // the other about the account.
             'webhooks' => 'Webhooks',
+            'agents' => 'Agents',
             'security' => 'Security',
         ],
 
@@ -1831,6 +1832,53 @@ return [
     // `url_once` and for the same reason. `secret_description` explains what
     // the secret is FOR — HMAC-SHA256 over the body — because a secret without
     // an explanation is a string you paste somewhere and forget.
+    // Issue 407: /settings/agents, ADR-0087 decision 12. The address is the
+    // one a client is given; the sentences say what MCP is and that a new
+    // agent starts with no access.
+    'agents' => [
+        'title' => 'Agents',
+        'heading' => 'Agents',
+        'intro' => 'AI agents you have connected over MCP. Each agent starts with no access; you decide what it may do and where.',
+        'empty' => 'MCP lets an AI assistant such as Claude read and change your items on your behalf. No agent is connected yet. Add this address in your client to connect one:',
+        'address_label' => 'Address',
+        'connected_at' => 'Connected',
+        'last_used' => 'Last used',
+        'never_used' => 'Never',
+        'containers_count' => 'Containers',
+        'paused' => 'Paused',
+        'back' => 'All agents',
+        'name_label' => 'Name',
+        'save' => 'Save',
+        'rights_heading' => 'Permissions',
+        'rights_intro' => 'A choice is saved at once. Lowering a level also lowers it in the containers where the agent is switched on.',
+        'level_none' => 'No access',
+        'all_label' => 'Everything in the group',
+        'create_containers' => 'May create containers',
+        'group' => [
+            'items' => 'Items, relations, categories and tags',
+            'schedules' => 'Recurring maintenance and tasks',
+            'costs' => 'Costs',
+            'loans' => 'Loans',
+            'files' => 'Attachments',
+            'containers' => 'Container details',
+        ],
+        'level' => [
+            'read' => 'Read',
+            'create' => 'Read and create',
+            'write' => 'Read, create and edit',
+            'delete' => 'Read, create, edit and delete',
+        ],
+        'pause_label' => 'Pause this agent',
+        'pause_hint' => 'While paused, every call from the agent is refused. Permissions and connection stay.',
+        'containers_heading' => 'Containers where the agent is switched on',
+        'containers_empty' => 'The agent is not switched on in any container. Do that in a container\'s settings.',
+        'events_heading' => 'Latest events',
+        'events_empty' => 'The agent has not done anything yet.',
+        'disconnect' => 'Disconnect',
+        'disconnect_heading' => 'Disconnect this agent?',
+        'disconnect_body' => 'Its permissions are deleted and its keys stop working. Connecting again creates a new agent that starts with no access.',
+    ],
+
     'webhook' => [
         'title' => 'Webhooks',
         'heading' => 'Webhooks',

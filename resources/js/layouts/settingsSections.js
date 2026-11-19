@@ -24,6 +24,11 @@
  * som förvaltar dem måste vara `owner` eller `admin`
  * (App\Policies\AccountPolicy::manageWebhooks()).
  *
+ * `agents` kom med issue 407 och ligger efter `webhooks`: båda är kontots
+ * utgångar till andra system. Raden bär `requires` — namnet på en delad prop
+ * som måste vara sann, `mcpAvailable` (Pro eller Pro+ och `mcp.enabled`).
+ * SettingsLayout döljer raden annars; sidan svarar 404 av samma skäl.
+ *
  * `transfers` kom med M28 · issue 248 och ligger sist: ägarbytena flyttade hit
  * från skalets sidopanel — menyn användaren når via avataren — och rutten
  * `/transfers` är oförändrad. Raden bär `label` med skalets gamla nyckel
@@ -43,6 +48,7 @@ export const settingsSections = [
     { key: 'storage', href: '/settings/storage' },
     { key: 'notifications', href: '/settings/notifications' },
     { key: 'webhooks', href: '/settings/webhooks' },
+    { key: 'agents', href: '/settings/agents', requires: 'mcpAvailable' },
     { key: 'security', href: '/settings/security' },
     { key: 'transfers', href: '/transfers', label: 'nav.transfers' },
 ];
