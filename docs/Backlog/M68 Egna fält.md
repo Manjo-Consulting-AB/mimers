@@ -8,13 +8,13 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 **Ordningen mot M67.** [[M67 Versionshistorik]] är inte byggd. Issue 412 beror på 420 här, så att `item_version` byggs med fältvärdena och inte med de sex kolumnerna. 411 kan gå före eller samtidigt.
 
-**Releasen:** två. Den första när 417–424 är mergade. 425 tar bort kolumnerna och går ut i releasen efter, enligt expand/contract i AGENTS.md § Databaskonventioner. Issuerna är inte skapade i GitHub än.
+**Releasen:** två. Den första när 417–424 är mergade. 425 tar bort kolumnerna och går ut i releasen efter, enligt expand/contract i AGENTS.md § Databaskonventioner. Issuerna är skapade i GitHub (#1433–#1441) och sammanfattade här.
 
 ---
 
 ### 417. Tabellerna, gränserna och fältdefinitionerna
 
-**Läget:** ett item har bara de fasta fälten, och det finns ingen plats att definiera egna.
+GitHub #1433. **Läget:** ett item har bara de fasta fälten, och det finns ingen plats att definiera egna.
 
 **Lösningen:** tabellerna `item_field` och `item_field_value` och config-nycklarna `fields.max_per_container`, `fields.max_per_item` och `fields.text_max_length`. Actions för att skapa, ändra, sortera och ta bort en definition, både på containern och på ett item. API:et får rutterna under containern och under itemet, med ULID:er. Containerns fält kräver skrivrätt i containern, och itemets egna kräver `ItemPolicy::update`. En borttagen definition går till papperskorgen som en kategori, och en återställning prövas mot gränsen. Båda tabellerna räknas i `MetadataSize` och `CountedRows`. Inga värden skrivs ännu.
 
@@ -30,7 +30,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 418. Värdena på itemet
 
-**Läget:** fälten kan definieras (417), men ett item kan inte bära ett värde.
+GitHub #1434. **Läget:** fälten kan definieras (417), men ett item kan inte bära ett värde.
 
 **Lösningen:** `StoreItemRequest` och `UpdateItemRequest`, på webben och i API:et, tar `fields` som en lista med fältets ULID och värdet. Värdet valideras mot fältets typ: text upp till `fields.text_max_length`, tal som `DECIMAL(20,6)`, datum som `Y-m-d`. `CreateItem` och `UpdateItem` skriver `item_field_value` i samma transaktion som itemet. Ett tomt värde tar bort raden. `ItemResource` returnerar itemets fält i ordning, containerns först, med rubrik, typ och värde. Ett typbyte på ett fält med värden avvisas nu med `field.type_locked`. Fält i papperskorgen syns inte och tar inte emot värden.
 
@@ -46,7 +46,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 419. Fälten i gränssnittet
 
-**Läget:** fälten och värdena finns i API:et (417, 418) men syns inte i appen.
+GitHub #1435. **Läget:** fälten och värdena finns i API:et (417, 418) men syns inte i appen.
 
 **Lösningen:** containerns inställningar får avsnittet *Fields*: lista, lägg till med rubrik och typ, döp om, sortera och ta bort. Typvalet är låst med en förklaring när fältet har värden. `ItemForm.vue` ritar containerns fält efter typ, med tomma fält ihopfällda som *More details* gör i dag, och har knappen *Add field* för itemets egna fält. Itemets vy visar bara fält som har ett värde. Felkoderna från 417 och 418 översätts i `lang/`.
 
@@ -62,7 +62,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 420. De sex kolumnerna blir fält
 
-**Läget:** `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until` och `position_note` är kolumner på `item` vid sidan av de egna fälten.
+GitHub #1436. **Läget:** `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until` och `position_note` är kolumner på `item` vid sidan av de egna fälten.
 
 **Lösningen:** en migrering ger varje befintlig container de sex som containerfält med formulärets engelska rubriker, datum för `purchased_at` och `warranty_until`, och kopierar värdena till `item_field_value`. Den räknar om `metadata_bytes`. Koden slutar läsa och skriva kolumnerna: `Item`, `UpdateItem`, `StoreItemRequest`, `UpdateItemRequest`, `ItemResource`, `ContainerExportBuilder` och exportvyn. Fritextsökningen söker i `item_field_value.value_text` vid sidan av namn och beskrivning. Kolumnerna står kvar orörda tills 425. Nya containrar får inga fält.
 
@@ -78,7 +78,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 421. Mallarna: tabellen och API:et
 
-**Läget:** kategoriförslagen finns bara i frontenden, och det går inte att spara en containers uppsättning för att använda den igen.
+GitHub #1437. **Läget:** kategoriförslagen finns bara i frontenden, och det går inte att spara en containers uppsättning för att använda den igen.
 
 **Lösningen:** tabellen `container_template` med kontot som ägare, ett namn och innehållet i JSON: kategoriträdet och containerns fält. API:et får lista, spara från en container, döp om, ta bort, skapa en container från en mall och tillämpa en mall på en befintlig container. Tillämpningen hoppar över fält vars rubrik redan finns och avvisar hela tillämpningen med `field.limit_reached` om resultatet går över gränsen. Högst `templates.max_per_account` mallar per konto. Mallen räknas i `metadata_bytes`. Ingenting i containern pekar tillbaka på mallen.
 
@@ -94,7 +94,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 422. Mallarna i gränssnittet och de inbyggda förslagen
 
-**Läget:** mallarna finns i API:et (421) men inte i appen, och kategoriförslagen i `categoryPresets.js` bär inga fält.
+GitHub #1438. **Läget:** mallarna finns i API:et (421) men inte i appen, och kategoriförslagen i `categoryPresets.js` bär inga fält.
 
 **Lösningen:** att skapa en container får valet att utgå från en egen mall eller ett inbyggt förslag. Containerns inställningar får *Save as template* och *Apply template*. Kontot får en lista över sina mallar där de kan döpas om och tas bort. `categoryPresets.js` blir inbyggda mallar som kan bära fält, till exempel *Manufacturer*, *Model*, *Serial number* och *Warranty until* för elektronik, och tillämpas genom samma API som en egen mall utan att servern sparar dem.
 
@@ -110,7 +110,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 423. Fälten och mallarna för agenter
 
-**Läget:** MCP-verktygen känner bara de sex kolumnerna och vet ingenting om egna fält eller mallar.
+GitHub #1439. **Läget:** MCP-verktygen känner bara de sex kolumnerna och vet ingenting om egna fält eller mallar.
 
 **Lösningen:** `items_get` returnerar itemets fält med rubrik, typ och värde. `items_create` och `items_update` tar `fields` och tappar parametrarna `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until` och `position_note`, utan avvecklingstid eftersom MCP inte är utrullat. `items_search` söker i textvärdena. Nya verktyg: `fields_list`, `fields_create`, `fields_update` och `fields_delete` i rättighetsgruppen `AgentGroup::Items`, som kategorierna, och `templates_list`. `containers_create` tar ett valfritt `template`, och en mall kan tillämpas på en befintlig container. Ingen agent får spara eller ta bort en mall. `fields_delete` räknas mot raderingstaket och syns i notisen. Kontraktsprovet uppdateras med avsikt.
 
@@ -126,7 +126,7 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 ### 424. Sortera och filtrera på fält
 
-**Läget:** värdena är typade (418) men listan och sökningen kan bara filtrera på tagg, kategori, uppgifter och utlåning.
+GitHub #1440. **Läget:** värdena är typade (418) men listan och sökningen kan bara filtrera på tagg, kategori, uppgifter och utlåning.
 
 **Lösningen:** sökningen i API:et och på webben tar ett filter per fält: lika med för text, intervall för tal och datum. Listan kan sorteras på ett containerfält. Ett filter på ett fält i en annan container ger `field.not_applicable`. Listans filterpanel får fälten. `items_search` i MCP får samma filter som en valfri parameter.
 
@@ -136,15 +136,15 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 **Klart när:** ett talintervall ger bara items inom intervallet och 9 sorteras före 10; ett datumintervall som "inom 30 dagar" fungerar på ett datumfält; items utan värde hamnar sist vid sortering; ett filter på ett fält i papperskorgen ignoreras inte tyst utan ger ett fel; frågan använder index enligt `EXPLAIN` mot MariaDB; hela sviten är grön.
 
-**Beror på:** 418, 419
+**Beror på:** 418, 419, 423
 
 ---
 
 ### 425. Kolumnerna tas bort
 
-**Läget:** efter 420 läser ingen kod `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until` eller `position_note`, men kolumnerna finns kvar på `item`.
+GitHub #1441. **Läget:** efter 420 läser ingen kod `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until` eller `position_note`, men kolumnerna finns kvar på `item`.
 
-**Lösningen:** en migrering tar bort de sex kolumnerna och bygger om FULLTEXT-indexet till `(name, description)`. Kräver att releasen med 420 redan är ute i produktion.
+**Lösningen:** en migrering tar bort de sex kolumnerna och bygger om FULLTEXT-indexet till `(name, description)`. Kräver att releasen med 420 och 423 redan är ute i produktion.
 
 **Läs:** [[ADR-0089 Egna fält på items]] § Riktning 5, AGENTS.md § Databaskonventioner
 
@@ -152,4 +152,4 @@ Nio issues. Inget arv till barnen och inga påminnelser för datumfält. Se ADR:
 
 **Klart när:** kolumnerna finns inte; ingen kod i `app/`, `resources/` eller `database/factories/` nämner dem; migreringen går igenom i migreringsvakten mot MariaDB 11.4; hela sviten är grön.
 
-**Beror på:** 420, och att releasen med 420 är utrullad
+**Beror på:** 420, 423, och att releasen med dem är utrullad

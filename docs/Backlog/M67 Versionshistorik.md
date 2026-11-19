@@ -38,7 +38,7 @@ GitHub #1405. **Läget:** en ändring av ett item skriver över det gamla läget
 
 **Klart när:** en ändring sparar en version med de gamla fälten och taggarna och containerns ägare som betalare; ingen ändring och taket 0 sparar inget; tre skrivningar med 5 minuter emellan ger en version, och 11 minuter efter den sista ger nästa en ny; en annan användare inom fönstret ger en ny version; taket 3 ger aldrig fler än 3; anteckningens autosparning ger en version per arbetspass; full kvot låter skrivningen gå igenom; under spärr tas inget bort; `metadata_bytes` stämmer med avstämningen; hela sviten är grön.
 
-**Beror på:** 411 och 420 i [[M68 Egna fält]], så att versionen bär fältvärdena i stället för de sex kolumnerna ([[ADR-0089 Egna fält på items]])
+**Beror på:** 411 och 420 i [[M68 Egna fält]] (GitHub #1436), så att versionen bär fältvärdena i stället för de sex kolumnerna ([[ADR-0089 Egna fält på items]])
 
 ---
 
