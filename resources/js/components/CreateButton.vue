@@ -66,6 +66,22 @@ const { request } = useInlineCreate();
 const isMenu = computed(() => props.create.kind === 'menu');
 
 const isInline = computed(() => props.create.kind === 'inline');
+
+/*
+ * Kortkommandot `N` (issue 1401 · [[ADR-0074 Registrering i vyn]] § 7).
+ *
+ * Bokstaven bor i `lang/` tillsammans med resten av knappens ord, så att
+ * knappens `title` och skalets lyssnare bär samma bokstav och inte kan glida
+ * isär. Formen på titeln — etiketten följd av kortkommandot — är också en
+ * mening ur katalogen; `aria-keyshortcuts` bär bokstaven själv, så att en
+ * skärmläsare kan annonsera den.
+ */
+const shortcut = computed(() => t('create.shortcut'));
+
+const title = computed(() => t('create.title', {
+    label: t('create.label'),
+    shortcut: shortcut.value,
+}));
 </script>
 
 <template>
@@ -79,6 +95,9 @@ const isInline = computed(() => props.create.kind === 'inline');
         type="button"
         class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
         :aria-label="t('create.label')"
+        :title="title"
+        :aria-keyshortcuts="shortcut"
+        data-create-button
         @click="emit('open', $event.currentTarget)"
     >
         <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
@@ -95,6 +114,9 @@ const isInline = computed(() => props.create.kind === 'inline');
         type="button"
         class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
         :aria-label="t('create.label')"
+        :title="title"
+        :aria-keyshortcuts="shortcut"
+        data-create-button
         @click="request()"
     >
         <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
@@ -105,6 +127,9 @@ const isInline = computed(() => props.create.kind === 'inline');
         :href="create.href"
         class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
         :aria-label="t('create.label')"
+        :title="title"
+        :aria-keyshortcuts="shortcut"
+        data-create-button
     >
         <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
     </Link>

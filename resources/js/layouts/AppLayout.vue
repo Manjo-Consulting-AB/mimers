@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, provide, ref, watch } from 'vue';
-import { Link, usePage } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
 import FlashMessage from '../components/FlashMessage.vue';
@@ -12,6 +12,7 @@ import ShellContainerList from '../components/ShellContainerList.vue';
 import ShellSections from '../components/ShellSections.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
+import { useInlineCreate } from '../composables/useInlineCreate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -189,11 +190,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * tomma ytor på båda sidor om innehållet, så nu fyller ytan allt bredvid
  * sidopanelen. ADR-0050 kräver "över 1 200 px", inte högst något.
  */
-defineProps({
+const props = defineProps({
     /*
      * Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null.
      * Formen är `{ kind, href }` för ett mål och `{ kind: 'menu', rows }` för
-     * en meny — se CreateButton.
+     * en meny — se CreateButton. Kortkommandot `N` frågar samma propp.
      */
     create: { type: Object, default: null },
 });
@@ -201,6 +202,9 @@ defineProps({
 const { t } = useTranslations();
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+/* Sidans formulär i vyn nås genom samma räknare som plusknappens klick. */
+const { request } = useInlineCreate();
 
 /*
  * Toppraden på mobilen ägs av skalet men fylls av containern (issue 275 ·
@@ -253,6 +257,83 @@ watch(() => page.url, () => {
     createMenuOpen.value = false;
 });
 
+/*
+ * Kortkommandot `N`, se [[ADR-0074 Registrering i vyn]] § 7 och tillägget
+ * 2026-11-18 (issue 1401).
+ *
+ * **Det första globala kortkommandot i appen**, och därför det enda stället
+ * som lyssnar på tangentbordet utanför ett fält. `N` gör samma sak som
+ * plusknappen på sidan man står på. Kortkommandot har ingen egen logik för
+ * vad som ska skapas: det frågar samma `create`-propp som knappen ritar ur,
+ * och en sida utan propp har ingen knapp — där finns ingenting att trycka på.
+ *
+ * **Lyssnaren sitter på `window` medan skalet är monterat.** Inertia behåller
+ * skalet mellan två sidor, så lyssnaren läggs en gång vid monteringen och tas
+ * bort vid avmonteringen; en lyssnare som blev kvar hade svarat på nästa sidas
+ * tangenttryck också.
+ *
+ * **`N` ignoreras där bokstaven betyder något annat.** I ett textfält, under
+ * IME-inmatning, med Ctrl, Meta eller Alt nedtryckt, med en dialog öppen —
+ * skalets egen meny, ett ark eller vilket `<dialog open>` som helst, för de är
+ * alla webbläsarens fokusfälla — och när någon redan har hanterat händelsen.
+ * Shift är tillåtet, så att Caps Lock inte stänger av kortkommandot. I alla
+ * andra fall stryks bokstaven med `preventDefault()`.
+ */
+const TEXT_FIELDS = ['INPUT', 'TEXTAREA', 'SELECT'];
+
+/* Står fokus i något användaren skriver i? */
+function isEditingField(element) {
+    return element instanceof HTMLElement
+        && (element.isContentEditable || TEXT_FIELDS.includes(element.tagName));
+}
+
+/*
+ * Plusknappen som hör till skärmen. Två ritas ur samma mål — sidhuvudets över
+ * `md:` och flikradens mitt under — och menyn ska fästas vid den som syns och
+ * lämna tillbaka fokus dit när den stängs.
+ */
+function visibleCreateButton() {
+    const buttons = Array.from(document.querySelectorAll('[data-create-button]'));
+
+    return buttons.find((button) => button.getClientRects().length > 0) ?? null;
+}
+
+function onKeydown(event) {
+    if (event.defaultPrevented || event.isComposing) {
+        return;
+    }
+
+    if (event.key !== 'n' && event.key !== 'N') {
+        return;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+        return;
+    }
+
+    if (isEditingField(event.target)) {
+        return;
+    }
+
+    if (menuOpen.value || document.querySelector('dialog[open]')) {
+        return;
+    }
+
+    event.preventDefault();
+
+    if (!props.create) {
+        return;
+    }
+
+    if (props.create.kind === 'inline') {
+        request();
+    } else if (props.create.kind === 'menu') {
+        openCreateMenu(visibleCreateButton());
+    } else if (props.create.href) {
+        router.visit(props.create.href);
+    }
+}
+
 const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),
 );
@@ -280,6 +361,12 @@ const isDesktopPanel = ref(false);
 
 onMounted(() => {
     isDesktopPanel.value = window.matchMedia('(min-width: 768px)').matches;
+
+    window.addEventListener('keydown', onKeydown);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeydown);
 });
 
 /*
