@@ -279,7 +279,8 @@ class StorageController extends Controller
      * **Kontot kommer ur kroppen och inte ur sökvägen**, till skillnad från
      * rensningen nedan: rutten har inget `{account}`-led, och sidan väljer
      * konto i en väljare. `UpdateStorageVersioningRequest` har redan bevisat
-     * att ULID:n finns.
+     * att ULID:n tillhör användaren, så en obehörig har fått 403 före både
+     * valideringen och det här uppslaget.
      *
      * **Grinden är medlemskap** (`AccountPolicy::manageStorage`), samma
      * minimikrav som rensningen: versionshistoriken är kontots inställning och

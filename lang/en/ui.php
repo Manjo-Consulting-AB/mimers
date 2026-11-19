@@ -2249,6 +2249,9 @@ return [
             'description' => 'How many earlier versions of each item are kept. They are counted toward the account\'s storage.',
             'label' => 'Versions per item',
             'saved' => 'The version limit has been saved.',
+            'confirm_heading' => 'Lower the version limit?',
+            'confirm_body' => 'Versions beyond the new limit are removed. This cannot be undone.',
+            'confirm_action' => 'Lower the limit',
         ],
 
         'list_heading' => 'Attachments',

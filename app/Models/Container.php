@@ -62,7 +62,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * rollen `container`. Namnet kontrolleras bara till formatet — listan över
  * Lucide-ikoner bor i klientens bygge.
  */
-#[Fillable(['name', 'kind', 'description', 'currency', 'icon', 'icon_color', 'versioning_max_versions'])]
+#[Fillable(['name', 'kind', 'description', 'currency', 'icon', 'icon_color'])]
 #[RouteKey('ulid')]
 class Container extends Model
 {

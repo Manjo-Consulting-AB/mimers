@@ -4,6 +4,7 @@ namespace App\Http\Requests\Container;
 
 use App\Models\Container;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Validator;
 
 /**
@@ -20,16 +21,22 @@ use Illuminate\Validation\Validator;
  * Meddelandet ligger i `lang/en/validation.php` under just den nyckeln, samma
  * väg som App\Rules\RedeemableVoucher och App\Rules\IsoCurrency använder.
  *
- * **Behörigheten prövas inte här.** Grinden är `ContainerPolicy::delete`,
- * samma som raderingen: bara ägarkontots egna medlemmar får röra taket, och
- * den ligger i App\Actions\Container\SetContainerVersioning som är ytan för
- * varje anropare.
+ * **Behörigheten prövas FÖRE valideringen.** Grinden är
+ * `ContainerPolicy::delete`, samma som raderingen: bara ägarkontots egna
+ * medlemmar får röra taket. Den står i authorize() och inte bara i
+ * App\Actions\Container\SetContainerVersioning, eftersom en inbjuden med
+ * `write` annars fick 422 ur `above_account` och kunde sondera kontots tak
+ * innan 403:an kom. Actionen prövar grinden på nytt — den är ytan för varje
+ * anropare.
  */
 class UpdateContainerVersioningRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $container = $this->route('container');
+
+        return $container instanceof Container
+            && Gate::allows('delete', $container);
     }
 
     /**

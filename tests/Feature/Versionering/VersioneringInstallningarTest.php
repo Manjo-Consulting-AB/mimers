@@ -211,3 +211,83 @@ it('tillåter containerns värde på kontots tak', function () {
 
     expect($container->fresh()->versioning_max_versions)->toBe(3);
 });
+
+it('svarar 403 före 422 när en inbjuden skickar ett för högt värde', function () {
+    withoutVite();
+
+    [$account] = versioneringMedlem('owner', 3);
+    $container = versioneringContainer($account);
+    $inbjuden = User::factory()->create();
+
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $inbjuden->id,
+        'level' => 'write',
+        'kind' => 'member',
+    ]);
+
+    // Värdet ligger över kontots tak. Grinden ska svara 403 innan
+    // valideringen hinner avslöja taket med 422 och `above_account`.
+    actingAs($inbjuden)
+        ->patch("/containers/{$container->ulid}/versioning", ['versioning_max_versions' => 4])
+        ->assertForbidden();
+
+    expect($container->fresh()->versioning_max_versions)->toBeNull();
+});
+
+it('avvisar negativa och icke-numeriska kontovärden', function () {
+    withoutVite();
+
+    [$account, $user] = versioneringMedlem();
+
+    foreach ([-1, 'abc'] as $värde) {
+        actingAs($user)->patch('/settings/storage/versioning', [
+            'account' => $account->ulid,
+            'versioning_max_versions' => $värde,
+        ])->assertSessionHasErrors('versioning_max_versions');
+    }
+
+    expect($account->fresh()->versioning_max_versions)->toBe(3);
+});
+
+it('tillåter kontovärdet 0 som av', function () {
+    withoutVite();
+
+    [$account, $user] = versioneringMedlem();
+
+    actingAs($user)->patch('/settings/storage/versioning', [
+        'account' => $account->ulid,
+        'versioning_max_versions' => 0,
+    ])->assertSessionHasNoErrors();
+
+    expect($account->fresh()->versioning_max_versions)->toBe(0);
+});
+
+it('avvisar negativa och icke-numeriska containervärden', function () {
+    withoutVite();
+
+    [$account, $user] = versioneringMedlem();
+    $container = versioneringContainer($account);
+
+    foreach ([-1, 'abc'] as $värde) {
+        actingAs($user)
+            ->patch("/containers/{$container->ulid}/versioning", ['versioning_max_versions' => $värde])
+            ->assertSessionHasErrors('versioning_max_versions');
+    }
+
+    expect($container->fresh()->versioning_max_versions)->toBeNull();
+});
+
+it('tillåter containervärdet 0 som av', function () {
+    withoutVite();
+
+    [$account, $user] = versioneringMedlem();
+    $container = versioneringContainer($account);
+
+    actingAs($user)
+        ->patch("/containers/{$container->ulid}/versioning", ['versioning_max_versions' => 0])
+        ->assertSessionHasNoErrors();
+
+    expect($container->fresh()->versioning_max_versions)->toBe(0);
+});

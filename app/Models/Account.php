@@ -34,7 +34,7 @@ use RuntimeException;
  * ändring gäller bara NYA poster: ingen befintlig `cost_entry`-rad märks
  * någonsin om, för det som står i en rad är vad som betalades.
  */
-#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'currency', 'status', 'read_only_reason', 'registration_ip', 'versioning_max_versions'])]
+#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'currency', 'status', 'read_only_reason', 'registration_ip'])]
 #[RouteKey('ulid')]
 class Account extends Model
 {

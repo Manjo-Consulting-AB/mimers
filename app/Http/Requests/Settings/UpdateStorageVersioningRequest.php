@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Settings;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 /**
  * PATCH /settings/storage/versioning — kontots tak för versionshistoriken,
@@ -14,16 +13,26 @@ use Illuminate\Validation\Rule;
  * Gränsen läses ur config och skrivs inte som en literalsiffra här, så
  * valideringen och vyn inte kan glida isär.
  *
- * **Medlemskapet prövas i kontrollern**, inte här: det är
- * `AccountPolicy::manageStorage()` som svarar på frågan, och requesten äger
- * bara formen på kroppen. En ULID som inte finns alls är däremot ett
- * valideringsfel (422), samma linje som de andra `exists`-reglerna i appen.
+ * **Medlemskapet prövas FÖRE valideringen**, i authorize(). Kontot slås upp
+ * bland användarens EGNA konton: en ULID som inte finns och en ULID som
+ * tillhör någon annan svarar då samma sak (403), så konto-ULID:er inte går
+ * att räkna upp. En `Rule::exists` här hade gett 422 för ett existerande
+ * konto och 403 först efteråt — det är den ordningen fyndet gällde.
+ * Kontrollern prövar `AccountPolicy::manageStorage` på nytt.
  */
 class UpdateStorageVersioningRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        $ulid = $this->input('account');
+
+        if (! is_string($ulid) || $this->user() === null) {
+            return false;
+        }
+
+        return $this->user()->accounts()
+            ->where('ulid', $ulid)
+            ->exists();
     }
 
     /**
@@ -32,7 +41,7 @@ class UpdateStorageVersioningRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'account' => ['required', 'string', Rule::exists('account', 'ulid')],
+            'account' => ['required', 'string'],
             'versioning_max_versions' => [
                 'required',
                 'integer',

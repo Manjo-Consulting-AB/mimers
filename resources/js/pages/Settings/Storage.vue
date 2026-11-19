@@ -4,6 +4,7 @@ import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { formatByteSize } from '../../components/attachmentPresentation.js';
 
@@ -98,14 +99,54 @@ function selectAccount(event) {
 const versioningPending = ref(false);
 const versioningStatus = ref(null);
 const versioningError = ref(null);
+const versioningConfirmOpen = ref(false);
+const versioningTrigger = ref(null);
+const versioningChoice = ref(null);
 
-function saveVersioning(event) {
+/*
+ * Att SÄNKA taket — även till 0, som är av — tar bort överskottet i alla
+ * containrar som följer kontot (issue 414), så det valet frågar först med
+ * `UiConfirmDialog`. En höjning frågar aldrig och sparas direkt.
+ */
+function onVersioningChange(event) {
+    const value = Number(event.target.value);
+
+    versioningStatus.value = null;
+    versioningError.value = null;
+    versioningTrigger.value = event.target;
+
+    if (value < props.versioning.max) {
+        versioningChoice.value = value;
+        versioningConfirmOpen.value = true;
+
+        return;
+    }
+
+    saveVersioning(value);
+}
+
+function confirmVersioning() {
+    versioningConfirmOpen.value = false;
+    saveVersioning(versioningChoice.value);
+}
+
+/* Avbrottet sätter tillbaka väljaren till det sparade värdet: `:value` bindes
+   mot proppen, och proppen ändrades aldrig. */
+function cancelVersioning() {
+    versioningConfirmOpen.value = false;
+
+    if (versioningTrigger.value) {
+        versioningTrigger.value.value = String(props.versioning.max);
+    }
+}
+
+function saveVersioning(value) {
     versioningStatus.value = null;
     versioningError.value = null;
 
     router.patch('/settings/storage/versioning', {
         account: props.account.ulid,
-        versioning_max_versions: Number(event.target.value),
+        versioning_max_versions: value,
     }, {
         preserveScroll: true,
         preserveState: true,
@@ -185,6 +226,8 @@ function saveVersioning(event) {
         items]] Riktning 1). Ett tal 0–`limit`; 0 är av. Valet sparas direkt —
         en väljare, inte text, så ingen *Save* (Tonys regel 2026-11-14,
         #1245) — och meningen säger att versionerna räknas mot kontots lagring.
+        Att sänka taket eller stänga av frågar först, eftersom överskottet i
+        de containrar som följer kontot tas bort (issue 414).
     -->
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
         <h2 class="text-lg font-semibold">{{ t('storage.versioning.heading') }}</h2>
@@ -201,7 +244,7 @@ function saveVersioning(event) {
                 :value="String(props.versioning.max)"
                 :disabled="versioningPending"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-                @change="saveVersioning"
+                @change="onVersioningChange"
             >
                 <option v-for="value in props.versioning.limit + 1" :key="value" :value="String(value - 1)">
                     {{ value - 1 }}
@@ -214,6 +257,18 @@ function saveVersioning(event) {
         <p v-else-if="versioningStatus" role="status" class="mt-2 text-sm text-ink-subtle">
             {{ t('storage.versioning.saved') }}
         </p>
+
+        <UiConfirmDialog
+            :open="versioningConfirmOpen"
+            :heading="t('storage.versioning.confirm_heading')"
+            :body="t('storage.versioning.confirm_body')"
+            :confirm-label="t('storage.versioning.confirm_action')"
+            tone="danger"
+            :pending="versioningPending"
+            :trigger="versioningTrigger"
+            @confirm="confirmVersioning"
+            @cancel="cancelVersioning"
+        />
     </section>
 
     <StorageCleanupSection
