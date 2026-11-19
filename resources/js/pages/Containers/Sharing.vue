@@ -77,6 +77,10 @@ const props = defineProps({
     invitedByNames: { type: Object, required: true },
     items: { type: Array, required: true },
     levels: { type: Array, required: true },
+    /* Fältet *Agent access* (issue 408): ritas bara när servern säger det. */
+    agentAccess: { type: Boolean, default: false },
+    /* Access-ULID → ägarens tak för medlemmens agenter. */
+    agentLevels: { type: Object, default: () => ({}) },
     can: { type: Object, required: true },
 });
 
@@ -168,6 +172,8 @@ const invitationInviter = (invitation) =>
                 :item-names="itemNames"
                 :grantee-names="granteeNames"
                 :levels="levels"
+                :agent-access="agentAccess"
+                :agent-level="agentLevels[access.ulid] ?? null"
             />
         </ul>
 
@@ -215,6 +221,7 @@ const invitationInviter = (invitation) =>
             :container-ulid="container.ulid"
             :levels="levels"
             :items="items"
+            :agent-access="agentAccess"
         />
 
         <ul v-if="invitations.length > 0" class="mt-4 flex flex-col gap-2">

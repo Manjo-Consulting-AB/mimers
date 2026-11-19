@@ -580,6 +580,8 @@ class ContainerController extends Controller
             // `currency` och betyder "ärver".
             'currency' => $container->currency,
             'accountCurrency' => $container->account->currency,
+            // Avsnittet *Agents* (issue 408); `null` ritar inget.
+            'agents' => ContainerAgentController::section($request->user(), $container),
             'can' => [
                 // Formuläret ritar sig ur den här; se docblocken ovan om varför
                 // grinden och flaggan inte är samma fråga.

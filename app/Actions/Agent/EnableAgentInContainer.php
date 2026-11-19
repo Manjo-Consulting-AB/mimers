@@ -18,6 +18,9 @@ use Illuminate\Support\Facades\DB;
  * - `$levels` satt: valda nivåer, där varje nivå kapas till kontots. En
  *   grupp som utelämnas eller sätts till null får ingen rad.
  *
+ * Nivåerna kapas också till ägarens tak i någon annans container
+ * (`ResolveAgentAccess::containerCeiling`, issue 408).
+ *
  * Raderna ersätter agentens tidigare rader i containern. Bara människan får
  * anropa den, och bara för sin egen agent (`RefusesAgentCaller`).
  */
@@ -27,6 +30,7 @@ class EnableAgentInContainer
 
     public function __construct(
         private readonly ApplyAgentContainerGrants $apply,
+        private readonly ResolveAgentAccess $resolveAccess,
         private readonly RecordAuditEvent $recordAuditEvent,
     ) {}
 
@@ -39,7 +43,12 @@ class EnableAgentInContainer
         $this->assertOwnAgent($agent, $actor);
 
         return DB::transaction(function () use ($agent, $container, $actor, $levels): array {
-            $saved = $this->apply->handle($agent, $container, $levels);
+            $saved = $this->apply->handle(
+                $agent,
+                $container,
+                $levels,
+                $this->resolveAccess->containerCeiling($agent, $container),
+            );
 
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_AGENT_ENABLED_IN_CONTAINER,

@@ -955,6 +955,7 @@ return [
         // `container_access.revoked` on /api and this sentence in the web.
         'container_access' => [
             'revoked' => 'The access has been revoked or has expired and cannot be changed.',
+            'agent_level_too_high' => 'Agent access cannot be higher than the level of the access itself.',
         ],
 
         // Issue 159 · [[ADR-0047 Containerns bild]]. A container image is
@@ -1015,6 +1016,7 @@ return [
         // Issue 55b: the invitation error codes. Never a raw JSON body in a
         // browser, same rule as issue 54 decision 4.
         'invitation' => [
+            'agent_level_too_high' => 'Agent access cannot be higher than the level the invitation gives.',
             'already_pending' => 'This address already has an invitation waiting for an answer.',
             'not_pending' => 'The invitation has already been answered and cannot be withdrawn.',
             'expired' => 'The invitation has expired.',
@@ -1867,6 +1869,30 @@ return [
             'create' => 'Read and create',
             'write' => 'Read, create and edit',
             'delete' => 'Read, create, edit and delete',
+        ],
+        // Issue 408: the *Agents* section in a container's settings.
+        'container' => [
+            'heading' => 'Agents',
+            'intro' => 'Every agent starts switched off here. Switch one on to decide what it may do in this container, never more than its account allows.',
+            'empty' => 'You have no connected agents.',
+            'off' => 'Off',
+            'on' => 'On',
+            'switch_on' => 'Switch on',
+            'switch_off' => 'Switch off',
+            'everything' => 'Everything up to the account level',
+            'everything_hint' => 'Saves the account\'s levels as they are now. Raising the account later does not change this container.',
+            'per_group' => 'Or choose a level per group',
+            'account_level' => 'Account: :level',
+            'owner_ceiling' => 'The owner allows your agents up to: :level.',
+            'owner_disallows' => 'The owner of this container does not allow agents.',
+            'unknown_group' => 'Unknown agent group.',
+            'saved' => 'Saved',
+        ],
+        'access_field' => [
+            'label' => 'Agent access',
+            'none' => 'None',
+            'hint' => 'The highest level the member\'s agents may reach here. It is never higher than the access itself.',
+            'saved' => 'Agent access updated',
         ],
         'pause_label' => 'Pause this agent',
         'pause_hint' => 'While paused, every call from the agent is refused. Permissions and connection stay.',

@@ -5,6 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
+import ContainerAgentsSection from '../../components/ContainerAgentsSection.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
 import CurrencyField from '../../components/CurrencyField.vue';
 import FormField from '../../components/FormField.vue';
@@ -130,6 +131,8 @@ const props = defineProps({
     /* Ägarkontots valuta — det containern faller tillbaka på. */
     accountCurrency: { type: String, required: true },
     can: { type: Object, required: true },
+    /* Avsnittet *Agents* (issue 408), `null` utan Pro hos båda eller med MCP av. */
+    agents: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -628,6 +631,8 @@ async function destroy() {
             {{ t('container.edit.currencies_saved') }}
         </p>
     </section>
+
+    <ContainerAgentsSection v-if="agents" :container-ulid="container.ulid" :section="agents" />
 
     <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
         <button

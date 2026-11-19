@@ -87,14 +87,26 @@ class ResolveAgentAccess
         $scope = $this->resolveItemScope->handle($user, $container);
         $userLevel = $item === null ? $scope->unrestrictedLevel() : $scope->levelFor($item->id);
 
-        $ceiling = $this->isOwnContainer($agent, $container)
-            ? AccessLevel::DELETE
-            : $this->ownerCeiling($agent, $container, $item);
+        $ceiling = $item === null
+            ? $this->containerCeiling($agent, $container)
+            : ($this->isOwnContainer($agent, $container) ? AccessLevel::DELETE : $this->ownerCeiling($agent, $container, $item));
 
         return AgentLevels::min($accountLevel, $containerLevel, $ceiling, $userLevel);
     }
 
-    private function isOwnContainer(Agent $agent, Container $container): bool
+    /**
+     * Taket för agentens användare i en hel container: högsta nivån i
+     * användarens egen container, annars ägarens `agent_level` (issue 408).
+     * `null` är inget tak alls, alltså ingen åtkomst.
+     */
+    public function containerCeiling(Agent $agent, Container $container): ?string
+    {
+        return $this->isOwnContainer($agent, $container)
+            ? AccessLevel::DELETE
+            : $this->ownerCeiling($agent, $container, null);
+    }
+
+    public function isOwnContainer(Agent $agent, Container $container): bool
     {
         if ($container->inbox_user_id !== null) {
             return (int) $container->inbox_user_id === (int) $agent->user_id;

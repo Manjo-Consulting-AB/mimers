@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Models\SecurityLog;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
+use App\Support\Access\AccessLevel;
 use App\Support\Plan\Entitlements;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -76,13 +77,21 @@ class CreateInvitation
      *                           för hela containern. Anroparen har redan bevisat
      *                           att det finns i DEN HÄR containern och är
      *                           levande (`StoreInvitationRequest`).
+     * @param  string|null  $agentLevel  Ägarens tak för den inbjudnas agenter
+     *                                   (issue 408, ADR-0087 Riktning 6). `null` = ingen
+     *                                   agentåtkomst. Aldrig högre än `$level`.
      *
-     * @throws ApiException 422 `invitation.already_pending`, 403
+     * @throws ApiException 422 `invitation.already_pending`, 422
+     *                      `invitation.agent_level_too_high`, 403
      *                      `quota.shared_users_exceeded`, 403
      *                      `quota.pending_invitations_exceeded`.
      */
-    public function handle(User $inviter, Container $container, string $email, string $level, ?Item $item): Invitation
+    public function handle(User $inviter, Container $container, string $email, string $level, ?Item $item, ?string $agentLevel = null): Invitation
     {
+        if ($agentLevel !== null && AccessLevel::rank($agentLevel) > AccessLevel::rank($level)) {
+            throw ApiException::make('invitation.agent_level_too_high', ['level' => $level, 'agent_level' => $agentLevel], 422);
+        }
+
         $email = mb_strtolower($email);
 
         $existing = $container->invitations()
@@ -112,7 +121,7 @@ class CreateInvitation
         // lagras aldrig, se klassens docblock.
         $rawToken = Str::random(self::TOKEN_LENGTH);
 
-        $invitation = DB::transaction(function () use ($inviter, $container, $email, $level, $item, $rawToken): Invitation {
+        $invitation = DB::transaction(function () use ($inviter, $container, $email, $level, $item, $rawToken, $agentLevel): Invitation {
             $invitation = new Invitation([
                 'email' => $email,
                 'level' => $level,
@@ -121,6 +130,7 @@ class CreateInvitation
             // Kolumnen är medvetet inte #[Fillable] — den sätts explicit, som
             // container_id och invited_by_user_id.
             $invitation->item_id = $item?->id;
+            $invitation->agent_level = $agentLevel;
             $invitation->token_hash = hash('sha256', $rawToken);
             $invitation->status = 'pending';
             $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
