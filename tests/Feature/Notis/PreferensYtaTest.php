@@ -71,8 +71,9 @@ it('listan bär varje typ med förvalet ifyllt', function () {
 
     $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
 
-    // Åtta typer sedan issue 406 lade till `agent.deleted`, alla med
-    // is_default true — inga rader finns, allt är förval.
+    // Åtta typer, alla med is_default true — inga rader finns, allt är
+    // förval. `versioning.skipped` (issue 412) är ingen mejltyp och står
+    // därför inte i listan.
     expect($karta)->toHaveCount(8);
     foreach ($karta as $typ => $rad) {
         expect($typ)->toBeString();

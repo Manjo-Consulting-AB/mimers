@@ -156,8 +156,9 @@ it('har ingen konstant och ingen preferensrad för inbjudningar', function () {
     expect($konstanter)->not->toHaveKey('TYPE_INVITATION_RECEIVED');
 
     // Listan preferensytan ritar är nycklarna i EMAIL_DEFAULTS, i
-    // konstanternas ordning — åtta typer sedan issue 406 lade till
-    // `agent.deleted`, ingen för en inbjudan.
+    // konstanternas ordning — åtta typer, ingen för en inbjudan och ingen
+    // för `versioning.skipped` (issue 412): den typen går bara i appen och
+    // är ingen mejltyp.
     $preferences = app(NotificationPreferences::class);
 
     expect($preferences->types())->toHaveCount(8);

@@ -111,6 +111,12 @@ return [
         'line' => 'Your agents can no longer reach the containers owned by :owner, because their plan no longer includes MCP. Nothing was deleted, and the access returns if the plan does.',
         'action' => 'Manage agents',
     ],
+    /*
+     * `versioning.skipped` (issue 412 · [[ADR-0088 Versionshistorik för
+     * items]] Riktning 3) har ingen text här: typen går bara i appen, och
+     * appens mening bor i `ui.php`. Mejlkanalen finns inte (se
+     * App\Support\Notification\NotificationPreferences::NO_EMAIL_TYPES).
+     */
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',

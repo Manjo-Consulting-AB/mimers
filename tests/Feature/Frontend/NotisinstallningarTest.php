@@ -118,7 +118,8 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
-            // Sju e-postrader och tre `in_app`-rader (issue 386).
+            // Åtta e-postrader och tre `in_app`-rader (issue 386; issue 412:s
+            // `versioning.skipped` är ingen mejltyp och har ingen växel).
             ->has('preferences', 11)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all()
@@ -149,7 +150,7 @@ it('listar inte kanalen webhook bland preferenserna', function () {
  * Issue 386 · Kolumnen In app. Serverns lista över typer som kan ha kanalen
  * bärs som propp; vyn ritar växeln bara för dem. Förvalet är påslaget.
  */
-it('bär kolumnen In app för de tre typerna och ingen växel för de andra', function () {
+it('bär kolumnen In app för typerna som har kanalen och ingen växel för de andra', function () {
     withoutVite();
 
     actingAs(User::factory()->create())
@@ -628,7 +629,8 @@ it('lämnar /api-rutterna oförändrade', function () {
 
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
-    // Sju e-postrader och tre `in_app`-rader (issue 386).
+    // Åtta e-postrader och tre `in_app`-rader (issue 386; issue 412:s
+    // `versioning.skipped` är ingen mejltyp och har ingen växel).
     expect($svar->json('data'))->toHaveCount(11);
     expect(collect($svar->json('data'))->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());

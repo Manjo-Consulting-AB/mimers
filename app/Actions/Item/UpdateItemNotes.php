@@ -39,6 +39,7 @@ class UpdateItemNotes
 
     public function __construct(
         private readonly RecordAuditEvent $recordAuditEvent,
+        private readonly RecordItemVersion $recordItemVersion,
     ) {}
 
     /**
@@ -53,6 +54,12 @@ class UpdateItemNotes
             if (! $item->isDirty('notes')) {
                 return;
             }
+
+            // Anteckningens läge FÖRE sparningen sparas som en version, i
+            // samma transaktion (issue 412 · [[ADR-0088 Versionshistorik för
+            // items]]). Skurven gör att ett helt arbetspass blir EN version —
+            // samma tio minuter som loggens undantag nedan använder.
+            $this->recordItemVersion->handle($item, $actor);
 
             MetadataLedger::save($item);
 

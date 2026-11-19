@@ -269,6 +269,10 @@ return [
         'quota' => [
             'warning' => ':percent% of the storage is used',
         ],
+        // Issue 412: containerns ägare fick veta att en version inte rymdes.
+        'versioning' => [
+            'skipped' => 'The storage is full — no new versions of :container are saved',
+        ],
         'transfer' => [
             'requested' => ':container has been offered to you',
         ],
@@ -1733,6 +1737,17 @@ return [
                     'description' => 'When an agent connected to your account deletes something. The notification in the app cannot be turned off, because reading it releases the agent\'s deletion limit.',
                 ],
             ],
+            /*
+             * Issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning 3.
+             * Goes to the owner of the container when a version does not fit
+             * in their quota. Off by default in email; on in the app.
+             */
+            'versioning' => [
+                'skipped' => [
+                    'label' => 'Storage is full',
+                    'description' => 'When an earlier version of an item could not be saved because the storage is full. The change itself still goes through.',
+                ],
+            ],
         ],
 
         // The three modes, see Decision 2.
@@ -1833,6 +1848,14 @@ return [
                 'agent' => [
                     'deleted' => ':agent deleted :total things. Anything in the trash can be restored.',
                     'container' => 'The container ":container" held :items items.',
+                ],
+                /*
+                 * Issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning
+                 * 3. The row links to /settings/storage
+                 * (App\Support\Notification\NotificationTarget).
+                 */
+                'versioning' => [
+                    'skipped' => 'Your storage is full, so earlier versions of items in ":container" are not being saved. Free up space under Storage.',
                 ],
             ],
         ],

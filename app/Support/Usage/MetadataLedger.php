@@ -3,6 +3,7 @@
 namespace App\Support\Usage;
 
 use App\Actions\Usage\AdjustUsage;
+use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Support\Plan\Entitlements;
 use Closure;
@@ -90,6 +91,26 @@ final class MetadataLedger
     private static function assertFits(int $payer, int $addedBytes): void
     {
         (new Entitlements)->assertMetadataWithinLimit(Account::query()->findOrFail($payer), $addedBytes);
+    }
+
+    /**
+     * Ryms `$addedBytes` hos betalaren? (issue 412 · [[ADR-0088
+     * Versionshistorik för items]] Riktning 3.)
+     *
+     * Samma fråga som `save()` ställer, men utan att skriva något: en version
+     * prövas INNAN den sparas, så att den kan tas bort eller hoppas över utan
+     * att en rad först har lagts in och rullats tillbaka. Frågan ställer
+     * samma `assertFits` som `save()` gör, så de två inte kan glida isär.
+     */
+    public static function fits(int $payer, int $addedBytes): bool
+    {
+        try {
+            self::assertFits($payer, $addedBytes);
+
+            return true;
+        } catch (ApiException) {
+            return false;
+        }
     }
 
     /**

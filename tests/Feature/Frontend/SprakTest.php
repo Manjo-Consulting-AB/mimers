@@ -623,10 +623,10 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    // Elva sedan issue 409 lade till `agent.access_lost`. Räkningen är över
+    // Tolv sedan issue 412 lade till `versioning.skipped`. Räkningen är över
     // KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
     // en typ någon lägger till `in_app` för utan att märka att texten saknas.
-    expect($typer)->toHaveCount(11);
+    expect($typer)->toHaveCount(12);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';
