@@ -352,9 +352,20 @@ const versioningConfirmOpen = ref(false);
 const versioningTrigger = ref(null);
 const versioningChoice = ref(undefined);
 
-const selectedVersioning = computed(
-    () => (props.versioning.max === null ? 'follow' : String(props.versioning.max)),
-);
+/* Containerns lagrade värde kan ligga ÖVER kontots tak: det händer när kontots
+   tak sänkts efter att containern fick sitt värde, och containerraden ska då
+   stå kvar orörd. Alternativen går bara upp till kontots tak, så ett lagrat
+   värde utanför dem ritas inte alls av `<select>`. Väljaren visar därför det
+   tak som verkligen gäller — det lägre av de två. */
+const selectedVersioning = computed(() => {
+    const own = props.versioning.max;
+
+    if (own === null) {
+        return 'follow';
+    }
+
+    return String(Math.min(own, props.versioning.accountLimit));
+});
 
 /* Vad som gäller i dag, räknat som App\Support\Versioning\VersionLimit::for():
    0 på endera nivån ger 0, annars det lägre av kontots och containerns. */
