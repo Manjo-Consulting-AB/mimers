@@ -50,6 +50,7 @@ use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\Settings\AgentController;
 use App\Http\Controllers\Settings\EmailChangeController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
@@ -934,6 +935,30 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/settings/webhooks/{webhook}', [WebhookEndpointController::class, 'destroy'])
         ->name('settings.webhooks.destroy');
+
+    /*
+     * Issue 407 · Sidan för anslutna agenter, se [[ADR-0087 MCP-server för
+     * agenter]] Riktning 12 och App\Http\Controllers\Settings\AgentController.
+     * Pro eller Pro+ och `mcp.enabled` krävs, annars 404. `{agent}` binds på
+     * ULID och prövas mot inloggad användare i kontrollern.
+     */
+    Route::get('/settings/agents', [AgentController::class, 'index'])
+        ->name('settings.agents');
+
+    Route::get('/settings/agents/{agent}', [AgentController::class, 'show'])
+        ->name('settings.agents.show');
+
+    Route::patch('/settings/agents/{agent}', [AgentController::class, 'update'])
+        ->name('settings.agents.update');
+
+    Route::put('/settings/agents/{agent}/grants', [AgentController::class, 'grants'])
+        ->name('settings.agents.grants');
+
+    Route::put('/settings/agents/{agent}/pause', [AgentController::class, 'pause'])
+        ->name('settings.agents.pause');
+
+    Route::delete('/settings/agents/{agent}', [AgentController::class, 'destroy'])
+        ->name('settings.agents.destroy');
 
     /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se

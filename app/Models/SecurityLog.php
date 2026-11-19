@@ -226,6 +226,18 @@ class SecurityLog extends Model
     public const ACTION_AGENT_DISCONNECTED = 'agent.disconnected';
 
     /**
+     * En agent pausades från `/settings/agents` (issue 407, Riktning 12).
+     * Skrivs av App\Actions\Agent\SetAgentPaused, bara när tillståndet
+     * faktiskt ändrades. `meta` bär agentens ULID och namn.
+     */
+    public const ACTION_AGENT_PAUSED = 'agent.paused';
+
+    /**
+     * En pausad agent återupptogs. Skrivs av App\Actions\Agent\SetAgentPaused.
+     */
+    public const ACTION_AGENT_RESUMED = 'agent.resumed';
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

@@ -9,6 +9,7 @@ use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
 use App\Actions\Notification\CountUnreadInAppNotifications;
 use App\Actions\Schedule\ListTodo;
+use App\Http\Controllers\Settings\AgentController;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
@@ -272,6 +273,9 @@ class HandleInertiaRequests extends Middleware
                 'year' => (int) now()->format('Y'),
             ],
             'auth' => fn (): array => $this->auth($request),
+            // Issue 407: ritar menyn länken till /settings/agents? Pro eller Pro+
+            // och `mcp.enabled`, samma regel som sidan själv (AgentController).
+            'mcpAvailable' => fn (): bool => AgentController::available($request->user()),
             // Användarens dag och tidszon ([[ADR-0044 Användarens dag]]
             // § Beslut 4) — se klassens docblock om varför de står här.
             'today' => fn (): ?string => $request->user()?->today()->toDateString(),

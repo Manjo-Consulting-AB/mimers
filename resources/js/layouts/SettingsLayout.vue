@@ -48,6 +48,11 @@ function isActive(section) {
 }
 
 /*
+ * Rader med `requires` ritas bara när den delade propen är sann (issue 407).
+ */
+const isVisible = (section) => section.requires === undefined || page.props[section.requires] === true;
+
+/*
  * Radens ord: dess egen nyckel när den bär en (`label`), annars
  * `settings.nav.<key>`. Se docblocket ovanför.
  */
@@ -72,16 +77,18 @@ const sectionLabel = (section) => t(section.label ?? `settings.nav.${section.key
                 class="flex-col gap-1 text-sm"
                 :class="sectionsOpen ? 'flex' : 'hidden md:flex'"
             >
-                <li v-for="section in settingsSections" :key="section.key">
-                    <Link
-                        :href="section.href"
-                        :aria-current="isActive(section) ? 'page' : undefined"
-                        class="flex min-h-11 items-center rounded px-3"
-                        :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
-                    >
-                        {{ sectionLabel(section) }}
-                    </Link>
-                </li>
+                <template v-for="section in settingsSections" :key="section.key">
+                    <li v-if="isVisible(section)">
+                        <Link
+                            :href="section.href"
+                            :aria-current="isActive(section) ? 'page' : undefined"
+                            class="flex min-h-11 items-center rounded px-3"
+                            :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
+                        >
+                            {{ sectionLabel(section) }}
+                        </Link>
+                    </li>
+                </template>
             </ul>
         </nav>
 
