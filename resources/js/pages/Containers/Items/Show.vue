@@ -26,6 +26,7 @@ import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { coverUrl } from '../../../components/coverPresentation.js';
+import { customFieldRows } from '../../../components/fields/fieldPresentation.js';
 import { formatDateOnly, itemFields } from '../../../components/itemPresentation.js';
 import { useCreationUpload } from '../../../composables/useCreationUpload.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
@@ -476,12 +477,19 @@ const locale = computed(() => page.props.locale);
  * lista bland tillverkare och modell varit två rader av fel sort (issue 96
  * och 102).
  */
-const fields = computed(() =>
-    itemFields(props.item, locale.value).map((field) => ({
+/*
+ * Sedan issue 419 räknas de EGNA fälten med: frågan är om itemet är
+ * oskrivet, och ett item vars enda uppgift står i ett eget fält är skrivet.
+ * Rutnätet ritar båda sorterna (ItemFieldGrid), så den här listan är bara
+ * underlaget för `overviewEmpty` nedan.
+ */
+const fields = computed(() => [
+    ...itemFields(props.item, locale.value).map((field) => ({
         ...field,
         label: t(`item.show.${field.key}`),
     })),
-);
+    ...customFieldRows(props.item, locale.value),
+]);
 
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 

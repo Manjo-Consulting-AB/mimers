@@ -42,6 +42,13 @@
  * delningen det man ställer in — ordningen är hur en användare möter containern,
  * inte hur issues råkade bli klara.
  *
+ * `fields` kom med M68 · issue 419 · [[ADR-0089 Egna fält på items]]
+ * § Riktning 1: de egna fälten hör till strukturen som kategorierna och
+ * taggarna — de är hur containerns items är ordnade — och raden ligger därför
+ * efter `tags`, före `sharing`. Sidan är containerns *Fields* och ritas ur
+ * `can.manage`, men VARJE medlem måste nå den: en `read`-mottagare ska se
+ * fälten och deras ordning även om hon inte får ändra dem.
+ *
  * `trash` kom med issue 62a § Beslut 1 och ligger SIST, efter `settings`:
  * papperskorgen är dit man går när något gått fel, inte en yta man arbetar
  * i. Den är ändå en rad och ingen sidfot — en väg tillbaka som ingen hittar
@@ -85,6 +92,7 @@ export const containerSections = [
     { key: 'costs', href: (ulid) => `/containers/${ulid}/costs` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
+    { key: 'fields', href: (ulid) => `/containers/${ulid}/fields` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
     { key: 'calendar', href: (ulid) => `/containers/${ulid}/calendar` },

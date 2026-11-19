@@ -55,8 +55,21 @@ class ItemFieldController extends Controller
     /**
      * GET /containers/{container}/fields — containerns fält.
      *
-     * Sidan ritas i issue 419. Propen `fields` är samma rader som `/api`
-     * svarar med, så vyn formulerar ingen egen form av ett fält.
+     * Sedan issue 419 ritas sidan: resources/js/pages/Containers/Fields.vue
+     * bär listan, *Add field*, omdöpningen, sorteringen och raderingen.
+     * Propen `fields` är samma rader som `/api` svarar med, så vyn formulerar
+     * ingen egen form av ett fält.
+     *
+     * **`values` är antalet värden per fält**, ULID → tal. Vyn behöver det
+     * för att låsa typvalet på ett fält som har värden
+     * ([[ADR-0089 Egna fält på items]] § Riktning 3): låset prövas på servern
+     * av App\Actions\Field\FieldRules, men ytan ska förklara varför valet
+     * inte går att ändra innan användaren försöker. **Ingen andra fråga** —
+     * `withCount` räknar dem i samma svep som raderna listas.
+     *
+     * `limit` är containerns tak och `types` fältets tre typer, båda ur
+     * samma config och samma modellkonstant som servern prövar mot. Ingen
+     * avskrift i JavaScript.
      */
     public function index(Request $request, Container $container, ListFields $listFields): Response
     {
@@ -67,6 +80,13 @@ class ItemFieldController extends Controller
         return Inertia::render('Containers/Fields', [
             'container' => ContainerResource::make($container)->resolve($request),
             'fields' => ItemFieldResource::collection($listFields->handle($container, null))->resolve($request),
+            'values' => ItemField::query()
+                ->where('container_id', $container->id)
+                ->whereNull('item_id')
+                ->withCount('values')
+                ->pluck('values_count', 'ulid'),
+            'limit' => (int) config('fields.max_per_container'),
+            'types' => ItemField::TYPES,
             'can' => ['manage' => Gate::forUser($request->user())->allows('update', $container)],
         ]);
     }

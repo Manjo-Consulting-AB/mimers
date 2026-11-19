@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { itemFields } from './itemPresentation.js';
+import { customFieldRows } from './fields/fieldPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -26,7 +27,15 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
-const fields = computed(() => {
+/*
+ * Kategorin och de sex fasta fälten först, sedan itemets EGNA fält (issue 419
+ * · [[ADR-0089 Egna fält på items]] § Riktning 1–2). De egna raderna kommer
+ * ur customFieldRows(), som filtrerar bort tomma värden och formaterar tal
+ * och datum efter typ — samma två regler som de fasta fälten lyder, i samma
+ * modul som formuläret använder. Rubriken är användarens egen och slås inte
+ * upp i `lang/`; systemet vet inte vad den betyder.
+ */
+const fixedFields = computed(() => {
     const rows = itemFields(props.item, props.locale);
 
     if (props.categoryName !== null && props.categoryName !== '') {
@@ -35,6 +44,8 @@ const fields = computed(() => {
 
     return rows.map((field) => ({ ...field, label: t(`item.show.${field.key}`) }));
 });
+
+const fields = computed(() => [...fixedFields.value, ...customFieldRows(props.item, props.locale)]);
 </script>
 
 <template>

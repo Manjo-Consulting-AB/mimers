@@ -6,6 +6,7 @@ use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Category\ListCategories;
 use App\Actions\Cost\ListCostSuppliers;
+use App\Actions\Field\ListFields;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
@@ -33,6 +34,7 @@ use App\Http\Resources\AttachmentResource;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\CostEntryResource;
+use App\Http\Resources\ItemFieldResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
 use App\Http\Resources\LoanResource;
@@ -44,6 +46,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\Tag;
@@ -267,6 +270,7 @@ class ItemController extends Controller
         ListItems $listItems,
         ListCategories $listCategories,
         ListTags $listTags,
+        ListFields $listFields,
         ActiveContainer $activeContainer,
         ItemStatus $itemStatus,
         CreateTarget $createTarget,
@@ -543,6 +547,11 @@ class ItemController extends Controller
             // som just registrerades (med `parent`) så att trädet kan
             // markera raden.
             'categories' => $canRegister ? CategoryResource::collection($categories)->resolve($request) : [],
+            // Registreringsradens formulär bär samma fält som skapandesidan
+            // (issue 419 · [[ADR-0089 Egna fält på items]] § Riktning 1): det
+            // är samma ItemForm, och en yta som ritar några av formulärets
+            // fält men inte alla hade varit två formulär med ett namn.
+            'fields' => $canRegister ? ItemFieldResource::collection($listFields->handle($container, null))->resolve($request) : [],
             'preselected' => $canRegister ? $this->defaultCategoryUlid($request, $categories) : null,
             'createdItem' => $canRegister ? $this->createdItem($request) : null,
 
@@ -1488,7 +1497,7 @@ class ItemController extends Controller
      * den raden är valbar bara när den här flaggan är sann; annars hade
      * väljaren erbjudit ett val `store()` svarar 403 på.
      */
-    public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags, ResolveItemTree $resolveItemTree): Response
+    public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags, ResolveItemTree $resolveItemTree, ListFields $listFields): Response
     {
         $parent = $this->parent($container, $this->parentUlid($request));
 
@@ -1534,6 +1543,12 @@ class ItemController extends Controller
             'created' => $this->createdItem($request),
             'structure' => $this->pickableStructure($tree->roots(), $this->abilities($user, $container, $tree)),
             'can_create_root' => $canCreateRoot,
+            // Containerns fält (issue 419 · [[ADR-0089 Egna fält på items]]
+            // § Riktning 1). Ett nytt item har inga egna fält än, så listan
+            // är containerns — samma rader som `/api` svarar med, och i
+            // `position`-ordning. Formuläret ritar ett fält per typ och
+            // skickar värdena med itemets POST.
+            'fields' => ItemFieldResource::collection($listFields->handle($container, null))->resolve($request),
             'can' => $this->taxonomyAbilities($user, $container),
         ]);
     }
@@ -1879,6 +1894,14 @@ class ItemController extends Controller
             // inte i listan, och `firstWhere` svarar då null. Det är rätt svar:
             // valet är borta, och upplösningens steg 2 gäller.
             'cover' => $images->firstWhere('id', $item->cover_attachment_id)?->ulid,
+            // Itemets egna fält (issue 419 · [[ADR-0089 Egna fält på items]]
+            // § Riktning 2): formuläret bär knappen *Add field*, och taket
+            // och typerna kommer ur samma config och samma modellkonstant
+            // som App\Actions\Field\FieldRules prövar mot. Itemets fält med
+            // värden följer redan i `item.fields` ur ItemResource — samma
+            // lista som itemets vy ritar.
+            'field_limit' => (int) config('fields.max_per_item'),
+            'types' => ItemField::TYPES,
             'can' => $this->taxonomyAbilities($user, $container),
         ]);
     }

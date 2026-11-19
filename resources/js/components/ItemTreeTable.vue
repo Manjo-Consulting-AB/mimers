@@ -163,6 +163,12 @@ const props = defineProps({
     /* Formulärets underlag ur vyn (issue 1164), samma som raden ovanför trädet. */
     categories: { type: Array, default: () => [] },
     tags: { type: Array, default: () => [] },
+    /*
+     * Containerns egna fält (issue 419 · [[ADR-0089 Egna fält på items]]
+     * § Riktning 1): formulärraden är SAMMA ItemForm som registreringsraden,
+     * och den ritar samma fält på båda ställena.
+     */
+    fields: { type: Array, default: () => [] },
     preselected: { type: String, default: null },
     accounts: { type: Array, default: () => [] },
     account: { type: String, default: '' },
@@ -590,6 +596,7 @@ function isMatch(node) {
                                 :structure="nodes"
                                 :can-create-root="canCreateRoot"
                                 :can-manage-taxonomy="canManageTaxonomy"
+                                :fields="fields"
                                 @dirty="emit('dirty', $event)"
                                 @cancel="closeForm"
                             />

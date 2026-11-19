@@ -29,4 +29,15 @@ return [
     'versioning' => [
         'above_account' => 'The container cannot keep more versions than the account allows.',
     ],
+
+    // App\Actions\Field\FieldAppliesToItem, se issue 418 och 419 ·
+    // [[ADR-0089 Egna fält på items]] § Riktning 9. Ett värde får bara
+    // skrivas i ett fält som hör till itemet — containerns fält eller
+    // itemets egna. Nyckeln är felkoden: `/api` svarar `field.not_applicable`
+    // (App\Support\Api\ValidationErrorMapper) och webben visar samma mening ur
+    // den här filen. Itemets formulär ritar den vid raden felet kom på
+    // (`fields.N.field`).
+    'field' => [
+        'not_applicable' => 'That field does not belong to this item.',
+    ],
 ];

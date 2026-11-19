@@ -47,6 +47,15 @@ defineProps({
     tags: { type: Array, required: true },
     images: { type: Array, required: true },
     cover: { type: String, default: null },
+    /*
+     * Taket för itemets EGNA fält, `fields.max_per_item`, ur
+     * App\Http\Controllers\ItemController::edit() (issue 419 ·
+     * [[ADR-0089 Egna fält på items]] § Riktning 2). Fälten själva följer i
+     * `item.fields` ur ItemResource — samma lista som itemets vy ritar.
+     */
+    fieldLimit: { type: Number, default: 0 },
+    /* Fältets typer, `ItemField::TYPES`, till typvalet i *Add field*. */
+    types: { type: Array, default: () => [] },
 });
 
 const { t } = useTranslations();
@@ -66,5 +75,8 @@ const { t } = useTranslations();
         :images="images"
         :cover="cover"
         :can-manage-taxonomy="can.manage_taxonomy"
+        :fields="item.fields"
+        :field-limit="fieldLimit"
+        :types="types"
     />
 </template>

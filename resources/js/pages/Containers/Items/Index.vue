@@ -248,6 +248,12 @@ const props = defineProps({
     linkForm: { type: Object, default: null },
     /* Kategoriträdet till formuläret (issue 1162); tomt när hon inte får registrera. */
     categories: { type: Array, default: () => [] },
+    /*
+     * Containerns egna fält till registreringsraden (issue 419 ·
+     * [[ADR-0089 Egna fält på items]] § Riktning 1); tomt när hon inte får
+     * registrera, samma grind och samma form som `categories` ovan.
+     */
+    fields: { type: Array, default: () => [] },
     /* Kategorin ur `?category=`, förvald i formuläret. */
     preselected: { type: String, default: null },
     /* Itemet som just registrerades: `{ulid, name, parent?}` eller null. */
@@ -636,6 +642,7 @@ const overflowHref = computed(() => base.value);
                     :structure="structure ?? []"
                     :can-create-root="can.create"
                     :can-manage-taxonomy="can.manage_taxonomy ?? false"
+                    :fields="fields"
                     @dirty="createDirty = $event"
                     @cancel="createOpen = false"
                 />
@@ -665,6 +672,7 @@ const overflowHref = computed(() => base.value);
                 :open-form="openForm"
                 :categories="categories"
                 :tags="tags"
+                :fields="fields"
                 :preselected="preselected"
                 :accounts="accounts"
                 :account="account"

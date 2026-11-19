@@ -12,6 +12,9 @@ import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiInput from './UiInput.vue';
 import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
+import FieldTypeSelect from './fields/FieldTypeSelect.vue';
+import FieldValueField from './fields/FieldValueField.vue';
+import { normalizeFields } from './fields/fieldPresentation.js';
 import { categoryOptions } from './categoryTree.js';
 import { useCreationUpload } from '../composables/useCreationUpload.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -151,6 +154,22 @@ const props = defineProps({
     /* Får användaren skapa taggar och kategorier? Ur `can.manage_taxonomy`. */
     canManageTaxonomy: { type: Boolean, default: false },
     /*
+     * Fälten som hör till itemet (issue 419 · [[ADR-0089 Egna fält på items]]
+     * § Riktning 1 och 2): containerns på skapandesidan (ItemFieldResource)
+     * och containerns plus itemets egna i redigeringen (ItemResource:s
+     * `item.fields`). Formen slätas ut av normalizeFields() — språket här är
+     * ett, så mallen inte behöver veta vilken resurs raderna kom ur.
+     */
+    fields: { type: Array, default: () => [] },
+    /*
+     * Taket för itemets EGNA fält, `fields.max_per_item`. Noll betyder att
+     * knappen *Add field* inte ritas — skapandeformuläret har inget item att
+     * sätta egna fält på.
+     */
+    fieldLimit: { type: Number, default: 0 },
+    /* Fältets typer, `ItemField::TYPES`, till typvalet i *Add field*. */
+    types: { type: Array, default: () => [] },
+    /*
      * Inbäddat läge (issue 1163 · [[ADR-0074 Registrering i vyn]] § 1–3):
      * formuläret ligger i `InlineCreate` på en lista och står kvar efter en
      * sparning. Utan flaggan fungerar formuläret som förut.
@@ -184,6 +203,36 @@ const showAccount = computed(() => props.item === null && props.accounts.length 
  * fältet.
  */
 const showCover = computed(() => props.item !== null && props.images.length > 0);
+
+/*
+ * De egna fälten, se issue 419 och [[ADR-0089 Egna fält på items]]
+ * § Riktning 1–3. Varje fält blir en rad i formuläret, och värdet skickas som
+ * `fields: [{field: <ULID>, value: …}]` — kroppen
+ * App\Actions\Field\ItemFieldInput prövar mot fältets typ.
+ *
+ * **Tomma fält skickas också, som en tom sträng.** Servern tolkar `''` som
+ * "töm fältet" och tar bort raden (issue 418), och att skicka ALLA fält gör
+ * att felens index i `fields.N.value` pekar på samma rad som användaren ser.
+ * Att bara skicka de ifyllda hade gjort indexet till en funktion av vad hon
+ * råkade skriva.
+ */
+const incomingFields = computed(() => normalizeFields(props.fields));
+
+const initialFieldRows = () => incomingFields.value.map((field) => ({
+    field: field.id,
+    value: field.value ?? '',
+}));
+
+/*
+ * Fältet har ett sparat värde: då står det direkt i formuläret. Ett tomt fält
+ * ligger under *More details* vid skapandet, som de sex fasta fälten gör.
+ * Frågan ställs mot det SPARADE värdet och inte mot det man skriver just nu,
+ * så en rad inte hoppar mellan avsnitten mitt i en mening.
+ */
+const hasStoredValue = (field) => field.value !== null && field.value !== undefined && field.value !== '';
+
+const visibleFields = computed(() => incomingFields.value.filter(hasStoredValue));
+const foldedFields = computed(() => incomingFields.value.filter((field) => ! hasStoredValue(field)));
 
 const fields = {
     name: props.item?.name ?? '',
@@ -219,8 +268,70 @@ const form = useForm(props.item === null
         ...fields,
         /* Kategorin ur `?category` efter *Save and add another* (issue 339). */
         category: props.preselected,
+        fields: initialFieldRows(),
     }
-    : fields);
+    : { ...fields, fields: initialFieldRows() });
+
+/*
+ * Nya och borttagna egna fält. *Add field* skriver på servern och sidan ritas
+ * om med `preserveState`, så propen får nya rader medan formuläret står kvar:
+ * de ifyllda värdena flyttas med, en ny rad får sin tomma sträng och en
+ * borttagen rad faller bort. Utan raden här hade en nyskapad rad aldrig fått
+ * ett värde att skriva i.
+ *
+ * **Den nya raden flyttas också in i formulärets `defaults`.** Annars blir
+ * formuläret smutsigt av att servern svarade — användaren har inte ändrat
+ * något — och lämna-dialogen dyker upp efter ett lyckat *Add field* eller en
+ * borttagning. Defaultvärdet per rad sparas i `fieldRowDefaults`: det
+ * användaren redan skrivit i en befintlig rad är fortfarande osparat och ska
+ * fortsätta räknas som en ändring.
+ */
+const fieldRowDefaults = new Map(initialFieldRows().map((row) => [row.field, row.value]));
+
+watch(incomingFields, (next) => {
+    const current = new Map(form.fields.map((row) => [row.field, row.value]));
+
+    form.fields = next.map((field) => ({
+        field: field.id,
+        value: current.has(field.id) ? current.get(field.id) : (field.value ?? ''),
+    }));
+
+    for (const field of next) {
+        if (! fieldRowDefaults.has(field.id)) {
+            fieldRowDefaults.set(field.id, field.value ?? '');
+        }
+    }
+
+    form.defaults('fields', form.fields.map((row) => ({
+        field: row.field,
+        value: fieldRowDefaults.get(row.field),
+    })));
+}, { deep: true });
+
+const fieldValue = (id) => form.fields.find((row) => row.field === id)?.value ?? '';
+
+function setFieldValue(id, value) {
+    const row = form.fields.find((candidate) => candidate.field === id);
+
+    if (row !== undefined) {
+        row.value = value;
+    }
+}
+
+/*
+ * Serverns fel för ett eget fält ligger på `fields.<index>.value` — index är
+ * radens plats i listan som skickades, alltså samma plats den ritas på.
+ * `fields.<index>.field` bär `field.not_applicable` och hör till samma rad.
+ */
+const fieldError = (id) => {
+    const index = form.fields.findIndex((row) => row.field === id);
+
+    if (index === -1) {
+        return null;
+    }
+
+    return form.errors[`fields.${index}.value`] ?? form.errors[`fields.${index}.field`] ?? null;
+};
 
 const leaveVisit = ref(null);
 let leaveConfirmed = false;
@@ -371,7 +482,15 @@ const detailFields = [
 ];
 const detailsOpen = ref(false);
 
-const detailsHasError = computed(() => detailFields.some((name) => form.errors[name] !== undefined));
+/* Ett fel på ett eget fält ligger under samma rubrik, så det fäller ut
+   avsnittet som de fasta fälten gör (issue 419). */
+const fieldDetailsHasError = computed(
+    () => Object.keys(form.errors).some((name) => name.startsWith('fields.')),
+);
+
+const detailsHasError = computed(
+    () => detailFields.some((name) => form.errors[name] !== undefined) || fieldDetailsHasError.value,
+);
 
 watch(detailsHasError, (hasError) => {
     if (hasError) {
@@ -467,6 +586,108 @@ function createTaxonomy(kind, name) {
             taxonomyCreating.value = false;
         },
     });
+}
+
+/*
+ * Itemets EGNA fält (issue 419 · [[ADR-0089 Egna fält på items]]
+ * § Riktning 2): knappen *Add field*, och en borttagning per fält.
+ *
+ * **Knappen finns bara i redigeringen.** Ett eget fält hör till ett item, och
+ * ett nytt item finns inte förrän det sparats; containerfälten ritas i båda
+ * lägena och behöver ingen knapp.
+ *
+ * **Anropet går till den BEFINTLIGA ändpunkten** — `POST
+ * /containers/{c}/items/{item}/fields` ur issue 417 — med `preserveState`,
+ * samma grep som tagg- och kategorieskapandet ovan: formulärets osparade
+ * inmatning står kvar, och sidan ritar om med den nya raden. Grinden är
+ * `ItemPolicy::update`, som redigeringssidan redan kräver.
+ *
+ * Rubriken och typen skickas som de är; `position` utelämnas, och
+ * App\Actions\Field\CreateField sätter nästa lediga. Felet — gränsen eller
+ * rubrikkrocken — kommer tillbaka på nyckeln `field`.
+ */
+const ownFields = computed(() => incomingFields.value.filter((field) => field.scope === 'item'));
+
+const atFieldLimit = computed(
+    () => props.item !== null && props.fieldLimit > 0 && ownFields.value.length >= props.fieldLimit,
+);
+
+const canAddField = computed(() => props.item !== null && props.fieldLimit > 0 && ! atFieldLimit.value);
+
+const addFormOpen = ref(false);
+const addLabel = ref('');
+const addType = ref(props.types[0] ?? 'text');
+const addPending = ref(false);
+/* Gränsen och rubrikkrocken — domänens fel, utan egen fältnyckel. */
+const addFieldError = ref(null);
+/* Formatfelen på rubriken och typen, som hör till sina egna fält. */
+const addLabelError = ref(null);
+
+function openAddForm() {
+    addFieldError.value = null;
+    addLabelError.value = null;
+    addFormOpen.value = true;
+}
+
+function createOwnField() {
+    addFieldError.value = null;
+    addLabelError.value = null;
+    addPending.value = true;
+
+    router.post(
+        `/containers/${props.containerUlid}/items/${props.item.ulid}/fields`,
+        { label: addLabel.value.trim(), type: addType.value },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                addLabel.value = '';
+                addType.value = props.types[0] ?? 'text';
+                addFormOpen.value = false;
+            },
+            onError: (errors) => {
+                addFieldError.value = errors.field ?? null;
+                addLabelError.value = errors.label ?? errors.type ?? null;
+            },
+            onFinish: () => {
+                addPending.value = false;
+            },
+        },
+    );
+}
+
+/*
+ * Borttagningen frågar först, som containerns fältsida: definitionen går till
+ * papperskorgen tillsammans med sina värden, och frågan säger det. Fältet
+ * försvinner ur formuläret när servern svarat, genom watch:en på propen.
+ */
+const fieldToRemove = ref(null);
+const removeTrigger = ref(null);
+const removePending = ref(false);
+
+function askRemoveField(field, event) {
+    removeTrigger.value = event.currentTarget;
+    fieldToRemove.value = field;
+}
+
+function removeOwnField() {
+    if (fieldToRemove.value === null) {
+        return;
+    }
+
+    removePending.value = true;
+
+    router.delete(
+        `/containers/${props.containerUlid}/items/${props.item.ulid}/fields/${fieldToRemove.value.id}`,
+        {
+            preserveState: true,
+            preserveScroll: true,
+            onFinish: () => {
+                removePending.value = false;
+                fieldToRemove.value = null;
+            },
+        },
+    );
 }
 
 /*
@@ -889,6 +1110,25 @@ function submit() {
         />
 
         <!--
+            De egna fälten som redan har ett värde (issue 419 ·
+            [[ADR-0089 Egna fält på items]] § Riktning 1 och 2). De står
+            direkt i skapandeformuläret, som namn och kategori; de tomma
+            ligger under *More details* nedanför — en tom etikett är ingen
+            uppgift, och frågan ställs mot det SPARADE värdet så raden inte
+            hoppar mellan avsnitten medan man skriver.
+        -->
+        <template v-if="item === null">
+            <FieldValueField
+                v-for="field in visibleFields"
+                :key="field.id"
+                :field="field"
+                :model-value="fieldValue(field.id)"
+                :error="fieldError(field.id)"
+                @update:model-value="(value) => setFieldValue(field.id, value)"
+            />
+        </template>
+
+        <!--
             Beskrivningen och de övriga fälten (issue 338 · [[ADR-0068 Itemets
             sida och skapandet]] § 8). Vid skapandet står de i en `<details>`
             med rubriken *More details*, hopfälld från början och utfälld av
@@ -1010,6 +1250,52 @@ function submit() {
                     />
                 </FormField>
 
+                <!--
+                    De egna fälten utan värde (issue 419), hopfällda som
+                    resten av *More details* vid skapandet. Ett serverfel på
+                    ett av dem fäller ut avsnittet — samma regel som de fasta
+                    fälten, se `detailsHasError` ovan.
+                -->
+                <template v-if="item === null">
+                    <FieldValueField
+                        v-for="field in foldedFields"
+                        :key="field.id"
+                        :field="field"
+                        :model-value="fieldValue(field.id)"
+                        :error="fieldError(field.id)"
+                        @update:model-value="(value) => setFieldValue(field.id, value)"
+                    />
+                </template>
+
+                <!--
+                    Redigeringen: ALLA fält, i den ordning servern gav dem —
+                    containerns först och itemets egna efter. Här finns ingen
+                    hopfällning att lägga dem i, och knappen *Add field* står
+                    under dem. Ett EGET fält kan tas bort; ett containerfält
+                    kan bara tas bort på containerns egen sida
+                    ([[ADR-0089 Egna fält på items]] § Riktning 2).
+                -->
+                <template v-if="item !== null">
+                    <FieldValueField
+                        v-for="field in incomingFields"
+                        :key="field.id"
+                        :field="field"
+                        :model-value="fieldValue(field.id)"
+                        :error="fieldError(field.id)"
+                        @update:model-value="(value) => setFieldValue(field.id, value)"
+                    >
+                        <template v-if="field.scope === 'item'" #action>
+                            <button
+                                type="button"
+                                class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-danger outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                                @click="askRemoveField(field, $event)"
+                            >
+                                {{ t('item.fields.remove') }}
+                            </button>
+                        </template>
+                    </FieldValueField>
+                </template>
+
                 <!-- Kontot: bara med fler än ett konto att välja mellan (Beslut 4 och
                      issue 338). Ett enda konto är förvalt och ritas inte alls. -->
                 <FormField
@@ -1033,6 +1319,84 @@ function submit() {
                 </FormField>
             </div>
         </component>
+
+        <!--
+            Itemets egna fält, knappen *Add field* (issue 419 ·
+            [[ADR-0089 Egna fält på items]] § Riktning 2). Bara i
+            redigeringen: ett nytt item finns inte förrän det sparats.
+            Anropet går till itemets egen fältändpunkt (issue 417) med
+            `preserveState`, så formulärets osparade inmatning står kvar.
+        -->
+        <section v-if="item !== null" class="flex flex-col gap-3 border-t border-border pt-4">
+            <p class="text-body font-medium text-ink">{{ t('item.fields.heading') }}</p>
+
+            <template v-if="canAddField">
+                <div v-if="addFormOpen" class="flex flex-col gap-3">
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('item.fields.label')"
+                        id="item-field-label"
+                        :error="addLabelError"
+                    >
+                        <!-- Enter skapar fältet och skickar INTE itemets
+                             formulär: add-ytan ligger inuti det formuläret,
+                             och ett naket Enter hade sparat itemet i
+                             stället. -->
+                        <UiInput
+                            id="item-field-label"
+                            v-model="addLabel"
+                            :described-by="describedBy"
+                            name="label"
+                            @keydown.enter.prevent="createOwnField"
+                        />
+                    </FormField>
+
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('item.fields.type')"
+                        id="item-field-type"
+                    >
+                        <FieldTypeSelect
+                            id="item-field-type"
+                            v-model="addType"
+                            :types="types"
+                            :described-by="describedBy"
+                        />
+                    </FormField>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <UiButton :pending="addPending" @click="createOwnField">
+                            {{ addPending ? t('common.pending.default') : t('item.fields.add') }}
+                        </UiButton>
+
+                        <UiButton variant="secondary" @click="addFormOpen = false">
+                            {{ t('item.fields.add_cancel') }}
+                        </UiButton>
+                    </div>
+
+                    <p
+                        v-if="addFieldError"
+                        role="alert"
+                        class="rounded border border-danger bg-surface px-3 py-2 text-meta text-danger"
+                    >
+                        {{ addFieldError }}
+                    </p>
+                </div>
+
+                <button
+                    v-else
+                    type="button"
+                    class="inline-flex min-h-11 items-center justify-center self-start rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="openAddForm"
+                >
+                    {{ t('item.fields.add') }}
+                </button>
+            </template>
+
+            <p v-else-if="atFieldLimit" class="text-meta text-ink-muted">
+                {{ t('item.fields.limit_reached', { limit: fieldLimit }) }}
+            </p>
+        </section>
 
         <template v-if="item !== null">
             <!-- Kategorin: en sökbar väljare ur trädet, ett värde. -->
@@ -1118,6 +1482,22 @@ function submit() {
                 </Link>
             </template>
         </div>
+
+        <!-- Borttagningen av ett EGET fält frågar först (issue 419): fältet
+             och dess värden går till papperskorgen och kan återställas
+             därifrån i 30 dagar. Fältet lämnar formuläret när servern svarat,
+             genom watch:en på propen. -->
+        <UiConfirmDialog
+            :open="fieldToRemove !== null"
+            :heading="t('item.fields.remove_heading', { label: fieldToRemove?.label ?? '' })"
+            :body="t('item.fields.remove_body')"
+            :confirm-label="t('item.fields.remove_confirm')"
+            :pending="removePending"
+            :trigger="removeTrigger"
+            tone="danger"
+            @confirm="removeOwnField"
+            @cancel="fieldToRemove = null"
+        />
 
         <UiConfirmDialog
             :open="leaveVisit !== null"
