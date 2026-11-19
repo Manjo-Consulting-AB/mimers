@@ -16,6 +16,55 @@
         }
     },
     {
+        "name": "attachments_upload",
+        "parameters": {
+            "content_base64": {
+                "type": "string"
+            },
+            "filename": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "filename",
+            "content_base64"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "attachments_upload_url",
+        "parameters": {
+            "byte_size": {
+                "minimum": 1,
+                "type": "integer"
+            },
+            "filename": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "filename",
+            "byte_size"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "categories_create",
         "parameters": {
             "container": {

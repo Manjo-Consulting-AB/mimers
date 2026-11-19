@@ -35,6 +35,7 @@ class EnsureMcpEnabled
             'oauth/register',
             'mcp',
             'mcp-files/*',
+            'mcp-uploads/*',
         )) {
             abort(404);
         }

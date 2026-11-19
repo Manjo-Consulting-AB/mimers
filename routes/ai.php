@@ -1,9 +1,11 @@
 <?php
 
 use App\Mcp\Http\AttachmentDownloadController;
+use App\Mcp\Http\AttachmentUploadController;
 use App\Mcp\Middleware\ResolveAgent;
 use App\Mcp\Servers\MimersServer;
 use App\Support\Mcp\AttachmentDownloadLink;
+use App\Support\Mcp\AttachmentUploadLink;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
@@ -44,3 +46,14 @@ $mcpFiler
     ->get('/mcp-files/{attachment}/{agent}', AttachmentDownloadController::class)
     ->middleware([SubstituteBindings::class, 'signed'])
     ->name(AttachmentDownloadLink::ROUTE);
+
+/*
+ * Issue 405 · Uppladdningsadressen från `attachments_upload_url`, se
+ * App\Support\Mcp\AttachmentUploadLink. Ingen Sanctum-token och ingen rutt
+ * under `/api`: signaturen är autentiseringen, och den binder agenten,
+ * itemet, filnamnet och storleken. Kontrollern prövar åtkomsten och
+ * kopieringsspärren på nytt och spärrar adressen efter en användning.
+ */
+Route::put('/mcp-uploads/{item}/{agent}', AttachmentUploadController::class)
+    ->middleware([SubstituteBindings::class, 'signed'])
+    ->name(AttachmentUploadLink::ROUTE);

@@ -3,6 +3,8 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\AttachmentsGet;
+use App\Mcp\Tools\AttachmentsUpload;
+use App\Mcp\Tools\AttachmentsUploadUrl;
 use App\Mcp\Tools\CategoriesCreate;
 use App\Mcp\Tools\CategoriesList;
 use App\Mcp\Tools\CategoriesUpdate;
@@ -58,6 +60,8 @@ class MimersServer extends Server
         ContainersCreate::class,
         ContainersUpdate::class,
         AttachmentsGet::class,
+        AttachmentsUpload::class,
+        AttachmentsUploadUrl::class,
         CategoriesCreate::class,
         CategoriesList::class,
         CategoriesUpdate::class,
