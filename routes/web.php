@@ -1269,6 +1269,17 @@ Route::middleware('auth')->group(function () {
         ->name('containers.items.move');
 
     /*
+     * Issue 1402 · Flyttvarningen, se App\Http\Controllers\ItemMoveController::
+     * audience och [[ADR-0069 Flytta ett item inom containern]]
+     * § Uppföljning 2026-11-18. Väljaren frågar FÖRE POST:en vilka som får
+     * åtkomst; rutten flyttar ingenting och bär samma behörighet som
+     * `move` ovan. `to_parent` skickas alltid (`?to_parent=` = toppnivån).
+     */
+    Route::get('/containers/{container}/items/{item}/move/audience', [ItemMoveController::class, 'audience'])
+        ->scopeBindings()
+        ->name('containers.items.move.audience');
+
+    /*
      * Issue 60 · Bilagorna på itemets detaljvy — uppladdning och mjuk
      * radering, se App\Http\Controllers\AttachmentController.
      *

@@ -60,6 +60,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  *   `can_create_root`.
  * - Har itemet flera föräldrar (`parents`) kommer först ett steg som frågar
  *   vilken placering som flyttas; svaret blir `from_parent`.
+ * - Innan flytten skickas frågar väljaren `check` om någon får ny åtkomst
+ *   (issue 1402 · [[ADR-0069 Flytta ett item inom containern]] § Uppföljning
+ *   2026-11-18). `widens: false` skickar valet direkt, som förut. `widens:
+ *   true` — eller en hämtning som misslyckades — visar ett bekräftelsesteg i
+ *   samma dialog: ägaren ser namnen, alla andra bara att fler får åtkomst.
+ *   *Cancel* går tillbaka till trädet med valet kvar.
  * - *Move here* stänger inte dialogen: anroparen skickar flytten och stänger
  *   väljaren när den lyckas. Ett fel från servern (`error`) ritas i dialogen,
  *   så att användaren kan välja om utan att börja om.
@@ -92,6 +98,12 @@ const props = defineProps({
     error: { type: String, default: null },
     /* Sant medan flytten skickas. */
     pending: { type: Boolean, default: false },
+    /*
+     * Frågan FÖRE flytten: `(valt led, placering) => Promise<{widens, names?}>`,
+     * se issue 1402. Komponenten gör inget HTTP-anrop själv — sidan äger
+     * adressen och sessionen, och väljarens sökning ska förbli lokal.
+     */
+    check: { type: Function, default: null },
 });
 
 const emit = defineEmits(['choose', 'close']);
@@ -134,6 +146,23 @@ const canChoose = computed(() => {
 const picked = ref(false);
 const placement = ref(null);
 const step = ref('tree');
+
+/*
+ * Flyttvarningen (issue 1402). `checking` stänger knappen medan frågan är i
+ * luften, och `confirmNames` är `null` för alla utom ägaren — även när
+ * hämtningen misslyckades, så att steget då visar texten för övriga.
+ */
+const checking = ref(false);
+const confirmNames = ref(null);
+
+/*
+ * Texten i bekräftelsesteget. Namnen kommer bara med när servern gav dem
+ * (ägarkontot); annars står meningen utan namn och utan antal, och det är
+ * hela skillnaden mellan de två nycklarna.
+ */
+const confirmText = computed(() => (confirmNames.value === null
+    ? t('item.move.audience.unnamed', { name: props.itemName })
+    : t('item.move.audience.named', { names: confirmNames.value.join(', '), name: props.itemName })));
 
 /* Itemet och dess ättlingar, ur trädet. Ett item under två föräldrar finns på båda ställena. */
 const blocked = computed(() => {
@@ -247,6 +276,8 @@ watch(
                 picked.value = false;
                 placement.value = props.parents.length === 1 ? props.parents[0].ulid : null;
                 step.value = props.parents.length > 1 ? 'placement' : 'tree';
+                checking.value = false;
+                confirmNames.value = null;
             }
 
             await nextTick();
@@ -260,13 +291,13 @@ watch(
     },
 );
 
-function choose() {
+async function choose() {
     if (! canChoose.value) {
         return;
     }
 
     if (props.move) {
-        emit('choose', chosen.value, placement.value);
+        await askBeforeMoving();
 
         return;
     }
@@ -274,6 +305,46 @@ function choose() {
     emit('choose', chosen.value);
 
     dialogElement.value?.close();
+}
+
+/*
+ * Frågan före flytten. Servern svarar om någon får ny åtkomst; ett misslyckat
+ * anrop behandlas som `widens: true` — det är bättre att fråga en gång för
+ * mycket än att flytta tyst (issue 1402). Ingen POST går förrän användaren
+ * har bekräftat.
+ */
+async function askBeforeMoving() {
+    checking.value = true;
+
+    let svar = { widens: true };
+
+    try {
+        svar = (await props.check?.(chosen.value, placement.value)) ?? { widens: true };
+    } catch {
+        svar = { widens: true };
+    } finally {
+        checking.value = false;
+    }
+
+    if (svar.widens !== true) {
+        emit('choose', chosen.value, placement.value);
+
+        return;
+    }
+
+    confirmNames.value = Array.isArray(svar.names) ? svar.names : null;
+    step.value = 'confirm';
+}
+
+/* Bekräftelsestegets *Move*: valet skickas vidare till formuläret. */
+function confirmMove() {
+    emit('choose', chosen.value, placement.value);
+}
+
+/* *Cancel* går tillbaka till trädet — valet står kvar markerat. */
+function backToTree() {
+    confirmNames.value = null;
+    step.value = 'tree';
 }
 
 /* Steget före trädet: vilken placering flyttas? */
@@ -392,6 +463,39 @@ function onClosed() {
                         {{ t('item.move.placement_back') }}
                     </button>
 
+                    <!--
+                        Flyttvarningen (issue 1402 · [[ADR-0069 Flytta ett item
+                        inom containern]] § Uppföljning 2026-11-18). Steget
+                        kommer efter valet och före POST:en: ägaren ser vilka
+                        som får åtkomst, alla andra bara att fler får det.
+                        *Cancel* lämnar valet kvar i trädet, så ett tryck för
+                        mycket kostar inget.
+                    -->
+                    <div v-if="move && step === 'confirm'" class="flex flex-col gap-3">
+                        <p class="px-2 text-body text-ink">
+                            {{ confirmText }}
+                        </p>
+
+                        <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                            <button
+                                type="button"
+                                class="inline-flex min-h-11 items-center justify-center rounded-control border border-border px-4 font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                                @click="backToTree"
+                            >
+                                {{ t('item.form.parent_cancel') }}
+                            </button>
+
+                            <button
+                                type="button"
+                                :disabled="pending"
+                                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                                @click="confirmMove"
+                            >
+                                {{ t('item.move.audience.confirm') }}
+                            </button>
+                        </div>
+                    </div>
+
                     <FormField
                         v-if="! move || step === 'tree'"
                         v-slot="{ describedBy }"
@@ -462,7 +566,7 @@ function onClosed() {
                     <button
                         v-if="! move || step === 'tree'"
                         type="button"
-                        :disabled="!canChoose || pending"
+                        :disabled="!canChoose || pending || checking"
                         class="inline-flex min-h-11 items-center justify-center self-end rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                         @click="choose"
                     >
