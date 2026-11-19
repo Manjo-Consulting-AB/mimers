@@ -1,6 +1,6 @@
 # ADR-0088 Versionshistorik för items
 
-**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0008 Soft delete och papperskorg]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0081 All lagrad data räknas mot kvoten]], [[ADR-0066 Itemets anteckning]] och [[ADR-0087 MCP-server för agenter]] · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0008 Soft delete och papperskorg]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0081 All lagrad data räknas mot kvoten]], [[ADR-0066 Itemets anteckning]] och [[ADR-0087 MCP-server för agenter]] · § Riktning 2 ändrad av [[ADR-0089 Egna fält på items]]: versionen bär fältvärdena i stället för de sex kolumnerna · [[ADR-index]]
 
 Tonys beslut 2026-11-18, efter en diskussion samma dag. Tony antog riktningarna ("vi kör helt efter dina förslag"). Det som står som *utformad av Claude* är detaljer som Claude satte i samma diskussion och som Tony godkände uttryckligen ("jag godkänner dina detaljer"). De är beslutade och inga förslag.
 
@@ -23,6 +23,7 @@ Tonys beslut 2026-11-18, efter en diskussion samma dag. Tony antog riktningarna 
 ### Riktning 2, vad en version är (Tony 2026-11-18, utformad av Claude)
 
 - En version är en ögonblicksbild av itemets egna fält **före** en ändring: `name`, `description`, `notes`, `manufacturer`, `model`, `serial_number`, `position_note`, `purchased_at`, `warranty_until`, `category_id`, `cover_attachment_id`, `icon`, `icon_color` och taggmängden.
+  - *Ändrad 2026-11-19 av [[ADR-0089 Egna fält på items]]:* `manufacturer`, `model`, `serial_number`, `position_note`, `purchased_at` och `warranty_until` blir egna fält. Versionen bär itemets fältvärden i stället för de sex kolumnerna, och en återställning hoppar över ett fält som har raderats.
 - **Filer versioneras inte.** En fil är oföränderlig och deduplicerad ([[Filer och lagring]]). Den kan inte skrivas över, bara tas bort, och det fångar papperskorgen. Versionen pekar på omslagsbilden och på taggarna med id, och bär ingen fil.
 - Scheman, kostnader, lån, bilagor och relationer versioneras inte i första steget. Relationer som tas bort (`UnlinkItems`, hård radering) står kvar som en öppen punkt i [[Tankar]].
 
