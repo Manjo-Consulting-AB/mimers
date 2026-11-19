@@ -5,6 +5,8 @@ use App\Actions\Notification\CreatesAgentDeletionNotifications;
 use App\Actions\Notification\MarkInAppNotificationsRead;
 use App\Actions\Trash\ListAllTrash;
 use App\Actions\Trash\RestoreAgentDeletionBatch;
+use App\Actions\Trash\RestoreContent;
+use App\Actions\Trash\RestoreTrashedContainer;
 use App\Console\DeliversNotifications;
 use App\Mail\NotificationMail;
 use App\Mcp\Tools\AttachmentsDelete;
@@ -177,6 +179,45 @@ it('delar tillfälle inom 15 minuter och börjar ett nytt efteråt', function ()
         ->and($fjarde)->not->toBe($forsta);
 });
 
+it('väntar med notisen till gränsen är strikt passerad och låter en radering på gränsen höra till tillfället', function () {
+    [, $token, $anvandare, $container] = raderingsMiljo();
+
+    $a = raderingsItem($container);
+    $b = raderingsItem($container);
+
+    $batch = mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $a->ulid]))['batch'];
+
+    // Exakt 15 minuter: tillfället är fortfarande öppet, så notisen får
+    // inte ha skapats — den hade aldrig kunnat omnämna en radering som
+    // fortfarande hör hit (granskningsfynd 3).
+    travel(15)->minutes();
+    app(CreatesAgentDeletionNotifications::class)->handle();
+
+    expect(Notification::query()->where('type', Notification::TYPE_AGENT_DELETED)->count())->toBe(0);
+
+    // En radering på exakt gränsen hör till samma tillfälle.
+    $andra = mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $b->ulid]))['batch'];
+
+    expect($andra)->toBe($batch);
+
+    // Ytterligare exakt 15 minuter efter den sista: fortfarande inte mogen.
+    travel(15)->minutes();
+    app(CreatesAgentDeletionNotifications::class)->handle();
+
+    expect(Notification::query()->where('type', Notification::TYPE_AGENT_DELETED)->count())->toBe(0);
+
+    travel(1)->minutes();
+    app(CreatesAgentDeletionNotifications::class)->handle();
+
+    $notis = Notification::query()
+        ->where('type', Notification::TYPE_AGENT_DELETED)
+        ->where('user_id', $anvandare->id)
+        ->sole();
+
+    expect($notis->payload['total'])->toBe(2)
+        ->and($notis->payload['batch'])->toBe($batch);
+});
+
 it('återställer hela tillfället och ingenting annat', function () {
     [$agent, $token, $anvandare, $container] = raderingsMiljo();
 
@@ -204,6 +245,80 @@ it('återställer hela tillfället och ingenting annat', function () {
         ->and($senare->refresh()->trashed())->toBeTrue();
 });
 
+it('ärver inte agentens märkning när användaren återställer och sedan raderar själv', function () {
+    [, $token, $anvandare, $container] = raderingsMiljo();
+
+    $item = raderingsItem($container);
+    $batch = mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $item->ulid]))['batch'];
+
+    app(RestoreContent::class)->handle('item', $item->refresh(), $anvandare);
+
+    expect($item->refresh()->trashed())->toBeFalse()
+        ->and($item->deleted_by_agent_id)->toBeNull()
+        ->and($item->agent_deletion_batch)->toBeNull();
+
+    // Användaren raderar själv: raden bär fortfarande ingen agentmärkning,
+    // och batchåterställningen rör den inte (granskningsfynd 1).
+    app(DeleteItem::class)->handle($item->refresh(), $anvandare);
+
+    expect($item->refresh()->trashed())->toBeTrue()
+        ->and($item->deleted_by_agent_id)->toBeNull()
+        ->and($item->agent_deletion_batch)->toBeNull();
+
+    $lista = app(ListAllTrash::class)->handle($anvandare, null, null, null);
+    $rad = collect($lista['entries'])->firstWhere('ulid', $item->ulid);
+
+    expect($rad['deleted_by_agent'])->toBeNull()
+        ->and($rad['agent_deletion_batch'])->toBeNull();
+
+    $action = app(RestoreAgentDeletionBatch::class);
+    $action->handle($anvandare, $action->models($batch));
+
+    expect($item->refresh()->trashed())->toBeTrue();
+});
+
+it('nollar agentmärkningen när en container återställs', function () {
+    [, $token, $anvandare, $container] = raderingsMiljo();
+
+    mcpResultat(mcpVerktyg($token, 'containers_delete', ['container' => $container->ulid]));
+
+    expect($container->refresh()->agent_deletion_batch)->toBeString();
+
+    app(RestoreTrashedContainer::class)->handle($container, $anvandare);
+
+    $container->refresh();
+
+    expect($container->trashed())->toBeFalse()
+        ->and($container->deleted_by_agent_id)->toBeNull()
+        ->and($container->agent_deletion_batch)->toBeNull();
+});
+
+it('hoppar över en rad som hör till en annan batch och visar antalet', function () {
+    [$agent, $token, $anvandare, $container] = raderingsMiljo();
+
+    $item = raderingsItem($container);
+    $bilaga = papperskorgsBilaga($item, $agent->account, $anvandare);
+
+    // Bilagan raderas först, itemet i ett senare tillfälle: bilagan kan
+    // inte återställas medan itemet ligger i papperskorgen.
+    $batch = mcpResultat(mcpVerktyg($token, 'attachments_delete', ['attachment' => $bilaga->ulid]))['batch'];
+
+    travel(16)->minutes();
+    mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $item->ulid]));
+
+    from('/trash')
+        ->actingAs($anvandare)
+        ->post(route('trash.batch.restore'), ['batch' => $batch])
+        ->assertRedirect('/trash')
+        ->assertSessionHas('status', 'trash-restored')
+        ->assertSessionHasErrors([
+            'trash' => __('ui.trash.overview.agent_batch_skipped', ['count' => 1]),
+        ]);
+
+    expect($bilaga->refresh()->trashed())->toBeTrue()
+        ->and($item->refresh()->trashed())->toBeTrue();
+});
+
 it('återställer tillfället via ruttens bekräftelse', function () {
     [, $token, $anvandare, $container] = raderingsMiljo();
 
@@ -228,6 +343,13 @@ it('skapar agent.deleted en gång per tillfälle, 15 minuter efter sista raderin
     mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $b->ulid]));
 
     travel(14)->minutes();
+    app(CreatesAgentDeletionNotifications::class)->handle();
+
+    expect(Notification::query()->where('type', Notification::TYPE_AGENT_DELETED)->count())->toBe(0);
+
+    // Exakt 15 minuter är fortfarande samma tillfälle — notisen väntar
+    // tills gränsen är strikt passerad (granskningsfynd 3).
+    travel(1)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
 
     expect(Notification::query()->where('type', Notification::TYPE_AGENT_DELETED)->count())->toBe(0);
@@ -266,7 +388,7 @@ it('skickar agent.deleted som mejl när mejlet är påslaget', function () {
     $item = raderingsItem($container);
     mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $item->ulid]));
 
-    travel(15)->minutes();
+    travel(16)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
     app(DeliversNotifications::class)->handle();
 
@@ -290,7 +412,7 @@ it('ger containerns ägare notisen när någon annans agent raderar', function (
 
     mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $item->ulid]));
 
-    travel(15)->minutes();
+    travel(16)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
 
     $agarens = Notification::query()
@@ -318,7 +440,7 @@ it('anger hur många items en raderad container innehöll', function () {
 
     mcpResultat(mcpVerktyg($token, 'containers_delete', ['container' => $container->ulid]));
 
-    travel(15)->minutes();
+    travel(16)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
 
     $notis = Notification::query()
@@ -353,7 +475,7 @@ it('har appkanalen på även när användaren stängt av den, och mejlet av', fu
     $item = raderingsItem($container);
     mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $item->ulid]));
 
-    travel(15)->minutes();
+    travel(16)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
 
     $notis = Notification::query()
@@ -396,7 +518,8 @@ it('ger agent.delete_limit på den 21:a raderingen och släpper taket först nä
     travel(10)->minutes();
     mcpFel(mcpVerktyg($token, 'items_delete', ['item' => $items[20]->ulid]));
 
-    travel(5)->minutes();
+    // Notisen kräver strikt mer än 15 minuter efter sista lyckade raderingen.
+    travel(6)->minutes();
     app(CreatesAgentDeletionNotifications::class)->handle();
 
     $notis = Notification::query()
@@ -408,7 +531,7 @@ it('ger agent.delete_limit på den 21:a raderingen och släpper taket först nä
 
     // Spärren står kvar också när timmen gått: det är läsningen som släpper
     // taket, inte tiden (issue 406 § 5).
-    travel(46)->minutes();
+    travel(45)->minutes();
 
     expect(mcpFel(mcpVerktyg($token, 'items_delete', ['item' => $items[20]->ulid]))['code'])
         ->toBe('agent.delete_limit');
@@ -416,6 +539,43 @@ it('ger agent.delete_limit på den 21:a raderingen och släpper taket först nä
     app(MarkInAppNotificationsRead::class)->handle($anvandare, null);
 
     expect(mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $items[20]->ulid]))['deleted'])->toBeTrue();
+});
+
+it('släpper inte taket för att en äldre agent.deleted är läst', function () {
+    [$agent, $token, $anvandare, $container] = raderingsMiljo();
+
+    $items = [];
+
+    foreach (range(1, 21) as $nummer) {
+        $items[] = raderingsItem($container);
+    }
+
+    for ($nummer = 0; $nummer < 20; $nummer++) {
+        mcpResultat(mcpVerktyg($token, 'items_delete', ['item' => $items[$nummer]->ulid]));
+    }
+
+    // En äldre notis för samma agent och användare, redan läst: den hör
+    // till ett annat tillfälle och får inte nollställa räkningen
+    // (granskningsfynd 6).
+    $gammal = Notification::factory()->create([
+        'account_id' => $agent->account_id,
+        'user_id' => $anvandare->id,
+        'type' => Notification::TYPE_AGENT_DELETED,
+        'payload' => ['agent' => $agent->name, 'batch' => '01AAAAAAAAAAAAAAAAAAAAAAAA', 'total' => 5],
+        'dedupe_key' => 'agent.deleted:'.$agent->ulid.':01AAAAAAAAAAAAAAAAAAAAAAAA:'.$anvandare->ulid,
+    ]);
+
+    NotificationDelivery::factory()->create([
+        'notification_id' => $gammal->id,
+        'channel' => NotificationDelivery::CHANNEL_IN_APP,
+        'status' => NotificationDelivery::STATUS_SENT,
+        'attempts' => 0,
+        'sent_at' => now(),
+        'read_at' => now(),
+    ]);
+
+    expect(mcpFel(mcpVerktyg($token, 'items_delete', ['item' => $items[20]->ulid]))['code'])
+        ->toBe('agent.delete_limit');
 });
 
 it('märker alla fem verktygen som radering med destructiveHint', function () {

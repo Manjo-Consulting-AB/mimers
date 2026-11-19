@@ -232,6 +232,10 @@ abstract class McpTool extends Tool
      * samma batch i `meta`. Transaktionen gör att märkningen, loggraden och
      * raderingen faller ihop: ett fel lämnar varken en batch eller en rad.
      *
+     * **En agent i taget.** Ett radlås på agenten omger taket, tillfället och
+     * actionen, så samtidiga anrop från samma agent inte kan räkna förbi
+     * taket eller hamna i olika tillfällen (granskningsfynd 5).
+     *
      * @template T
      *
      * @param  Closure(): T  $delete
@@ -239,14 +243,29 @@ abstract class McpTool extends Tool
      */
     protected function deleteAsAgent(Agent $agent, Closure $delete): array
     {
-        $deletion = AgentDeletion::forRequest();
-        $batch = $deletion->begin($agent);
+        // Serialiserar en agents raderingar (granskningsfynd 5). Både taket
+        // och tillfället är check-then-act — de räknar och läser innan raden
+        // raderas — så två samtidiga anrop kunde annars passera taket ihop
+        // eller få var sitt tillfälle. Radlåset på agenten tas före båda
+        // läsningarna och hålls till actionen är klar; nästa anrop väntar
+        // och ser den förras radering.
+        return DB::transaction(function () use ($agent, $delete): array {
+            Agent::query()->whereKey($agent->getKey())->lockForUpdate()->first();
 
-        try {
-            return ['result' => DB::transaction($delete), 'batch' => $batch];
-        } finally {
-            $deletion->end();
-        }
+            // Omprövningen under låset är den som gäller. Den tidiga
+            // kontrollen i handle() står kvar så att ett anrop som ändå ska
+            // avvisas inte först slår upp målet.
+            app(AgentDeletionLimit::class)->assertCanDelete($agent);
+
+            $deletion = AgentDeletion::forRequest();
+            $batch = $deletion->begin($agent);
+
+            try {
+                return ['result' => $delete(), 'batch' => $batch];
+            } finally {
+                $deletion->end();
+            }
+        });
     }
 
     /**

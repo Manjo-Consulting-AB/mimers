@@ -18,12 +18,19 @@ use Illuminate\Support\Carbon;
  * famlar mot en saknad ULID bränner alltså inte sin kvot.
  *
  * **Taket släpps av notisen, inte av tiden.** Fönstret är en timme, men
- * räkningen börjar om vid det senaste `agent.deleted` som användaren LÄST i
- * appen. När notisen är läst går nästa radering igenom direkt, oavsett hur
- * många som hunnit ske inom timmen; utan läsningen står taket kvar.
- * Notisen skapas 15 minuter efter den sista raderingen, så den som blir
- * stoppad behöver aldrig vänta på en ny notis (Riktning 9: avvisade försök
- * förlänger inte tillfället).
+ * räkningen börjar om när användaren LÄST notisen för det tillfälle som
+ * utlöste taket — inte vilken `agent.deleted` som helst. Att läsa en äldre
+ * notis medan det aktuella tillfället ännu inte fått sin får alltså inte
+ * släppa spärren (granskningsfynd 6). När rätt notis är läst går nästa
+ * radering igenom direkt, oavsett hur många som hunnit ske inom timmen; utan
+ * läsningen står taket kvar. Notisen skapas 15 minuter efter den sista
+ * raderingen, så den som blir stoppad behöver aldrig vänta på en ny notis
+ * (Riktning 9: avvisade försök förlänger inte tillfället).
+ *
+ * **Tillfället som utlöste taket är den max:te raderingen sedan den senaste
+ * frigöringen.** Räkningen sker i tidsordning, och den raderingen bär
+ * batchen vars notis är nyckeln tillbaka. Det gör uppslaget oberoende av
+ * vilken ordning notiserna skapades i.
  *
  * Gränsen och fönstret läses ur `config('mcp.rate_limits.delete.agent')`, samma
  * post som beskriver slaget i Riktning 13 — McpRateLimiter hoppar över just
@@ -47,23 +54,46 @@ final class AgentDeletionLimit
             ]);
         }
 
-        $cutoff = now()->subSeconds($windowSeconds);
-        $readAt = $this->lastReadAt($agent);
+        $since = now()->subSeconds($windowSeconds);
 
-        // Läsningen är den nya startpunkten när den ligger inom fönstret.
-        $since = $readAt !== null && $readAt->gt($cutoff) ? $readAt : $cutoff;
+        // Räkningen börjar om vid den läsning som gäller — notisen för
+        // tillfället som utlöste taket. Loopen är sällan mer än ett varv:
+        // den går vidare bara när en tidigare frigöring redan ligger i
+        // fönstret.
+        while (true) {
+            $rows = AuditLog::query()
+                ->where('agent_id', $agent->getKey())
+                ->whereIn('action', AgentDeletion::DELETE_ACTIONS)
+                ->where('created_at', '>', $since)
+                ->orderBy('created_at')
+                ->orderBy('id')
+                ->limit($max)
+                ->get(['id', 'created_at', 'meta']);
 
-        $count = AuditLog::query()
-            ->where('agent_id', $agent->getKey())
-            ->whereIn('action', AgentDeletion::DELETE_ACTIONS)
-            ->where('created_at', '>', $since)
-            ->count();
+            if ($rows->count() < $max) {
+                return;
+            }
 
-        if ($count >= $max) {
-            throw new McpToolException('agent.delete_limit', [
-                'limit' => $max,
-                'window_seconds' => $windowSeconds,
-            ]);
+            // Den max:te raderingen sedan startpunkten utlöste taket; dess
+            // batch är tillfället användaren måste ha öppnat notisen för.
+            $batch = $rows->last()->meta['agent_deletion_batch'] ?? null;
+
+            $readAt = is_string($batch) && $batch !== ''
+                ? $this->readAtForBatch($agent, $batch)
+                : null;
+
+            // Ingen läsning av RÄTT notis: spärren står kvar. Att en annan
+            // `agent.deleted` är läst flyttar ingenting.
+            if ($readAt === null || ! $readAt->gt($since)) {
+                throw new McpToolException('agent.delete_limit', [
+                    'limit' => $max,
+                    'window_seconds' => $windowSeconds,
+                ]);
+            }
+
+            // Läsningen flyttar startpunkten: det som räknats är avräknat,
+            // och bara raderingar efter läsningen räknas.
+            $since = $readAt;
         }
     }
 
@@ -95,21 +125,23 @@ final class AgentDeletionLimit
     }
 
     /**
-     * Det senaste `agent.deleted` som agentens användare läst i appen.
+     * När agentens användare läste notisen för EXAKT den batchen, eller null
+     * om den inte är läst (eller inte finns ännu).
+     *
      * E-postens leveransrad räknas aldrig: taket släpps bara av notisen i
-     * appen, som inte går att stänga av (Riktning 14). Nyckeln binder
-     * läsningen till DEN HÄR agenten — en annan agents notis släpper inte
-     * taket, eftersom `dedupe_key` bär agentens ULID.
+     * appen, som inte går att stänga av (Riktning 14). Dedupe-nyckeln bär
+     * agenten, batchen och mottagaren, så uppslaget kan inte träffa en annan
+     * agents eller en annan batchs notis.
      */
-    private function lastReadAt(Agent $agent): ?Carbon
+    private function readAtForBatch(Agent $agent, string $batch): ?Carbon
     {
         $readAt = NotificationDelivery::query()
             ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
             ->whereNotNull('read_at')
-            ->whereHas('notification', function ($query) use ($agent): void {
+            ->whereHas('notification', function ($query) use ($agent, $batch): void {
                 $query->where('user_id', $agent->user_id)
                     ->where('type', Notification::TYPE_AGENT_DELETED)
-                    ->where('dedupe_key', 'like', 'agent.deleted:'.$agent->ulid.':%');
+                    ->where('dedupe_key', 'like', 'agent.deleted:'.$agent->ulid.':'.$batch.':%');
             })
             ->max('read_at');
 

@@ -112,7 +112,7 @@ const message = computed(() => {
         });
 
         const containers = (payload.containers ?? []).map((container) => t(
-            'notifications.list.type.agent.deleted.container',
+            'notifications.list.type.agent.container',
             { container: container.name, items: container.items },
         ));
 

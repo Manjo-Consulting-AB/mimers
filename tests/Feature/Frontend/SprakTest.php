@@ -639,6 +639,36 @@ it('har en mening åt varje notistyp klockan visar', function () {
 });
 
 /*
+ * Notisradens meningar, se issue 406 § 4 och
+ * resources/js/components/NotificationRow.vue.
+ *
+ * Meningen för en raderad container ligger som SYSKON till typens mening i
+ * ui.php — `notifications.list.type.agent.container` — och inte under
+ * `…agent.deleted.container`: `deleted` är ett strängblad. Ett uppslag med
+ * det längre namnet gav nyckeln tillbaka, och antalet items visades aldrig i
+ * appen (granskningsfynd 2). Provet läser nycklarna ur källkoden, som
+ * grannproven: en mening som byter namn i komponenten följer med, och en
+ * nyckel som glöms faller.
+ */
+it('hämtar agentraderingens meningar ur ui.php', function () {
+    $rad = File::get(resource_path('js/components/NotificationRow.vue'));
+
+    // `\s*` för att komponenten radbryter mellan `t(` och nyckeln i
+    // containermeningen.
+    preg_match_all("/t\\(\\s*'([a-z0-9_.]+)'/", $rad, $träffar);
+
+    expect($träffar[1])->toContain('notifications.list.type.agent.deleted')
+        ->and($träffar[1])->toContain('notifications.list.type.agent.container');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    expect(Lang::get('ui.notifications.list.type.agent.container', ['container' => 'Bilen', 'items' => 3], 'en'))
+        ->toBe('The container "Bilen" held 3 items.');
+});
+
+/*
  * Dashboardens strängar, se issue 122, 124, 125 och 126.
  *
  * Samma form som skalets prov strax ovanför: nycklarna läses ur källkoden i

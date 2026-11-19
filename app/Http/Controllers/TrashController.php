@@ -181,6 +181,12 @@ class TrashController extends Controller
      * Blir ingenting kvar att återställa är svaret 403 — en ULID utanför
      * användarens räckvidd avslöjas inte som 404, samma svar som en postad
      * rad han inte får återställa får.
+     *
+     * **Överhoppade rader når användaren.** Ett tillfälle kan innehålla en
+     * rad som inte går att återställa ännu — en bilaga vars item hör till en
+     * annan batch, en container som möter kvoten. Actionen räknar dem, och
+     * svaret bär antalet som ett fältfel på `trash`, samma ruta som ett
+     * domänfel vid en enskild återställning (granskningsfynd 4).
      */
     public function restoreBatch(Request $request, RestoreAgentDeletionBatch $restoreBatch): RedirectResponse
     {
@@ -231,9 +237,21 @@ class TrashController extends Controller
 
         abort_if($total === 0, 403);
 
-        $restoreBatch->handle($user, $allowed);
+        $resultat = $restoreBatch->handle($user, $allowed);
 
-        return back()->with('status', 'trash-restored');
+        $svar = back()->with('status', 'trash-restored');
+
+        // En rad som inte kunde återställas — en bilaga vars item ligger i en
+        // annan batch, en container som möter kvoten — stannar i
+        // papperskorgen medan resten kommer tillbaka. Utan raden trodde
+        // användaren att hela tillfället var tillbaka (granskningsfynd 4).
+        if ($resultat['skipped'] > 0) {
+            $svar->withErrors([
+                'trash' => __('ui.trash.overview.agent_batch_skipped', ['count' => $resultat['skipped']]),
+            ]);
+        }
+
+        return $svar;
     }
 
     /**

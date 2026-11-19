@@ -10,6 +10,7 @@ use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Återställer hela ett tillfälle av agentraderingar — raderna som delar
@@ -98,33 +99,42 @@ class RestoreAgentDeletionBatch
      */
     public function handle(User $actor, array $models): array
     {
-        $restored = 0;
-        $skipped = 0;
+        // Hela svepet i EN transaktion. De enskilda återställningarna öppnar
+        // egna transaktioner, som här blir sparpunkter: en rad som avvisas
+        // rullas tillbaka för sig och resten av tillfället går igenom. Utan
+        // den yttre transaktionen hade ett fel mitt i lämnat en delvis
+        // återställd batch utan att någon kunde säga vilken halva som gällt.
+        return DB::transaction(function () use ($actor, $models): array {
+            $restored = 0;
+            $skipped = 0;
 
-        // Containrarna först: ett item som raderades innan sin container hör
-        // till samma tillfälle, och RestoreContent läser itemets container
-        // när den loggar raden — den måste vara levande igen då.
-        foreach ($models['containers'] as $container) {
-            $this->restoreTrashedContainer->handle($container, $actor);
-            $restored++;
-        }
+            // Containrarna först: ett item som raderades innan sin container
+            // hör till samma tillfälle, och RestoreContent läser itemets
+            // container när den loggar raden — den måste vara levande igen då.
+            // Containern hanteras som varje annan rad: ett domänfel (till
+            // exempel containerkvoten) hoppas över i stället för att avbryta
+            // svepet (granskningsfynd 4).
+            foreach ($models['containers'] as $container) {
+                [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreTrashedContainer->handle($container, $actor));
+            }
 
-        foreach ($models['items'] as $item) {
-            [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('item', $item, $actor));
-        }
+            foreach ($models['items'] as $item) {
+                [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('item', $item, $actor));
+            }
 
-        [$categoryRestored, $skipped] = $this->restoreCategories($models['categories'], $actor, $skipped);
-        $restored += $categoryRestored;
+            [$categoryRestored, $skipped] = $this->restoreCategories($models['categories'], $actor, $skipped);
+            $restored += $categoryRestored;
 
-        foreach ($models['tags'] as $tag) {
-            [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('tag', $tag, $actor));
-        }
+            foreach ($models['tags'] as $tag) {
+                [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('tag', $tag, $actor));
+            }
 
-        foreach ($models['attachments'] as $attachment) {
-            [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('attachment', $attachment, $actor));
-        }
+            foreach ($models['attachments'] as $attachment) {
+                [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('attachment', $attachment, $actor));
+            }
 
-        return ['restored' => $restored, 'skipped' => $skipped];
+            return ['restored' => $restored, 'skipped' => $skipped];
+        });
     }
 
     /**

@@ -22,11 +22,15 @@ use Illuminate\Support\Collection;
  * listas i papperskorgen — så notisen räknar upp allt agenten raderade och
  * taket (App\Support\Mcp\AgentDeletionLimit) räknar samma rader.
  *
- * **15 minuter efter den SISTA lyckade raderingen.** Ett avvisat försök skriver
- * ingen rad och skjuter därför aldrig notisen framåt (Riktning 9). Cronen
- * (routes/console.php) kallar den varje minut; `dedupe_key` med agenten,
- * tillfället och mottagaren gör att en andra körning inte skapar en andra
- * notis.
+ * **Strikt mer än 15 minuter efter den SISTA lyckade raderingen.** Gränsen är
+ * densamma som batchen (AgentDeletion::openBatch): en radering på exakt 15
+ * minuter hör fortfarande till tillfället, så notisen får inte vara skapad då
+ * — den hade aldrig kunnat omnämna raderingen (granskningsfynd 3). Ett
+ * avvisat försök skriver ingen rad och skjuter därför aldrig notisen framåt
+ * (Riktning 9). Cronen (routes/console.php) kallar den varje minut;
+ * `dedupe_key` med agenten, tillfället och mottagaren gör att en andra
+ * körning inte skapar en andra notis, och ett tillfälle som redan fått sin
+ * notis hoppas över helt (granskningsfynd 7).
  *
  * **Mottagarna.** Agentens användare får allt. En container som någon annan
  * äger ger dessutom ägarkontots medlemmar en notis — men bara om det som
@@ -62,9 +66,17 @@ final class CreatesAgentDeletionNotifications
      */
     public function handle(): int
     {
+        // Kandidaterna är de tillfällen som HAR en radering äldre än
+        // gränsen: ett tillfälle som fortfarande fylls på har ingen sådan.
+        // Fönstret på ett dygn håller körningen borta från historiken; en
+        // notis som missats där är redan förbrukad, och cronen går varje
+        // minut. Att läsa hela tillfället efteråt — inte bara raderna i
+        // fönstret — är det som ger rätt antal när ett tillfälle varat
+        // längre än ett dygn (granskningsfynd 7).
         $rows = AuditLog::query()
             ->whereNotNull('agent_id')
             ->whereIn('action', AgentDeletion::DELETE_ACTIONS)
+            ->where('created_at', '<', $this->matureBefore())
             ->where('created_at', '>=', now()->subDay())
             ->get(['id', 'action', 'agent_id', 'container_id', 'created_at', 'meta']);
 
@@ -74,31 +86,79 @@ final class CreatesAgentDeletionNotifications
             $batch = $row->meta['agent_deletion_batch'] ?? null;
 
             if (is_string($batch) && $batch !== '') {
-                $batches[$batch][] = $row;
+                $batches[$batch] = (int) $row->agent_id;
             }
         }
 
         $created = 0;
 
-        foreach ($batches as $batch => $batchRows) {
-            $last = $this->lastDeletion($batchRows);
-
-            // Tillfället är öppet så länge raderingar kommer tätare än
-            // gränsen; notisen väntar tills det är stängt.
-            if ($last === null || $last->gt(now()->subMinutes(AgentDeletion::BATCH_MINUTES))) {
-                continue;
-            }
-
-            $agent = Agent::query()->find($batchRows[0]->agent_id);
+        foreach ($batches as $batch => $agentId) {
+            $agent = Agent::query()->find($agentId);
 
             if ($agent === null || $agent->user === null) {
                 continue;
             }
 
-            $created += $this->forBatch($agent, (string) $batch, $batchRows);
+            // Ett tillfälle som redan fått sina notiser rörs inte: en
+            // omkörning ska inte betala för containerfrågor, itemantal och
+            // dedupe-uppslag en gång i minuten (granskningsfynd 7).
+            if ($this->alreadyNotified($agent, (string) $batch)) {
+                continue;
+            }
+
+            $batchRows = $this->batchRows((string) $batch);
+            $last = $this->lastDeletion($batchRows->all());
+
+            // Tillfället är öppet så länge raderingar kommer högst
+            // BATCH_MINUTES efter den förra. Vid EXAKT gränsen hör
+            // raderingen fortfarande till tillfället (AgentDeletion::
+            // openBatch), och då får notisen inte redan vara skapad — den
+            // hade aldrig omnämnt raderingen. Därför krävs strikt mer än
+            // gränsen, samma jämförelse på sekunder som batchen använder
+            // (granskningsfynd 3).
+            if ($last === null
+                || $last->getTimestamp() >= now()->subMinutes(AgentDeletion::BATCH_MINUTES)->getTimestamp()) {
+                continue;
+            }
+
+            $created += $this->forBatch($agent, (string) $batch, $batchRows->all());
         }
 
         return $created;
+    }
+
+    /**
+     * Den tidigaste raderingen som kan höra till ett STÄNGT tillfälle.
+     */
+    private function matureBefore(): CarbonInterface
+    {
+        return now()->subMinutes(AgentDeletion::BATCH_MINUTES);
+    }
+
+    /**
+     * Har tillfället redan fått sin notis? `dedupe_key` bär agenten och
+     * batchen, så uppslaget träffar bara det här tillfället.
+     */
+    private function alreadyNotified(Agent $agent, string $batch): bool
+    {
+        return Notification::query()
+            ->where('type', Notification::TYPE_AGENT_DELETED)
+            ->where('dedupe_key', 'like', 'agent.deleted:'.$agent->ulid.':'.$batch.':%')
+            ->exists();
+    }
+
+    /**
+     * Hela tillfället, utan fönstret som kandidatfrågan använder.
+     *
+     * @return Collection<int, AuditLog>
+     */
+    private function batchRows(string $batch): Collection
+    {
+        return AuditLog::query()
+            ->whereNotNull('agent_id')
+            ->whereIn('action', AgentDeletion::DELETE_ACTIONS)
+            ->where('meta->agent_deletion_batch', $batch)
+            ->get(['id', 'action', 'agent_id', 'container_id', 'created_at', 'meta']);
     }
 
     /**

@@ -5304,6 +5304,12 @@ return [
             'restore_agent_batch_title' => 'Restore everything?',
             'restore_agent_batch_body' => 'Everything the agent deleted at this occasion is restored from the trash in one action. Nothing else is touched.',
             'restore_agent_batch_submit' => 'Restore everything',
+            // Issue 406 § 3: a row in the batch can depend on something that
+            // is still in the trash (for example an attachment whose item is
+            // in another batch). The rest is restored; the count says how
+            // many rows stayed, so the answer is never silently partial
+            // (review finding 4).
+            'agent_batch_skipped' => 'Could not restore :count of the rows, because something they depend on is still in the trash.',
         ],
 
         // The row under the container list, see issue 62b decision 8 and issue

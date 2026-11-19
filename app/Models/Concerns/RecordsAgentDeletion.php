@@ -19,6 +19,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * **Ingen agent i sammanhanget betyder ingen märkning.** En radering i appen,
  * av ett jobb eller av kontoraderingen går genom samma modell och lämnar
  * kolumnerna null — de beskriver agentens handling, inte raderingen i sig.
+ *
+ * **En människa som raderar en rad som en agent raderat tidigare rensar
+ * märkningen.** Utan nollningen hade raden burit agentens id och batch efter
+ * en återställning, och papperskorgen hade sagt *Deleted by {agenten}* om en
+ * människas radering — och batchåterställningen hade tagit med den. Samma
+ * nollning görs vid återställning, se `clearAgentDeletionMark()`.
  */
 trait RecordsAgentDeletion
 {
@@ -26,19 +32,41 @@ trait RecordsAgentDeletion
     {
         static::deleting(function (self $model): void {
             $deletion = app()->bound(AgentDeletion::class) ? app(AgentDeletion::class) : null;
-
-            if (! $deletion instanceof AgentDeletion || ! $deletion->isActive()) {
-                return;
-            }
+            $active = $deletion instanceof AgentDeletion && $deletion->isActive();
 
             // Raden är ännu inte mjukraderad: `saving`/`saved` rör bara de två
             // kolumnerna, och SoftDeletes sätter `deleted_at` efteråt i samma
             // transaktion.
             $model->forceFill([
-                'deleted_by_agent_id' => $deletion->agentId(),
-                'agent_deletion_batch' => $deletion->batch(),
-            ])->saveQuietly();
+                'deleted_by_agent_id' => $active ? $deletion->agentId() : null,
+                'agent_deletion_batch' => $active ? $deletion->batch() : null,
+            ]);
+
+            if ($model->isDirty(['deleted_by_agent_id', 'agent_deletion_batch'])) {
+                $model->saveQuietly();
+            }
         });
+    }
+
+    /**
+     * Nollar agentmärkningen vid en återställning.
+     *
+     * Kolumnerna beskriver raderingen som ligger i papperskorgen, inte raden:
+     * när den är tillbaka är det ingen agent som raderat den. Utan nollningen
+     * hade en senare mänsklig radering visat fel namn och kunnat återställas
+     * av `RestoreAgentDeletionBatch` som hörde till en annan händelse.
+     */
+    public function clearAgentDeletionMark(): void
+    {
+        if ($this->getAttribute('deleted_by_agent_id') === null
+            && $this->getAttribute('agent_deletion_batch') === null) {
+            return;
+        }
+
+        $this->forceFill([
+            'deleted_by_agent_id' => null,
+            'agent_deletion_batch' => null,
+        ])->saveQuietly();
     }
 
     /**
