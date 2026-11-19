@@ -6,6 +6,7 @@ use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Field\SyncItemFieldValues;
 use App\Models\AuditLog;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Usage\MetadataLedger;
@@ -50,8 +51,9 @@ use Illuminate\Support\Facades\DB;
  * **Läget före ändringen sparas som en version** (issue 412 · [[ADR-0088
  * Versionshistorik för items]]), i samma transaktion och före
  * `MetadataLedger::save()`. Skurven och taket bor i
- * App\Actions\Item\RecordItemVersion; hit hör bara jämförelsen av
- * taggmängden, som actionen behöver för att veta om något ändras alls.
+ * App\Actions\Item\RecordItemVersion; hit hör bara de önskade mängderna —
+ * taggarna och fältvärdena — som actionen skickar med så att versionen kan
+ * avgöra om något ändras alls.
  */
 class UpdateItem
 {
@@ -106,14 +108,16 @@ class UpdateItem
         DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields): void {
             // Läget FÖRE ändringen sparas som en version, i samma transaktion
             // (issue 412 · [[ADR-0088 Versionshistorik för items]]). Taggar
-            // byts först efteråt av SyncItemTags, och ett nytt item har
-            // ingen tidigare version — därför jämförs mängden här och fälten
-            // och taggarna sparas tillsammans. `null` betyder att anroparen
-            // inte rör taggarna.
+            // byts först efteråt av SyncItemTags, fältvärdena av
+            // SyncItemFieldValues, och ett nytt item har ingen tidigare
+            // version — därför jämförs mängderna här och kolumnerna,
+            // taggarna och fältvärdena sparas tillsammans. `null` betyder
+            // att anroparen inte rör mängden.
             $this->recordItemVersion->handle(
                 $item,
                 $actor,
                 tagIds: $syncTags ? $tags->pluck('id')->all() : null,
+                fieldValues: $this->desiredFieldValues($fields),
             );
 
             MetadataLedger::save($item);
@@ -141,6 +145,41 @@ class UpdateItem
                 $this->syncItemTags->handle($item, $tags, $actor);
             }
         });
+    }
+
+    /**
+     * Fältvärdena ur kroppen, nycklade på `item_field_id` — formen
+     * App\Actions\Item\RecordItemVersion jämför mot de nuvarande raderna.
+     * `null` betyder att anroparen inte rör fältvärdena.
+     *
+     * En ULID som inte hör till itemet blir ingen post: SyncItemFieldValues
+     * avvisar den strax med `field.not_applicable`, och transaktionen rullas
+     * tillbaka. Den sista posten för samma fält vinner, som där.
+     *
+     * @param  list<array{field: string, value?: mixed}>  $fields
+     * @return array<int, mixed>|null
+     */
+    private function desiredFieldValues(array $fields): ?array
+    {
+        if ($fields === []) {
+            return null;
+        }
+
+        $ids = ItemField::query()
+            ->whereIn('ulid', array_map(fn (array $entry): string => $entry['field'], $fields))
+            ->pluck('id', 'ulid');
+
+        $values = [];
+
+        foreach ($fields as $entry) {
+            $id = $ids[$entry['field']] ?? null;
+
+            if ($id !== null) {
+                $values[(int) $id] = $entry['value'] ?? null;
+            }
+        }
+
+        return $values;
     }
 
     /**

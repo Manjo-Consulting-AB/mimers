@@ -112,20 +112,11 @@ return [
         'action' => 'Manage agents',
     ],
     /*
-     * En version fick inte plats i ägarens kvot, se [[ADR-0088
-     * Versionshistorik för items]] Riktning 3 och issue 412. Skrivningen som
-     * utlöste den gick igenom; det är bara ögonblicksbilden som inte fick
-     * plats. Mejlets förval är avstängt
-     * (App\Support\Notification\NotificationPreferences) — texten finns för
-     * den som slår på kanalen. Knappen går till appens startsida: sidan som
-     * raden handlar om nås i appen, där målet är /settings/storage.
+     * `versioning.skipped` (issue 412 · [[ADR-0088 Versionshistorik för
+     * items]] Riktning 3) har ingen text här: typen går bara i appen, och
+     * appens mening bor i `ui.php`. Mejlkanalen finns inte (se
+     * App\Support\Notification\NotificationPreferences::NO_EMAIL_TYPES).
      */
-    'versioning_skipped' => [
-        'subject' => 'Your storage is full — version history is paused',
-        'greeting' => 'Hello!',
-        'line' => 'Your storage is full, so an earlier version of ":container" could not be saved. The change itself went through, and nothing was deleted. Free up space under Storage to start saving versions again.',
-        'action' => 'View storage usage',
-    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',
@@ -148,7 +139,6 @@ return [
             'container_deleted' => 'container deletion notices',
             'container_content_moving' => 'notices about content moving to your storage',
             'agent_deleted' => 'agent deletion notices',
-            'versioning_skipped' => 'version history notices',
         ],
     ],
     /*

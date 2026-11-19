@@ -108,7 +108,8 @@ class Notification extends Model
      * Versionshistorik för items]] Riktning 3 och issue 412. Går till
      * ägarkontot i appen, en gång per container och dygn: skrivningen som
      * utlöste den gick igenom ändå, och notisen säger bara att lagringen är
-     * full. E-postens förval är avstängt — den som vill kan slå på det.
+     * full. **Bara i appen** — typen är ingen mejltyp och har ingen
+     * inställning (se App\Support\Notification\NotificationPreferences).
      */
     public const TYPE_VERSIONING_SKIPPED = 'versioning.skipped';
 

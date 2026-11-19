@@ -60,12 +60,6 @@ final class NotificationPreferences
         // MANDATORY_IN_APP_TYPES nedan (issue 406 · [[ADR-0087 MCP-server för
         // agenter]] Riktning 13 och 14).
         Notification::TYPE_AGENT_DELETED => ['enabled' => true, 'digest' => false],
-        // `versioning.skipped` (issue 412 · [[ADR-0088 Versionshistorik för
-        // items]] Riktning 3) går till containerns ägare när en version inte
-        // fick plats i kvoten. Avstängt i mejlet som förval — det är en
-        // notis om lagringen, inte om en händelse användaren väntar på — men
-        // går att slå på. Appkanalen är påslagen i IN_APP_DEFAULTS.
-        Notification::TYPE_VERSIONING_SKIPPED => ['enabled' => false, 'digest' => false],
     ];
 
     /**
@@ -76,7 +70,10 @@ final class NotificationPreferences
      * inte står här har kanalen avslagen och visar ingen växel för den.
      *
      * Det här är den enda listan: inställningssidan och API:et läser den via
-     * inAppTypes() och förvalet slås upp härifrån.
+     * inAppTypes() och förvalet slås upp härifrån. En typ här som inte står
+     * i EMAIL_DEFAULTS (`versioning.skipped`, issue 412) får förvalet men
+     * ingen växel: inAppTypes() hämtar bara typer ur preferensytans lista,
+     * så kanalen går inte att stänga av — den hör till notisen.
      *
      * @var array<string, array{enabled: bool, digest: bool}>
      */
@@ -84,7 +81,9 @@ final class NotificationPreferences
         Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
         Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_CONTAINER_DELETED => ['enabled' => true, 'digest' => false],
-        // Issue 412: ägaren får veta att lagringen är full i appen.
+        // Issue 412: ägaren får veta att lagringen är full i appen. Typen
+        // står INTE i EMAIL_DEFAULTS och har därför ingen växel på
+        // inställningssidan — den är ingen mejltyp (se NO_EMAIL_TYPES).
         Notification::TYPE_VERSIONING_SKIPPED => ['enabled' => true, 'digest' => false],
     ];
 
@@ -117,6 +116,20 @@ final class NotificationPreferences
         // `agent.access_lost` (issue 409): agenten har tappat åtkomsten och
         // användaren ska få veta det, inte välja bort det.
         Notification::TYPE_AGENT_ACCESS_LOST,
+    ];
+
+    /**
+     * Typer som ALDRIG går som mejl. `versioning.skipped` är den första
+     * (issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning 3): den
+     * går till ägaren i appen, och en sparad rad med `email` ska inte kunna
+     * ändra det. Typen står inte i EMAIL_DEFAULTS, så utan den här listan
+     * hade UNKNOWN_DEFAULT gett den e-post på som förval — och en rad i
+     * `notification_preference` hade kunnat slå på den.
+     *
+     * @var list<string>
+     */
+    private const NO_EMAIL_TYPES = [
+        Notification::TYPE_VERSIONING_SKIPPED,
     ];
 
     /**
@@ -198,6 +211,12 @@ final class NotificationPreferences
      */
     public function isEnabled(?User $user, string $type, string $channel): bool
     {
+        // En typ som aldrig går som mejl: varken förvalet eller en sparad
+        // rad får slå på kanalen. Se NO_EMAIL_TYPES.
+        if ($channel === NotificationDelivery::CHANNEL_EMAIL && in_array($type, self::NO_EMAIL_TYPES, true)) {
+            return false;
+        }
+
         // Ett obligatoriskt mejl går före varje rad: `agent.connected` är
         // säkerhetsinformation om en anslutning, inte en prenumeration.
         if ($channel === NotificationDelivery::CHANNEL_EMAIL && $this->isMandatoryEmail($type)) {

@@ -4,6 +4,7 @@ namespace App\Actions\Item;
 
 use App\Actions\Notification\NotifyVersioningSkipped;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\ItemFieldValue;
 use App\Models\ItemVersion;
 use App\Models\LegalHold;
@@ -23,12 +24,17 @@ use Illuminate\Support\Facades\DB;
  * `getRawOriginal()` — databasens värden — och inte ur modellens fyllda
  * attribut: itemet är redan `fill()`-at med de nya värdena av anroparen.
  *
- * **Ingenting sparas när ingenting ändras.** `isDirty()` falskt och samma
- * taggmängd är ingen händelse: en PATCH med samma värden ska inte kosta en
- * version. Taggar byts av App\Actions\Item\SyncItemTags, men itemet har
- * ingen tidigare version som kunde bära det gamla bytet, så `UpdateItem`
- * skickar den önskade mängden hit — jämförelsen äger rum här, och fälten och
- * taggarna sparas som EN version tillsammans.
+ * **Ingenting sparas när ingenting ändras.** `isDirty()` falskt, samma
+ * taggmängd och samma fältvärden är ingen händelse: en PATCH med samma
+ * värden ska inte kosta en version. Taggar byts av
+ * App\Actions\Item\SyncItemTags och fältvärden av
+ * App\Actions\Field\SyncItemFieldValues, men itemet har ingen tidigare
+ * version som kunde bära det gamla bytet, så `UpdateItem` skickar de
+ * önskade mängderna hit — jämförelsen äger rum här, och kolumnerna,
+ * taggarna och fältvärdena sparas som EN version tillsammans. Ett fältvärde
+ * bor i `item_field_value` och gör inte itemet smutsigt
+ * ([[ADR-0089 Egna fält på items]] § Riktning 9): utan den jämförelsen hade
+ * en ändring av till exempel ett serienummer inte gett någon version.
  *
  * **Skurven (Riktning 4).** Skriver samma aktör igen inom
  * `konton.versioning.burst_minutes` sparas ingen ny version; den nyaste
@@ -67,6 +73,13 @@ class RecordItemVersion
      *                                  byter taggar, annars null (mängden
      *                                  rörs inte). Jämförs med den nuvarande
      *                                  för att avgöra om något ändras.
+     * @param  array<int, mixed>|null  $fieldValues  De önskade fältvärdena,
+     *                                               nycklade på
+     *                                               `item_field_id`, annars
+     *                                               null (värdena rörs
+     *                                               inte). Ett tomt värde
+     *                                               tar bort raden och är
+     *                                               därför en ändring.
      */
     public function handle(
         Item $item,
@@ -74,6 +87,7 @@ class RecordItemVersion
         ?int $agentId = null,
         bool $breakBurst = false,
         ?array $tagIds = null,
+        ?array $fieldValues = null,
     ): void {
         $container = $item->container;
         $limit = VersionLimit::for($container);
@@ -85,7 +99,14 @@ class RecordItemVersion
         $currentTagIds = $this->currentTagIds($item);
         $desiredTagIds = $tagIds === null ? $currentTagIds : $this->normalizeTagIds($tagIds);
 
-        if (! $item->isDirty() && $desiredTagIds === $currentTagIds) {
+        $currentFieldValues = $this->currentFieldValues($item);
+        $desiredFieldValues = $fieldValues === null
+            ? $currentFieldValues
+            : $this->desiredFieldValues($currentFieldValues, $fieldValues);
+
+        if (! $item->isDirty()
+            && $desiredTagIds === $currentTagIds
+            && $desiredFieldValues === $currentFieldValues) {
             return;
         }
 
@@ -216,6 +237,139 @@ class RecordItemVersion
         $version->replaced_at = now();
 
         return $version;
+    }
+
+    /**
+     * Fältvärdena som de står i databasen, normaliserade per typ så att de
+     * går att jämföra med de önskade värdena: text som den är, ett tal som
+     * en decimalsträng utan inledande och avslutande nollor (`12.5` och
+     * `DECIMAL(20,6)`s `12.500000` är samma värde) och ett datum som
+     * `Y-m-d`. Ett fält utan rad har inget värde — ett tomt värde lagras
+     * aldrig ([[ADR-0089 Egna fält på items]] § Riktning 9).
+     *
+     * @return array<int, string>
+     */
+    private function currentFieldValues(Item $item): array
+    {
+        $values = [];
+
+        $rows = ItemFieldValue::query()
+            ->where('item_id', $item->id)
+            ->orderBy('item_field_id')
+            ->get(['item_field_id', 'value_text', 'value_number', 'value_date']);
+
+        $types = ItemField::query()
+            ->whereIn('id', $rows->pluck('item_field_id')->all())
+            ->pluck('type', 'id');
+
+        foreach ($rows as $row) {
+            $type = (string) ($types[$row->item_field_id] ?? 'text');
+            $value = $row->getRawOriginal('value_text')
+                ?? $row->getRawOriginal('value_number')
+                ?? $row->getRawOriginal('value_date');
+            $normalized = $this->normalizeFieldValue($type, $value);
+
+            if ($normalized !== null) {
+                $values[(int) $row->item_field_id] = $normalized;
+            }
+        }
+
+        ksort($values);
+
+        return $values;
+    }
+
+    /**
+     * De nuvarande värdena med de önskade ovanpå: ett fält som inte nämns
+     * lämnas orört, och ett tomt värde tar bort posten. Nycklarna sorteras
+     * som i `currentFieldValues()`, så att arrayerna går att jämföra med
+     * `===`.
+     *
+     * @param  array<int, string>  $current
+     * @param  array<int, mixed>  $fieldValues
+     * @return array<int, string>
+     */
+    private function desiredFieldValues(array $current, array $fieldValues): array
+    {
+        $desired = $current;
+
+        $types = ItemField::query()
+            ->whereIn('id', array_map('intval', array_keys($fieldValues)))
+            ->pluck('type', 'id');
+
+        foreach ($fieldValues as $id => $value) {
+            $id = (int) $id;
+            $normalized = $this->normalizeFieldValue((string) ($types[$id] ?? 'text'), $value);
+
+            if ($normalized === null) {
+                unset($desired[$id]);
+            } else {
+                $desired[$id] = $normalized;
+            }
+        }
+
+        ksort($desired);
+
+        return $desired;
+    }
+
+    /**
+     * Ett värde i den form jämförelsen använder, eller null när värdet är
+     * tomt. Normaliseringen är densamma som
+     * App\Actions\Field\SyncItemFieldValues::equals använder när den avgör
+     * om en rad behöver skrivas, så att de två inte kan säga olika saker om
+     * samma ändring.
+     */
+    private function normalizeFieldValue(string $type, mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return match ($type) {
+            'number' => $this->canonicalDecimal($this->decimalString($value)),
+            'date' => substr((string) $value, 0, 10),
+            // `text` är standardtypen.
+            default => (string) $value,
+        };
+    }
+
+    /**
+     * Talet som en decimalsträng utan exponent — `DECIMAL(20,6)` tar inget
+     * flyttal.
+     */
+    private function decimalString(mixed $value): string
+    {
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        $string = trim((string) $value);
+
+        return stripos($string, 'e') === false
+            ? $string
+            : sprintf('%.6F', (float) $string);
+    }
+
+    /**
+     * Två decimalsträngar är samma tal när de har samma siffror sedan
+     * inledande och avslutande nollor skalats bort.
+     */
+    private function canonicalDecimal(string $value): string
+    {
+        $value = trim($value);
+        $negative = str_starts_with($value, '-');
+        $value = ltrim($value, '+-');
+
+        [$integer, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+
+        $integer = ltrim($integer, '0');
+        $integer = $integer === '' ? '0' : $integer;
+        $fraction = rtrim($fraction, '0');
+
+        $result = $fraction === '' ? $integer : $integer.'.'.$fraction;
+
+        return $negative && $result !== '0' ? '-'.$result : $result;
     }
 
     /**

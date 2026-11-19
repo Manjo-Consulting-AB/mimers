@@ -118,8 +118,9 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
-            // Nio e-postrader och fyra `in_app`-rader (issue 386, 412).
-            ->has('preferences', 13)
+            // Åtta e-postrader och tre `in_app`-rader (issue 386; issue 412:s
+            // `versioning.skipped` är ingen mejltyp och har ingen växel).
+            ->has('preferences', 11)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all()
                 === app(NotificationPreferences::class)->types())
@@ -159,14 +160,12 @@ it('bär kolumnen In app för typerna som har kanalen och ingen växel för de a
                 Notification::TYPE_CONTAINER_DELETED,
                 Notification::TYPE_TRANSFER_REQUESTED,
                 Notification::TYPE_QUOTA_WARNING,
-                // Issue 412.
-                Notification::TYPE_VERSIONING_SKIPPED,
             ])->sort()->values()->all())
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
                 ->every(fn (array $rad) => $rad['enabled'] === true && $rad['is_default'] === true))
             ->where('preferences', fn ($rader) => collect($rader)
-                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)->count() === 4)
+                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)->count() === 3)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('type', Notification::TYPE_TASK_DUE)->pluck('channel')->all()
                 === [NotificationDelivery::CHANNEL_EMAIL])
@@ -630,8 +629,9 @@ it('lämnar /api-rutterna oförändrade', function () {
 
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
-    // Nio e-postrader och fyra `in_app`-rader (issue 386, 412).
-    expect($svar->json('data'))->toHaveCount(13);
+    // Åtta e-postrader och tre `in_app`-rader (issue 386; issue 412:s
+    // `versioning.skipped` är ingen mejltyp och har ingen växel).
+    expect($svar->json('data'))->toHaveCount(11);
     expect(collect($svar->json('data'))->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());
     expect(collect($svar->json('data'))->every(fn (array $rad) => $rad['is_default'] === true))->toBeTrue();

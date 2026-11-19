@@ -150,8 +150,6 @@ it('har in_app avslagen som förval för alla kända typer utom de tre första',
         // Issue 406: `agent.deleted` har appkanalen på som förval och kan
         // inte stängas av — läsningen släpper agentens raderingstak.
         Notification::TYPE_AGENT_DELETED,
-        // Issue 412: ägaren får veta att lagringen är full i appen.
-        Notification::TYPE_VERSIONING_SKIPPED,
     ];
 
     foreach ($preferences->types() as $type) {

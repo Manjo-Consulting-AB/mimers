@@ -18,7 +18,13 @@ use App\Models\Notification;
  * **En gång per container och dygn.** `dedupe_key` bär containern och
  * datumet, så en full kvot som stoppar hundra versioner under en dag ger EN
  * rad. Adressen går till ägarkontots ägare — den som kan göra något åt
- * saken — och notisen levereras i appen; e-postens förval är avstängt.
+ * saken — och notisen levereras BARA i appen. Det är ingen mejltyp: kanalen
+ * skapas inte ens om inställningen säger annat
+ * (App\Support\Notification\NotificationPreferences).
+ *
+ * **Ett konto har en användare** (Tonys regel 2026-11-18), och det är
+ * ägaren. Saknas en `owner` finns ingen mottagare, och då skapas ingen
+ * notisrad alls — en rad utan leverans vore bara skräp i utboxen.
  *
  * **Ingenting avslöjar en rättslig spärr.** Under spärr sparas versionen ändå
  * utan kvotprövning (Riktning 6), och den här notisen skapas då aldrig.
@@ -31,10 +37,13 @@ final class NotifyVersioningSkipped
     {
         $account = $container->account;
 
-        $recipient = $account->users()
-            ->wherePivot('role', 'owner')
-            ->orderBy('user.id')
-            ->first();
+        // Ett konto har exakt en användare och den är ägaren. Finns ingen
+        // `owner` finns ingen mottagare.
+        $recipient = $account->users()->wherePivot('role', 'owner')->first();
+
+        if ($recipient === null) {
+            return;
+        }
 
         $this->createNotification->handle(
             type: Notification::TYPE_VERSIONING_SKIPPED,
@@ -42,9 +51,8 @@ final class NotifyVersioningSkipped
             user: $recipient,
             container: $container,
             payload: ['container' => $container->name],
-            // Containern och dygnet, inte mottagaren: raden gäller ägarens
-            // lagring, och en andra ägare ska inte få en andra notis för
-            // samma fulla kvot.
+            // Containern och dygnet, inte mottagaren: nyckeln beskriver
+            // händelsen, och samma fulla kvot ska ge EN rad.
             dedupeKey: 'versioning.skipped:'.$container->ulid.':'.now()->toDateString(),
         );
     }

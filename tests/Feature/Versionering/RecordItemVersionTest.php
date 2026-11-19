@@ -1,18 +1,23 @@
 <?php
 
 use App\Actions\Container\CreateContainer;
+use App\Actions\Field\CreateField;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\UpdateItem;
 use App\Actions\Item\UpdateItemNotes;
+use App\Actions\Notification\NotifyVersioningSkipped;
 use App\Actions\Tag\CreateTag;
 use App\Actions\Usage\AdjustUsage;
 use App\Console\ReconcilesUsageCounters;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemFieldValue;
 use App\Models\ItemVersion;
 use App\Models\LegalHold;
 use App\Models\Notification;
+use App\Models\NotificationDelivery;
+use App\Models\NotificationPreference;
 use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Usage\CountedRows;
@@ -339,6 +344,45 @@ it('sparar en version för ett taggbyte utan andra ändringar', function () {
         ->toBe([$tagg->id]);
 });
 
+it('sparar en version när bara ett fältvärde ändras, med det gamla värdet', function () {
+    [$ägare, $användare] = versionKonto();
+    $container = versionContainer($ägare, $användare);
+    $item = versionItem($container, $ägare, $användare);
+
+    // Fältet skapas genom actionen, så att `metadata_bytes` bokförs som
+    // avstämningen räknar (versionStammer).
+    $fält = app(CreateField::class)->handle($container, null, 'Serienummer', 'text', 1, $användare);
+
+    // Första skrivningen ger fältet ett värde. Ett tomt värde har ingen rad
+    // ([[ADR-0089 Egna fält på items]] § Riktning 9), så det är en ändring
+    // från "inget värde" — och versionen bär det tomma läget.
+    app(UpdateItem::class)->handle($item, $användare, false, collect(), [
+        ['field' => $fält->ulid, 'value' => 'Gammalt'],
+    ]);
+
+    expect(ItemVersion::query()->where('item_id', $item->id)->sole()->field_values)->toBe([]);
+
+    // Bara fältvärdet ändras: itemets kolumner och taggar står stilla. Utan
+    // jämförelsen i RecordItemVersion hade detta inte gett någon version.
+    Carbon::setTestNow(now()->addMinutes(11));
+    $item = Item::query()->findOrFail($item->id);
+
+    app(UpdateItem::class)->handle($item, $användare, false, collect(), [
+        ['field' => $fält->ulid, 'value' => 'Nytt'],
+    ]);
+
+    $senaste = ItemVersion::query()
+        ->where('item_id', $item->id)
+        ->orderByDesc('created_at')
+        ->orderByDesc('id')
+        ->firstOrFail();
+
+    expect($senaste->field_values)->toBe([$fält->id => 'Gammalt'])
+        ->and(ItemFieldValue::query()->where('item_id', $item->id)->value('value_text'))->toBe('Nytt');
+
+    versionStammer($ägare);
+});
+
 it('tar bort de äldsta versionerna för att ge plats när ägarens kvot är full', function () {
     [$ägare, $användare] = versionKonto(3);
     $container = versionContainer($ägare, $användare);
@@ -389,6 +433,16 @@ it('hoppar över versionen och noterar ägaren en gång per container och dygn n
     (new AdjustUsage)->handle($ägare->id, metadataDelta: 5000);
     sättPlangräns('free', 'storage_bytes', UsageCounter::usedBytes($ägare->id));
 
+    // En sparad rad som slår PÅ mejl ska inte bita: typen är ingen mejltyp
+    // ([[Notiser]] § notification och issue 412).
+    NotificationPreference::query()->create([
+        'user_id' => $användare->id,
+        'type' => Notification::TYPE_VERSIONING_SKIPPED,
+        'channel' => NotificationDelivery::CHANNEL_EMAIL,
+        'enabled' => true,
+        'digest' => false,
+    ]);
+
     versionSkriv($item, $skrivare, 'Motorn');
 
     // Skrivningen gick igenom, men ingen version sparades.
@@ -404,11 +458,29 @@ it('hoppar över versionen och noterar ägaren en gång per container och dygn n
         ->and($notis->payload['container'])->toBe('Båten')
         ->and($notis->dedupe_key)->toContain($container->ulid);
 
+    // Bara appkanalen: ingen mejlleverans skapades.
+    expect(NotificationDelivery::query()->where('notification_id', $notis->id)->pluck('channel')->all())
+        ->toBe([NotificationDelivery::CHANNEL_IN_APP]);
+
     // En andra skrivning samma dygn ger ingen andra notis.
     Carbon::setTestNow(now()->addMinutes(11));
     versionSkriv($item, $skrivare, 'Motorn igen');
 
     expect(Notification::query()->where('type', Notification::TYPE_VERSIONING_SKIPPED)->count())->toBe(1);
+});
+
+it('skapar ingen notis när kontot saknar en owner', function () {
+    // Ett konto har en användare (Tonys regel 2026-11-18). Finns ingen
+    // `owner` finns ingen mottagare — och då ska ingen rad skapas alls.
+    $konto = Account::factory()->create(['versioning_max_versions' => 3]);
+    $medlem = User::factory()->create();
+    $konto->users()->attach($medlem, ['role' => 'member']);
+
+    $container = versionContainer($konto, $medlem);
+
+    app(NotifyVersioningSkipped::class)->handle($container);
+
+    expect(Notification::query()->count())->toBe(0);
 });
 
 it('tar inte bort någon version under rättslig spärr, och sparar utan kvotprövning', function () {

@@ -71,9 +71,10 @@ it('listan bär varje typ med förvalet ifyllt', function () {
 
     $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
 
-    // Nio typer sedan issue 412 lade till `versioning.skipped`, alla med
-    // is_default true — inga rader finns, allt är förval.
-    expect($karta)->toHaveCount(9);
+    // Åtta typer, alla med is_default true — inga rader finns, allt är
+    // förval. `versioning.skipped` (issue 412) är ingen mejltyp och står
+    // därför inte i listan.
+    expect($karta)->toHaveCount(8);
     foreach ($karta as $typ => $rad) {
         expect($typ)->toBeString();
         expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
@@ -94,7 +95,7 @@ it('listan bär inte kanalen webhook', function () {
 
     // Precis en e-postrad per typ — ingen webhook-rad som inte gör något
     // (31a § Beslut 4). Kanalerna som finns är `email` och `in_app`.
-    expect($karta)->toHaveCount(9);
+    expect($karta)->toHaveCount(8);
 
     $kanaler = collect(getJson('/api/me/notification-preferences', $headers)->json('data'))
         ->pluck('channel')->unique()->sort()->values()->all();
@@ -115,8 +116,6 @@ it('listan bär in_app för de tre typerna, påslagen som förval', function () 
         Notification::TYPE_CONTAINER_DELETED,
         Notification::TYPE_TRANSFER_REQUESTED,
         Notification::TYPE_QUOTA_WARNING,
-        // Issue 412.
-        Notification::TYPE_VERSIONING_SKIPPED,
     ]);
     foreach ($inApp as $rad) {
         expect($rad['enabled'])->toBeTrue();
