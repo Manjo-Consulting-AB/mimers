@@ -127,6 +127,47 @@ function faltGrassnittNode(string $skript): string
     return implode("\n", $rader);
 }
 
+/**
+ * Kompilerar en .vue-fils mall med @vue/compiler-sfc och returnerar
+ * proppnamnen, de setup-namn som skuggar en prop, och den kompilerade mallen.
+ *
+ * En montering hade behövt en webbläsare; kompilatorn svarar på samma fråga:
+ * vilket namn mallen läser. `$setup.x` betyder en setup-bindning och
+ * `$props.x` propen — en hjälpare som heter samma sak som en prop vinner över
+ * den i mallen, och då blir `field.ulid` en egenskap på funktionen.
+ *
+ * @return array{proppar: list<string>, skuggade: list<string>, kod: string}
+ */
+function faltGrassnittKompilera(string $sokvag): array
+{
+    $skript = implode("\n", [
+        "import { readFileSync } from 'node:fs';",
+        "import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';",
+        'const kalla = readFileSync('.json_encode(resource_path("js/{$sokvag}"), JSON_UNESCAPED_SLASHES).", 'utf8');",
+        "const { descriptor } = parse(kalla, { filename: 'Falt.vue' });",
+        'const block = /defineProps\(\{([\s\S]*?)\n\}\)/.exec(kalla);',
+        'const proppar = [...block[1].matchAll(/^ {4}([A-Za-z_$][\w$]*)\s*:/gm)].map((m) => m[1]);',
+        "const manus = compileScript(descriptor, { id: 'prov' });",
+        "const skuggade = proppar.filter((namn) => namn in manus.bindings && manus.bindings[namn] !== 'props');",
+        'const mall = compileTemplate({',
+        '    source: descriptor.template.content,',
+        "    filename: 'Falt.vue',",
+        "    id: 'prov',",
+        '    compilerOptions: { bindingMetadata: manus.bindings },',
+        '});',
+        'process.stdout.write(JSON.stringify({ proppar, skuggade, kod: mall.code }));',
+    ]);
+
+    $rader = [];
+    $status = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $status);
+
+    expect($status)->toBe(0, implode("\n", $rader));
+
+    return json_decode(implode("\n", $rader), true, 512, JSON_THROW_ON_ERROR);
+}
+
 it('visar containerns fält i formuläret för alla items i containern', function () {
     withoutVite();
 
@@ -255,7 +296,11 @@ it('ritar fälten i formuläret och egna fält med en borttagningsknapp', functi
         ->toContain('createOwnField')
         ->toContain('askRemoveField')
         ->toContain('/items/${props.item.ulid}/fields')
-        ->toContain('preserveState: true');
+        ->toContain('preserveState: true')
+        // Den nya raden är serverns svar: den flyttas in i defaults, annars
+        // blir formuläret smutsigt och lämna-dialogen dyker upp efter ett
+        // lyckat *Add field*.
+        ->toContain("form.defaults('fields'");
 });
 
 it('ritar bara fält som har ett värde i itemets vy', function () {
@@ -476,6 +521,23 @@ it('byter ordningen på fälten med en PATCH', function () {
         ->toContain('draggable="true"')
         ->toContain('@dragstart="dragStart"')
         ->toContain("setData('text/plain'");
+});
+
+it('läser propen och inte en skuggande hjälpare i fältraden', function () {
+    $svar = faltGrassnittKompilera('components/fields/FieldRow.vue');
+
+    // Ingen setup-bindning heter samma sak som en prop: då hade mallen läst
+    // hjälparen i stället, och `field.ulid` blivit `undefined`.
+    expect($svar['proppar'])->toContain('field')
+        ->and($svar['skuggade'])->toBe([]);
+
+    // Draget, flytten och raderingsfrågan bär fältets ulid respektive rubrik
+    // ur propen — det som faktiskt flyttar och raderar rätt rad.
+    expect($svar['kod'])->toContain("emit('drop', \$props.field.ulid)");
+    expect($svar['kod'])->toContain("emit('move', \$props.field.ulid, -1)");
+    expect($svar['kod'])->toContain("emit('move', \$props.field.ulid, 1)");
+    expect($svar['kod'])->toContain("t('container.fields.destroy_heading', { label: \$props.field.label })");
+    expect($svar['kod'])->not->toContain('$setup.field');
 });
 
 it('har texterna och felkoderna i lang', function () {

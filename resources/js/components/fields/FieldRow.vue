@@ -55,8 +55,10 @@ const emit = defineEmits(['submit', 'move', 'dragstart', 'drop']);
 
 const { t } = useTranslations();
 
-/* Fältens id:n måste vara unika i listan — varje rad har samma fältnamn. */
-const field = (name) => `field-${props.field.ulid}-${name}`;
+/* Fältens id:n måste vara unika i listan — varje rad har samma fältnamn.
+   Heter inte `field`: det namnet är propen, och en hjälpare med samma namn
+   skuggar den i mallen (då blir `field.ulid` en egenskap på funktionen). */
+const inputId = (name) => `field-${props.field.ulid}-${name}`;
 
 const form = useForm({
     label: props.field.label,
@@ -139,11 +141,11 @@ function destroy() {
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('container.fields.label')"
-                :id="field('label')"
+                :id="inputId('label')"
                 :error="labelError"
             >
                 <input
-                    :id="field('label')"
+                    :id="inputId('label')"
                     v-model="form.label"
                     :aria-describedby="describedBy"
                     type="text"
@@ -157,11 +159,11 @@ function destroy() {
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('container.fields.type')"
-                :id="field('type')"
+                :id="inputId('type')"
                 :error="typeError"
             >
                 <FieldTypeSelect
-                    :id="field('type')"
+                    :id="inputId('type')"
                     v-model="form.type"
                     :types="types"
                     :described-by="describedBy"

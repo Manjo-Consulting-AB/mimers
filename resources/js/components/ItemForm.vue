@@ -278,7 +278,16 @@ const form = useForm(props.item === null
  * de ifyllda värdena flyttas med, en ny rad får sin tomma sträng och en
  * borttagen rad faller bort. Utan raden här hade en nyskapad rad aldrig fått
  * ett värde att skriva i.
+ *
+ * **Den nya raden flyttas också in i formulärets `defaults`.** Annars blir
+ * formuläret smutsigt av att servern svarade — användaren har inte ändrat
+ * något — och lämna-dialogen dyker upp efter ett lyckat *Add field* eller en
+ * borttagning. Defaultvärdet per rad sparas i `fieldRowDefaults`: det
+ * användaren redan skrivit i en befintlig rad är fortfarande osparat och ska
+ * fortsätta räknas som en ändring.
  */
+const fieldRowDefaults = new Map(initialFieldRows().map((row) => [row.field, row.value]));
+
 watch(incomingFields, (next) => {
     const current = new Map(form.fields.map((row) => [row.field, row.value]));
 
@@ -286,6 +295,17 @@ watch(incomingFields, (next) => {
         field: field.id,
         value: current.has(field.id) ? current.get(field.id) : (field.value ?? ''),
     }));
+
+    for (const field of next) {
+        if (! fieldRowDefaults.has(field.id)) {
+            fieldRowDefaults.set(field.id, field.value ?? '');
+        }
+    }
+
+    form.defaults('fields', form.fields.map((row) => ({
+        field: row.field,
+        value: fieldRowDefaults.get(row.field),
+    })));
 }, { deep: true });
 
 const fieldValue = (id) => form.fields.find((row) => row.field === id)?.value ?? '';
