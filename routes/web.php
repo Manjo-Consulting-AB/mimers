@@ -38,6 +38,7 @@ use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\ItemFieldController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
 use App\Http\Controllers\LoanController;
@@ -2020,6 +2021,63 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.tags.destroy');
+
+    /*
+     * Issue 417 · Egna fält — webbens motstycke till `/api`:s tio rutter, se
+     * App\Http\Controllers\ItemFieldController. `index`, `store`, `update`,
+     * `destroy` och en PATCH för ordningen, både under containern och under
+     * itemet. **Ingen sida byggs här** — avsnittet *Fields* i containerns
+     * inställningar och knappen *Add field* i itemets formulär är issue 419;
+     * rutterna finns så att ytorna kan byggas mot dem utan en andra
+     * omgång rutter.
+     *
+     * Skrivningarna svarar `back()` med en flash-kod, och ett domänfel blir
+     * ett formulärfel på nyckeln `field` — mönstret från issue 54 § Beslut 4
+     * och App\Http\Controllers\CategoryController, aldrig en JSON-kropp
+     * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
+     *
+     * `scopeBindings()` på de fyra nästlade skrivningarna av samma skäl som
+     * kategorierna: `{field}` löses genom App\Models\Container::fields(),
+     * `{ownField}` genom App\Models\Item::ownFields(), och en ULID från en
+     * annan container eller ett annat item blir 404. `fields/order` ligger
+     * FÖRE `fields/{field}` — annars binds "order" som en fält-ULID.
+     */
+    Route::get('/containers/{container}/fields', [ItemFieldController::class, 'index'])
+        ->name('containers.fields');
+
+    Route::post('/containers/{container}/fields', [ItemFieldController::class, 'store'])
+        ->name('containers.fields.store');
+
+    Route::patch('/containers/{container}/fields/order', [ItemFieldController::class, 'reorder'])
+        ->name('containers.fields.order');
+
+    Route::patch('/containers/{container}/fields/{field}', [ItemFieldController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.fields.update');
+
+    Route::delete('/containers/{container}/fields/{field}', [ItemFieldController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.fields.destroy');
+
+    Route::get('/containers/{container}/items/{item}/fields', [ItemFieldController::class, 'indexForItem'])
+        ->scopeBindings()
+        ->name('containers.items.fields');
+
+    Route::post('/containers/{container}/items/{item}/fields', [ItemFieldController::class, 'storeForItem'])
+        ->scopeBindings()
+        ->name('containers.items.fields.store');
+
+    Route::patch('/containers/{container}/items/{item}/fields/order', [ItemFieldController::class, 'reorderForItem'])
+        ->scopeBindings()
+        ->name('containers.items.fields.order');
+
+    Route::patch('/containers/{container}/items/{item}/fields/{ownField}', [ItemFieldController::class, 'updateForItem'])
+        ->scopeBindings()
+        ->name('containers.items.fields.update');
+
+    Route::delete('/containers/{container}/items/{item}/fields/{ownField}', [ItemFieldController::class, 'destroyForItem'])
+        ->scopeBindings()
+        ->name('containers.items.fields.destroy');
 
     /*
      * Issue 116 · Containerns historikflik, se App\Http\Controllers\

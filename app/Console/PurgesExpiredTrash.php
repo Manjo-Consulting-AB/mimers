@@ -9,6 +9,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\LegalHold;
 use App\Models\Tag;
 use Closure;
@@ -69,7 +70,7 @@ class PurgesExpiredTrash
     /**
      * Gallrar allt vars retention har passerats.
      *
-     * @return array{attachment: int, item: int, category: int, tag: int, container: int}
+     * @return array{attachment: int, item: int, category: int, tag: int, field: int, container: int}
      */
     public function handle(): array
     {
@@ -96,6 +97,14 @@ class PurgesExpiredTrash
                 Tag::onlyTrashed()->where('deleted_at', '<=', $cutoff),
                 fn (Tag $tag) => $this->purgeContent->tag($tag),
             ),
+            // Issue 417: ett fält gallras med sina värden. Grenen ligger efter
+            // items, så de egna fälten har redan följt sina items; det som
+            // återstår är containerns fält och de egna fält vars item lever.
+            'field' => $this->purge(
+                'field',
+                ItemField::onlyTrashed()->where('deleted_at', '<=', $cutoff),
+                fn (ItemField $field) => $this->purgeContent->field($field),
+            ),
             // 20c · Raderade containers: PurgeContainer tar med sig hela
             // innehållet, och varje container ligger i sin egen transaktion
             // (Beslut 7) — samma chunkById/felhantering/loggning som de fyra
@@ -119,7 +128,7 @@ class PurgesExpiredTrash
      * försvinner under iterationen och pagingen måste följa primärnyckeln,
      * inte radnumret (Beslut 8).
      *
-     * @template TModel of Item|Attachment|Category|Tag|Container
+     * @template TModel of Item|Attachment|Category|Tag|ItemField|Container
      *
      * @param  Builder<TModel>  $query
      * @param  Closure(TModel): void  $perRow
@@ -168,7 +177,7 @@ class PurgesExpiredTrash
      * SoftDeletes-scope hade gömt den — och därmed spärren. Null betyder
      * "ingen ägare att fråga om", och då gallras raden som förut.
      */
-    private function owningAccount(Item|Attachment|Category|Tag|Container $row): ?Account
+    private function owningAccount(Item|Attachment|Category|Tag|ItemField|Container $row): ?Account
     {
         if ($row instanceof Container) {
             return $row->account;

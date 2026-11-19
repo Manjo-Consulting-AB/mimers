@@ -111,6 +111,23 @@ class PurgeContainer
                 $this->purgeContent->tag($tag);
             }
 
+            // Fältdefinitionerna och deras värden (issue 417). Items är
+            // redan gallrade, så det som återstår är containerns fält — och
+            // eventuella värden som hängde på dem. Utan den här raden faller
+            // `forceDelete()` på containern på ett främmandenyckelfel, för
+            // `item_field.container_id` är ON DELETE RESTRICT. Räknaren
+            // minskas FÖRE raderingarna ([[ADR-0081 All lagrad data räknas
+            // mot kvoten]] § 2).
+            MetadataLedger::releaseWhere(
+                'item_field',
+                fn ($query) => $query->where('container.id', $container->id),
+            );
+
+            DB::table('item_field_value')
+                ->whereIn('item_field_id', DB::table('item_field')->where('container_id', $container->id)->select('id'))
+                ->delete();
+            DB::table('item_field')->where('container_id', $container->id)->delete();
+
             // Notiser som pekar på containern — issue 30 § Beslut 8 och 37b.
             // Nycklarna är ON DELETE RESTRICT, så utan städningen kastar
             // forceDelete nedan ett integritetsfel i papperskorgens gallring

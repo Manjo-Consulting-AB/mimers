@@ -14,6 +14,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -135,6 +136,12 @@ class TrashController extends Controller
             $row = ListTrash::entry('attachment', $model->ulid, $model->filename, $model->item?->name, null, $retentionDays);
         } elseif ($model instanceof Category) {
             $row = ListTrash::entry('category', $model->ulid, $model->name, $model->parent?->name, null, $retentionDays);
+        } elseif ($model instanceof ItemField) {
+            // Ett eget fält bär sitt items namn som sammanhang, som en
+            // underkategori bär förälderns (issue 417). Itemet slås upp med
+            // withTrashed() är onödigt här — ett eget fält vars item ligger i
+            // papperskorgen kan inte återställas (trash.parent_deleted).
+            $row = ListTrash::entry('field', $model->ulid, $model->label, $model->item?->name, null, $retentionDays);
         } else {
             // Item och tagg — båda har `name` och aldrig ett context.
             $row = ListTrash::entry($type, $model->ulid, $model->name, null, null, $retentionDays);
@@ -181,7 +188,7 @@ class TrashController extends Controller
      * RestoreContent och få 422 `trash.parent_deleted` (Beslut 8), precis
      * som före issuen. Samma uppslag och samma skäl som i RestoreContent.
      */
-    private function authorizeRestore(Container $container, Item|Attachment|Category|Tag $model): void
+    private function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField $model): void
     {
         if ($model instanceof Item) {
             Gate::authorize('delete', $model);
@@ -195,6 +202,18 @@ class TrashController extends Controller
             abort_if($item === null, 404);
 
             Gate::authorize('delete', $item);
+
+            return;
+        }
+
+        // Issue 417: ett items EGET fält grindas mot itemet — samma pinne som
+        // att definiera det (ItemPolicy::update, [[ADR-0028 Åtkomst på
+        // itemnivå]]). Containerns fält är containervid organisation och
+        // grindas mot containern, som kategorin och taggen.
+        if ($model instanceof ItemField && $model->item_id !== null) {
+            $item = Item::withTrashed()->findOrFail($model->item_id);
+
+            Gate::authorize('update', $item);
 
             return;
         }

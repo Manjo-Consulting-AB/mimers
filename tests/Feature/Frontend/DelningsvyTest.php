@@ -1463,6 +1463,13 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/categories',
         'containers/{container}/categories/preset',
         'containers/{container}/tags',
+        // Issue 417: fältens två POST. De skriver en `item_field`-rad och rör
+        // inga åtkomster — grinden är `ContainerPolicy::update` för
+        // containerns fält och `ItemPolicy::update` för itemets egna, samma
+        // pinne som att definiera dem. Ingen ny läsare och ingen ny mottagare
+        // läggs till.
+        'containers/{container}/fields',
+        'containers/{container}/items/{item}/fields',
         'containers/{container}/trash/restore',
     ]);
 

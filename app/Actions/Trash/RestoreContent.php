@@ -3,11 +3,13 @@
 namespace App\Actions\Trash;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Field\FieldRules;
 use App\Exceptions\Api\ApiException;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use Carbon\Carbon;
@@ -63,11 +65,11 @@ class RestoreContent
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 
     /**
-     * @param  'item'|'attachment'|'category'|'tag'  $type
+     * @param  'item'|'attachment'|'category'|'tag'|'field'  $type
      * @param  User  $actor  Den som återställer; blir `user_id` på
      *                       loggraden. Behörigheten är redan prövad.
      */
-    public function handle(string $type, Item|Attachment|Category|Tag $model, User $actor): void
+    public function handle(string $type, Item|Attachment|Category|Tag|ItemField $model, User $actor): void
     {
         if ($model instanceof Attachment) {
             $item = Item::withTrashed()->find($model->item_id);
@@ -87,6 +89,20 @@ class RestoreContent
                 throw ApiException::make('trash.parent_deleted', [
                     'type' => 'category',
                     'ulid' => $parent->ulid,
+                ], 422);
+            }
+        }
+
+        // Issue 417: ett eget fält vars item ligger i papperskorgen kan inte
+        // återställas för sig — det skulle bli ett fält på ett item ingen
+        // ser. Samma svar som för en bilaga med en raderad förälder.
+        if ($model instanceof ItemField && $model->item_id !== null) {
+            $item = Item::withTrashed()->find($model->item_id);
+
+            if ($item !== null && $item->trashed()) {
+                throw ApiException::make('trash.parent_deleted', [
+                    'type' => 'item',
+                    'ulid' => $item->ulid,
                 ], 422);
             }
         }
@@ -112,6 +128,15 @@ class RestoreContent
             }
 
             $varMjukraderad = $rad->trashed();
+
+            // Issue 417 § 5: en återställning av ett fält prövas mot gränsen
+            // och rubrikkrocken med SAMMA felkoder som en skapning. Prövningen
+            // ligger under radlåset och bara när raden faktiskt låg i
+            // papperskorgen — en återställning av något levande är ingen
+            // händelse och ska inte kunna avvisas.
+            if ($varMjukraderad && $rad instanceof ItemField) {
+                FieldRules::assertRestorable($rad);
+            }
 
             // restore() körs på instansen även när en samtidig återställning
             // redan hunnit först — den är då en no-op i databasen som bara

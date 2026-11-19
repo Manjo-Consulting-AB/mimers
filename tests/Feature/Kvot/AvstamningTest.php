@@ -5,6 +5,8 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\ItemVersion;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
@@ -477,4 +479,35 @@ it('en item_version-rad räknas i avstämningen', function () {
 
     expect((int) avstamningRad($account->id)->metadata_bytes)
         ->toBe(avstamningText($account) + MetadataSize::of($version));
+});
+
+it('en item_field- och en item_field_value-rad räknas i avstämningen', function () {
+    // Issue 417 · [[ADR-0089 Egna fält på items]]: både definitionen och
+    // värdet räknas i `metadata_bytes` ([[ADR-0081 All lagrad data räknas
+    // mot kvoten]] § 2). Raderna skapas med fabrikerna — 417 skriver inga
+    // värden, det gör 418 — och `avstamningText()` känner inte till
+    // tabellerna, så avstämningen ska rätta upp räknaren med bådas vikt.
+    [$account, , $container, $item] = avstamningSetup();
+
+    $fält = ItemField::factory()->for($container, 'container')->create([
+        'label' => 'Färg',
+        'billed_account_id' => $account->id,
+    ]);
+    $värde = ItemFieldValue::factory()->for($item, 'item')->create([
+        'item_field_id' => $fält->id,
+        'value_text' => 'Blå',
+        'billed_account_id' => $account->id,
+    ]);
+
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => 0,
+        'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
+    ]);
+
+    (new ReconcilesUsageCounters)->handle();
+
+    expect((int) avstamningRad($account->id)->metadata_bytes)
+        ->toBe(avstamningText($account) + MetadataSize::of($fält) + MetadataSize::of($värde));
 });

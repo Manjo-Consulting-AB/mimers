@@ -15,6 +15,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
@@ -300,7 +301,7 @@ class TrashController extends Controller
      * inte kopieras och inte flyttas (ADR-0065 § 8,
      * [[ADR-0024 Tunna controllers och actions]]).
      */
-    public function authorizeRestore(Container $container, Item|Attachment|Category|Tag $model): void
+    public function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField $model): void
     {
         if ($model instanceof Item) {
             Gate::authorize('delete', $model);
@@ -314,6 +315,15 @@ class TrashController extends Controller
             abort_if($item === null, 404);
 
             Gate::authorize('delete', $item);
+
+            return;
+        }
+
+        // Issue 417: ett items eget fält grindas mot itemet, som på `/api`.
+        if ($model instanceof ItemField && $model->item_id !== null) {
+            $item = Item::withTrashed()->findOrFail($model->item_id);
+
+            Gate::authorize('update', $item);
 
             return;
         }

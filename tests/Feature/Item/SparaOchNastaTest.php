@@ -193,6 +193,10 @@ it('har ingen ny rutt för skapandet', function () {
         'containers.items.create',
         'containers.items.destroy',
         'containers.items.edit',
+        // Issue 417: itemets egna fält har en egen yta under itemet. Den är
+        // ingen ny väg att SKAPA ett item — namnet fångas bara av samma
+        // prefix som listan nedan.
+        'containers.items.fields',
         'containers.items.index',
         'containers.items.move',
         'containers.items.show',

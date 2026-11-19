@@ -10,7 +10,8 @@ use Illuminate\Validation\Rules\Exists;
 
 /**
  * POST /api/containers/{container}/trash/restore, se issue 20a § Beslut 6.
- * Kroppen är `{"type": "item|attachment|category|tag", "ulid": "..."}`.
+ * Kroppen är `{"type": "item|attachment|category|tag|field", "ulid": "..."}`.
+ * `field` kom med issue 417.
  *
  * Valideringen bevisar att ULID:en finns i typens tabell, INOM den här
  * containern och är mjukraderad — allt annat är 422 `validation.failed`.
@@ -45,7 +46,7 @@ class RestoreRequest extends FormRequest
      *
      * @var list<string>
      */
-    public const TYPES = ['item', 'attachment', 'category', 'tag'];
+    public const TYPES = ['item', 'attachment', 'category', 'tag', 'field'];
 
     public function authorize(): bool
     {
@@ -78,6 +79,16 @@ class RestoreRequest extends FormRequest
 
         return match ($type) {
             'item', 'category', 'tag' => Rule::exists($type, 'ulid')->where(
+                fn ($query) => $query
+                    ->where('container_id', $container->id)
+                    ->whereNotNull('deleted_at')
+            ),
+            // Sedan issue 417: ett fält hör till containern genom
+            // `container_id` också när det är ett items eget. Dess item kan
+            // ligga i papperskorgen — det ska PASSERA valideringen så att
+            // RestoreContent kan svara trash.parent_deleted, som för en
+            // bilaga.
+            'field' => Rule::exists('item_field', 'ulid')->where(
                 fn ($query) => $query
                     ->where('container_id', $container->id)
                     ->whereNotNull('deleted_at')

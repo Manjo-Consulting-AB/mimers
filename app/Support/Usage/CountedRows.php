@@ -51,16 +51,19 @@ final class CountedRows
 
         $query = DB::table($table);
 
-        // Vägen från raden till dess container. Items, kategorier, taggar och
-        // kostnader bär `container_id` själva; scheman, utlåningar och
-        // itemversioner går genom sitt item, och förekomsterna genom sitt
-        // schema.
+        // Vägen från raden till dess container. Items, kategorier, taggar,
+        // fält och kostnader bär `container_id` själva; scheman, utlåningar,
+        // itemversioner och fältvärden går genom sitt item, och
+        // förekomsterna genom sitt schema. Ett fältvärde hör till itemet som
+        // bär värdet — även när fältet är ett containerfält — så
+        // `item_field_value` går genom `item`, medan definitionen
+        // `item_field` bär containern själv (issue 417).
         match ($table) {
             'schedule_occurrence' => $query
                 ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
                 ->join('item', 'item.id', '=', 'schedule.item_id')
                 ->join('container', 'container.id', '=', 'item.container_id'),
-            'schedule', 'loan', 'item_version' => $query
+            'schedule', 'loan', 'item_version', 'item_field_value' => $query
                 ->join('item', 'item.id', '=', "{$table}.item_id")
                 ->join('container', 'container.id', '=', 'item.container_id'),
             default => $query->join('container', 'container.id', '=', "{$table}.container_id"),

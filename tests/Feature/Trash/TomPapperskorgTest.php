@@ -233,7 +233,7 @@ it('loggar trash.emptied med antalen per typ', function () {
     expect($loggat)->toBe([['trash.emptied', [
         'container_ulid' => $container->ulid,
         'user_ulid' => $user->ulid,
-        'deleted' => ['attachment' => 1, 'item' => 1, 'category' => 1, 'tag' => 1],
+        'deleted' => ['attachment' => 1, 'item' => 1, 'category' => 1, 'tag' => 1, 'field' => 0],
     ]]]);
 });
 
@@ -250,6 +250,6 @@ it('svarar 204 med alla antal noll för en redan tom papperskorg', function () {
     expect($loggat)->toBe([['trash.emptied', [
         'container_ulid' => $container->ulid,
         'user_ulid' => $user->ulid,
-        'deleted' => ['attachment' => 0, 'item' => 0, 'category' => 0, 'tag' => 0],
+        'deleted' => ['attachment' => 0, 'item' => 0, 'category' => 0, 'tag' => 0, 'field' => 0],
     ]]]);
 });

@@ -8,17 +8,18 @@ use Illuminate\Support\Carbon;
 
 /**
  * En post i papperskorgen, se issue 20a § Beslut 4. Beskriver något annat
- * än en enda modell — fyra typer (`item`, `attachment`, `category`, `tag`)
- * i samma form — så den lindar en färdig rad, precis som ParticipantResource
- * lindar en deltagarrad (issue 9c). App\Http\Controllers\Api\TrashController
- * bygger raderna ur fyra platta frågor och slår aldrig upp något själv här.
+ * än en enda modell — typerna (`item`, `attachment`, `category`, `tag` och
+ * sedan issue 417 `field`) i samma form — så den lindar en färdig rad,
+ * precis som ParticipantResource lindar en deltagarrad (issue 9c).
+ * App\Http\Controllers\Api\TrashController bygger raderna ur platta frågor
+ * och slår aldrig upp något själv här.
  *
  * `label` är det användaren känner igen saken på: `item.name`,
- * `attachment.filename`, `category.name`, `tag.name`. `context` är itemets
- * namn för en bilaga och förälderkategorins namn för en underkategori,
- * annars `null` — utan det är "faktura.pdf" i en lista med tjugo poster
- * obrukbart. Båda är alltid närvarande, aldrig utelämnade, samma regel som
- * ItemResource.
+ * `attachment.filename`, `category.name`, `tag.name`, `item_field.label`.
+ * `context` är itemets namn för en bilaga och för ett items eget fält,
+ * förälderkategorins namn för en underkategori, annars `null` — utan det är
+ * "faktura.pdf" i en lista med tjugo poster obrukbart. Båda är alltid
+ * närvarande, aldrig utelämnade, samma regel som ItemResource.
  *
  * `deleted_at` och `expires_at` är tidsstämplar och serialiseras med
  * `toIso8601String()` som resten av API:et. `expires_at` är härlett —
