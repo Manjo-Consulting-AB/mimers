@@ -5,6 +5,8 @@ namespace App\Mcp\Tools;
 use App\Models\Agent;
 use App\Models\Container;
 use App\Support\Access\AccessLevel;
+use App\Support\Agent\ItemAudience;
+use App\Support\Agent\ReadAudience;
 use App\Support\Mcp\ContainerGate;
 use App\Support\Mcp\McpToolException;
 
@@ -13,6 +15,11 @@ use App\Support\Mcp\McpToolException;
  * taggar). Agenten behöver `read` i verktygets grupp på containern, och
  * användaren ska nå den (ContainerGate). Annars är containern
  * `resource.not_found`.
+ *
+ * Listan lämnar ut namn ur containern, och räknas därför som en läsning i
+ * kopieringsspärren ([[ADR-0087 MCP-server för agenter]] Riktning 10). Det är
+ * containerns egen publik som noteras, inte ett items: en kategorilista är
+ * inte knuten till ett item.
  */
 abstract class ReadsContainers extends McpTool
 {
@@ -30,5 +37,13 @@ abstract class ReadsContainers extends McpTool
         }
 
         return $container;
+    }
+
+    /**
+     * Notera vilka som når containern, se App\Support\Agent\ReadAudience.
+     */
+    protected function noteContainerRead(Agent $agent, Container $container): void
+    {
+        app(ReadAudience::class)->note($agent, app(ItemAudience::class)->forContainer($container));
     }
 }

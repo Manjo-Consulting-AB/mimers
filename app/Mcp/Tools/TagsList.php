@@ -53,6 +53,10 @@ class TagsList extends ReadsContainers
         $more = $rows->count() > $limit;
         $rows = $rows->take($limit);
 
+        // Taggnamnen är containerns innehåll — notera vilka som når den
+        // (Riktning 10, *Kopiering*).
+        $this->noteContainerRead($agent, $container);
+
         return Response::structured([
             'tags' => $rows->map(fn (Tag $tag): array => ['ulid' => $tag->ulid, 'name' => $tag->name, 'color' => $tag->color])->values()->all(),
             'next_cursor' => $more ? Cursor::encode([(int) $rows->last()->id]) : null,

@@ -29,7 +29,14 @@ function verktygslistaNu(): array
     [, $anvandare] = mcpKonto('pro');
     $token = mcpAnslut($anvandare)['access_token'];
 
-    $verktyg = mcpAnropa($token, 'tools/list')->assertOk()->json('result.tools');
+    // `tools/list` sidindelas (15 per sida som standard, högst 50), så
+    // kontraktet läses i EN sida. Fler verktyg än så fäller provet här i
+    // stället för att tyst lämna de sista utanför ögonblicksbilden.
+    $svar = mcpAnropa($token, 'tools/list', ['per_page' => 50])->assertOk();
+
+    expect($svar->json('result.nextCursor'))->toBeNull();
+
+    $verktyg = $svar->json('result.tools');
 
     $lista = array_map(function (array $v): array {
         $annotationer = $v['annotations'];
@@ -65,13 +72,15 @@ it('låser verktygslistan mot ögonblicksbilden', function () {
 });
 
 it('fäller ett verktyg vars namn inte följer domän_verb på engelska', function () {
+    // Ett eller flera understreck: `items_notes_update` (issue 404) är
+    // domän_fält_verb, samma form som `items_create` med fältet utskrivet.
     foreach (verktygslistaNu() as $verktyg) {
-        expect($verktyg['name'])->toMatch('/^[a-z]+_[a-z]+$/');
+        expect($verktyg['name'])->toMatch('/^[a-z]+(_[a-z]+)+$/');
     }
 
     // Provet självt biter: dessa namn ska inte godkännas.
-    foreach (['containersList', 'containers-list', 'behållare_lista', 'containers', 'a_b_c'] as $dalig) {
-        expect($dalig)->not->toMatch('/^[a-z]+_[a-z]+$/');
+    foreach (['containersList', 'containers-list', 'behållare_lista', 'containers', 'a__b', '_items_create', 'items_create_'] as $dalig) {
+        expect($dalig)->not->toMatch('/^[a-z]+(_[a-z]+)+$/');
     }
 });
 

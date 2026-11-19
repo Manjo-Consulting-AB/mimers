@@ -79,6 +79,7 @@ class Agent extends Model
             'create_containers' => 'boolean',
             'paused_at' => 'datetime',
             'last_used_at' => 'datetime',
+            'read_audience_until' => 'datetime',
         ];
     }
 
@@ -119,6 +120,19 @@ class Agent extends Model
     public function containerGrants(): HasMany
     {
         return $this->hasMany(AgentContainerGrant::class);
+    }
+
+    /**
+     * Lässnittet — personerna som når allt agenten läst under fönstret, se
+     * [[ADR-0087 MCP-server för agenter]] Riktning 10 och issue 404.
+     * `read_audience_until` på raden är fönstrets slut. Läses och skrivs bara
+     * genom App\Support\Agent\ReadAudience.
+     *
+     * @return HasMany<AgentReadAudience, $this>
+     */
+    public function readAudience(): HasMany
+    {
+        return $this->hasMany(AgentReadAudience::class);
     }
 
     /**

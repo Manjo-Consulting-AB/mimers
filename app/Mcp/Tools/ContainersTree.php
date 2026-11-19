@@ -127,6 +127,7 @@ class ContainersTree extends McpTool
         usort($order, fn (int $a, int $b): int => [$depthOf[$a], $a] <=> [$depthOf[$b], $b]);
 
         $rows = [];
+        $visible = [];
         $more = false;
         $last = null;
         $examined = 0;
@@ -152,7 +153,12 @@ class ContainersTree extends McpTool
             }
 
             $rows[] = ['id' => $id, 'ulid' => $item->ulid, 'name' => $item->name, 'depth' => $depthOf[$id]];
+            $visible[] = $item;
         }
+
+        // Trädets rader är det läsningen lämnade ut — notera vilka som når
+        // dem (Riktning 10, *Kopiering*).
+        $this->noteReads($agent, $visible);
 
         // Föräldrarna är de agenten når; ett dolt items ULID lämnas inte ut.
         $rows = array_map(function (array $row) use ($items, $parentsOf, $agent, $container): array {

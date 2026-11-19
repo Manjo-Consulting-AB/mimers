@@ -3,18 +3,36 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\AttachmentsGet;
+use App\Mcp\Tools\CategoriesCreate;
 use App\Mcp\Tools\CategoriesList;
+use App\Mcp\Tools\CategoriesUpdate;
+use App\Mcp\Tools\ContainersCreate;
 use App\Mcp\Tools\ContainersList;
 use App\Mcp\Tools\ContainersTree;
+use App\Mcp\Tools\ContainersUpdate;
+use App\Mcp\Tools\CostsCreate;
 use App\Mcp\Tools\CostsList;
+use App\Mcp\Tools\CostsUpdate;
 use App\Mcp\Tools\HistoryList;
+use App\Mcp\Tools\ItemsCreate;
 use App\Mcp\Tools\ItemsGet;
+use App\Mcp\Tools\ItemsMove;
+use App\Mcp\Tools\ItemsNotesUpdate;
 use App\Mcp\Tools\ItemsSearch;
+use App\Mcp\Tools\ItemsUpdate;
+use App\Mcp\Tools\LoansCreate;
 use App\Mcp\Tools\LoansList;
+use App\Mcp\Tools\LoansReturn;
+use App\Mcp\Tools\OccurrencesComplete;
 use App\Mcp\Tools\OccurrencesList;
+use App\Mcp\Tools\RelationsCreate;
 use App\Mcp\Tools\RelationsList;
+use App\Mcp\Tools\RelationsRemove;
+use App\Mcp\Tools\SchedulesCreate;
 use App\Mcp\Tools\SchedulesList;
+use App\Mcp\Tools\SchedulesUpdate;
 use App\Mcp\Tools\TagsList;
+use App\Mcp\Tools\TagsSet;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Contracts\Transport;
 
@@ -37,17 +55,35 @@ class MimersServer extends Server
     protected array $tools = [
         ContainersList::class,
         ContainersTree::class,
+        ContainersCreate::class,
+        ContainersUpdate::class,
         AttachmentsGet::class,
+        CategoriesCreate::class,
         CategoriesList::class,
+        CategoriesUpdate::class,
+        CostsCreate::class,
         CostsList::class,
+        CostsUpdate::class,
         HistoryList::class,
+        ItemsCreate::class,
         ItemsGet::class,
+        ItemsMove::class,
+        ItemsNotesUpdate::class,
         ItemsSearch::class,
+        ItemsUpdate::class,
+        LoansCreate::class,
         LoansList::class,
+        LoansReturn::class,
+        OccurrencesComplete::class,
         OccurrencesList::class,
+        RelationsCreate::class,
         RelationsList::class,
+        RelationsRemove::class,
+        SchedulesCreate::class,
         SchedulesList::class,
+        SchedulesUpdate::class,
         TagsList::class,
+        TagsSet::class,
     ];
 
     public function __construct(Transport $transport)

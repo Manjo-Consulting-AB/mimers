@@ -11,10 +11,16 @@ use App\Models\Item;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
 use App\Support\Agent\AgentLevels;
+use App\Support\Agent\CopyGate;
+use App\Support\Agent\ItemAudience;
+use App\Support\Agent\ReadAudience;
+use App\Support\Mcp\AgentAudit;
 use App\Support\Mcp\McpRateLimiter;
 use App\Support\Mcp\McpToolException;
 use App\Support\Mcp\ToolError;
 use App\Support\Mcp\ToolKind;
+use Closure;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -37,8 +43,10 @@ use Throwable;
  * bara `run()`. Varje undantag blir ett verktygsfel i det delade formatet
  * (App\Support\Mcp\ToolError); `server.error` bär aldrig undantagstext.
  *
- * **Skrivningar loggas som agenten** genom `audit()` — `agent_id` sätts på
- * raden så att den syns som agentens handling för användarens räkning
+ * **Skrivningar loggas som agenten.** `handle()` sätter agenten i det
+ * request-bundna sammanhanget (App\Support\Mcp\AgentAudit), och varje
+ * `audit_log`-rad som skapas under anropet får `agent_id` när den skrivs, så
+ * att historiken visar handlingen som agentens för användarens räkning
  * (Riktning 3).
  *
  * Innehåll som andra skrivit (namn, beskrivningar) är användardata och inte
@@ -70,6 +78,8 @@ abstract class McpTool extends Tool
 
     final public function handle(Request $request): Response|ResponseFactory
     {
+        $audit = null;
+
         try {
             $agent = request()->attributes->get('mcp.agent');
 
@@ -95,13 +105,111 @@ abstract class McpTool extends Tool
                 throw new McpToolException('agent.rate_limited', ['retry_after_seconds' => $wait]);
             }
 
+            // Historiken märks när raden skrivs, inte efteråt — se
+            // App\Support\Mcp\AgentAudit.
+            $audit = AgentAudit::forRequest();
+            $audit->begin($agent);
+
             return $this->run($request, $agent);
         } catch (Throwable $e) {
             return ToolError::fromThrowable($e);
+        } finally {
+            $audit?->end();
         }
     }
 
     abstract protected function run(Request $request, Agent $agent): Response|ResponseFactory;
+
+    /**
+     * Actionerna verktyget anropar, som klassnamn. Tom för ett verktyg som
+     * bara läser. `ForbudTest` läser listan och fäller ett verktyg vars namn
+     * eller action hör till en förbjuden domän
+     * (App\Support\Mcp\ForbiddenDomains, [[ADR-0087 MCP-server för agenter]]
+     * Riktning 7).
+     *
+     * @return list<class-string>
+     */
+    public function actions(): array
+    {
+        return [];
+    }
+
+    /**
+     * Notera vad en läsning lämnade ut, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 10, *Kopiering*: för varje item verktyget svarade med sparas
+     * vilka personer som når det, och snittet prövas före varje skrivning.
+     *
+     * Flera items i samma svar bidrar med SITT snitt — personerna som når
+     * allt svaret lämnade ut. Ett tomt svar noterar ingenting: det finns
+     * ingen mängd att snitta mot, och en tom mängd hade stängt varje
+     * skrivning.
+     *
+     * @param  list<Item>  $items  de items svaret lämnade ut
+     */
+    protected function noteReads(Agent $agent, array $items): void
+    {
+        if ($items === []) {
+            return;
+        }
+
+        // Containern laddas en gång för hela svaret i stället för en fråga
+        // per item (en sida i en sökning kan ha hundra rader).
+        $collection = new EloquentCollection($items);
+
+        if ($collection->contains(fn (Item $item): bool => ! $item->relationLoaded('container'))) {
+            $collection->load('container');
+        }
+
+        $audiences = [];
+        $audience = app(ItemAudience::class);
+
+        foreach ($collection as $item) {
+            $container = $item->container;
+
+            if ($container !== null) {
+                $audiences[] = $audience->forItem($container, $item);
+            }
+        }
+
+        if ($audiences === []) {
+            return;
+        }
+
+        $intersection = array_shift($audiences);
+
+        foreach ($audiences as $audience) {
+            $intersection = array_values(array_intersect($intersection, $audience));
+        }
+
+        app(ReadAudience::class)->note($agent, $intersection);
+    }
+
+    /**
+     * Kopieringsspärren: når någon utanför agentens lässnitt målet efter
+     * skrivningen är anropet `agent.copy_widens_access`, se
+     * App\Support\Agent\CopyGate.
+     *
+     * @param  list<int>  $audienceAfterWrite
+     */
+    protected function guardCopy(Agent $agent, array $audienceAfterWrite): void
+    {
+        app(CopyGate::class)->assert($agent, $audienceAfterWrite);
+    }
+
+    /**
+     * Kör skrivningen. `agent_id` sätts av sammanhanget som `handle()`
+     * sätter (App\Support\Mcp\AgentAudit), när raden skapas — inte av en
+     * UPDATE efteråt.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $write
+     * @return T
+     */
+    protected function writeAsAgent(Closure $write): mixed
+    {
+        return $write();
+    }
 
     /**
      * Agentens nivå i verktygets grupp, via den enda som svarar.

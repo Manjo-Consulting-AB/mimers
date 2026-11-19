@@ -74,4 +74,13 @@ return [
      * anrop hade gjort varje läsning till en UPDATE.
      */
     'last_used_interval_seconds' => 60,
+
+    /*
+     * Fönstret för kopieringsspärren, i timmar, se [[ADR-0087 MCP-server för
+     * agenter]] Riktning 10 och issue 404. Snittet av vad agenten läst gäller
+     * så här länge efter agentens SENASTE läsning; därefter nollställs det
+     * och en skrivning släpps igenom. Ett kort fönster vore lätt att vänta ut,
+     * eftersom en konversation kan återupptas långt senare.
+     */
+    'read_audience_hours' => (int) env('MCP_READ_AUDIENCE_HOURS', 24),
 ];
