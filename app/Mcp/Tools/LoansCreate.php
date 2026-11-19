@@ -64,7 +64,7 @@ class LoansCreate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $loan = $this->writeAsAgent($agent, (int) $container->id, fn (): Loan => app(CreateLoan::class)->handle(
+        $loan = $this->writeAsAgent(fn (): Loan => app(CreateLoan::class)->handle(
             $item,
             $agent->user,
             new Loan($args),

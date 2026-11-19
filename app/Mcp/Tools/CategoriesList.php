@@ -54,6 +54,10 @@ class CategoriesList extends ReadsContainers
         $more = $rows->count() > $limit;
         $rows = $rows->take($limit);
 
+        // Kategorinamnen är containerns innehåll — notera vilka som når den
+        // (Riktning 10, *Kopiering*).
+        $this->noteContainerRead($agent, $container);
+
         return Response::structured([
             'categories' => $rows->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,

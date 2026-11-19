@@ -138,7 +138,7 @@ class ItemsCreate extends McpTool
             'purchased_at', 'warranty_until', 'position_note', 'icon', 'icon_color',
         ])));
 
-        $created = $this->writeAsAgent($agent, (int) $container->id, fn (): Item => app(CreateItem::class)->handle(
+        $created = $this->writeAsAgent(fn (): Item => app(CreateItem::class)->handle(
             $container,
             $agent->account,
             $agent->user,

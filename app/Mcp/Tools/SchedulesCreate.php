@@ -93,7 +93,7 @@ class SchedulesCreate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $schedule = $this->writeAsAgent($agent, (int) $container->id, fn (): Schedule => app(CreateSchedule::class)->handle(
+        $schedule = $this->writeAsAgent(fn (): Schedule => app(CreateSchedule::class)->handle(
             $item,
             $agent->user,
             new Schedule(array_intersect_key($args, array_flip([

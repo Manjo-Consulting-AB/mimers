@@ -62,7 +62,7 @@ class OccurrencesComplete extends McpTool
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $result = $this->writeAsAgent($agent, (int) $container->id, fn (): array => app(CloseOccurrence::class)->handle(
+        $result = $this->writeAsAgent(fn (): array => app(CloseOccurrence::class)->handle(
             $schedule,
             $occurrence,
             $agent->user,

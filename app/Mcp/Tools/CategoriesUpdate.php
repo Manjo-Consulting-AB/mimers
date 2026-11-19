@@ -86,7 +86,7 @@ class CategoriesUpdate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forContainer($container));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateCategory::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateCategory::class)->handle(
             $container,
             $category,
             $agent->user,

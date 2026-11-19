@@ -62,7 +62,7 @@ class CostsCreate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $cost = $this->writeAsAgent($agent, (int) $container->id, fn () => app(CreateCostEntry::class)->handle(
+        $cost = $this->writeAsAgent(fn () => app(CreateCostEntry::class)->handle(
             $container,
             $item,
             $args,

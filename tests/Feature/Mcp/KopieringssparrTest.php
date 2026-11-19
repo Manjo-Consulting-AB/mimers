@@ -1,10 +1,15 @@
 <?php
 
 use App\Models\Agent;
+use App\Models\AgentReadAudience;
+use App\Models\Category;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\travel;
 
@@ -119,20 +124,140 @@ it('släpper alltid igenom en skrivning i användarens privata container', funct
     expect($annatPrivat->refresh()->notes)->toBe('Bara jag ser det här');
 });
 
-it('påverkas inte av containers_list, men av en sökning utan containerfilter', function () {
+it('noterar ingenting ur containers_list — varken snitt eller fönster', function () {
     [$agent, $token, $anvandare, $privat, $delad, $medlem] = kopieringsMiljo();
 
-    $privatItem = kopieringsItem($privat, 'Batteri privat');
     $delatItem = kopieringsItem($delad, 'Batteri delat');
 
+    // Containernamnen räknas inte som läst innehåll: listan lämnar inte ut
+    // något ur containrarna. Hade den noterat båda hade snittet blivit
+    // {användaren} och skrivningen nedan avvisats.
+    mcpResultat(mcpVerktyg($token, 'containers_list'));
+
+    expect(AgentReadAudience::query()->where('agent_id', $agent->id)->exists())->toBeFalse()
+        ->and($agent->refresh()->read_audience_until)->toBeNull();
+
+    mcpResultat(mcpVerktyg($token, 'items_update', [
+        'item' => $delatItem->ulid,
+        'name' => 'Tillåten',
+    ]));
+
+    expect($delatItem->refresh()->name)->toBe('Tillåten');
+});
+
+it('snittar flera läsningar — en senare läsning kan inte vidga snittet', function () {
+    [$agent, $token, $anvandare, $privat, $delad, $medlem] = kopieringsMiljo();
+
+    $delatItem = kopieringsItem($delad, 'Delat batteri');
+    $privatItem = kopieringsItem($privat, 'Privat batteri');
+
+    // Den delade läsningen ger {användaren, medlemmen}, den privata ger
+    // {användaren}. Snittet är det minsta av dem.
+    mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $delatItem->ulid]));
     mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $privatItem->ulid]));
 
-    // Containernamnen räknas inte — listan lämnar inte ut det delade itemet.
-    mcpResultat(mcpVerktyg($token, 'containers_list'));
+    expect(AgentReadAudience::query()->where('agent_id', $agent->id)->pluck('user_id')->map(fn ($id): int => (int) $id)->sort()->values()->all())
+        ->toBe([(int) $anvandare->id]);
 
     expect(mcpFel(mcpVerktyg($token, 'items_update', [
         'item' => $delatItem->ulid,
-        'name' => 'Fortfarande avvisad',
+        'name' => 'Avvisad',
+    ]))['code'])->toBe('agent.copy_widens_access');
+});
+
+it('räknar kategorilistan som läst innehåll', function () {
+    [$agent, $token, $anvandare, $privat, $delad, $medlem] = kopieringsMiljo();
+
+    Category::factory()->create(['container_id' => $privat->id, 'name' => 'Privat kategori']);
+    $delatItem = kopieringsItem($delad, 'Delat batteri');
+
+    mcpResultat(mcpVerktyg($token, 'categories_list', ['container' => $privat->ulid]));
+
+    expect(mcpFel(mcpVerktyg($token, 'items_update', [
+        'item' => $delatItem->ulid,
+        'name' => 'Avvisad',
+    ]))['code'])->toBe('agent.copy_widens_access');
+});
+
+it('räknar tagglistan som läst innehåll', function () {
+    [$agent, $token, $anvandare, $privat, $delad, $medlem] = kopieringsMiljo();
+
+    Tag::factory()->create(['container_id' => $privat->id, 'name' => 'Privat tagg']);
+    $delatItem = kopieringsItem($delad, 'Delat batteri');
+
+    mcpResultat(mcpVerktyg($token, 'tags_list', ['container' => $privat->ulid]));
+
+    expect(mcpFel(mcpVerktyg($token, 'items_update', [
+        'item' => $delatItem->ulid,
+        'name' => 'Avvisad',
+    ]))['code'])->toBe('agent.copy_widens_access');
+});
+
+it('räknar förälderns publik när items_get lämnar ut vägen', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    $container = mcpEgenContainer($agent, 'Delad');
+
+    $foralder = kopieringsItem($container, 'Förälder');
+    $barnet = kopieringsItem($container, 'Barn');
+
+    DB::table('item_link')->insert([
+        'from_item_id' => $foralder->id,
+        'to_item_id' => $barnet->id,
+        'relation' => 'parent',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Medlemmen når barnet genom en itemgrant, aldrig föräldern. Vägen
+    // "Förälder › Barn" nämner då någon som bara användaren når.
+    $medlem = User::factory()->create();
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => $barnet->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $medlem->id,
+        'level' => 'read',
+        'kind' => 'member',
+    ]);
+
+    mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $barnet->ulid]));
+
+    expect(mcpFel(mcpVerktyg($token, 'items_update', [
+        'item' => $barnet->ulid,
+        'name' => 'Avvisad',
+    ]))['code'])->toBe('agent.copy_widens_access');
+});
+
+it('räknar de relaterade itemens publik när relations_list lämnar ut dem', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    $container = mcpEgenContainer($agent, 'Delad');
+
+    $delatItem = kopieringsItem($container, 'Delat');
+    $baraAnvandaren = kopieringsItem($container, 'Bara användaren');
+
+    DB::table('item_link')->insert([
+        'from_item_id' => $delatItem->id,
+        'to_item_id' => $baraAnvandaren->id,
+        'relation' => 'related',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $medlem = User::factory()->create();
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => $delatItem->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $medlem->id,
+        'level' => 'read',
+        'kind' => 'member',
+    ]);
+
+    mcpResultat(mcpVerktyg($token, 'relations_list', ['item' => $delatItem->ulid]));
+
+    expect(mcpFel(mcpVerktyg($token, 'items_update', [
+        'item' => $delatItem->ulid,
+        'name' => 'Avvisad',
     ]))['code'])->toBe('agent.copy_widens_access');
 });
 

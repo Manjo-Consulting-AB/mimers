@@ -74,7 +74,65 @@ final class ItemPaths
      */
     public function path(Item $item): string
     {
-        $names = [];
+        return implode(' › ', array_map(
+            fn (int $id): string => $this->items[$id]['name'],
+            $this->pathIds($item),
+        ));
+    }
+
+    /**
+     * Alla items ett svar nämner utöver itemet självt: relationerna och
+     * förfäderna i vägen. Publiken för ett item är en delmängd av publiken
+     * för dess förälder, så att notera bara itemet hade gett ett för
+     * vidsträckt snitt i kopieringsspärren.
+     *
+     * @return list<Item>
+     */
+    public function mentionedItems(Item $item): array
+    {
+        return $this->models(array_values(array_unique(array_merge(
+            $this->relationIds($item),
+            $this->pathIds($item),
+        ))));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function relationIds(Item $item): array
+    {
+        $container = (int) $item->container_id;
+        $edges = $this->edgesOf($container);
+        $ids = [];
+
+        foreach (['parents', 'children', 'related'] as $direction) {
+            $ids = array_merge($ids, $this->sortedReadable($edges[$direction][(int) $item->id] ?? [], $container));
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @param  list<int>  $ids
+     * @return list<Item>
+     */
+    private function models(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        return Item::query()->whereIn('id', $ids)->get()->all();
+    }
+
+    /**
+     * Förfäderna vägen går igenom, roten först — de agenten når.
+     *
+     * @return list<int>
+     */
+    private function pathIds(Item $item): array
+    {
+        $ids = [];
         $seen = [(int) $item->id => true];
         $current = (int) $item->id;
         $container = (int) $item->container_id;
@@ -95,11 +153,11 @@ final class ItemPaths
             }
 
             $seen[$next] = true;
-            array_unshift($names, $this->items[$next]['name']);
+            array_unshift($ids, $next);
             $current = $next;
         }
 
-        return implode(' › ', $names);
+        return $ids;
     }
 
     /**

@@ -48,7 +48,21 @@ final class ReadAudience
         $until = $this->windowEndsAt();
 
         DB::transaction(function () use ($agent, $userIds, $until): void {
-            if ($this->isOpen($agent)) {
+            // Låset gör läsningen av fönstret och skrivningen av snittet
+            // atomiska: två samtidiga läsningar från samma agent kan annars
+            // korsa varandra, och den enas `insertOrIgnore` lägger tillbaka
+            // en person som den andra just tog bort — en union i stället för
+            // ett snitt.
+            $row = Agent::query()->whereKey($agent->id)->lockForUpdate()->first();
+
+            if ($row === null) {
+                return;
+            }
+
+            $open = $row->read_audience_until !== null
+                && now()->lessThan($row->read_audience_until);
+
+            if ($open) {
                 // Snittet: en person som inte finns i den nya mängden når
                 // inte allt agenten har läst och faller bort.
                 AgentReadAudience::query()
@@ -83,7 +97,8 @@ final class ReadAudience
                 ));
             }
 
-            Agent::query()->whereKey($agent->id)->update(['read_audience_until' => $until]);
+            $row->read_audience_until = $until;
+            $row->save();
             $agent->read_audience_until = $until;
         });
     }

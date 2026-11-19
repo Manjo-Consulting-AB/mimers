@@ -64,7 +64,7 @@ class TagsSet extends WritesItems
         // SyncItemTags öppnar ingen egen transaktion — den anropas inifrån
         // UpdateItem och CreateItem. Här är den ensam, så taggarna och
         // loggraden behöver en.
-        $this->writeAsAgent($agent, (int) $container->id, fn () => DB::transaction(
+        $this->writeAsAgent(fn () => DB::transaction(
             fn () => app(SyncItemTags::class)->handle($item, $tags, $agent->user),
         ));
 

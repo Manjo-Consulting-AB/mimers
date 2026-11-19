@@ -84,7 +84,7 @@ class RelationsCreate extends WritesItems
 
         // Actionen öppnar ingen egen transaktion; API-kontrollern lägger
         // länken och loggraden i en (issue 109).
-        $this->writeAsAgent($agent, (int) $container->id, fn () => DB::transaction(
+        $this->writeAsAgent(fn () => DB::transaction(
             fn () => app(LinkItems::class)->handle($item, $other, $relation, $agent->user),
         ));
 

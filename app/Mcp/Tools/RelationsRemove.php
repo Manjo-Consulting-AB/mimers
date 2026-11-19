@@ -64,7 +64,7 @@ class RelationsRemove extends WritesItems
             $audience->forItem($container, $other),
         ))));
 
-        $removed = $this->writeAsAgent($agent, (int) $container->id, fn (): bool => app(UnlinkItems::class)->handle(
+        $removed = $this->writeAsAgent(fn (): bool => app(UnlinkItems::class)->handle(
             $item,
             $other,
             $agent->user,

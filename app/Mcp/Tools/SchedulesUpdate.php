@@ -101,7 +101,7 @@ class SchedulesUpdate extends McpTool
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateSchedule::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateSchedule::class)->handle(
             $schedule,
             $agent->user,
         ));

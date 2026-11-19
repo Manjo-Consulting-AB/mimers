@@ -55,9 +55,9 @@ class ItemsGet extends ReadsItems
 
         $paths = new ItemPaths($agent, $this->group);
 
-        // Läsningen lämnade ut itemets innehåll — notera vilka som når det
-        // (Riktning 10, *Kopiering*).
-        $this->noteReads($agent, [$item]);
+        // Läsningen lämnade ut itemets innehåll och namnen på allt det
+        // nämner — notera vilka som når dem (Riktning 10, *Kopiering*).
+        $this->noteReads($agent, array_merge([$item], $paths->mentionedItems($item)));
 
         return Response::structured([
             'ulid' => $item->ulid,

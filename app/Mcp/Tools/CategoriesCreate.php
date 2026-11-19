@@ -77,7 +77,7 @@ class CategoriesCreate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forContainer($container));
 
-        $category = $this->writeAsAgent($agent, (int) $container->id, fn (): Category => app(CreateCategory::class)->handle(
+        $category = $this->writeAsAgent(fn (): Category => app(CreateCategory::class)->handle(
             $container,
             $args['name'],
             $parent,

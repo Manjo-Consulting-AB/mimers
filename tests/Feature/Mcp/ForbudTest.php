@@ -25,10 +25,11 @@ use Laravel\Mcp\Server\Attributes\Name;
 
 /**
  * Ett verktyg i en förbjuden domän, enbart för att bevisa att provet fäller
- * det. Det finns inte i servern och ska aldrig registreras.
+ * det. Det finns inte i servern och ska aldrig registreras. Namnet är
+ * prefixat med filens eget namn: klasserna är globala i testsviten.
  */
 #[Name('trash_empty')]
-class ForbjudetNamnVerktyg extends McpTool
+class ForbudProvForbjudetNamnVerktyg extends McpTool
 {
     protected ?ToolKind $kind = ToolKind::Write;
 
@@ -45,7 +46,7 @@ class ForbjudetNamnVerktyg extends McpTool
  * inte hela prövningen.
  */
 #[Name('items_create')]
-class ForbjudenActionVerktyg extends McpTool
+class ForbudProvForbjudenActionVerktyg extends McpTool
 {
     protected ?ToolKind $kind = ToolKind::Write;
 
@@ -67,6 +68,11 @@ class ForbjudenActionVerktyg extends McpTool
 
 /**
  * Verktygen som servern faktiskt registrerar.
+ *
+ * `actions()` deklareras för hand av varje verktyg och är ett KONTRAKT, inte
+ * en avläsning av koden: ett verktyg som anropar en förbjuden action men
+ * inte listar den här fångas inte. Kontraktet är det provet kan pröva, och
+ * granskningen av varje nytt verktyg får kontrollera att listan stämmer.
  *
  * @return list<McpTool>
  */
@@ -104,11 +110,11 @@ it('har inget verktyg i en förbjuden domän', function () {
 });
 
 it('fäller ett verktyg vars namn hör till en förbjuden domän', function () {
-    expect(forbudProv([new ForbjudetNamnVerktyg]))->not->toBe([]);
+    expect(forbudProv([new ForbudProvForbjudetNamnVerktyg]))->not->toBe([]);
 });
 
 it('fäller ett verktyg vars action hör till en förbjuden domän', function () {
-    expect(forbudProv([new ForbjudenActionVerktyg]))->not->toBe([]);
+    expect(forbudProv([new ForbudProvForbjudenActionVerktyg]))->not->toBe([]);
 
     expect(ForbiddenDomains::offence('items_create', [EmptyTrash::class]))->toBe(EmptyTrash::class);
 });

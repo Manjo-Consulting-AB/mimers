@@ -56,7 +56,7 @@ class LoansReturn extends McpTool
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateLoan::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateLoan::class)->handle(
             $item,
             $loan,
             ['returned_at' => $returnedAt],

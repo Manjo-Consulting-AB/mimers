@@ -50,7 +50,7 @@ class ItemsNotesUpdate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateItemNotes::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateItemNotes::class)->handle(
             $item,
             $agent->user,
             $args['notes'] ?? null,

@@ -114,7 +114,7 @@ class ItemsUpdate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateItem::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateItem::class)->handle(
             $item,
             $agent->user,
             $tagsGiven,

@@ -64,7 +64,7 @@ class CostsUpdate extends McpTool
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateCostEntry::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateCostEntry::class)->handle(
             $item,
             $cost,
             $fields,

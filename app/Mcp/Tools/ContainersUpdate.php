@@ -58,7 +58,7 @@ class ContainersUpdate extends WritesItems
 
         $this->guardCopy($agent, app(ItemAudience::class)->forContainer($container));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(UpdateContainer::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateContainer::class)->handle(
             $container,
             $agent->user,
             array_intersect_key($args, array_flip(['name', 'description'])),

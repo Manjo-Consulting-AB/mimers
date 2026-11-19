@@ -79,7 +79,7 @@ class ItemsMove extends WritesItems
         // Sedan kopieringsspärren, mot målet efter flytten.
         $this->guardCopy($agent, app(ItemAudience::class)->afterMoving($container, $item, $fromParent, $toParent));
 
-        $this->writeAsAgent($agent, (int) $container->id, fn () => app(MoveItem::class)->handle(
+        $this->writeAsAgent(fn () => app(MoveItem::class)->handle(
             $item,
             $toParent,
             $fromParent,
