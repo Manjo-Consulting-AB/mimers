@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
 use App\Support\Agent\AgentLevels;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,7 +53,14 @@ class AgentController extends Controller
             return false;
         }
 
-        return AgentLevels::planIncludesMcp(app(ResolveAgentAccount::class)->handle($user));
+        try {
+            $account = app(ResolveAgentAccount::class)->handle($user);
+        } catch (ModelNotFoundException) {
+            // Användare utan konto: skalet ska fortsätta fungera.
+            return false;
+        }
+
+        return AgentLevels::planIncludesMcp($account);
     }
 
     public function index(Request $request): Response

@@ -52,6 +52,16 @@ it('ger ett gratiskonto 404 på sidan och ingen länk i menyn', function () {
         ->assertInertia(fn (AssertableInertia $sida) => $sida->where('mcpAvailable', false));
 });
 
+it('ger inte 404 på andra sidor för en användare utan konto', function () {
+    [, $anvandare] = mcpKonto('pro');
+    $anvandare->accounts()->detach();
+    actingAs($anvandare);
+
+    get('/settings/profile')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('mcpAvailable', false));
+});
+
 it('ger 404 när MCP_ENABLED är falsk, även för Pro', function () {
     [$agent, $anvandare] = sidaAgent();
     config(['mcp.enabled' => false]);
