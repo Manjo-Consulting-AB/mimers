@@ -3939,6 +3939,20 @@ return [
             'current' => 'Current place',
             'placement_heading' => 'Which placement do you want to move?',
             'placement_back' => 'Back',
+
+            // The warning before the move is made (issue 1402 · [[ADR-0069
+            // Flytta ett item inom containern]] § Uppföljning 2026-11-18).
+            // `named` is the owner's sentence, with the people who gain
+            // access; `unnamed` is everyone else's — it says that more people
+            // will see the item, never who or how many ([[ADR-0028 Åtkomst på
+            // itemnivå]] § Deltagarlistan). `confirm` is the button that
+            // sends the move after the question; Cancel reuses
+            // `item.form.parent_cancel`.
+            'audience' => [
+                'named' => ':names will get access to :name and everything under it.',
+                'unnamed' => 'More people will get access to :name and everything under it.',
+                'confirm' => 'Move',
+            ],
         ],
 
         // The deletion is SOFT ([[ADR-0008 Soft delete och papperskorg]]), and

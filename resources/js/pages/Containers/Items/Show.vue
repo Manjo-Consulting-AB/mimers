@@ -812,6 +812,36 @@ function move(node, fromParent) {
     });
 }
 
+/*
+ * Flyttvarningen (issue 1402 · [[ADR-0069 Flytta ett item inom containern]]
+ * § Uppföljning 2026-11-18): väljaren frågar servern VILKA som får åtkomst
+ * innan den skickar POST:en. Rutten flyttar ingenting och bär samma
+ * behörighet som flytten; svaret är `{widens, names?}`, där `names` bara
+ * kommer med för ägarkontot.
+ *
+ * Ett misslyckat anrop — nätet, en gammal flik, ett oväntat svar — behandlas
+ * som `widens: true` utan namn: väljaren visar då texten för övriga och
+ * frågar en gång för mycket i stället för att flytta tyst.
+ */
+async function checkMoveAudience(node, fromParent) {
+    const params = new URLSearchParams();
+    params.set('to_parent', node === null ? '' : node.ulid);
+
+    if (fromParent !== null && fromParent !== undefined) {
+        params.set('from_parent', fromParent);
+    }
+
+    try {
+        const response = await fetch(`/containers/${props.container.ulid}/items/${props.item.ulid}/move/audience?${params.toString()}`, {
+            headers: { Accept: 'application/json' },
+        });
+
+        return response.ok ? await response.json() : { widens: true };
+    } catch {
+        return { widens: true };
+    }
+}
+
 function goEdit() {
     router.visit(editUrl.value);
 }
@@ -1079,6 +1109,7 @@ function toggleFavorite() {
                 :error="moveError"
                 :pending="movePending"
                 :trigger="moveTrigger"
+                :check="checkMoveAudience"
                 @choose="move"
                 @close="moveOpen = false"
             />
