@@ -668,6 +668,22 @@ return [
         'password' => 'Password',
     ],
 
+    /*
+     * The types an own field can have, see issue 419 ·
+     * [[ADR-0089 Egna fält på items]] § Riktning 1. The three values are
+     * `ItemField::TYPES` and come to the client as a prop from the
+     * controller; these keys are only the words on screen. The type is the
+     * system's and the heading is the user's, so a type has a translation
+     * while a field's label never does.
+     */
+    'field' => [
+        'type' => [
+            'text' => 'Text',
+            'number' => 'Number',
+            'date' => 'Date',
+        ],
+    ],
+
     // Issue 359: the link after a flash message, one per code that has an
     // address in FlashMessage's table.
     'flash_link' => [
@@ -1037,6 +1053,32 @@ return [
         // codes — `has_children` and `has_items` — were retired by issue 150:
         // a category is deleted with its whole subtree after a question in
         // the view, so there is no refusal left to translate.
+        /*
+         * The own-field error codes, see M68 · issue 417 and 418 ·
+         * [[ADR-0089 Egna fält på items]] § Riktning 3 och 4, and issue 419,
+         * which puts them on screen. App\Actions\Field\FieldRules throws
+         * them as App\Exceptions\Api\ApiException, and
+         * App\Support\Frontend\ApiErrorTranslator turns the code into the
+         * sentence below on the web — never a raw JSON body
+         * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
+         *
+         * `limit_reached` carries `limit` and `scope` in `data`; the sentence
+         * uses the number and says nothing about the scope, because the page
+         * the user stands on already shows which of the two lists she filled
+         * (the container's or the item's own). `label_taken` names the
+         * heading she typed, so the row she has to change is unambiguous.
+         *
+         * `not_applicable` never reaches this block: it is a validation
+         * message from App\Actions\Field\FieldAppliesToItem and lives in
+         * lang/en/validation.php. On `/api` it is `field.not_applicable`,
+         * see App\Support\Api\ValidationErrorMapper.
+         */
+        'field' => [
+            'limit_reached' => 'No more fields can be added: the limit is :limit.',
+            'label_taken' => 'A field called “:label” already exists.',
+            'type_locked' => 'The type cannot be changed: the field already has values.',
+        ],
+
         'category' => [
             'max_depth_exceeded' => 'A category can be at most :max_depth levels deep.',
             'cycle' => 'A category cannot be moved into itself or into one of its own subcategories.',
@@ -2353,6 +2395,12 @@ return [
             'costs' => 'Costs',
             'categories' => 'Categories',
             'tags' => 'Tags',
+            // M68 · issue 419 · [[ADR-0089 Egna fält på items]] § Riktning 1:
+            // the container's own typed fields, the page where they are
+            // defined. It sits after the tags in containerSections.js — the
+            // fields belong to the structure, like the categories — and the
+            // word is the page's own (`container.fields.heading`).
+            'fields' => 'Fields',
             'sharing' => 'Sharing',
             'settings' => 'Settings',
             // Issue 65b decision 1: the calendar link is a WAY OUT of the
@@ -2729,6 +2777,61 @@ return [
             // ninety. Only asked when the count is greater than zero — a tag
             // on nothing is deleted without a question, as before.
             'destroy_confirm' => 'This tag is used on :count items. Move it to the trash? You can restore it within 30 days.',
+        ],
+
+        /*
+         * The container's own fields, see M68 · issue 419 ·
+         * [[ADR-0089 Egna fält på items]] § Riktning 1–4 and
+         * resources/js/pages/Containers/Fields.vue.
+         *
+         * **`label` is the field's heading and the user writes it herself** —
+         * the system does not know what *Litre* or *Model year* means, so no
+         * key can be built from it. `type` is the system's and its three
+         * words live under `field.type.*`.
+         *
+         * `count` is the sentence the issue asks for: how many of the limit
+         * the container uses, e.g. *12 of 25 fields*. `limit_reached` is the
+         * same number on its own, shown where the form would have been when
+         * the container is full.
+         *
+         * `type_locked` explains a disabled select: a field with values
+         * cannot change type ([[ADR-0089 Egna fält på items]] § Riktning 3).
+         * A greyed control without a reason looks like a broken page.
+         *
+         * `drag`, `move_up` and `move_down` are the three ways to change the
+         * order: the handle's tooltip and the two buttons the keyboard uses.
+         * The order itself is saved by the list, not the row.
+         *
+         * `destroy_body` names the trash and the 30 days, like every other
+         * deletion question since ADR-0008: the field and its values can be
+         * restored, and the sentence says so instead of "deleted for good",
+         * which would be untrue.
+         */
+        'fields' => [
+            'title' => 'Fields',
+            'heading' => 'Fields',
+            'description' => 'Your own fields for the items in this container. A field has a heading and a type, and every item can fill it in.',
+
+            'label' => 'Heading',
+            'type' => 'Type',
+            'count' => ':used of :limit fields',
+            'limit_reached' => 'The container has reached its limit of :limit fields.',
+
+            'type_locked' => 'The type cannot be changed: the field already has values.',
+
+            'drag' => 'Drag to change the order',
+            'move_up' => 'Move up',
+            'move_down' => 'Move down',
+
+            'create_heading' => 'Add field',
+            'create' => 'Add',
+            'save' => 'Save',
+            'destroy' => 'Delete',
+            'empty' => 'No fields yet.',
+
+            'destroy_heading' => 'Delete “:label”?',
+            'destroy_body' => 'The field and its values go to the trash. You can restore them within 30 days.',
+            'destroy_confirm' => 'Delete',
         ],
 
         /*
@@ -3899,6 +4002,40 @@ return [
             ],
             'icon_remove' => 'Remove icon',
             'icon_done' => 'Done',
+        ],
+
+        /*
+         * The item's own fields, see M68 · issue 419 ·
+         * [[ADR-0089 Egna fält på items]] § Riktning 2 and
+         * resources/js/components/ItemForm.vue.
+         *
+         * **`heading`, `label` and `type` are the form's own words, not the
+         * field's.** A field's heading is the user's text and never comes
+         * from here; these are the labels of the two inputs that CREATE one.
+         * The type's three values live under `field.type.*`.
+         *
+         * `remove` and the three dialog keys ask before an own field is
+         * deleted: the field and its values go to the trash and can be
+         * restored within 30 days, like every other deletion in the
+         * container.
+         *
+         * `limit_reached` is shown in place of the button when the item has
+         * its ten own fields — the same number as
+         * `fields.max_per_item`, which the server refuses past
+         * (`field.limit_reached`).
+         */
+        'fields' => [
+            'heading' => 'Fields',
+            'label' => 'Heading',
+            'type' => 'Type',
+            'add' => 'Add field',
+            'add_cancel' => 'Cancel',
+            'limit_reached' => 'The item has reached its limit of :limit own fields.',
+
+            'remove' => 'Remove',
+            'remove_heading' => 'Remove “:label”?',
+            'remove_body' => 'The field and its values go to the trash. You can restore them within 30 days.',
+            'remove_confirm' => 'Remove',
         ],
 
         /*

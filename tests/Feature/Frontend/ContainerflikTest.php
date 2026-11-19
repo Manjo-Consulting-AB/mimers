@@ -239,16 +239,16 @@ it('containern har en flikrad byggd av UiTabs', function () {
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
  * Nycklarna räknas upp ur modulen — en rad fler vore en ny sida någon byggt
  * utan att en issue bad om den, och en rad färre vore en yta ingen hittar —
- * och varje adress begärs som inloggad medlem. Tretton sedan issue 178 (178
- * lade till dokumentfliken, 175 kostnadsfliken, 174 uppgiftsfliken och 116
- * historikfliken).
+ * och varje adress begärs som inloggad medlem. Fjorton sedan M68 · issue 419
+ * (178 lade till dokumentfliken, 175 kostnadsfliken, 174 uppgiftsfliken, 116
+ * historikfliken och 419 fältsidan).
  *
  * Den andra halvan är inställningssidan, som är den yta de sju sektionerna
  * flyttade TILL. Att adressen svarar 200 är inte samma sak som att den går att
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de tretton sektionerna går att nå', function () {
+it('var och en av de fjorton sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
@@ -260,6 +260,7 @@ it('var och en av de tretton sektionerna går att nå', function () {
         'costs',
         'categories',
         'tags',
+        'fields',
         'sharing',
         'settings',
         'calendar',
@@ -282,6 +283,7 @@ it('var och en av de tretton sektionerna går att nå', function () {
         'settings',
         'categories',
         'tags',
+        'fields',
         'sharing',
         'calendar',
         'export',

@@ -230,12 +230,17 @@ it('länkar containernamnet i containerlistan till itemfliken', function () {
  * fjärde gång — en ny sida, en ny rutt och en ny kontrollermetod — och den
  * sista av de fyra som M24 lade till i containerns flikrad.
  *
+ * **Tretton blev fjorton i M68 · issue 419.** Fältsidan är samma sorts rad:
+ * en ny sida (resources/js/pages/Containers/Fields.vue), en rutt som redan
+ * fanns sedan issue 417 och nu får sin vy, och ingen ny kontrollermetod —
+ * den här gången är det ytan som är det nya.
+ *
  * **Räkningen gäller `containerSections` och ingenting annat.** Sedan issue 101
  * bär filen också `containerTabs`, och översiktsraden där är en adress utan
  * sektion — den hör till flikraden och räknas inte hit. En räkning över hela
  * filen hade räknat den som en sektion.
  */
-it('lägger itemfliken först i containerns navigation och behåller tretton rader', function () {
+it('lägger itemfliken först i containerns navigation och behåller fjorton rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -247,7 +252,7 @@ it('lägger itemfliken först i containerns navigation och behåller tretton rad
     preg_match('#export const containerSections = \[(.*?)\n\];#s', $sektioner, $träff);
 
     expect($träff[1] ?? '')->not->toBe('', 'containerSections finns inte i filen');
-    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(13);
+    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(14);
 });
 
 /*

@@ -50,6 +50,7 @@ function containerinstallningskolumnSidor(): array
         'Edit',
         'Categories',
         'Tags',
+        'Fields',
         'Sharing',
         'CalendarFeed',
         'Export',

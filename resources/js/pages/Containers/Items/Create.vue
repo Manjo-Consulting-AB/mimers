@@ -68,6 +68,13 @@ const props = defineProps({
     canCreateRoot: { type: Boolean, default: false },
     /* `manage_taxonomy`: får användaren skapa taggar och kategorier i väljaren? */
     can: { type: Object, default: () => ({ manage_taxonomy: false }) },
+    /*
+     * Containerns egna fält, ur App\Http\Controllers\ItemController::create()
+     * (issue 419 · [[ADR-0089 Egna fält på items]] § Riktning 1). Ett nytt
+     * item har inga egna fält än, så listan är containerns — och den gäller
+     * alla items i containern, därför står den här och inte på itemet.
+     */
+    fields: { type: Array, default: () => [] },
 });
 
 const { t } = useTranslations();
@@ -103,5 +110,6 @@ const account = computed(() => {
         :structure="structure"
         :can-create-root="canCreateRoot"
         :can-manage-taxonomy="can.manage_taxonomy"
+        :fields="fields"
     />
 </template>
