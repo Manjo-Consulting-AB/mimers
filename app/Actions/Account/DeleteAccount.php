@@ -55,7 +55,8 @@ use InvalidArgumentException;
  * 5. ägarbyten där kontot är avsändare eller mottagare, och åtkomster som
  *    getts till kontot — raderna på kontots EGNA containers tog steg 4,
  *    kvar är de på någon annans (ADR-0045 § Beslut 3),
- * 6. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
+ * 6. usage_counter-raden, webhook_endpoint-raderna (issue 37a § Beslut 8) och
+ *    mallarna (issue 421) — på både `account_id` och `billed_account_id`,
  * 7. subscription-raden om den finns,
  * 8. account_user-raderna,
  * 9. account-raden.
@@ -257,6 +258,19 @@ class DeleteAccount
             // account-raderingen nedan ett integritetsfel. Leveransraderna togs
             // överst i transaktionen, före container-gallringen.
             DB::table('webhook_endpoint')->where('account_id', $accountId)->delete();
+
+            // Mallarna (issue 421). En mall hör till kontot, inte till en
+            // container, så PurgeContainer känner den inte; `account_id` och
+            // `billed_account_id` är båda ON DELETE RESTRICT och en
+            // mjukraderad mall står kvar i tabellen med samma nycklar. Båda
+            // kolumnerna städas: betalaren kan vara ett annat konto än
+            // ägaren när en medlem i flera konton sparar från en container i
+            // ett av dem.
+            DB::table('container_template')
+                ->where(fn ($query) => $query
+                    ->where('account_id', $accountId)
+                    ->orWhere('billed_account_id', $accountId))
+                ->delete();
 
             DB::table('subscription')->where('account_id', $accountId)->delete();
             DB::table('account_user')->where('account_id', $accountId)->delete();
