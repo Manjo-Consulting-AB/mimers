@@ -5,7 +5,10 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
 use App\Models\ItemField;
+use App\Models\Plan;
+use App\Models\UsageCounter;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
@@ -357,6 +360,165 @@ it('avvisar ett innehåll med okänd typ eller för djupt träd', function () {
     expect($forDjupt->json('error.code'))->toBe('validation.failed');
 
     expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+});
+
+it('avvisar ett innehåll med fler kategorinoder än taket och ändrar ingenting', function () {
+    [$account, , $headers, $container] = mallKontext();
+
+    $tak = (int) config('templates.max_categories');
+
+    // 100 rötter med ett barn var = 200 noder. Formen är tillåten per nivå
+    // (100 rötter, 100 barn per nod) men det TOTALA taket är 100.
+    $rottrad = array_map(
+        fn (int $nummer): array => [
+            'name' => "Rot {$nummer}",
+            'children' => [['name' => "Barn {$nummer}"]],
+        ],
+        range(1, $tak),
+    );
+
+    $response = postJson("/api/containers/{$container->ulid}/template", [
+        'template_content' => ['categories' => $rottrad, 'fields' => []],
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('template.max_categories_exceeded');
+    expect($response->json('error.data.limit'))->toBe($tak);
+
+    // Ingenting skrivs: kontrollen ligger före den första kategorin.
+    expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+
+    // Samma tak på skapanderutten — där hade containern annars skapats först.
+    $skapande = postJson('/api/containers', [
+        'account' => $account->ulid,
+        'name' => 'För stort träd',
+        'template_content' => ['categories' => $rottrad, 'fields' => []],
+    ], $headers);
+
+    $skapande->assertStatus(422);
+    expect($skapande->json('error.code'))->toBe('template.max_categories_exceeded');
+    expect(Container::query()->where('name', 'För stort träd')->exists())->toBeFalse();
+});
+
+it('avvisar en sparad mall över kategoritaket när den tillämpas', function () {
+    [$account, , $headers, $container] = mallKontext();
+
+    $tak = (int) config('templates.max_categories');
+
+    // En sparad malls innehåll passerar inte TemplateContentRules — mallen
+    // skapas ur en container som kan bära fler kategorier än en mall får
+    // tillämpa. Kontrollen i ApplyTemplate gäller därför båda vägarna.
+    $mall = mallMall($account, [
+        'categories' => array_map(
+            fn (int $nummer): array => ['name' => "Kategori {$nummer}"],
+            range(1, $tak + 1),
+        ),
+        'fields' => [],
+    ]);
+
+    $response = postJson("/api/containers/{$container->ulid}/template", [
+        'template' => $mall->ulid,
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('template.max_categories_exceeded');
+    expect($response->json('error.data.limit'))->toBe($tak);
+
+    expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+});
+
+it('hoppar över en rubrik som bara databasens collation ser som samma', function () {
+    [$account, , $headers, $container] = mallKontext();
+
+    // «Eé» och «Ee» är olika i PHPs mb_strtolower men samma i MariaDBs
+    // utf8mb4_unicode_ci. Förkontrollen släpper därför igenom båda, och
+    // CreateField:s label_taken fångas som överhoppat i stället för att rulla
+    // tillbaka hela tillämpningen. sqlite (testsviten) har bara nocase för
+    // ASCII, så provet är MariaDB-only — samma drivrutinsgap som
+    // App\Actions\Field\FieldRules dokumenterar.
+    $response = postJson("/api/containers/{$container->ulid}/template", [
+        'template_content' => [
+            'categories' => [],
+            'fields' => [
+                ['label' => 'Eé', 'type' => 'text'],
+                ['label' => 'Ee', 'type' => 'text'],
+            ],
+        ],
+    ], $headers);
+
+    $response->assertOk();
+    expect($response->json('data.fields'))->toBe(1);
+    expect($response->json('data.skipped'))->toBe(['Ee']);
+    expect(collect(mallFalt($container))->pluck('label')->all())->toBe(['Eé']);
+})->skip(
+    fn (): bool => DB::connection()->getDriverName() !== 'mysql',
+    'Accenters likhet är MariaDBs _ci-collation; sviten kör sqlite.',
+);
+
+it('avvisar en mall från ett annat konto med validation.failed', function () {
+    [$account, , $headers, $container] = mallKontext();
+
+    $annan = Account::factory()->create();
+    $frammande = mallMall($annan, [
+        'categories' => [['name' => 'Motor']],
+        'fields' => [['label' => 'Vikt', 'type' => 'number']],
+    ]);
+
+    // Skapa en container ur någon annans mall: exists-regeln prövar mot
+    // användarens konton, så svaret är ett valideringsfel — mallen läses
+    // aldrig och ingen container skapas.
+    $skapande = postJson('/api/containers', [
+        'account' => $account->ulid,
+        'name' => 'Främmande mall',
+        'template' => $frammande->ulid,
+    ], $headers);
+
+    $skapande->assertStatus(422);
+    expect($skapande->json('error.code'))->toBe('validation.failed');
+    expect(Container::query()->where('name', 'Främmande mall')->exists())->toBeFalse();
+
+    // Tillämpa någon annans mall på sin egen container: samma svar, och
+    // ingenting läggs in.
+    $tillampning = postJson("/api/containers/{$container->ulid}/template", [
+        'template' => $frammande->ulid,
+    ], $headers);
+
+    $tillampning->assertStatus(422);
+    expect($tillampning->json('error.code'))->toBe('validation.failed');
+    expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+    expect(ItemField::query()->where('container_id', $container->id)->count())->toBe(0);
+});
+
+it('tar bort den nyskapade containern när tillämpningen kastar', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $tak = Plan::where('code', 'free')->firstOrFail()->planLimit('storage_bytes');
+
+    // Rum för containerraden (256 byte plus namnet) men inte för en kategori
+    // (256 byte plus namnet): CreateContainer går igenom, den första
+    // kategorin spränger kvoten. Hela den yttre transaktionen ska rullas
+    // tillbaka, containern inräknad.
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => $tak - 300,
+    ]);
+
+    $mall = mallMall($account, [
+        'categories' => [['name' => 'Motor']],
+        'fields' => [],
+    ]);
+
+    $response = postJson('/api/containers', [
+        'account' => $account->ulid,
+        'name' => 'Kvot',
+        'template' => $mall->ulid,
+    ], $headers);
+
+    $response->assertStatus(403);
+    expect($response->json('error.code'))->toBe('quota.storage_exceeded');
+
+    expect(Container::query()->where('name', 'Kvot')->exists())->toBeFalse();
+    expect((int) DB::table('usage_counter')->where('account_id', $account->id)->value('container_count'))->toBe(0);
 });
 
 it('avvisar ett anrop helt utan mall', function () {

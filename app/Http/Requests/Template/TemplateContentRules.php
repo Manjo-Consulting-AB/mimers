@@ -23,9 +23,14 @@ use Illuminate\Validation\Rule;
  * **Fälten är högst `fields.max_per_container`** — fler fält än en container
  * får bära kan en mall aldrig behöva, och taket stänger samma missbruksvektor
  * som App\Http\Requests\Category\StoreCategoryPresetRequest gör för
- * kategoriförslagen ([[ADR-0017 Missbruksvektorer]]). Antalet kategorier har
- * inget eget tak i datamodellen; den yttre gränsen är 100 rötter och 100 barn
- * per nod, vilket räcker med marginal för ett träd som går att skapa för hand.
+ * kategoriförslagen ([[ADR-0017 Missbruksvektorer]]).
+ *
+ * **Kategorierna har ett TOTALT tak**, `templates.max_categories` noder över
+ * hela trädet. Per-nivå-taken (100 rötter, 100 barn per nod, fem nivåer) räcker
+ * inte som missbruksgräns: de multipliceras med varandra. Det totala taket
+ * prövas av App\Actions\Template\ApplyTemplate före den första skrivningen,
+ * eftersom både `template_content` och en sparad malls innehåll går genom
+ * samma action — se config/templates.php.
  */
 final class TemplateContentRules
 {

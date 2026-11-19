@@ -22,15 +22,27 @@ use Illuminate\Support\Facades\DB;
  * vanliga kategorier och fält. Ingenting i containern pekar tillbaka på
  * mallen, och en senare ändring i mallen rör den inte.
  *
- * **Fält vars rubrik redan finns hoppas över**, utan hänsyn till skiftläge —
- * jämförelsen går genom databasens collation, samma som
- * App\Actions\Field\FieldRules::assertLabelAvailable(). Det gäller också
- * rubriker som redan lagts till av ett tidigare fält i SAMMA mall, så en
- * mall med två varianter av samma rubrik inte fäller tillämpningen mitt i.
+ * **Fält vars rubrik redan finns hoppas över**, utan hänsyn till skiftläge.
+ * Den slutgiltiga jämförelsen går genom databasens collation, i
+ * App\Actions\Field\FieldRules::assertLabelAvailable(). Förkontrollen här
+ * använder `mb_strtolower()` och fångar den vanliga krocken billigt, men den
+ * är inte auktoritativ: PHP:s gemener och MariaDB:s `_ci`-collation är inte
+ * samma mängd (`Eé` och `Ee` är samma rubrik bara i databasen). Ett fält som
+ * ändå krockar fångas därför som `field.label_taken` från
+ * App\Actions\Field\CreateField och rapporteras som överhoppat — annars hade
+ * felet rullat tillbaka hela tillämpningen. Det gäller också rubriker som
+ * lagts till av ett tidigare fält i SAMMA mall.
  * Rubriken jämförs mot allt som SYNS på ett item (`visibleFields()`), inte
  * bara containerns fält: ett eget fält på ett item med samma rubrik hade
  * annars fått `CreateField` att kasta `field.label_taken` och rullat tillbaka
  * hela tillämpningen.
+ *
+ * **Kategoritaket prövas före första skrivningen.** Fler noder än
+ * `templates.max_categories` i hela trädet avvisas med 422
+ * `template.max_categories_exceeded` och gränsen i `data` — annars kunde ett
+ * anrop med tiotusentals noder skriva en rad per nod i samma transaktion.
+ * Kontrollen ligger här och inte bara i valideringen, eftersom en sparad
+ * malls innehåll inte passerar App\Http\Requests\Template\TemplateContentRules.
  *
  * **Gränsen prövas innan något skrivs.** Skulle resultatet gå över
  * `fields.max_per_container` avvisas hela tillämpningen med 422
@@ -57,6 +69,9 @@ final class ApplyTemplate
      *                                              mall används (inbyggt förslag).
      * @return array{categories: int, fields: int, skipped: list<string>}
      *
+     * @throws ApiException 422 `template.max_categories_exceeded` när trädet
+     *                      har fler noder än `templates.max_categories`.
+     *                      Ingenting ändras.
      * @throws ApiException 422 `field.limit_reached` när tillämpningen skulle
      *                      gå över containerns fältgräns. Ingenting ändras.
      */
@@ -69,6 +84,12 @@ final class ApplyTemplate
 
         /** @var list<array<string, mixed>> $fields */
         $fields = $content['fields'] ?? [];
+
+        $categoryLimit = (int) config('templates.max_categories');
+
+        if ($this->countCategoryNodes($categories) > $categoryLimit) {
+            throw ApiException::make('template.max_categories_exceeded', ['limit' => $categoryLimit], 422);
+        }
 
         return DB::transaction(function () use ($container, $categories, $fields, $actor): array {
             // Serialiserar tillämpningar och enskilda fältskapanden mot samma
@@ -91,15 +112,27 @@ final class ApplyTemplate
             $fieldsCreated = 0;
 
             foreach ($toCreate as $field) {
-                $this->createField->handle(
-                    $container,
-                    null,
-                    $field['label'],
-                    $field['type'],
-                    null,
-                    $actor,
-                );
-                $fieldsCreated++;
+                try {
+                    $this->createField->handle(
+                        $container,
+                        null,
+                        $field['label'],
+                        $field['type'],
+                        null,
+                        $actor,
+                    );
+                    $fieldsCreated++;
+                } catch (ApiException $e) {
+                    // Förkontrollen i fieldsToCreate() kan se två rubriker som
+                    // olika där databasens collation ser dem som samma. Att
+                    // hoppa över fältet är samma svar som för en krock mot ett
+                    // befintligt fält — inte ett fel som rullar tillbaka allt.
+                    if ($e->errorCode() !== 'field.label_taken') {
+                        throw $e;
+                    }
+
+                    $skipped[] = $field['label'];
+                }
             }
 
             return [
@@ -111,9 +144,37 @@ final class ApplyTemplate
     }
 
     /**
+     * Antalet noder i hela kategoriträdet, alla nivåer. Trädet är redan
+     * djupbegränsat av valideringen när det kommer i ett anrop, så
+     * rekursionen är bunden; en sparad mall har skapats ur en container med
+     * samma djupgräns.
+     *
+     * @param  list<array<string, mixed>>  $categories
+     */
+    private function countCategoryNodes(array $categories): int
+    {
+        $nodes = 0;
+
+        foreach ($categories as $node) {
+            $nodes++;
+
+            /** @var list<array<string, mixed>> $children */
+            $children = $node['children'] ?? [];
+
+            $nodes += $this->countCategoryNodes($children);
+        }
+
+        return $nodes;
+    }
+
+    /**
      * Delar mallens fält i dem som ska skapas och dem som hoppas över för att
      * rubriken redan finns. Läser bara — den som anropar kontrollerar gränsen
      * och skriver.
+     *
+     * `$seen` är en snabb förkontroll i PHP. Den är medvetet inte
+     * auktoritativ: databasens collation avgör krocken, och ett fält som
+     * slinker igenom här fångas som `field.label_taken` i skapandet.
      *
      * @param  list<array<string, mixed>>  $fields
      * @return array{0: list<array{label: string, type: string}>, 1: list<string>}
