@@ -49,6 +49,19 @@ cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess.ny"
 mv -f "$APP/shared/storage/files/.htaccess.ny" "$APP/shared/storage/files/.htaccess"
 
 cd "$DIR"
+
+# Passport-nycklarna (issue 410, [[ADR-0087 MCP-server för agenter]] Riktning
+# 17): OAuth-servern signerar med ett nyckelpar under storage/, och storage är
+# symlänken till shared/storage ovan — nycklarna hamnar därför i den delade
+# katalogen och överlever releasen. De skapas bara när BÅDA saknas. Finns en av
+# dem rör vi ingenting: `passport:keys` skriver om båda, och en befintlig nyckel
+# får aldrig bytas ut av en utrullning.
+if [ ! -f "$APP/shared/storage/oauth-private.key" ] && [ ! -f "$APP/shared/storage/oauth-public.key" ]; then
+  php artisan passport:keys
+elif [ ! -f "$APP/shared/storage/oauth-private.key" ] || [ ! -f "$APP/shared/storage/oauth-public.key" ]; then
+  echo "VARNING: bara en av Passport-nycklarna finns i $APP/shared/storage - rör den inte." >&2
+fi
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
