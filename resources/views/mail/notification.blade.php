@@ -9,7 +9,7 @@
 {{-- Knappen går till papperskorgen när det som raderats kan återställas där
      (issue 406 § 4); de andra typerna behåller appens startsida. --}}
 @php($actionUrl = match ($type) {
-    'agent.connected' => url('/settings/agents'),
+    'agent.connected', 'agent.access_lost' => url('/settings/agents'),
     'agent.deleted' => url('/trash'),
     default => config('app.url'),
 })

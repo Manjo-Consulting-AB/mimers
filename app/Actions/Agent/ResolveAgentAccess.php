@@ -41,6 +41,9 @@ use Illuminate\Support\Facades\DB;
  * kunde en item-rad med högt tak lyfta en container-bred rad som ägaren
  * stängt. Taket gäller medlemmens agenter gemensamt (Riktning 6, *Takets regler*).
  *
+ * Är containerns ägarkonto fruset (`read_only` eller `closed`) kapas nivån
+ * till `read`: agenten kan läsa men inte skriva, som användaren (Riktning 11).
+ *
  * Inkorgen är användarens egen när hen äger den; någon annans inkorg ger
  * `ResolveItemScope` ingen åtkomst alls.
  */
@@ -91,7 +94,19 @@ class ResolveAgentAccess
             ? $this->containerCeiling($agent, $container)
             : ($this->isOwnContainer($agent, $container) ? AccessLevel::DELETE : $this->ownerCeiling($agent, $container, $item));
 
-        return AgentLevels::min($accountLevel, $containerLevel, $ceiling, $userLevel);
+        $level = AgentLevels::min($accountLevel, $containerLevel, $ceiling, $userLevel);
+
+        // Skrivspärren (regel 4): ett fruset ägarkonto — `read_only` eller
+        // `closed` — tillåter läsning men inte skrivning, och det gäller
+        // agenten som användaren. Policyn prövar det för användaren men ligger
+        // utanför MCP-verktygens väg, så taket sätts här (issue 409).
+        if ($level !== null
+            && AccessLevel::rank($level) > AccessLevel::rank(AccessLevel::READ)
+            && in_array($container->account->status, ['read_only', 'closed'], true)) {
+            return AccessLevel::READ;
+        }
+
+        return $level;
     }
 
     /**

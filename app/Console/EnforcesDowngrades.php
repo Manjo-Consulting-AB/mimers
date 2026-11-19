@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Actions\Agent\NotifyAgentAccessLost;
 use App\Actions\Trash\PurgeContent;
 use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
@@ -109,6 +110,24 @@ class EnforcesDowngrades
                     'exception' => $e->getMessage(),
                 ]);
             }
+        }
+
+        $this->notifyAgentAccessLost();
+    }
+
+    /**
+     * Issue 409: en ägare som gått till Gratis har tagit andra användares
+     * agenter ur sina containrar, och de användarna får `agent.access_lost`.
+     * Planen löper ut med klockan och ingen rad ändras, så det nattliga jobbet
+     * är den enda platsen att hitta dem på. Ett fel här stoppar inte det
+     * övriga och tas om nästa natt.
+     */
+    private function notifyAgentAccessLost(): void
+    {
+        try {
+            app(NotifyAgentAccessLost::class)->handle();
+        } catch (Throwable $e) {
+            Log::error('downgrade.agent_access_lost_failed', ['exception' => $e->getMessage()]);
         }
     }
 
