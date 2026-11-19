@@ -3,8 +3,12 @@
 namespace App\Http\Resources;
 
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\Tag;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -69,6 +73,25 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class ItemResource extends JsonResource
 {
     /**
+     * Laddar fältens relationer för HELA samlingen i ett fast antal frågor:
+     * containern och dess fält, itemets egna fält och dess värden. Utan den
+     * här raden hade `fields` blivit en lazy-load per item — sökningens och
+     * översiktens frågeantal växer då med antalet träffar, och de proven
+     * mäter just att det inte gör det (issue 15b, issue 285).
+     *
+     * @param  mixed  $resource
+     * @return AnonymousResourceCollection
+     */
+    public static function collection($resource)
+    {
+        if ($resource instanceof EloquentCollection) {
+            $resource->loadMissing(['container.fields', 'ownFields', 'fieldValues']);
+        }
+
+        return parent::collection($resource);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -98,6 +121,61 @@ class ItemResource extends JsonResource
                     'name' => $tag->name,
                     'color' => $tag->color,
                 ]),
+            'fields' => $this->fields(),
         ];
+    }
+
+    /**
+     * Itemets fält med värden, containerns först i `position`-ordning och
+     * sedan itemets egna ([[ADR-0089 Egna fält på items]] § Riktning 9 och
+     * issue 418).
+     *
+     * Ett fält utan värde finns med som `value: null` — klienten ska kunna
+     * rita alla fält som hör till itemet utan en andra lista. Fält i
+     * papperskorgen saknas helt: relationerna `container.fields` och
+     * `ownFields` bär SoftDeletes' globala scope, och värdet kommer tillbaka
+     * när fältet återställs.
+     *
+     * `id` är fältets ULID, aldrig löpnumret. `scope` säger om fältet hör
+     * till containern eller bara itemet.
+     *
+     * @return list<array{id: string, label: string, type: string, scope: string, value: string|null}>
+     */
+    private function fields(): array
+    {
+        $values = $this->fieldValues->keyBy('item_field_id');
+
+        return $this->container->fields
+            ->concat($this->ownFields)
+            ->map(fn (ItemField $field): array => [
+                'id' => $field->ulid,
+                'label' => $field->label,
+                'type' => $field->type,
+                'scope' => $field->item_id === null ? 'container' : 'item',
+                'value' => $this->fieldValue($field, $values->get($field->id)),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Värdet som en sträng, eller null när raden saknas.
+     *
+     * **Ett tal är alltid en sträng.** `DECIMAL(20,6)` ryms inte i en
+     * JSON-flyttal utan att decimalerna tappas, så klienten får samma
+     * decimalsträng servern lagrade ([[ADR-0089 Egna fält på items]]
+     * § Riktning 9). Ett datum är `Y-m-d`, en dag har ingen tidszon.
+     */
+    private function fieldValue(ItemField $field, ?ItemFieldValue $row): ?string
+    {
+        if ($row === null) {
+            return null;
+        }
+
+        return match ($field->type) {
+            'number' => $row->value_number,
+            'date' => $row->value_date?->toDateString(),
+            default => $row->value_text,
+        };
     }
 }

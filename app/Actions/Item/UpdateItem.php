@@ -3,6 +3,7 @@
 namespace App\Actions\Item;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Field\SyncItemFieldValues;
 use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Tag;
@@ -76,6 +77,7 @@ class UpdateItem
     public function __construct(
         private readonly RecordAuditEvent $recordAuditEvent,
         private readonly SyncItemTags $syncItemTags,
+        private readonly SyncItemFieldValues $syncItemFieldValues,
     ) {}
 
     /**
@@ -86,13 +88,29 @@ class UpdateItem
      *                          alltid.
      * @param  Collection<int, Tag>  $tags  Den önskade mängden, när den ska
      *                                      synkas.
+     * @param  list<array{field: string, value?: mixed}>  $fields  Fältvärdena
+     *                                                             ur kroppen,
+     *                                                             redan
+     *                                                             validerade
+     *                                                             (issue 418).
+     *                                                             Ett fält som
+     *                                                             inte nämns
+     *                                                             lämnas orört.
      */
-    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags): void
+    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags, array $fields = []): void
     {
         $meta = $this->metaFor($item);
 
-        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta): void {
+        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields): void {
             MetadataLedger::save($item);
+
+            // Fältvärdena skrivs i samma transaktion som itemet. Actionen
+            // svarar med ULID:erna för de fält som faktiskt ändrades — de
+            // namnges i loggen, aldrig med sitt värde (issue 418 ·
+            // [[ADR-0043 Tre loggar]]).
+            $changedFields = $this->syncItemFieldValues->handle($item, $fields);
+
+            $meta = $this->withChangedFields($meta, $changedFields);
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(
@@ -109,6 +127,31 @@ class UpdateItem
                 $this->syncItemTags->handle($item, $tags, $actor);
             }
         });
+    }
+
+    /**
+     * Fältvärdena som ändrades, med fältets ULID och aldrig värdet
+     * ([[ADR-0043 Tre loggar]] § Händelseloggen och issue 418). De bor i
+     * `meta.fields`, skilda från `meta.changed`, som bär itemets kolumner:
+     * vyn slår upp `changed` mot `audit.field.*`, och en ULID är ingen
+     * kolumn den känner igen.
+     *
+     * En ändring som bara rör fältvärden skriver ändå en `item.updated`-rad.
+     *
+     * @param  array{changed: list<string>, values?: array<string, mixed>}|null  $meta
+     * @param  list<string>  $changedFields
+     * @return array<string, mixed>|null
+     */
+    private function withChangedFields(?array $meta, array $changedFields): ?array
+    {
+        if ($changedFields === []) {
+            return $meta;
+        }
+
+        $meta ??= [];
+        $meta['fields'] = $changedFields;
+
+        return $meta;
     }
 
     /**

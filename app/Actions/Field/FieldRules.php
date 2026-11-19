@@ -61,6 +61,36 @@ final class FieldRules
     }
 
     /**
+     * Fälten ett item kan BÄRA ETT VÄRDE i: containerns fält plus itemets
+     * egna, se [[ADR-0089 Egna fält på items]] § Riktning 3 och 9 och issue
+     * 418. För ett nytt item (`$item === null`) bara containerns — ett eget
+     * fält kan inte finnas innan itemet finns.
+     *
+     * Mängden är en annan än `visibleFields()`: den frågan gäller rubrikens
+     * unikhet och räknar ALLA fält i containern också när `$item` är null.
+     * Ett värde däremot får bara skrivas i ett fält som hör till just det
+     * här itemet — ett annat items egna fält är inte ett av dem.
+     *
+     * Fält i papperskorgen är inte med: de syns ingenstans och tar inte emot
+     * värden förrän de återställs ([[ADR-0089 Egna fält på items]]
+     * § Riktning 3).
+     *
+     * @return Builder<ItemField>
+     */
+    public static function applicableFields(Container $container, ?Item $item): Builder
+    {
+        $query = ItemField::query()->where('container_id', $container->id);
+
+        if ($item === null) {
+            return $query->whereNull('item_id');
+        }
+
+        return $query->where(function (Builder $query) use ($item): void {
+            $query->whereNull('item_id')->orWhere('item_id', $item->id);
+        });
+    }
+
+    /**
      * Fälten som SYNS på ett item — containerns plus itemets egna — eller
      * alla fält i containern när frågan gäller ett containerfält. Det är
      * mängden rubriken ska vara unik inom ([[ADR-0089 Egna fält på items]]

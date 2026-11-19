@@ -26,10 +26,17 @@ final class ValidationErrorMapper
      * fortsätter heta IsoCurrency — mappningen bor här därför att den är en
      * del av API-kontraktet och inte av valideringen.
      *
+     * `App\Actions\Field\FieldAppliesToItem` ger `field.not_applicable` av
+     * samma skäl (issue 418 · [[ADR-0089 Egna fält på items]] § Riktning 9):
+     * ett värde för ett fält som inte hör till itemet är ett domänfel, inte
+     * ett formatfel, och koden ska heta samma sak som `field.limit_reached`
+     * och `field.type_locked` bredvid den.
+     *
      * @var array<string, string>
      */
     private const FAILURE_CODES = [
         'App\\Rules\\IsoCurrency' => 'currency.invalid',
+        'App\\Actions\\Field\\FieldAppliesToItem' => 'field.not_applicable',
     ];
 
     /**

@@ -162,9 +162,9 @@ class ItemController extends Controller
             ? Tag::whereIn('ulid', $request->validated('tags'))->get()
             : collect();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent', 'child', 'fields']));
 
-        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child);
+        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent, $child, $request->validated('fields') ?? []);
 
         if ($parent !== null) {
             app(CountFeatureUse::class)->handle(Features::ITEM_CREATE_CHILD, $request->user());
@@ -172,7 +172,12 @@ class ItemController extends Controller
 
         // $account, $category and $tags are already in hand above — set the
         // relations directly instead of letting ItemResource trigger new
-        // queries for the same rows, see index() on N+1.
+        // queries for the same rows, see index() on N+1. The field
+        // relations are loaded the same way: a new item has no own fields.
+        $container->loadMissing('fields');
+        $item->setRelation('container', $container);
+        $item->setRelation('ownFields', collect());
+        $item->loadMissing('fieldValues');
         $item->setRelation('category', $category);
         $item->setRelation('createdByAccount', $account);
         $item->setRelation('tags', $tags);
@@ -203,7 +208,7 @@ class ItemController extends Controller
 
         // A single row, but eager-load explicitly so ItemResource never
         // runs an unplanned lazy-load query, same reasoning as index().
-        $item->loadMissing(['category', 'createdByAccount', 'tags']);
+        $item->loadMissing(['category', 'createdByAccount', 'tags', 'container.fields', 'ownFields', 'fieldValues']);
 
         return new ItemResource($item);
     }
@@ -232,7 +237,7 @@ class ItemController extends Controller
     {
         Gate::authorize('update', $item);
 
-        $item->fill($request->safe()->except(['category', 'tags']));
+        $item->fill($request->safe()->except(['category', 'tags', 'fields']));
 
         if ($request->has('category')) {
             $categoryUlid = $request->validated('category');
@@ -251,11 +256,12 @@ class ItemController extends Controller
             $request->user(),
             $request->has('tags'),
             Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
+            $request->validated('fields') ?? [],
         );
 
         // See show() above — same reasoning, a single row. `tags` is loaded
         // AFTER the sync so the response reflects the new set.
-        $item->loadMissing(['category', 'createdByAccount', 'tags']);
+        $item->loadMissing(['category', 'createdByAccount', 'tags', 'container.fields', 'ownFields', 'fieldValues']);
 
         return new ItemResource($item);
     }

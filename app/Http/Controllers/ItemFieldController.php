@@ -152,6 +152,13 @@ class ItemFieldController extends Controller
 
         $container->loadMissing('account');
 
+        // Resursens `fields` läser containerns fält, itemets egna och dess
+        // värden — ladda dem uttryckligen, samma skäl som i
+        // App\Http\Controllers\ItemController::show() (issue 418).
+        $container->loadMissing('fields');
+        $item->setRelation('container', $container);
+        $item->loadMissing(['ownFields', 'fieldValues']);
+
         return Inertia::render('Items/Fields', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => ItemResource::make($item)->resolve($request),
