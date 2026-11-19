@@ -2,7 +2,7 @@
 
 Själva innehållet. Läs [[Datamodell – översikt]] först.
 
-Beslut bakom detta: [[ADR-0004 Fria taggar och kategorier]], [[ADR-0016 Kostnadsregistrering]].
+Beslut bakom detta: [[ADR-0004 Fria taggar och kategorier]], [[ADR-0016 Kostnadsregistrering]], [[ADR-0089 Egna fält på items]].
 
 ## item
 
@@ -16,12 +16,12 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | name | VARCHAR(255) | |
 | description | TEXT NULL | |
 | notes | TEXT NULL | Markdown. Se [[ADR-0066 Itemets anteckning]] |
-| manufacturer | VARCHAR(255) NULL | |
-| model | VARCHAR(255) NULL | |
-| serial_number | VARCHAR(255) NULL | Sökbart — folk letar efter serienummer |
-| purchased_at | DATE NULL | |
-| warranty_until | DATE NULL | |
-| position_note | VARCHAR(255) NULL | Fritext, t.ex. "bakom panelen i akterruffen" |
+| manufacturer | VARCHAR(255) NULL | **Utgår**, blir ett eget fält. Se nedan |
+| model | VARCHAR(255) NULL | **Utgår** |
+| serial_number | VARCHAR(255) NULL | **Utgår** |
+| purchased_at | DATE NULL | **Utgår** |
+| warranty_until | DATE NULL | **Utgår** |
+| position_note | VARCHAR(255) NULL | **Utgår** |
 | icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0060 Itemets ikon]] |
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
@@ -29,7 +29,9 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
-Index: `(container_id, deleted_at)`, `(container_id, category_id, deleted_at)`, FULLTEXT på `(name, description, manufacturer, model, serial_number)`.
+Index: `(container_id, deleted_at)`, `(container_id, category_id, deleted_at)`, FULLTEXT på `(name, description, manufacturer, model, serial_number)`, som blir `(name, description)` när kolumnerna tas bort.
+
+**De sex kolumnerna som utgår** blir containerfält med sina värden i `item_field_value` ([[ADR-0089 Egna fält på items]] § Riktning 5). Koden slutar använda dem i [[M68 Egna fält]] issue 420, och de tas bort i issue 425, i releasen efter.
 
 **Position modelleras inte som en egen entitet.** "Akterruffen" är en tagg eller kategori som användaren hittat på; systemet vet inte att det är en plats. Se [[ADR-0004 Fria taggar och kategorier]]. Kartfunktionen ligger utanför MVP och kan byggas ovanpå taggarna senare utan schemaändring.
 
@@ -43,8 +45,8 @@ Läget före en ändring av ett item, så att en överskrivning går att få til
 | ulid | CHAR(26) UNIQUE | |
 | item_id | FK → item, cascade | |
 | billed_account_id | FK → account | Containerns ägare när versionen skapades |
-| name, description, notes, manufacturer, model, serial_number, position_note | samma typer som på `item` | |
-| purchased_at, warranty_until | DATE NULL | |
+| name, description, notes | samma typer som på `item` | |
+| field_values | JSON | Itemets fältvärden, nycklade på fältets id. Ersätter de sex kolumnerna, se [[ADR-0089 Egna fält på items]] § Riktning 9 |
 | category_id | FK → category NULL, nullOnDelete | |
 | cover_attachment_id | FK → attachment NULL, nullOnDelete | |
 | icon, icon_color | som på `item` | |
@@ -55,6 +57,59 @@ Läget före en ändring av ett item, så att en överskrivning går att få til
 | created_at | TIMESTAMP | |
 
 Index `(item_id, created_at)`.
+
+## item_field
+
+Ett fält som användaren har definierat: en rubrik och en typ. Gäller alla items i containern, eller bara ett item när `item_id` är satt. Se [[ADR-0089 Egna fält på items]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| container_id | FK → container | Satt även för ett items egna fält |
+| item_id | FK → item NULL | `NULL` för containerns fält, satt för ett items egna |
+| label | VARCHAR(100) | Unik utan hänsyn till skiftläge bland fälten som syns på ett item. Prövas i applikationen |
+| type | VARCHAR(10) | `text` \| `number` \| `date`, med CHECK-villkor. Låst när fältet har värden |
+| position | INT | Ordningen bland containerns fält, eller bland itemets egna |
+| billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
+| deleted_at | | Papperskorgen, som `category` |
+
+Index: `(container_id, item_id, deleted_at, position)`, `(item_id, deleted_at)`.
+
+Gränserna står i config: `fields.max_per_container` (25) och `fields.max_per_item` (10). Bara fält som inte är raderade räknas.
+
+### item_field_value
+
+Ett items värde i ett fält. En rad per item och fält, och ett tomt värde har ingen rad.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: värdet adresseras med item och fält |
+| item_id | FK → item, CASCADE | |
+| item_field_id | FK → item_field, CASCADE | |
+| value_text | VARCHAR(255) NULL | Satt när fältet är `text`. Längden prövas mot `fields.text_max_length` |
+| value_number | DECIMAL(20,6) NULL | Satt när fältet är `number`. Aldrig flyttal |
+| value_date | DATE NULL | Satt när fältet är `date` |
+| billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
+| created_at, updated_at | | |
+
+UNIQUE `(item_id, item_field_id)`. Index: `(item_field_id, value_number)`, `(item_field_id, value_date)` för filter och sortering. FULLTEXT på `value_text`.
+
+Ingen `deleted_at`. Ett tömt värde är bara borta, som text som suddas ut, och versionshistoriken fångar det. Värdena i ett fält som ligger i papperskorgen syns inte och kommer tillbaka med fältet.
+
+## container_template
+
+En mall som kontot har sparat: kategorier och fält som kopieras in i en container. Ingenting i containern pekar tillbaka på mallen. Se [[ADR-0089 Egna fält på items]] § Riktning 6. Inte samma sak som `container.template_source_id` i [[ADR-0002 Konto äger container]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| account_id | FK → account | |
+| name | VARCHAR(255) | |
+| content | JSON | Kategoriträdet och fälten med rubrik, typ och ordning. Inga items |
+| billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
+| created_at, updated_at, deleted_at | | |
+
+Index: `(account_id, deleted_at)`. Högst `templates.max_per_account` (50) per konto.
 
 ## category
 
@@ -234,6 +289,7 @@ Byggs mot Laravel Scout med databasdrivern i MVP, se [[ADR-0012 Sök]]. Men det 
 - efter kategori, inklusive underkategorier
 - efter uppgiftsstatus och förfallodatum, se [[Scheman och uppgifter]]
 - efter utlåningsstatus
-- fritext över namn, beskrivning, tillverkare, modell, serienummer
+- fritext över namn, beskrivning och textfältens värden
+- efter ett fälts värde: lika med för text, intervall för tal och datum
 
 MariaDB FULLTEXT saknar svensk stemming — "batteri" hittar inte "batterier". Accepterat i MVP, löses av Meilisearch när det finns en VPS.
