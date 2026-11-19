@@ -24,19 +24,27 @@ use Illuminate\Support\Facades\DB;
  * Betalaren är `billed_account_id`, utom för `container` där den är ägaren
  * (`container.account_id`). För `schedule_occurrence` är kolumnen NULL tills
  * en anteckning skrivits, och en rad utan betalare räknas inte.
+ *
+ * **Två slag av tabeller.** De flesta hänger på en container och hittas
+ * genom `container_id` eller genom sitt item. `container_template` (issue
+ * 421) ägs av ett konto och har ingen container: den står i
+ * App\Support\Usage\MetadataSize::ACCOUNT_COLUMNS och läses utan join.
+ * Avstämningen (`bytesPerAccount()`) summerar båda slagen; flyttarna gör det
+ * inte, eftersom en mall aldrig följer med en container.
  */
 final class CountedRows
 {
     /**
      * Raderna i en räknad tabell, med fyra fasta kolumner utöver
      * fritextkolumnerna: `id`, `payer_id` (kan vara NULL), `owner_id`
-     * (containerns ägare) och `container_id`.
+     * (containerns ägare, eller kontot för en kontonivåtabell) och
+     * `container_id` (NULL för en kontonivåtabell).
      */
     public static function query(string $table): Builder
     {
         $text = array_map(
             fn (string $column): string => "{$table}.{$column}",
-            MetadataSize::COLUMNS[$table],
+            MetadataSize::columnsFor($table),
         );
 
         if ($table === 'container') {
@@ -45,6 +53,21 @@ final class CountedRows
                 'container.account_id as payer_id',
                 'container.account_id as owner_id',
                 'container.id as container_id',
+                ...$text,
+            ]);
+        }
+
+        // Kontonivåtabellerna (just nu `container_template`, issue 421) hänger
+        // på ett konto och inte på en container. De har därför ingen join att
+        // göra, och `container_id` är NULL. Flyttarna i move() rör dem aldrig
+        // — de itererar MetadataSize::COLUMNS, inte countedTables() — så den
+        // NULL-kolumnen läses bara av den som själv väljer tabellen.
+        if (isset(MetadataSize::ACCOUNT_COLUMNS[$table])) {
+            return DB::table($table)->select([
+                "{$table}.id",
+                "{$table}.billed_account_id as payer_id",
+                "{$table}.account_id as owner_id",
+                DB::raw('NULL as container_id'),
                 ...$text,
             ]);
         }
@@ -89,7 +112,7 @@ final class CountedRows
     {
         $totals = [];
 
-        foreach (array_keys(MetadataSize::COLUMNS) as $table) {
+        foreach (MetadataSize::countedTables() as $table) {
             self::query($table)->chunkById(500, function ($rows) use ($table, &$totals): void {
                 foreach ($rows as $row) {
                     if ($row->payer_id === null) {
@@ -159,6 +182,9 @@ final class CountedRows
         /** @var array<int, array<int, int>> $bytes  [från][till] => byte */
         $bytes = [];
 
+        // COLUMNS och inte countedTables(): en kontonivåtabell har ingen
+        // container att flytta raden inom, och en mall följer aldrig med ett
+        // ägarbyte (issue 421).
         foreach (array_keys(MetadataSize::COLUMNS) as $table) {
             if ($table === 'container') {
                 continue;

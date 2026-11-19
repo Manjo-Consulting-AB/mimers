@@ -4,6 +4,7 @@ use App\Console\ReconcilesUsageCounters;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ContainerTemplate;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemFieldValue;
@@ -510,4 +511,33 @@ it('en item_field- och en item_field_value-rad räknas i avstämningen', functio
 
     expect((int) avstamningRad($account->id)->metadata_bytes)
         ->toBe(avstamningText($account) + MetadataSize::of($fält) + MetadataSize::of($värde));
+});
+
+it('en container_template-rad räknas i avstämningen', function () {
+    // Issue 421 · [[ADR-0089 Egna fält på items]] § Riktning 9: mallen räknas
+    // i `metadata_bytes` ([[ADR-0081 All lagrad data räknas mot kvoten]] § 2)
+    // även om den hör till kontot och inte till en container.
+    // `avstamningText()` känner inte till tabellen, så räknaren sätts UTAN
+    // mallens vikt och avstämningen ska rätta upp den.
+    [$account] = avstamningSetup();
+
+    $mall = ContainerTemplate::factory()->forAccount($account)->create([
+        'name' => 'Båtmall',
+        'content' => [
+            'categories' => [['name' => 'Båt']],
+            'fields' => [['label' => 'Serienummer', 'type' => 'text']],
+        ],
+    ]);
+
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => 0,
+        'container_count' => 1,
+        'metadata_bytes' => avstamningText($account),
+    ]);
+
+    (new ReconcilesUsageCounters)->handle();
+
+    expect((int) avstamningRad($account->id)->metadata_bytes)
+        ->toBe(avstamningText($account) + MetadataSize::of($mall));
 });

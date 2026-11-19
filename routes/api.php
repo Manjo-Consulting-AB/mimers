@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerCurrencyController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
+use App\Http\Controllers\Api\ContainerTemplateController;
 use App\Http\Controllers\Api\ContainerTrashController;
 use App\Http\Controllers\Api\CostEntryController;
 use App\Http\Controllers\Api\CostReportController;
@@ -44,6 +45,7 @@ use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Api\WebhookEndpointController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Models\ContainerTemplate;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
 
@@ -97,6 +99,31 @@ Route::post('/webhooks/mailgun', MailgunWebhookController::class)
 // INOM {container}, annars går det att återkalla en åtkomst i fel
 // container via en ULID från en annan (behörighetshål). Ingen effekt på
 // övriga rutter i gruppen, som bara har ett rutt-parametrar var.
+//
+// Issue 421 · `{template}` saknar en förälder i URL:en, så scopeBindings()
+// kan inte lösa den: mallen ägs av ett KONTO, och den enda frågan är om
+// användaren är medlem i det ([[ADR-0089 Egna fält på items]] § Riktning 6).
+// Bindningen ställer samma fråga som listningen — App\Models\
+// ContainerTemplate::scopeMemberOf() — så en mall i någon annans konto blir
+// 404, aldrig en läsning. Den ligger före gruppen eftersom explicita
+// bindningar registreras globalt, men körs först när rutten matchats och
+// auth:sanctum redan satt requestens användare.
+Route::bind('template', function (string $value): ContainerTemplate {
+    $user = request()->user();
+
+    $query = ContainerTemplate::query()->where('ulid', $value);
+
+    if ($user === null) {
+        // Kan inte inträffa under auth:sanctum; hellre 404 än en osparad
+        // fråga om middleware-ordningen någonsin ändras.
+        $query->whereRaw('1 = 0');
+    } else {
+        $query->memberOf($user);
+    }
+
+    return $query->firstOrFail();
+});
+
 Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);
 
@@ -133,6 +160,19 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // Grinden är `ContainerPolicy::update` och upprätthålls av servern —
     // urvalet är ingen önskan i formuläret.
     Route::put('/containers/{container}/currencies', [ContainerCurrencyController::class, 'update']);
+
+    // Issue 421 · Mallarna — en containers kategorier och fält sparade på
+    // kontot, se App\Http\Controllers\Api\ContainerTemplateController och
+    // [[ADR-0089 Egna fält på items]] § Riktning 6. `{template}` binds av
+    // Route::bind ovan (scopeMemberOf), inte av scopeBindings — mallen har
+    // ingen container i URL:en. Att tillämpa kräver `update` i containern;
+    // att spara kräver `view` där och medlemskap i dess konto. Innehållet är
+    // en kopia: ingenting i containern pekar tillbaka på mallen.
+    Route::get('/templates', [ContainerTemplateController::class, 'index']);
+    Route::post('/templates', [ContainerTemplateController::class, 'store']);
+    Route::patch('/templates/{template}', [ContainerTemplateController::class, 'update']);
+    Route::delete('/templates/{template}', [ContainerTemplateController::class, 'destroy']);
+    Route::post('/containers/{container}/template', [ContainerTemplateController::class, 'apply']);
 
     // Issue 9b · Åtkomstytan — bevilja, lista och återkalla delegerade
     // åtkomster till en container, se

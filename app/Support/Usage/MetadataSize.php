@@ -26,8 +26,10 @@ final class MetadataSize
     public const ROW_OVERHEAD_BYTES = 256;
 
     /**
-     * Fritextkolumnerna per räknad tabell. Nyckeln är också listan över vilka
-     * tabeller som räknas — `container` bland dem, vars betalare är ägaren.
+     * Fritextkolumnerna per räknad tabell som hänger på en container.
+     * Nycklarna här är också listan CountedRows::move() och ägarbytets
+     * genomgångar itererar; hela listan över räknade tabeller är
+     * countedTables(), som även bär ACCOUNT_COLUMNS.
      *
      * `container.kind` är med: sedan `free_container_kind` är arten fri text
      * (en egen art, upp till 40 tecken), inte en kod ur en fast lista.
@@ -64,6 +66,24 @@ final class MetadataSize
     ];
 
     /**
+     * Fritextkolumnerna för de räknade tabeller som ägs av ett KONTO och
+     * saknar container. `container_template` bär inget `container_id`
+     * ([[ADR-0089 Egna fält på items]] § Riktning 6): raden hör till kontot,
+     * och radernas väg till en container finns inte.
+     *
+     * Listan står skild från COLUMNS med flit. COLUMNS är också listan
+     * CountedRows::move() och ägarbytets genomgångar itererar, och de frågar
+     * alltid efter `container.id` — en tabell utan container hade fallit på
+     * en kolumn som inte finns. Den som lägger till en kontonivåtabell här
+     * får den räknad i avstämningen utan att röra flyttarna.
+     *
+     * @var array<string, list<string>>
+     */
+    public const ACCOUNT_COLUMNS = [
+        'container_template' => ['name', 'content'],
+    ];
+
+    /**
      * Tabellerna som saknar påslaget.
      *
      * @var list<string>
@@ -76,6 +96,30 @@ final class MetadataSize
     }
 
     /**
+     * Fritextkolumnerna för en räknad tabell, oavsett om den hänger på en
+     * container eller på ett konto.
+     *
+     * @return list<string>
+     */
+    public static function columnsFor(string $table): array
+    {
+        return self::COLUMNS[$table] ?? self::ACCOUNT_COLUMNS[$table] ?? [];
+    }
+
+    /**
+     * Alla räknade tabeller — containertabellerna och kontonivåtabellerna.
+     * Används av avstämningen, som ska summera varje räknad rad oavsett var
+     * den bor. Flyttarna itererar COLUMNS och inte den här listan, se
+     * ACCOUNT_COLUMNS.
+     *
+     * @return list<string>
+     */
+    public static function countedTables(): array
+    {
+        return array_merge(array_keys(self::COLUMNS), array_keys(self::ACCOUNT_COLUMNS));
+    }
+
+    /**
      * För anropare som har råa värden, till exempel vid massradering.
      *
      * @param  array<string, mixed>  $attributes
@@ -84,7 +128,7 @@ final class MetadataSize
     {
         $bytes = 0;
 
-        foreach (self::COLUMNS[$table] ?? [] as $column) {
+        foreach (self::columnsFor($table) as $column) {
             $value = $attributes[$column] ?? null;
 
             if ($value !== null) {

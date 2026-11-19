@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
 use App\Actions\Container\UpdateContainer;
+use App\Actions\Template\CreateContainerFromTemplate;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerTemplate;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -102,28 +105,76 @@ class ContainerController extends Controller
      * felkoder, samma antal frågor och samma ordning behörighet-före-kvot
      * (issue 27 § Beslut 3). `Gate::authorize()` står kvar här, utanför
      * actionen, så att API:ets 403 och webbens 403 kommer från samma ställe.
+     *
+     * **En valfri mall fyller containern** (issue 421 § 5): skickas `template`
+     * (en mall-ULID) eller `template_content` (frontendens inbyggda förslag)
+     * skapas containern genom App\Actions\Template\CreateContainerFromTemplate,
+     * som anropar samma CreateContainer och därefter lägger in kategorierna och
+     * fälten i samma transaktion. `template` prövas mot användarens konton
+     * redan i StoreContainerRequest; det får ingen annan läsa.
      */
-    public function store(StoreContainerRequest $request, CreateContainer $createContainer): JsonResponse
-    {
+    public function store(
+        StoreContainerRequest $request,
+        CreateContainer $createContainer,
+        CreateContainerFromTemplate $createContainerFromTemplate,
+    ): JsonResponse {
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
         Gate::authorize('create', [Container::class, $account]);
 
-        $container = $createContainer->handle(
-            $request->user(),
-            $account,
-            $request->validated('name'),
-            $request->validated('kind'),
-            $request->validated('description'),
-            // Ikonen är ett val vid skapandet när klienten skickar den
-            // (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
-            $request->validated('icon'),
-            $request->validated('icon_color'),
-        );
+        $templateUlid = $request->validated('template');
+        $content = $request->validated('template_content');
+
+        // Issue 421 § 5 · En valfri mall eller ett inbyggt förslag fyller den
+        // nya containern med en kopia av kategorier och fält
+        // ([[ADR-0089 Egna fält på items]] § Riktning 6). Utan någondera är
+        // vägen oförändrad — samma CreateContainer, samma 201, samma resurs.
+        $container = ($templateUlid !== null || $content !== null)
+            ? $createContainerFromTemplate->handle(
+                $request->user(),
+                $account,
+                $request->validated('name'),
+                $request->validated('kind'),
+                $request->validated('description'),
+                $request->validated('icon'),
+                $request->validated('icon_color'),
+                $this->templateForUser($request->user(), $templateUlid),
+                is_array($content) ? $content : null,
+            )
+            : $createContainer->handle(
+                $request->user(),
+                $account,
+                $request->validated('name'),
+                $request->validated('kind'),
+                $request->validated('description'),
+                // Ikonen är ett val vid skapandet när klienten skickar den
+                // (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
+                $request->validated('icon'),
+                $request->validated('icon_color'),
+            );
 
         return (new ContainerResource($container))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * Mallen i kroppen, prövad mot användarens konton — samma fråga som
+     * routebindningen ställer för `/api/templates/{template}`. StoreContainerRequest
+     * har redan bevisat att ULID:en finns och tillhör henne; `firstOrFail()`
+     * här är det försvar som gör att ett ändrat svar aldrig kan läsa någon
+     * annans mall.
+     */
+    private function templateForUser(User $user, ?string $ulid): ?ContainerTemplate
+    {
+        if ($ulid === null) {
+            return null;
+        }
+
+        return ContainerTemplate::query()
+            ->memberOf($user)
+            ->where('ulid', $ulid)
+            ->firstOrFail();
     }
 
     /**
