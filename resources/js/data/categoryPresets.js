@@ -30,6 +30,15 @@
  * etiketten i väljaren; den säger vad mallen innehåller och ingenting om vad
  * användarens container är.
  *
+ * **Issue 422 · uppsättningarna är inbyggda mallar och bär fält.** Sedan
+ * [[ADR-0089 Egna fält på items]] § Riktning 6 har varje uppsättning en
+ * valfri `fields`-lista i samma form som en sparad malls `content.fields`
+ * (`{label, type}`), och en ny container som börjar från ett inbyggt förslag
+ * får både kategorierna och fälten. Fälten skickas som `template_content`
+ * till servern och SPARAS ALDRIG: servern vet fortfarande inte vad orden
+ * betyder. `fields` är valfritt — *Other* bär inga, för en påse blandat har
+ * ingen naturlig uppsättning gemensamma fält.
+ *
  * Fem uppsättningar, två nivåer och aldrig fler, sex till tolv rotkategorier
  * per uppsättning (Beslut 1): en uppsättning ska gå att överblicka i en lista,
  * och en container som möts av trettio tomma fack är lika avskräckande som en
@@ -52,6 +61,12 @@ export const categoryPresets = {
                 { name: 'Galley and storage' },
                 { name: 'Winter storage' },
             ],
+            fields: [
+                { label: 'Manufacturer', type: 'text' },
+                { label: 'Model', type: 'text' },
+                { label: 'Serial number', type: 'text' },
+                { label: 'Warranty until', type: 'date' },
+            ],
         },
         {
             name: 'Caravan',
@@ -64,6 +79,12 @@ export const categoryPresets = {
                 { name: 'Awning and accessories' },
                 { name: 'Insurance and papers' },
                 { name: 'Winter storage' },
+            ],
+            fields: [
+                { label: 'Manufacturer', type: 'text' },
+                { label: 'Model', type: 'text' },
+                { label: 'Serial number', type: 'text' },
+                { label: 'Warranty until', type: 'date' },
             ],
         },
         {
@@ -78,6 +99,10 @@ export const categoryPresets = {
                 { name: 'Garden' },
                 { name: 'Documents and insurance' },
             ],
+            fields: [
+                { label: 'Built year', type: 'number' },
+                { label: 'Warranty until', type: 'date' },
+            ],
         },
         {
             name: 'Car',
@@ -90,6 +115,13 @@ export const categoryPresets = {
                 { name: 'Service and inspection' },
                 { name: 'Papers and insurance' },
                 { name: 'Accessories' },
+            ],
+            fields: [
+                { label: 'Manufacturer', type: 'text' },
+                { label: 'Model', type: 'text' },
+                { label: 'Serial number', type: 'text' },
+                { label: 'Registration number', type: 'text' },
+                { label: 'Warranty until', type: 'date' },
             ],
         },
         {
@@ -125,8 +157,38 @@ const FALLBACK_LOCALE = 'en';
  * resources/js/components/CategoryPresetCard.vue — den här funktionen
  * föreslår bara vad som finns.
  *
- * @returns {Array<{ name: string, categories: Array<{ name: string, children?: string[] }> }>}
+ * @returns {Array<{ name: string, categories: Array<{ name: string, children?: string[] }>, fields?: Array<{ label: string, type: string }> }>}
  */
 export function presetsFor(locale) {
     return categoryPresets[locale] ?? categoryPresets[FALLBACK_LOCALE];
+}
+
+/**
+ * En uppsättning i den form servern tar emot som `template_content`, se issue
+ * 422 och [[ADR-0089 Egna fält på items]] § Riktning 6.
+ *
+ * **Formerna är inte samma, och skillnaden bor här.** Kategoriförslagets
+ * `children` är namn (`['Drive train', 'Cooling']`) eftersom
+ * App\Http\Requests\Category\StoreCategoryPresetRequest tar en lista med
+ * namn. En malls `content.categories` är noder hela vägen
+ * (`[{name: 'Drive train'}]`) eftersom
+ * App\Http\Requests\Template\TemplateContentRules kräver `name` på varje
+ * nivå. Att räkna om formen på anropet gör att uppsättningarna kan behålla
+ * sin läsbara form och ändå skickas som en mall — servern får fortfarande
+ * bara namn och innehåll, aldrig en betydelse.
+ *
+ * `fields` följer med orörd och är tom när uppsättningen inte bär några.
+ *
+ * @param {{categories?: Array<{name: string, children?: string[]}>, fields?: Array<{label: string, type: string}>}} preset
+ * @returns {{categories: Array<{name: string, children?: Array<{name: string}>}>, fields: Array<{label: string, type: string}>}}
+ */
+export function presetContent(preset) {
+    return {
+        categories: (preset.categories ?? []).map((category) => (
+            category.children === undefined
+                ? { name: category.name }
+                : { name: category.name, children: category.children.map((name) => ({ name })) }
+        )),
+        fields: preset.fields ?? [],
+    };
 }

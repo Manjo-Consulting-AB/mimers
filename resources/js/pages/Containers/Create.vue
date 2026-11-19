@@ -1,8 +1,10 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
+import TemplatePreview from '../../components/templates/TemplatePreview.vue';
+import { presetsFor, presetContent } from '../../data/categoryPresets.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -48,6 +50,10 @@ const props = defineProps({
     /* De arter användaren redan använt — underlag för autocomplete, inte en
        tillåten mängd. Fältet är fritt och får lämnas tomt. */
     kinds: { type: Array, required: true },
+    /* Användarens mallar, ur App\Http\Resources\ContainerTemplateResource —
+       valet *Start from* (issue 422 · [[ADR-0089 Egna fält på items]]
+       § Riktning 6). De inbyggda förslagen är inte här: de bor i klienten. */
+    templates: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -65,9 +71,71 @@ const form = useForm({
     // `null` (issue 88).
     description: '',
     account: singleAccount.value?.ulid ?? '',
+    // Issue 422: exakt en av de två fylls i av `submit()` — en egen mall som
+    // ULID eller ett inbyggt förslag som `template_content`. Ingenting sparas
+    // på servern för det inbyggda förslaget.
+    template: null,
+    template_content: null,
 });
 
+/*
+ * *Start from*: tom container, en egen mall eller ett inbyggt förslag.
+ *
+ * Värdet är en sträng med ett prefix — `''` för tom, `template:<ulid>` och
+ * `preset:<namn>` — så att ett enda `<select>` kan bära alla tre sorterna
+ * utan att två listor blandas i en array. Valet bor i klienten; servern får
+ * bara ULID:n eller innehållet.
+ */
+const source = ref('');
+
+/* Uppsättningarna på användarens språk. Bara `en` finns, se datafilen. */
+const presets = computed(() => presetsFor(page.props.locale));
+
+/*
+ * Mallarna som hör till det valda kontot. Med ett enda konto är det alla;
+ * med flera följer listan kontovalet, så en mall aldrig erbjuds för ett konto
+ * den inte tillhör. Servern prövar samma sak oavsett vad listan visade.
+ */
+const availableTemplates = computed(() => {
+    if (! form.account) {
+        return props.templates;
+    }
+
+    return props.templates.filter((template) => template.account === form.account);
+});
+
+const chosenTemplate = computed(() => {
+    if (! source.value.startsWith('template:')) {
+        return null;
+    }
+
+    const ulid = source.value.slice('template:'.length);
+
+    return availableTemplates.value.find((template) => template.ulid === ulid) ?? null;
+});
+
+const chosenPreset = computed(() => {
+    if (! source.value.startsWith('preset:')) {
+        return null;
+    }
+
+    const name = source.value.slice('preset:'.length);
+
+    return presets.value.find((preset) => preset.name === name) ?? null;
+});
+
+/* Innehållet förhandsvisningen ritar: mallen eller det inbyggda förslaget,
+   det senare i den form servern tar emot som `template_content`. */
+const chosenContent = computed(() => chosenTemplate.value?.content
+    ?? (chosenPreset.value === null ? null : presetContent(chosenPreset.value)));
+
 function submit() {
+    form.template = chosenTemplate.value?.ulid ?? null;
+
+    form.template_content = chosenPreset.value === null
+        ? null
+        : presetContent(chosenPreset.value);
+
     form.post('/containers', { onError: focusFirstError });
 }
 </script>
@@ -175,6 +243,50 @@ function submit() {
                     {{ account.name }}
                 </option>
             </select>
+        </FormField>
+
+        <!-- Issue 422 · *Start from*: tom container, en egen mall på det
+             valda kontot, eller ett inbyggt förslag. Ett enda val, ett enda
+             fält — de tre sorterna är samma fråga. Det inbyggda förslaget är
+             klientens och skickas som `template_content`; servern sparar det
+             aldrig. -->
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.create.start_from')"
+            id="start-from"
+            :error="form.errors.template"
+        >
+            <select
+                id="start-from"
+                v-model="source"
+                :aria-describedby="describedBy"
+                name="start_from"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            >
+                <option value="">{{ t('container.create.start_empty') }}</option>
+
+                <optgroup v-if="availableTemplates.length > 0" :label="t('container.create.start_own')">
+                    <option
+                        v-for="template in availableTemplates"
+                        :key="template.ulid"
+                        :value="`template:${template.ulid}`"
+                    >
+                        {{ template.name }}
+                    </option>
+                </optgroup>
+
+                <optgroup :label="t('container.create.start_presets')">
+                    <option
+                        v-for="preset in presets"
+                        :key="preset.name"
+                        :value="`preset:${preset.name}`"
+                    >
+                        {{ preset.name }}
+                    </option>
+                </optgroup>
+            </select>
+
+            <TemplatePreview v-if="chosenContent" :content="chosenContent" />
         </FormField>
 
         <button
