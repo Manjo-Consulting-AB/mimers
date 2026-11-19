@@ -16,6 +16,7 @@ final class Hints
 
     private const TABLE = [
         'agent.paused' => 'This agent is paused by the user. Stop and tell the user to resume it on /settings/agents.',
+        'auth.forbidden' => 'The account that owns this container is read-only. Reading still works; tell the user that writing returns when the account is paid for again.',
         'agent.forbidden' => 'This agent is never allowed to do this. Ask the user to do it in the app.',
         'agent.move_widens_access' => 'This move would give more people access. Ask the user to make it in the app.',
         'agent.copy_widens_access' => 'You have read content that some people who can see this target cannot. Ask the user to make this change in the app, or search with the container filter before writing here.',

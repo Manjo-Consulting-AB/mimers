@@ -106,7 +106,8 @@ it('låter läsverktygen lyckas och avvisar skrivverktygen vid past_due', functi
 
     $fel = nedgSkriv($token, $item);
 
-    expect($fel['code'])->toBe('agent.forbidden')
+    // Samma kod som API:et ger när policyn nekar skrivningen (issue 409 § 2).
+    expect($fel['code'])->toBe('auth.forbidden')
         ->and($item->refresh()->name)->toBe('Motorn');
 });
 
