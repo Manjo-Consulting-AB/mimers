@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -36,7 +37,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Category extends Model
 {
     /** @use HasFactory<CategoryFactory> */
-    use HasFactory, HasUlid, SoftDeletes;
+    use HasFactory, HasUlid, RecordsAgentDeletion, SoftDeletes;
 
     /**
      * Djupgränsen, se issue 11 § Beslut 4. En kategori utan förälder ligger

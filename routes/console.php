@@ -2,6 +2,7 @@
 
 use App\Actions\LegalHold\LiftLegalHold;
 use App\Actions\LegalHold\PlaceLegalHold;
+use App\Actions\Notification\CreatesAgentDeletionNotifications;
 use App\Console\AdvancesAccountLifecycle;
 use App\Console\AggregatesUsageMetrics;
 use App\Console\DeletesDormantAccounts;
@@ -235,6 +236,22 @@ Schedule::call(fn () => app(GeneratesQuotaWarnings::class)->handle())
 Schedule::call(fn () => app(GeneratesLoanNotifications::class)->handle())
     ->daily()
     ->name('generate-loan-notifications');
+
+/*
+ * Issue 406 · Notisen `agent.deleted`: ett tillfälle är raderingar från samma
+ * agent med högst 15 minuter emellan, och notisen skapas när tillfället varit
+ * stängt i 15 minuter — se App\Actions\Notification\CreatesAgentDeletionNotifications
+ * och [[ADR-0087 MCP-server för agenter]] Riktning 8 och 14. Logiken bor i en
+ * vanlig action, testad direkt i tests/Feature/Mcp/RaderingTest.php; det här
+ * är bara schemaläggningen. Varje minut, eftersom notisen ska komma så nära
+ * 15-minutersgränsen som möjligt. `dedupe_key` gör omkörningar ofarliga.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — se AGENTS.md § Subprocesser i driftmiljön.
+ */
+Schedule::call(fn () => app(CreatesAgentDeletionNotifications::class)->handle())
+    ->everyMinute()
+    ->name('create-agent-deletion-notifications');
 
 /*
  * Issue 28b · Verkställandet av nedgraderingen: konton vars frist gått ut får

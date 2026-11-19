@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\AttachmentsDelete;
 use App\Mcp\Tools\AttachmentsGet;
 use App\Mcp\Tools\AttachmentsUpload;
 use App\Mcp\Tools\AttachmentsUploadUrl;
@@ -9,14 +10,17 @@ use App\Mcp\Tools\CategoriesCreate;
 use App\Mcp\Tools\CategoriesList;
 use App\Mcp\Tools\CategoriesUpdate;
 use App\Mcp\Tools\ContainersCreate;
+use App\Mcp\Tools\ContainersDelete;
 use App\Mcp\Tools\ContainersList;
 use App\Mcp\Tools\ContainersTree;
 use App\Mcp\Tools\ContainersUpdate;
 use App\Mcp\Tools\CostsCreate;
+use App\Mcp\Tools\CostsDelete;
 use App\Mcp\Tools\CostsList;
 use App\Mcp\Tools\CostsUpdate;
 use App\Mcp\Tools\HistoryList;
 use App\Mcp\Tools\ItemsCreate;
+use App\Mcp\Tools\ItemsDelete;
 use App\Mcp\Tools\ItemsGet;
 use App\Mcp\Tools\ItemsMove;
 use App\Mcp\Tools\ItemsNotesUpdate;
@@ -31,6 +35,7 @@ use App\Mcp\Tools\RelationsCreate;
 use App\Mcp\Tools\RelationsList;
 use App\Mcp\Tools\RelationsRemove;
 use App\Mcp\Tools\SchedulesCreate;
+use App\Mcp\Tools\SchedulesDelete;
 use App\Mcp\Tools\SchedulesList;
 use App\Mcp\Tools\SchedulesUpdate;
 use App\Mcp\Tools\TagsList;
@@ -59,7 +64,9 @@ class MimersServer extends Server
         ContainersTree::class,
         ContainersCreate::class,
         ContainersUpdate::class,
+        ContainersDelete::class,
         AttachmentsGet::class,
+        AttachmentsDelete::class,
         AttachmentsUpload::class,
         AttachmentsUploadUrl::class,
         CategoriesCreate::class,
@@ -68,6 +75,7 @@ class MimersServer extends Server
         CostsCreate::class,
         CostsList::class,
         CostsUpdate::class,
+        CostsDelete::class,
         HistoryList::class,
         ItemsCreate::class,
         ItemsGet::class,
@@ -75,6 +83,7 @@ class MimersServer extends Server
         ItemsNotesUpdate::class,
         ItemsSearch::class,
         ItemsUpdate::class,
+        ItemsDelete::class,
         LoansCreate::class,
         LoansList::class,
         LoansReturn::class,
@@ -86,6 +95,7 @@ class MimersServer extends Server
         SchedulesCreate::class,
         SchedulesList::class,
         SchedulesUpdate::class,
+        SchedulesDelete::class,
         TagsList::class,
         TagsSet::class,
     ];

@@ -82,6 +82,19 @@ class Notification extends Model
     public const TYPE_AGENT_CONNECTED = 'agent.connected';
 
     /**
+     * En agent raderade innehåll, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 8, 9 och 14 och issue 406.
+     *
+     * En notis per tillfälle och mottagare, skapad 15 minuter efter den sista
+     * raderingen. Den går till agentens användare, och till containerns ägare
+     * när det är någon annan. **Kanalen `in_app` kan inte stängas av** —
+     * läsningen av notisen är det som släpper raderingstaket (Riktning 13) —
+     * men mejlet kan stängas av, se
+     * App\Support\Notification\NotificationPreferences.
+     */
+    public const TYPE_AGENT_DELETED = 'agent.deleted';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

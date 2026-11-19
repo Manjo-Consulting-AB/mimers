@@ -539,12 +539,16 @@ it('har inte fått någon annan kolumn än description', function () {
 
     expect($kolumner)->toBe([
         'account_id',
+        // Issue 406 · agentens radering: namnet i papperskorgen och
+        // tillfället som återställs i ett svep.
+        'agent_deletion_batch',
         'cover_attachment_id',
         'cover_focus_x',
         'cover_focus_y',
         'created_at',
         'currency',
         'deleted_at',
+        'deleted_by_agent_id',
         'description',
         'icon',
         'icon_color',

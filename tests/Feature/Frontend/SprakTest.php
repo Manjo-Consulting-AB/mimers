@@ -623,11 +623,10 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    // Nio sedan issue 400 lade till `agent.connected`. Typen går bara som
-    // mejl (App\Support\Notification\NotificationPreferences), men räkningen
-    // är över KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
+    // Tio sedan issue 406 lade till `agent.deleted`. Räkningen är över
+    // KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
     // en typ någon lägger till `in_app` för utan att märka att texten saknas.
-    expect($typer)->toHaveCount(9);
+    expect($typer)->toHaveCount(10);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';

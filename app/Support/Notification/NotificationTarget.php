@@ -38,6 +38,10 @@ final class NotificationTarget
             Notification::TYPE_TASK_DUE, Notification::TYPE_TASK_OVERDUE => $this->taskTarget($notification),
             Notification::TYPE_LOAN_DUE => $this->loanTarget($notification),
             Notification::TYPE_TRANSFER_REQUESTED => route('transfers.index', [], false),
+            // Issue 406 § 4: notisen om en agents radering länkar till
+            // papperskorgen, där hela tillfället kan återställas
+            // ([[ADR-0087 MCP-server för agenter]] Riktning 8 och 14).
+            Notification::TYPE_AGENT_DELETED => route('trash.index', [], false),
             default => null,
         };
     }

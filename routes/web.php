@@ -2111,6 +2111,18 @@ Route::middleware('auth')->group(function () {
         ->name('trash.restore');
 
     /*
+     * Issue 406 § 3 · Hela tillfället av agentraderingar i ett svep, se
+     * App\Http\Controllers\TrashController::restoreBatch och [[ADR-0087
+     * MCP-server för agenter]] Riktning 8. Batchens ULID ligger i kroppen som
+     * `ulid` i de andra återställningarna: den kommer ur en rad i listan, inte
+     * ur adressen. Rutten bor hos TrashController och inte hos den samlade
+     * papperskorgens kontroller, eftersom det är papperskorgens
+     * återställningsgrind som prövas per rad.
+     */
+    Route::post('/trash/batches/restore', [TrashController::class, 'restoreBatch'])
+        ->name('trash.batch.restore');
+
+    /*
      * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade CONTAINERS,
      * se App\Http\Controllers\ContainerTrashController.
      *

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use App\Support\Access\ItemScope;
 use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -38,7 +39,7 @@ use Laravel\Scout\Searchable;
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
-    use HasFactory, HasUlid, Searchable, SoftDeletes;
+    use HasFactory, HasUlid, RecordsAgentDeletion, Searchable, SoftDeletes;
 
     /**
      * Paletten för itemets ikonfärg — åtta nycklar, aldrig en hex-kod

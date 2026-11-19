@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use Database\Factories\AttachmentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -36,7 +37,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Attachment extends Model
 {
     /** @use HasFactory<AttachmentFactory> */
-    use HasFactory, HasUlid, SoftDeletes;
+    use HasFactory, HasUlid, RecordsAgentDeletion, SoftDeletes;
 
     /**
      * Tabellen heter `attachment`, inte Eloquents standardplural

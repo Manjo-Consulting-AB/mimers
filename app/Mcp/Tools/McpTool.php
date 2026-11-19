@@ -15,12 +15,15 @@ use App\Support\Agent\CopyGate;
 use App\Support\Agent\ItemAudience;
 use App\Support\Agent\ReadAudience;
 use App\Support\Mcp\AgentAudit;
+use App\Support\Mcp\AgentDeletion;
+use App\Support\Mcp\AgentDeletionLimit;
 use App\Support\Mcp\McpRateLimiter;
 use App\Support\Mcp\McpToolException;
 use App\Support\Mcp\ToolError;
 use App\Support\Mcp\ToolKind;
 use Closure;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Facades\DB;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -103,6 +106,14 @@ abstract class McpTool extends Tool
 
             if ($wait !== null) {
                 throw new McpToolException('agent.rate_limited', ['retry_after_seconds' => $wait]);
+            }
+
+            // Raderingstaket prövas efter den vanliga gränsen och före
+            // verktyget: det räknar lyckade raderingar ur händelseloggen och
+            // släpps av notisen i appen, inte av tiden
+            // (App\Support\Mcp\AgentDeletionLimit).
+            if ($this->kind === ToolKind::Delete) {
+                app(AgentDeletionLimit::class)->assertCanDelete($agent);
             }
 
             // Historiken märks när raden skrivs, inte efteråt — se
@@ -209,6 +220,33 @@ abstract class McpTool extends Tool
     protected function writeAsAgent(Closure $write): mixed
     {
         return $write();
+    }
+
+    /**
+     * Kör en radering som agenten, med tillfället satt kring actionen, se
+     * [[ADR-0087 MCP-server för agenter]] Riktning 8 och 9 och
+     * App\Support\Mcp\AgentDeletion.
+     *
+     * Raden som raderas märks i sin `deleting`-händelse
+     * (App\Models\Concerns\RecordsAgentDeletion) och revisionsraden får
+     * samma batch i `meta`. Transaktionen gör att märkningen, loggraden och
+     * raderingen faller ihop: ett fel lämnar varken en batch eller en rad.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $delete
+     * @return array{result: T, batch: string}
+     */
+    protected function deleteAsAgent(Agent $agent, Closure $delete): array
+    {
+        $deletion = AgentDeletion::forRequest();
+        $batch = $deletion->begin($agent);
+
+        try {
+            return ['result' => DB::transaction($delete), 'batch' => $batch];
+        } finally {
+            $deletion->end();
+        }
     }
 
     /**

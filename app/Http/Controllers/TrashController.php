@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Trash\EmptyTrash;
 use App\Actions\Trash\FindTrashedInContainer;
 use App\Actions\Trash\ListTrash;
+use App\Actions\Trash\RestoreAgentDeletionBatch;
 use App\Actions\Trash\RestoreContent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Trash\RestoreRequest;
@@ -155,6 +156,82 @@ class TrashController extends Controller
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['trash' => $translator->message($e)]);
         }
+
+        return back()->with('status', 'trash-restored');
+    }
+
+    /**
+     * POST /trash/batches/restore — återställer hela ett tillfälle av
+     * agentraderingar, se [[ADR-0087 MCP-server för agenter]] Riktning 8 och
+     * issue 406 § 3.
+     *
+     * **Batchen är en ULID i kroppen**, som `ulid` i de andra
+     * återställningsrutterna: den kommer ur en rad i listan, inte ur
+     * adressen. Retentionen och urvalet bor i
+     * App\Actions\Trash\RestoreAgentDeletionBatch.
+     *
+     * **Rader användaren inte får återställa hoppas över.** Ett tillfälle kan
+     * rymma raderingar i flera containrar — agentens användare ser allt,
+     * medan en annan ägare bara ser sina egna. Att avvisa hela anropet för
+     * en rad utanför användarens räckvidd hade gjort ägarens knapp obrukbar;
+     * att återställa den hade varit en behörighetsläcka. Grinden är samma som
+     * `restore()` prövar, per rad och i kontrollern
+     * ([[ADR-0024 Tunna controllers och actions]]).
+     *
+     * Blir ingenting kvar att återställa är svaret 403 — en ULID utanför
+     * användarens räckvidd avslöjas inte som 404, samma svar som en postad
+     * rad han inte får återställa får.
+     */
+    public function restoreBatch(Request $request, RestoreAgentDeletionBatch $restoreBatch): RedirectResponse
+    {
+        $args = $request->validate(['batch' => ['required', 'string', 'size:26']]);
+        $user = $request->user();
+
+        $models = $restoreBatch->models($args['batch']);
+
+        // Containerns grind först: en container i samma tillfälle återställs
+        // före sitt innehåll, så en rad i den ska prövas mot containern även
+        // när den ännu ligger i papperskorgen.
+        $containers = $models['containers']->filter(
+            fn (Container $container): bool => Gate::forUser($user)->allows('delete', $container),
+        )->keyBy('id');
+
+        $containerFor = function (int $id) use ($containers): ?Container {
+            return Container::query()->find($id) ?? $containers->get($id);
+        };
+
+        $allowed = [
+            'containers' => $containers,
+            'items' => $models['items']->filter(function (Item $item) use ($user, $containerFor): bool {
+                $container = $containerFor((int) $item->container_id);
+
+                return $container !== null
+                    && Gate::forUser($user)->allows('delete', $item->setRelation('container', $container));
+            }),
+            'categories' => $models['categories']->filter(function (Category $category) use ($user, $containerFor): bool {
+                $container = $containerFor((int) $category->container_id);
+
+                return $container !== null && Gate::forUser($user)->allows('update', $container);
+            }),
+            'tags' => $models['tags']->filter(function (Tag $tag) use ($user, $containerFor): bool {
+                $container = $containerFor((int) $tag->container_id);
+
+                return $container !== null && Gate::forUser($user)->allows('update', $container);
+            }),
+            'attachments' => $models['attachments']->filter(function (Attachment $attachment) use ($user, $containerFor): bool {
+                $item = Item::withTrashed()->find($attachment->item_id);
+                $container = $item === null ? null : $containerFor((int) $item->container_id);
+
+                return $container !== null
+                    && Gate::forUser($user)->allows('delete', $item->setRelation('container', $container));
+            }),
+        ];
+
+        $total = array_sum(array_map(fn ($rows): int => $rows->count(), $allowed));
+
+        abort_if($total === 0, 403);
+
+        $restoreBatch->handle($user, $allowed);
 
         return back()->with('status', 'trash-restored');
     }

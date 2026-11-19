@@ -65,6 +65,7 @@ const ICONS = {
     'transfer.requested': 'share',
     'account.inactive': 'warning',
     'container.deleted': 'trash',
+    'agent.deleted': 'trash',
 };
 
 const icon = computed(() => ICONS[props.notification.type] ?? 'notifications');
@@ -96,6 +97,26 @@ const message = computed(() => {
         return t(`notifications.list.type.container.deleted.${payload.reason}`, {
             container: payload.container,
         });
+    }
+
+    /*
+     * Issue 406 · Riktning 8 och 14: en rad per tillfälle, med antalet. En
+     * raderad container bär sitt innehåll med sig till papperskorgen, så
+     * raden säger också hur många items den innehöll — en mening per container,
+     * sammanfogade efter huvudsatsen.
+     */
+    if (row.type === 'agent.deleted') {
+        const base = t('notifications.list.type.agent.deleted', {
+            agent: payload.agent,
+            total: payload.total,
+        });
+
+        const containers = (payload.containers ?? []).map((container) => t(
+            'notifications.list.type.agent.deleted.container',
+            { container: container.name, items: container.items },
+        ));
+
+        return [base, ...containers].join(' ');
     }
 
     const key = `notifications.list.type.${row.type}`;

@@ -309,7 +309,11 @@ it('räknar skrivningar och raderingar mot egna gränser', function () {
     }
     expect($gransare->attempt($agent, ToolKind::Write))->toBeInt();
 
-    for ($i = 0; $i < 20; $i++) {
+    // Raderingens tak per agent bor i App\Support\Mcp\AgentDeletionLimit
+    // sedan issue 406: det räknar LYCKADE raderingar och släpps av notisen i
+    // appen, inte av tiden. McpRateLimiter har därför ingen egen hink för
+    // slaget — bara kontots, som ligger kvar på 40 i timmen.
+    for ($i = 0; $i < 40; $i++) {
         expect($gransare->attempt($agent, ToolKind::Delete))->toBeNull();
     }
     expect($gransare->attempt($agent, ToolKind::Delete))->toBeInt();
