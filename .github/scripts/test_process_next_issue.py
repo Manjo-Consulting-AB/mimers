@@ -5,42 +5,7 @@ Repot har inga python-tester sedan tidigare, och den här filen inför
 medvetet ingen testberoende (issue 259, beslut 11): bara stdlib-`assert` och
 ett `if __name__ == "__main__"`-block som kör och rapporterar. Modulen är
 importerbar utan sidoeffekter - allt som faktiskt kör ett kommando ligger
-bakom `import pr_kroppen  # noqa: E402
-
-_KROPP_AV = "Closes #1\n\n## Sammanfattning\n\nx\n\n## Frågor och antaganden\n\nInga.\n\n## Processnotering\n\nInget."
-
-
-def test_atgardsvarv_skapar_avsnittet_sist():
-    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
-    assert ny.index("## Åtgärdsvarv") > ny.index("## Processnotering")
-    assert "- Varv 1 (DeepSeek, `1a2b3c4d`): `a.php`" in ny
-
-
-def test_atgardsvarv_lagger_till_rad_i_befintligt_avsnitt():
-    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["*"])
-    tva = p.atgardsvarv_i_kropp(ett, 2, "Sonnet", "9f8e7d6c5b", ["b.vue"], ["*"])
-    assert tva.count("## Åtgärdsvarv") == 1
-    assert tva.index("Varv 1") < tva.index("Varv 2")
-
-
-def test_atgardsvarv_markerar_fil_utanfor_rutan():
-    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 2, "DeepSeek", "1a2b3c4d5e",
-                               ["app/a.php", "ui/b.vue"], ["app/**"])
-    assert "`ui/b.vue` (utanför In scope)" in ny
-    assert "`app/a.php` (utanför" not in ny
-
-
-def test_atgardsvarv_ar_idempotent_per_sha():
-    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
-    assert p.atgardsvarv_i_kropp(ett, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"]) == ett
-
-
-def test_processnoteringen_lases_oforandrad_efter_atgardsvarv():
-    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
-    assert pr_kroppen.innehall_under(ny, "Processnotering") == pr_kroppen.innehall_under(_KROPP_AV, "Processnotering")
-
-
-if __name__ == "__main__":` i process_next_issue.py - så den här filen
+bakom `if __name__ == "__main__":` i process_next_issue.py - så den här filen
 importerar den direkt i stället för att mocka den. De tre funktioner som
 testas (`ska_eskalera_till_arkitekt`, `bygg_granskningsprompt`, `oppna_fragor`,
 `ar_arkitektsvar`) är rena: inget `gh`-anrop att mocka bort.
@@ -60,6 +25,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import process_next_issue as p
+import pr_kroppen  # noqa: E402
 
 
 # =====================================================================
@@ -1747,6 +1713,113 @@ def test_peak_hours_stoppar_bara_deepseek():
     assert not p.vantar_pa_peak(["Build", "model:opus"], True)
 
 
+# =====================================================================
+# Åtgärdsvarvet i PR-kroppen (#902)
+# =====================================================================
+
+_KROPP_AV = "Closes #1\n\n## Sammanfattning\n\nx\n\n## Frågor och antaganden\n\nInga.\n\n## Processnotering\n\nInget."
+
+
+def test_atgardsvarv_skapar_avsnittet_sist():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert ny.index("## Åtgärdsvarv") > ny.index("## Processnotering")
+    assert "- Varv 1 (DeepSeek, `1a2b3c4d`): `a.php`" in ny
+
+
+def test_atgardsvarv_lagger_till_rad_i_befintligt_avsnitt():
+    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["*"])
+    tva = p.atgardsvarv_i_kropp(ett, 2, "Sonnet", "9f8e7d6c5b", ["b.vue"], ["*"])
+    assert tva.count("## Åtgärdsvarv") == 1
+    assert tva.index("Varv 1") < tva.index("Varv 2")
+
+
+def test_atgardsvarv_markerar_fil_utanfor_rutan():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 2, "DeepSeek", "1a2b3c4d5e",
+                               ["app/a.php", "ui/b.vue"], ["app/**"])
+    assert "`ui/b.vue` (utanför In scope)" in ny
+    assert "`app/a.php` (utanför" not in ny
+
+
+def test_atgardsvarv_ar_idempotent_per_sha():
+    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert p.atgardsvarv_i_kropp(ett, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"]) == ett
+
+
+def test_processnoteringen_lases_oforandrad_efter_atgardsvarv():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert pr_kroppen.innehall_under(ny, "Processnotering") == pr_kroppen.innehall_under(_KROPP_AV, "Processnotering")
+
+
+
+# =====================================================================
+# laga_retrofalt() - retro-fälten överlever en omskriven PR-kropp
+# =====================================================================
+
+def _grinden_slapper(kropp):
+    return all(pr_kroppen.innehall_under(kropp, r) for r in pr_kroppen.RUBRIKER)
+
+
+def test_laga_retrofalt_rör_inte_en_hel_kropp():
+    assert p.laga_retrofalt(_KROPP_AV, "") == _KROPP_AV
+
+
+def test_laga_retrofalt_aterstaller_processnoteringen_fran_fore():
+    """PR #1425: åtgärdsvarvet skrev om kroppen och tappade fältet."""
+    fore = _KROPP_AV.replace("Inget.", "Läslistan var för tunn.") + "\n\n## Åtgärdsvarv\n\n- Varv 1"
+    efter = ("Closes #1\n\n## Sammanfattning\n\nny text\n\n## Frågor och antaganden\n\n"
+             "- en fråga\n\n## Åtgärdsvarv\n\n- Varv 1\n- Varv 2")
+    lagad = p.laga_retrofalt(efter, fore)
+    assert _grinden_slapper(lagad)
+    assert pr_kroppen.innehall_under(lagad, "Processnotering") == "Läslistan var för tunn."
+    assert pr_kroppen.innehall_under(lagad, "Frågor och antaganden") == "- en fråga"
+    assert lagad.index("## Processnotering") < lagad.index("## Åtgärdsvarv")
+    assert "- Varv 2" in lagad
+
+
+def test_laga_retrofalt_dopar_om_felstavad_rubrik():
+    """PR #1372: `## Processnoteringen` föll i CI men inte i bygg_pr_kropp()."""
+    kropp = _KROPP_AV.replace("## Processnotering", "## Processnoteringen")
+    lagad = p.laga_retrofalt(kropp)
+    assert _grinden_slapper(lagad)
+    assert pr_kroppen.innehall_under(lagad, "Processnotering") == "Inget."
+    assert p.SAKNAT_AVSNITT not in lagad
+
+
+def test_laga_retrofalt_fyller_tom_rubrik():
+    kropp = _KROPP_AV.replace("## Processnotering\n\nInget.", "## Processnotering\n")
+    lagad = p.laga_retrofalt(kropp, _KROPP_AV)
+    assert _grinden_slapper(lagad)
+    assert lagad.count("## Processnotering") == 1
+
+
+def test_laga_retrofalt_skriver_synlig_lucka_utan_fore():
+    lagad = p.laga_retrofalt("Closes #1\n\n## Sammanfattning\n\nx")
+    assert _grinden_slapper(lagad)
+    assert pr_kroppen.innehall_under(lagad, "Processnotering") == p.SAKNAT_AVSNITT
+    # Luckan i frågefältet stannar PR:en hos arkitekten, som förut.
+    assert p.oppna_fragor(lagad)
+
+
+def test_laga_retrofalt_behaller_agentens_egen_text():
+    fore = _KROPP_AV
+    efter = _KROPP_AV.replace("## Frågor och antaganden\n\nInga.", "## Frågor och antaganden\n\n- ny fråga")
+    assert p.laga_retrofalt(efter, fore) == efter
+
+
+def test_bygg_pr_kropp_slapps_alltid_av_grinden():
+    for sammanfattning in ("", "## Sammanfattning\n\nx", "## Sammanfattning\n\nx\n\n## Processnoteringen\n\nDyrt."):
+        assert _grinden_slapper(p.bygg_pr_kropp(1, sammanfattning)), sammanfattning
+
+
+def test_worktree_base_ligger_utanfor_repot():
+    assert os.path.commonpath([p.WORKTREE_BASE, p.REPO_ROOT]) != p.REPO_ROOT
+    assert p.WORKTREE_BASE == os.path.join(os.path.dirname(p.REPO_ROOT), "mimers-worktrees")
+
+
+def test_docstringen_namner_inte_gamla_worktreebasen():
+    assert ".claude/worktrees" not in p.__doc__
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
@@ -1775,11 +1848,3 @@ if __name__ == "__main__":
             print(f"  - {namn}: {fel}")
         sys.exit(1)
 
-
-def test_worktree_base_ligger_utanfor_repot():
-    assert os.path.commonpath([p.WORKTREE_BASE, p.REPO_ROOT]) != p.REPO_ROOT
-    assert p.WORKTREE_BASE == os.path.join(os.path.dirname(p.REPO_ROOT), "mimers-worktrees")
-
-
-def test_docstringen_namner_inte_gamla_worktreebasen():
-    assert ".claude/worktrees" not in p.__doc__

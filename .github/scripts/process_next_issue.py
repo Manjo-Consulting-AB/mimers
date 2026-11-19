@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import omfangslint  # noqa: E402  - samma katalog, ingen paketstruktur
 import omfangsruta  # noqa: E402  - samma katalog
 import granskningsspar  # noqa: E402  - samma katalog
+import pr_kroppen  # noqa: E402  - samma katalog; CI:s grind för retro-fälten
 
 
 def is_peak_hour() -> bool:
@@ -1292,10 +1293,18 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             f"{issue_body}\n\n"
             f"Granskningens fynd att åtgärda:\n{findings}\n\n"
             f"Ändra koden i arbetsträdet så att varje fynd är löst. Uppfinn inget nytt - lös "
-            f"bara det som listas."
+            f"bara det som listas.\n\n"
+            f"Gäller ett fynd PR-kroppen: redigera bara de avsnitt fyndet nämner. "
+            f"`## Frågor och antaganden` och `## Processnotering` ska stå kvar med exakt "
+            f"de rubrikerna - CI fäller PR:en annars."
         )
         head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        kropp_fore = run_cmd(["gh", "pr", "view", pr_number, "--json", "body", "-q", ".body"],
+                             check=False, cwd=worktree_path).stdout
         anropa_byggare(modell, fix_prompt, worktree_path)
+        # Före "inga ändringar"-kontrollen: ett varv som bara skrev om kroppen
+        # rör ingen fil, och har ändå kunnat tappa ett retro-fält (PR #1425).
+        vakta_retrofalten(pr_number, kropp_fore, worktree_path)
 
         # Agenten kan svara utan att röra en enda fil (missförstod fyndet,
         # eller trodde felaktigt att det redan var löst). `git commit` kraschar
@@ -2046,7 +2055,79 @@ def extract_risk_class(issue_body):
     return legacy_map.get(value, value)
 
 
-PR_RUBRIKER = ("## Sammanfattning", "## Frågor och antaganden", "## Processnotering")
+SAKNAT_AVSNITT = "_Modellen skrev inte det här avsnittet._"
+
+
+def laga_retrofalt(kropp, fore=""):
+    """Återställer PR-mallens två retro-fält så att pr_kroppen.py släpper igenom
+    kroppen. Ren funktion; returnerar kroppen oförändrad när båda fälten finns.
+
+    Rotorsaken bakom återkommande röda `PR-kroppen bär processnoteringen`
+    (PR #281, #370, #420, #1372, #1425) är att CI-grinden var den enda som
+    kontrollerade fälten - efter att kroppen redan skrivits om. Två vägar dit:
+
+    1. En agent skriver om kroppen själv med `gh api` och tappar ett avsnitt.
+       PR #1425: granskaren sa att kroppen inte motsvarade diffen, åtgärdsvarv
+       3 skrev om den från början och `## Processnotering` försvann.
+    2. Rubriken är felstavad. PR #1372 skrev `## Processnoteringen`;
+       bygg_pr_kropp() jämförde med en delsträng och såg den som närvarande,
+       medan pr_kroppen.py kräver exakt rubrik.
+
+    Lagningen använder pr_kroppen.innehall_under(), alltså samma test som
+    CI. Två kontroller som mäter olika saker var precis felet i väg 2. I
+    ordning:
+
+    - en rubrik som börjar med fältnamnet (`## Processnoteringen`,
+      `## Processnotering:`) döps om till den exakta;
+    - ett fält som saknas eller är tomt får tillbaka texten från `fore`, alltså
+      kroppen innan agenten körde. Den har ingen annan än agenten rört, och
+      text som agenten själv skrev i fältet behålls alltid;
+    - finns inget att återställa skrivs SAKNAT_AVSNITT, en synlig lucka i
+      stället för en tom rubrik (se bygg_pr_kropp()).
+
+    Ett fält som saknas helt läggs före `## Åtgärdsvarv` om det avsnittet finns
+    (som atgardsvarv_i_kropp() lägger sist), annars sist.
+    """
+    kropp = kropp or ""
+    for rubrik in pr_kroppen.RUBRIKER:
+        if pr_kroppen.innehall_under(kropp, rubrik):
+            continue
+        if pr_kroppen.innehall_under(kropp, rubrik) is None:
+            kropp = re.sub(rf"^##[ \t]+{re.escape(rubrik)}\S*[^\n]*$", f"## {rubrik}",
+                           kropp, count=1, flags=re.M | re.I)
+            if pr_kroppen.innehall_under(kropp, rubrik):
+                continue
+        text = pr_kroppen.innehall_under(fore or "", rubrik) or SAKNAT_AVSNITT
+        tom = re.search(rf"^##[ \t]+{re.escape(rubrik)}[ \t]*$", kropp, flags=re.M)
+        if tom is not None:
+            kropp = kropp[:tom.end()] + f"\n\n{text}\n" + kropp[tom.end():]
+            continue
+        avsnitt = f"## {rubrik}\n\n{text}\n\n"
+        atg = re.search(rf"^{re.escape(ATGARDSVARV_RUBRIK)}[ \t]*$", kropp, flags=re.M)
+        if atg is not None:
+            kropp = kropp[:atg.start()] + avsnitt + kropp[atg.start():]
+        else:
+            kropp = kropp.rstrip("\n") + "\n\n" + avsnitt.rstrip("\n") + "\n"
+    return kropp
+
+
+def vakta_retrofalten(pr_number, fore, cwd):
+    """Läser PR-kroppen efter ett agentanrop och lagar retro-fälten mot `fore`,
+    kroppen före anropet. Fail-open som skriv_atgardsvarv_i_kropp(): ett fel
+    skrivs ut och fäller inte varvet - CI-grinden finns kvar bakom.
+
+    Anropas efter varje agentanrop som har en öppen PR: agenten har
+    bypassPermissions och kan skriva om kroppen hur den vill, och det är inget
+    en prompt kan förbjuda bort (se laga_retrofalt())."""
+    try:
+        kropp = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "body"],
+                                    cwd=cwd).stdout).get("body") or ""
+        lagad = laga_retrofalt(kropp, fore)
+        if lagad != kropp:
+            print(f"  ⚠ PR #{pr_number}: agenten tappade ett retro-fält i PR-kroppen - återställer det.")
+            run_cmd(bygg_kroppsuppdatering(pr_number, lagad), cwd=cwd)
+    except Exception as fel:
+        print(f"  ⚠ Kunde inte vakta retro-fälten i PR-kroppen: {fel}. Fortsätter.")
 
 
 def bygg_pr_kropp(issue_num, agent_summary):
@@ -2065,19 +2146,24 @@ def bygg_pr_kropp(issue_num, agent_summary):
     för att utelämnas. En lucka som syns i PR:en kan åtgärdas; en som inte finns
     i texten går inte att skilja från ett "Inget." - vilket är exakt samma
     fail-open-fel som omfångsrutans grind gjorde. Se docs/Process/Lärdomar.md.
+
+    Retro-fälten kontrolleras av laga_retrofalt(), med samma test som CI.
+    Tidigare räckte det att rubriken fanns som delsträng, och PR #1372:s
+    `## Processnoteringen` gick igenom här men föll i CI.
     """
     delar = [f"Closes #{issue_num}"]
     text = (agent_summary or "").strip()
     if text:
         delar.append(text)
+    if not re.search(r"^##[ \t]+Sammanfattning[ \t]*$", text, flags=re.M | re.I):
+        delar.append(f"## Sammanfattning\n\n{SAKNAT_AVSNITT}")
+        print("!! PR-kroppen saknar den obligatoriska rubriken ## Sammanfattning")
 
-    saknade = [r for r in PR_RUBRIKER if r.lower() not in text.lower()]
-    for rubrik in saknade:
-        delar.append(f"{rubrik}\n\n_Modellen skrev inte det här avsnittet._")
-    if saknade:
-        print(f"!! PR-kroppen saknar {len(saknade)} obligatorisk(a) rubrik(er): {', '.join(saknade)}")
-
-    return "\n\n".join(delar)
+    kropp = "\n\n".join(delar)
+    lagad = laga_retrofalt(kropp)
+    if lagad != kropp:
+        print("!! PR-kroppen saknade ett retro-fält eller stavade rubriken fel - lagat.")
+    return lagad
 
 
 def bygg_kroppsuppdatering(pr_number, body):
@@ -3190,9 +3276,10 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
             ["gh", "pr", "view", pr_number, "--json", "body", "-q", ".body"], cwd=worktree_path
         ).stdout
 
-        lagad_kropp = sakerstall_closes_rad(pr_body, issue_num)
-        if lagad_kropp is not None:
-            print(f"--> Agentens PR-kropp saknar 'Closes #{issue_num}' - lägger till den.")
+        lagad_kropp = sakerstall_closes_rad(pr_body, issue_num) or pr_body
+        lagad_kropp = laga_retrofalt(lagad_kropp)
+        if lagad_kropp != pr_body:
+            print(f"--> Agentens PR-kropp saknade 'Closes #{issue_num}' eller ett retro-fält - lagar den.")
             pr_body = lagad_kropp
             run_cmd(bygg_kroppsuppdatering(pr_number, pr_body), cwd=worktree_path)
     else:
