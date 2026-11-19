@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Access\GrantContainerAccess;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Auth\CreatesUserWithPersonalAccount;
@@ -22,6 +23,7 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Favorite;
 use App\Models\Item;
 use App\Models\Loan;
@@ -29,6 +31,7 @@ use App\Models\Schedule;
 use App\Models\StoredFile;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Access\AccessLevel;
 use Illuminate\Console\Command;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -60,13 +63,21 @@ use Throwable;
  * ingen egen städning ovanpå.
  *
  * Kommandot raderar aldrig något. Finns adressen redan, i någon skiftlägesform,
- * avslutar det utan att skriva. Ingenting delas med någon annan och inget mejl
- * går till någon annan än kontot självt.
+ * avslutar det utan att skriva. Utan `--mcp` delas ingenting med någon annan
+ * och inget mejl går till någon annan än kontot självt.
+ *
+ * Med `--mcp` (issue 410) skapas dessutom en andra användare på plusadressen
+ * `<adress>+mcp`, med Pro, och en av den förstas containrar delas med henne på
+ * `write` med `agent_level` `read`. Det är den delade containern och ägarens
+ * tak som testarna ska prova MCP med på staging; se [[ADR-0087 MCP-server för
+ * agenter]] Riktning 17. Den andra användaren får inga egna containers, och
+ * hennes lösenord frågas som den förstas.
  */
 class TestkontoSkapa extends Command
 {
     protected $signature = 'testkonto:skapa
                             {email : Adressen kontot skapas för}
+                            {--mcp : Skapa även en andra användare och dela en container för MCP-testet}
                             {--force : Fråga inte i production}';
 
     protected $description = 'Skapa testkontot med fast testdata. Lösenordet frågas.';
@@ -75,6 +86,11 @@ class TestkontoSkapa extends Command
      * Kontots namn. Fast, så att två körningar ger igenkännbart samma konto.
      */
     private const NAME = 'Testkonto';
+
+    /**
+     * Den andra användarens namn, bara med `--mcp`.
+     */
+    private const MCP_NAME = 'Testkonto MCP';
 
     /**
      * Containers, i ordning. `files` är itemet som får anteckning, bild och
@@ -187,6 +203,7 @@ class TestkontoSkapa extends Command
         GrantInternalPro $grantInternalPro,
     ): int {
         $email = $this->argument('email');
+        $withMcp = (bool) $this->option('mcp');
 
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
             $this->error('Adressen är ingen giltig e-postadress.');
@@ -194,12 +211,24 @@ class TestkontoSkapa extends Command
             return self::FAILURE;
         }
 
-        // Skiftlägesokänsligt: `Mia@Manjo.ME` är samma adress som
-        // `mia@manjo.me`, och kommandot skriver aldrig över ett konto.
-        if (User::query()->whereRaw('lower(email) = ?', [mb_strtolower($email)])->exists()) {
-            $this->error("Det finns redan ett konto med adressen {$email}.");
+        // Först därefter går adressen att dela i lokal del och domän.
+        $mcpEmail = $withMcp ? $this->mcpEmail($email) : null;
+
+        if ($mcpEmail !== null && filter_var($mcpEmail, FILTER_VALIDATE_EMAIL) === false) {
+            $this->error('Adressen för den andra användaren är ingen giltig e-postadress.');
 
             return self::FAILURE;
+        }
+
+        // Skiftlägesokänsligt: `Mia@Manjo.ME` är samma adress som
+        // `mia@manjo.me`, och kommandot skriver aldrig över ett konto.
+        // Med --mcp prövas båda adresserna innan något skrivs.
+        foreach (array_filter([$email, $mcpEmail]) as $adress) {
+            if (User::query()->whereRaw('lower(email) = ?', [mb_strtolower($adress)])->exists()) {
+                $this->error("Det finns redan ett konto med adressen {$adress}.");
+
+                return self::FAILURE;
+            }
         }
 
         if (app()->environment('production') && ! $this->option('force')
@@ -213,13 +242,32 @@ class TestkontoSkapa extends Command
             return self::FAILURE;
         }
 
+        $mcp = null;
+
+        if ($mcpEmail !== null) {
+            $mcpPassword = $this->askPassword("Lösenord för {$mcpEmail}");
+
+            if ($mcpPassword === null) {
+                return self::FAILURE;
+            }
+
+            $mcp = ['email' => $mcpEmail, 'password' => $mcpPassword];
+        }
+
         $this->attachmentCount = 0;
         $this->storagePaths = [];
         $this->containerCount = 0;
         $this->itemCount = 0;
 
         try {
-            $user = DB::transaction(function () use ($createUser, $grantInternalPro, $email, $password): User {
+            /** @var array{0: User, 1: User|null, 2: Container|null} $result */
+            $result = DB::transaction(function () use (
+                $createUser,
+                $grantInternalPro,
+                $email,
+                $password,
+                $mcp,
+            ): array {
                 $user = $createUser->handle(self::NAME, $email, $password, null);
                 $user->markEmailAsVerified();
 
@@ -227,9 +275,19 @@ class TestkontoSkapa extends Command
 
                 $account = $user->accounts()->wherePivot('role', 'owner')->firstOrFail();
 
-                $this->build($user, $account);
+                $firstContainer = $this->build($user, $account);
 
-                return $user;
+                if ($mcp === null) {
+                    return [$user, null, null];
+                }
+
+                $mcpUser = $createUser->handle(self::MCP_NAME, $mcp['email'], $mcp['password'], null);
+                $mcpUser->markEmailAsVerified();
+
+                $this->grantInternalProForMcpUser($grantInternalPro, $mcpUser);
+                $this->shareWithMcpUser($user, $mcpUser, $firstContainer);
+
+                return [$user, $mcpUser, $firstContainer];
             });
         } catch (Throwable $e) {
             $this->removeOrphanedFiles();
@@ -240,9 +298,20 @@ class TestkontoSkapa extends Command
             Auth::forgetUser();
         }
 
-        $this->summarize($user);
+        $this->summarize(...$result);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Den andra användarens adress: plusadressering på den förstas, så att
+     * båda adresserna hör ihop och det syns vilket konto som hör till vilket.
+     */
+    private function mcpEmail(string $email): string
+    {
+        [$local, $domain] = explode('@', $email, 2);
+
+        return $local.'+mcp@'.$domain;
     }
 
     private function track(Attachment $attachment): Attachment
@@ -280,10 +349,10 @@ class TestkontoSkapa extends Command
      * Frågar lösenordet två gånger. Det är aldrig ett argument eller en
      * flagga, så det hamnar inte i skalets historik. Null när det inte håller.
      */
-    private function askPassword(): ?string
+    private function askPassword(string $label = 'Lösenord'): ?string
     {
-        $password = $this->secret('Lösenord');
-        $again = $this->secret('Lösenord igen');
+        $password = $this->secret($label);
+        $again = $this->secret($label.' igen');
 
         if (! is_string($password) || $password !== $again) {
             $this->error('Lösenorden är inte lika.');
@@ -305,7 +374,11 @@ class TestkontoSkapa extends Command
         return $password;
     }
 
-    private function build(User $user, Account $account): void
+    /**
+     * Bygger hela kontot och lämnar den första containern, som `--mcp` delar
+     * med den andra användaren.
+     */
+    private function build(User $user, Account $account): Container
     {
         // SetContainerCover prövar Gate::authorize; en artisan-körning har
         // ingen inloggad användare, så vi är kontots ägare under bygget.
@@ -317,6 +390,48 @@ class TestkontoSkapa extends Command
         );
 
         $this->extrasForFirstContainer($user, $account, $containers[0]);
+
+        return $containers[0];
+    }
+
+    /**
+     * Den andra användaren ska vara Pro utan att adressen först måste läggas
+     * i miljöns `internal_pro_emails`. Kommandot lägger till den i listan
+     * under körningen och går genom samma action som den första användaren,
+     * så att Pro-raden blir en vanlig intern Pro-rad (`external_ref`
+     * `internal`) och ingenting skrivs till `.env` eller konfigurationen.
+     */
+    private function grantInternalProForMcpUser(GrantInternalPro $grantInternalPro, User $user): void
+    {
+        config(['konton.internal_pro_emails' => array_merge(
+            (array) config('konton.internal_pro_emails'),
+            [$user->email],
+        )]);
+
+        $grantInternalPro->handle($user);
+    }
+
+    /**
+     * Delar den första användarens första container: medlem på `write`, med
+     * ägarens tak för hennes agenter satt till `read`. `agent_level` är
+     * medvetet inte massildelbar (se ContainerAccess), så den sätts efter
+     * raden har skapats — samma grepp som SetMemberAgentLevel.
+     */
+    private function shareWithMcpUser(User $owner, User $member, Container $container): ContainerAccess
+    {
+        $access = app(GrantContainerAccess::class)->handle(
+            $container,
+            $owner,
+            $member,
+            'user',
+            null,
+            ['level' => AccessLevel::WRITE, 'kind' => 'member'],
+        );
+
+        $access->agent_level = AccessLevel::READ;
+        $access->save();
+
+        return $access;
     }
 
     /**
@@ -576,7 +691,7 @@ class TestkontoSkapa extends Command
         return $path;
     }
 
-    private function summarize(User $user): void
+    private function summarize(User $user, ?User $mcpUser = null, ?Container $shared = null): void
     {
         $account = $user->accounts()->wherePivot('role', 'owner')->firstOrFail();
         $plan = $account->currentPlan();
@@ -588,5 +703,13 @@ class TestkontoSkapa extends Command
         $this->line("Items: {$this->itemCount}");
         $this->line('Bilagor: '.$this->attachmentCount);
         $this->line("Använda bytes: {$bytes}");
+
+        if ($mcpUser !== null && $shared !== null) {
+            $mcpPlan = $mcpUser->accounts()->wherePivot('role', 'owner')->firstOrFail()->currentPlan();
+
+            $this->line("Testkontot {$mcpUser->email} skapades.");
+            $this->line('Plan: '.$mcpPlan->code);
+            $this->line("Delat: {$shared->name} med {$mcpUser->email} (level write, agent_level read)");
+        }
     }
 }
