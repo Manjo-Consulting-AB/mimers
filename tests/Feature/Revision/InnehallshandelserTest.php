@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -303,29 +304,40 @@ it('en ändring loggar fältens namn och aldrig fritext', function () {
     $item = innehallsItem($container, $anvandare, 'Motorn', ['notes' => 'den gamla anteckningen']);
     $kategori = Category::factory()->for($container, 'container')->create(['name' => 'Verktyg']);
 
+    // Sedan issue 420 är datumet ett containerns fält, inte en kolumn. Ett
+    // fältvärde namnges med fältets ULID i `meta.fields` — aldrig med värdet.
+    $inkop = ItemField::factory()->for($container, 'container')->create([
+        'label' => 'Purchase date',
+        'type' => 'date',
+        'position' => 1,
+    ]);
+
     patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}", [
         'name' => 'Nya motorn',
         'description' => 'en beskrivning',
         'notes' => 'en anteckning',
-        'purchased_at' => '2024-05-17',
         'category' => $kategori->ulid,
+        'fields' => [
+            ['field' => $inkop->ulid, 'value' => '2024-05-17'],
+        ],
     ], $headers)->assertOk();
 
     $rad = innehallsRad($item, AuditLog::ACTION_ITEM_UPDATED);
     $meta = json_decode($rad->meta, true);
 
-    expect($meta['changed'])->toEqualCanonicalizing(['name', 'description', 'notes', 'purchased_at', 'category']);
+    expect($meta['changed'])->toEqualCanonicalizing(['name', 'description', 'notes', 'category']);
 
-    // Datumet och referensen följer med som gamla och nya värden — kategorin
-    // som ULID, aldrig som löpnummer.
-    expect($meta['values']['purchased_at'])->toBe(['from' => null, 'to' => '2024-05-17']);
+    // Referensen följer med som gamla och nya värden — kategorin som ULID,
+    // aldrig som löpnummer. Fältet namnges med sin ULID.
     expect($meta['values']['category'])->toBe(['from' => null, 'to' => $kategori->ulid]);
+    expect($meta['fields'])->toBe([$inkop->ulid]);
 
-    // Innehållet gör det aldrig.
+    // Innehållet gör det aldrig — varken texten eller fältets värde.
     expect($rad->meta)->not->toContain('Nya motorn');
     expect($rad->meta)->not->toContain('en beskrivning');
     expect($rad->meta)->not->toContain('en anteckning');
     expect($rad->meta)->not->toContain('den gamla anteckningen');
+    expect($rad->meta)->not->toContain('2024-05-17');
 
     // Redigeringen tog: raden beskriver en ändring som faktiskt hände.
     expect($item->fresh()->name)->toBe('Nya motorn');

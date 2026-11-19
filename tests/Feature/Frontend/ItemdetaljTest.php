@@ -8,6 +8,8 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Favorite;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
@@ -129,12 +131,12 @@ function itemdetaljTagg(string $kod, string $komponent): string
  * bara att pröva i en zon med negativ offset, där den naiva vägen visar dagen
  * före.
  */
-function itemdetaljKör(string $skript, string $tz = 'UTC'): string
+function itemdetaljKör(string $skript, string $tz = 'UTC', string $modul = 'js/components/itemPresentation.js'): string
 {
     $kod = implode("\n", [
         "const { pathToFileURL } = await import('node:url');",
         'const m = await import(pathToFileURL('
-            .json_encode(resource_path('js/components/itemPresentation.js'), JSON_UNESCAPED_SLASHES).').href);',
+            .json_encode(resource_path($modul), JSON_UNESCAPED_SLASHES).').href);',
         $skript,
     ]);
 
@@ -161,14 +163,33 @@ it('visar itemets fält, kategorin och taggarna för den som når itemet', funct
 
     $motorn = itemdetaljItem($container, 'Motorn', $anvandare, [
         'description' => 'En diesel.',
-        'manufacturer' => 'Yanmar',
-        'model' => '3YM30',
-        'serial_number' => 'SN-42',
-        'purchased_at' => '2024-05-17',
-        'warranty_until' => '2027-05-17',
-        'position_note' => 'Bakom panelen',
         'category_id' => $kategori->id,
     ]);
+
+    // Sedan issue 420 är de sex fasta fälten containerns fält.
+    $definitioner = [
+        ['Manufacturer', 'text', 'Yanmar'],
+        ['Model', 'text', '3YM30'],
+        ['Serial number', 'text', 'SN-42'],
+        ['Purchase date', 'date', '2024-05-17'],
+        ['Warranty until', 'date', '2027-05-17'],
+        ['Storage location', 'text', 'Bakom panelen'],
+    ];
+
+    foreach ($definitioner as $index => [$label, $type, $value]) {
+        $falt = ItemField::factory()->for($container, 'container')->create([
+            'label' => $label,
+            'type' => $type,
+            'position' => $index + 1,
+        ]);
+
+        ItemFieldValue::factory()->create([
+            'item_id' => $motorn->id,
+            'item_field_id' => $falt->id,
+            ($type === 'date' ? 'value_date' : 'value_text') => $value,
+            'billed_account_id' => $container->account_id,
+        ]);
+    }
 
     $tagg = Tag::factory()->for($container, 'container')->create(['name' => 'Motor', 'color' => '#ff0000']);
     $motorn->tags()->attach([$tagg->id]);
@@ -180,13 +201,18 @@ it('visar itemets fält, kategorin och taggarna för den som når itemet', funct
             ->where('item.ulid', $motorn->ulid)
             ->where('item.name', 'Motorn')
             ->where('item.description', 'En diesel.')
-            ->where('item.manufacturer', 'Yanmar')
-            ->where('item.model', '3YM30')
-            ->where('item.serial_number', 'SN-42')
-            // DATE-kolumnerna bär `Y-m-d` rakt igenom — ingen ISO-tidsstämpel.
-            ->where('item.purchased_at', '2024-05-17')
-            ->where('item.warranty_until', '2027-05-17')
-            ->where('item.position_note', 'Bakom panelen')
+            // Fälten bärs i `fields` med rubrik, typ och värde; de sex
+            // kolumnerna är inte egna nycklar längre (issue 420).
+            ->where('item.fields.0.label', 'Manufacturer')
+            ->where('item.fields.0.type', 'text')
+            ->where('item.fields.0.value', 'Yanmar')
+            ->where('item.fields.3.label', 'Purchase date')
+            ->where('item.fields.3.type', 'date')
+            // DATE-värdet bär `Y-m-d` rakt igenom — ingen ISO-tidsstämpel.
+            ->where('item.fields.3.value', '2024-05-17')
+            ->where('item.fields.5.value', 'Bakom panelen')
+            ->missing('item.manufacturer')
+            ->missing('item.purchased_at')
             ->where('item.category', $kategori->ulid)
             ->where('item.tags.0.name', 'Motor')
             ->where('item.tags.0.color', '#ff0000')
@@ -383,30 +409,28 @@ it('låter ett fryst ägarkonto se itemet men nekar varje skrivflagga', function
  * Klart när: ett tomt fält visas som tomt eller utelämnas — men vyn hittar
  * inte på ett värde.
  *
- * Regeln bor i itemFields() i resources/js/components/itemPresentation.js, och
- * prövas därför i node på exakt den modul klienten importerar. Ett item med
- * bara `manufacturer` satt ska ge EN rad.
- *
- * Sedan issue 102 är listan fältraderna på översiktsfliken, och `description`
- * och `notes` står i indata men inte i svaret: de är vyns ledande stycken,
- * över listan, och aldrig en rad bland tillverkare och modell. Att de har
- * värden här är hela beviset — hade de varit kvar i listan hade de synts.
+ * Regeln bor i `customFieldRows()` i
+ * resources/js/components/fields/fieldPresentation.js, och prövas därför i
+ * node på exakt den modul klienten importerar. Sedan issue 420 ritas alla
+ * fält — også de sex före detta fasta — genom samma funktion, så ett fält
+ * med värde ger EN rad och de tomma ger ingen.
  */
 it('utelämnar tomma fält i stället för att hitta på ett värde', function () {
     $item = json_encode([
-        'description' => 'En diesel.',
-        'notes' => 'Bytte impeller 2024.',
-        'manufacturer' => 'Yanmar',
-        'model' => null,
-        'serial_number' => null,
-        'purchased_at' => null,
-        'warranty_until' => null,
-        'position_note' => '',
+        'fields' => [
+            ['id' => 'a', 'label' => 'Manufacturer', 'type' => 'text', 'scope' => 'container', 'value' => 'Yanmar'],
+            ['id' => 'b', 'label' => 'Model', 'type' => 'text', 'scope' => 'container', 'value' => null],
+            ['id' => 'c', 'label' => 'Storage location', 'type' => 'text', 'scope' => 'container', 'value' => ''],
+        ],
     ], JSON_UNESCAPED_UNICODE);
 
-    $rader = itemdetaljKör("process.stdout.write(JSON.stringify(m.itemFields({$item}, 'sv-SE')));");
+    $rader = itemdetaljKör(
+        "process.stdout.write(JSON.stringify(m.customFieldRows({$item}, 'sv-SE')));",
+        'UTC',
+        'js/components/fields/fieldPresentation.js',
+    );
 
-    expect($rader)->toBe('[{"key":"manufacturer","value":"Yanmar"}]');
+    expect($rader)->toBe('[{"key":"field-a","label":"Manufacturer","value":"Yanmar"}]');
 });
 
 /*
@@ -421,10 +445,7 @@ it('har ingen länk Show all fields och låter ?tab=information visa översikten
 
     [, $anvandare, $container] = itemdetaljKontext();
 
-    $motorn = itemdetaljItem($container, 'Motorn', $anvandare, [
-        'manufacturer' => 'Yanmar',
-        'purchased_at' => '2024-05-17',
-    ]);
+    $motorn = itemdetaljItem($container, 'Motorn', $anvandare);
 
     $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
 
@@ -438,7 +459,7 @@ it('har ingen länk Show all fields och låter ?tab=information visa översikten
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('Containers/Items/Show')
-                ->where('item.purchased_at', '2024-05-17')
+                ->where('item.name', 'Motorn')
             );
     }
 

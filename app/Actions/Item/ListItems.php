@@ -9,7 +9,6 @@ use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Access\ItemScope;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -18,23 +17,25 @@ use Illuminate\Support\Collection;
  *
  * Kroppen är `App\Http\Controllers\Api\ItemController::index()`s, övertagen
  * oförändrad: omfångsupplösningen överst, tagguppslaget, kategorins ättlingar,
- * Scout-grenen när `q` finns och den raka Eloquent-grenen annars, allt med
+ * fritextgrenen när `q` finns och den raka Eloquent-grenen annars, allt med
  * `with(['category', 'createdByAccount', 'tags'])` och `orderBy('name')`.
  * Filtren flyttade med redan nu, trots att webben inte använder dem förrän
  * issue 59a — att bryta ut halva metoden och komma tillbaka om två issues är
  * att göra samma riskabla flytt två gånger.
  *
  * **Omfånget filtrerar RADERNA** (issue 73 § Beslut 2). Det löses upp EN gång
- * överst och appliceras i BÅDA grenarna nedan — Scout när `q` finns, rak
- * Eloquent annars. Att bara filtrera den ena är precis den symmetri som glöms
- * bort, och den som glöms läcker.
+ * överst och appliceras i BÅDA grenarna nedan — fritextgrenen när `q` finns,
+ * rak Eloquent annars. Att bara filtrera den ena är precis den symmetri som
+ * glöms bort, och den som glöms läcker.
  *
  * `$filters` är de tre `IndexItemRequest` validerar, och varje nyckel är
  * valfri:
  *
  * - `tags` (list av tagg-ULID) — VARJE tagg krävs, kombineras med OCH
  * - `category` (kategori-ULID eller null) — kategorin och hela dess underträd
- * - `q` (söksträng eller null) — fritext över de fem sökbara kolumnerna
+ * - `q` (söksträng eller null) — fritext över itemets textkolumner och
+ *   `item_field_value.value_text`, formulerad i `Item::scopeMatchingText()`
+ *   (issue 420)
  *
  * `IndexItemRequest` har redan bevisat att varje ULID finns i DEN HÄR
  * containern och inte är mjukraderad — ett okänt värde är 422
@@ -92,23 +93,21 @@ class ListItems
         $q = $filters['q'] ?? null;
 
         if ($q !== null && $q !== '') {
-            return Item::search($q)
-                ->query(function (Builder $query) use ($container, $tagIds, $categoryIds, $scope) {
-                    /** @var Builder<Item> $query */
-                    $query->where('container_id', $container->id)
-                        ->inScope($scope)
-                        ->with(['category', 'createdByAccount', 'tags']);
+            $query = Item::query()
+                ->matchingText($q)
+                ->where('container_id', $container->id)
+                ->inScope($scope)
+                ->with(['category', 'createdByAccount', 'tags']);
 
-                    if ($tagIds !== []) {
-                        $query->withAllTags($tagIds);
-                    }
+            if ($tagIds !== []) {
+                $query->withAllTags($tagIds);
+            }
 
-                    if ($categoryIds !== null) {
-                        $query->inCategoryTree($categoryIds);
-                    }
-                })
-                ->orderBy('name')
-                ->get();
+            if ($categoryIds !== null) {
+                $query->inCategoryTree($categoryIds);
+            }
+
+            return $query->orderBy('name')->get();
         }
 
         $query = $container->items()->inScope($scope)->with(['category', 'createdByAccount', 'tags']);

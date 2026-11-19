@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,19 @@ use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\patchJson;
 use function Pest\Laravel\postJson;
+
+/*
+ * Ett containerfält — de sex fasta fälten är containerns fält sedan issue 420
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5).
+ */
+function crudFalt(Container $container, string $label, string $type = 'text', int $position = 1): ItemField
+{
+    return ItemField::factory()->for($container, 'container')->create([
+        'label' => $label,
+        'type' => $type,
+        'position' => $position,
+    ]);
+}
 
 /*
  * Issue 13a · Items. See App\Http\Controllers\Api\ItemController,
@@ -33,19 +47,28 @@ it('creates an item with every field', function () {
     $container = Container::factory()->for($account, 'account')->create();
     $category = Category::factory()->for($container, 'container')->create(['name' => 'Motor']);
 
+    $tillverkare = crudFalt($container, 'Manufacturer', 'text', 1);
+    $modell = crudFalt($container, 'Model', 'text', 2);
+    $serienummer = crudFalt($container, 'Serial number', 'text', 3);
+    $inkop = crudFalt($container, 'Purchase date', 'date', 4);
+    $garanti = crudFalt($container, 'Warranty until', 'date', 5);
+    $position = crudFalt($container, 'Storage location', 'text', 6);
+
     $response = postJson("/api/containers/{$container->ulid}/items", [
         'name' => 'MPPT-regulator',
         'description' => 'Charges the house battery from the solar panel',
-        'manufacturer' => 'Victron',
-        'model' => 'SmartSolar 100/30',
-        'serial_number' => 'HQ2148',
-        'purchased_at' => '2024-05-17',
-        'warranty_until' => '2029-05-17',
-        'position_note' => 'Behind the panel in the aft cabin',
         'icon' => 'droplet',
         'icon_color' => 'blue',
         'category' => $category->ulid,
         'account' => $account->ulid,
+        'fields' => [
+            ['field' => $tillverkare->ulid, 'value' => 'Victron'],
+            ['field' => $modell->ulid, 'value' => 'SmartSolar 100/30'],
+            ['field' => $serienummer->ulid, 'value' => 'HQ2148'],
+            ['field' => $inkop->ulid, 'value' => '2024-05-17'],
+            ['field' => $garanti->ulid, 'value' => '2029-05-17'],
+            ['field' => $position->ulid, 'value' => 'Behind the panel in the aft cabin'],
+        ],
     ], $headers);
 
     $response->assertCreated();
@@ -53,18 +76,29 @@ it('creates an item with every field', function () {
         'data' => [
             'name' => 'MPPT-regulator',
             'description' => 'Charges the house battery from the solar panel',
-            'manufacturer' => 'Victron',
-            'model' => 'SmartSolar 100/30',
-            'serial_number' => 'HQ2148',
-            'purchased_at' => '2024-05-17',
-            'warranty_until' => '2029-05-17',
-            'position_note' => 'Behind the panel in the aft cabin',
             'icon' => 'droplet',
             'icon_color' => 'blue',
             'category' => $category->ulid,
             'created_by_account' => $account->ulid,
         ],
     ]);
+
+    // Fälten bärs i `fields` med rubrik, typ och värde (issue 420) och de sex
+    // kolumnerna är inte längre egna nycklar i svaret.
+    $fields = collect($response->json('data.fields'))->keyBy('label');
+
+    expect($fields['Manufacturer']['value'])->toBe('Victron')
+        ->and($fields['Model']['value'])->toBe('SmartSolar 100/30')
+        ->and($fields['Serial number']['value'])->toBe('HQ2148')
+        ->and($fields['Purchase date']['type'])->toBe('date')
+        ->and($fields['Purchase date']['value'])->toBe('2024-05-17')
+        ->and($fields['Warranty until']['value'])->toBe('2029-05-17')
+        ->and($fields['Storage location']['value'])->toBe('Behind the panel in the aft cabin');
+
+    foreach (['manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'] as $kolumn) {
+        expect($response->json('data'))->not->toHaveKey($kolumn);
+    }
+
     expect($response->json('data.ulid'))->toBeString();
     expect($response->json('data.created_at'))->toBeString();
     expect($response->json('data.updated_at'))->toBeString();
@@ -86,16 +120,13 @@ it('creates an item with only name and account', function () {
         'data' => [
             'name' => 'Wardrobe',
             'description' => null,
-            'manufacturer' => null,
-            'model' => null,
-            'serial_number' => null,
-            'purchased_at' => null,
-            'warranty_until' => null,
-            'position_note' => null,
             'icon' => null,
             'icon_color' => null,
             'category' => null,
             'created_by_account' => $account->ulid,
+            // En ny container har inga fält, så itemets fältlista är tom
+            // (issue 420: nya containrar får inga fält).
+            'fields' => [],
         ],
     ]);
 });
@@ -104,32 +135,43 @@ it('the date fields serialize as Y-m-d', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
 
+    $inkop = crudFalt($container, 'Purchase date', 'date', 1);
+    $garanti = crudFalt($container, 'Warranty until', 'date', 2);
+
     $response = postJson("/api/containers/{$container->ulid}/items", [
         'name' => 'Pump',
-        'purchased_at' => '2024-05-17',
-        'warranty_until' => '2029-05-17',
         'account' => $account->ulid,
+        'fields' => [
+            ['field' => $inkop->ulid, 'value' => '2024-05-17'],
+            ['field' => $garanti->ulid, 'value' => '2029-05-17'],
+        ],
     ], $headers);
 
     $response->assertCreated();
-    expect($response->json('data.purchased_at'))->toBe('2024-05-17');
-    expect($response->json('data.warranty_until'))->toBe('2029-05-17');
+    $fields = collect($response->json('data.fields'))->keyBy('label');
+    expect($fields['Purchase date']['value'])->toBe('2024-05-17');
+    expect($fields['Warranty until']['value'])->toBe('2029-05-17');
 });
 
 it('a date in the wrong format is rejected', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
 
+    $inkop = crudFalt($container, 'Purchase date', 'date');
+
     foreach (['next tuesday', '17/05/2024'] as $datum) {
         $response = postJson("/api/containers/{$container->ulid}/items", [
             'name' => 'Pump',
-            'purchased_at' => $datum,
             'account' => $account->ulid,
+            'fields' => [
+                ['field' => $inkop->ulid, 'value' => $datum],
+            ],
         ], $headers);
 
         $response->assertStatus(422);
         expect($response->json('error.code'))->toBe('validation.failed');
-        expect($response->json('error.data.fields.purchased_at'))->not->toBeNull();
+        expect(collect($response->json('error.data.fields')['fields.0.value'])->pluck('code')->all())
+            ->toContain('validation.date_format');
     }
 });
 

@@ -27,15 +27,18 @@ use Illuminate\Support\Facades\DB;
  *
  * **En ändring loggas med fältens namn, inte med deras innehåll.**
  * `meta.changed` är namnen på de fält som ändrades. Fritext — `name`,
- * `description`, `notes`, `manufacturer`, `model`, `serial_number`,
- * `position_note` — följer aldrig med, inte ens som gammalt värde: loggen
- * får inte bli ett andra register över vad användaren skrivit. `meta.values`
- * bär gamla och nya värdet för de fält som inte ÄR fritext: datumen
- * `purchased_at` och `warranty_until`, referenserna `category` och
- * `cover`, som ULID:er — aldrig löpnummer (AGENTS.md
- * § Databaskonventioner) — samt `icon` och `icon_color` (issue 301 ·
+ * `description`, `notes` — följer aldrig med, inte ens som gammalt värde:
+ * loggen får inte bli ett andra register över vad användaren skrivit.
+ * `meta.values` bär gamla och nya värdet för de fält som inte ÄR fritext:
+ * referenserna `category` och `cover`, som ULID:er — aldrig löpnummer
+ * (AGENTS.md § Databaskonventioner) — samt `icon` och `icon_color` (issue 301 ·
  * [[ADR-0060 Itemets ikon]] § 7). Ikonnamnet och palettnyckeln är valda
  * värden och inte fritext, precis som `category` och `cover`.
+ *
+ * **De sex fasta fälten är inte längre itemets kolumner** sedan issue 420
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5); de skrivs genom
+ * App\Actions\Field\SyncItemFieldValues och namnges i `meta.fields` med sin
+ * ULID, aldrig med sitt värde.
  *
  * **En ändring som inte ändrar något skriver ingen rad.** En PATCH med
  * samma värden som förut sparar ingenting (Eloquent rör ingen rad när inget
@@ -56,14 +59,6 @@ class UpdateItem
         'category_id' => 'category',
         'cover_attachment_id' => 'cover',
     ];
-
-    /**
-     * Datumfälten. Gamla och nya värdet följer med, som `Y-m-d` — samma form
-     * kolumnen har, en dag har ingen tidszon (issue 13a § Beslut 5).
-     *
-     * @var list<string>
-     */
-    private const DATE_FIELDS = ['purchased_at', 'warranty_until'];
 
     /**
      * Itemets ikon och dess färg. Båda är valda värden och inte fritext, så
@@ -201,13 +196,6 @@ class UpdateItem
      */
     private function valueFor(Item $item, string $column): ?array
     {
-        if (in_array($column, self::DATE_FIELDS, true)) {
-            return [
-                'from' => $item->getOriginal($column)?->toDateString(),
-                'to' => $item->{$column}?->toDateString(),
-            ];
-        }
-
         if ($column === 'category_id') {
             return [
                 'from' => $this->categoryUlid($item->getOriginal($column)),

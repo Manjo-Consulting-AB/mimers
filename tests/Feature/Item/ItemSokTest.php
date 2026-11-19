@@ -10,11 +10,37 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\Tag;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
+
+/*
+ * Ett containerfält och ett textvärde på itemet — sedan issue 420 är
+ * tillverkare, modell och serienummer containerns fält, inte kolumner
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5).
+ */
+function sokFalt(Container $container, string $label, int $position = 1): ItemField
+{
+    return ItemField::factory()->for($container, 'container')->create([
+        'label' => $label,
+        'type' => 'text',
+        'position' => $position,
+    ]);
+}
+
+function sokVarde(Item $item, ItemField $field, string $value): void
+{
+    ItemFieldValue::factory()->create([
+        'item_id' => $item->id,
+        'item_field_id' => $field->id,
+        'value_text' => $value,
+        'billed_account_id' => $item->billed_account_id,
+    ]);
+}
 
 /*
  * Issue 15b · Fritextsök över containers. Se
@@ -119,20 +145,30 @@ it('mjukraderade items kommer inte med', function () {
     expect($response->json('data'))->toHaveCount(0);
 });
 
-it('söker över namn, beskrivning, tillverkare, modell och serienummer', function () {
+it('söker över namn, beskrivning, anteckning och fältens textvärden', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
 
+    $tillverkareFalt = sokFalt($container, 'Manufacturer', 1);
+    $modellFalt = sokFalt($container, 'Model', 2);
+    $serienummerFalt = sokFalt($container, 'Serial number', 3);
+
     $namn = Item::factory()->for($container, 'container')->create(['name' => 'Trålvinsch', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
     $beskrivning = Item::factory()->for($container, 'container')->create(['name' => 'Ankare', 'description' => 'danforth', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
-    $tillverkare = Item::factory()->for($container, 'container')->create(['name' => 'Lina', 'manufacturer' => 'Rapp Hydema', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
-    $modell = Item::factory()->for($container, 'container')->create(['name' => 'Navigator', 'model' => 'TW-2000', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
-    $serienummer = Item::factory()->for($container, 'container')->create(['name' => 'Pump', 'serial_number' => 'SN-4711', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    $anteckning = Item::factory()->for($container, 'container')->create(['name' => 'Pump', 'notes' => 'Bytte impeller i höstas', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    $tillverkare = Item::factory()->for($container, 'container')->create(['name' => 'Lina', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    $modell = Item::factory()->for($container, 'container')->create(['name' => 'Navigator', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    $serienummer = Item::factory()->for($container, 'container')->create(['name' => 'Generator', 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+
+    sokVarde($tillverkare, $tillverkareFalt, 'Rapp Hydema');
+    sokVarde($modell, $modellFalt, 'TW-2000');
+    sokVarde($serienummer, $serienummerFalt, 'SN-4711');
 
     $sök = fn (string $term) => getJson('/api/items?q='.urlencode($term), $headers);
 
     $sök('Trålvinsch')->assertOk()->assertJsonPath('data.0.ulid', $namn->ulid);
     $sök('danforth')->assertOk()->assertJsonPath('data.0.ulid', $beskrivning->ulid);
+    $sök('impeller')->assertOk()->assertJsonPath('data.0.ulid', $anteckning->ulid);
     $sök('Rapp Hydema')->assertOk()->assertJsonPath('data.0.ulid', $tillverkare->ulid);
     $sök('TW-2000')->assertOk()->assertJsonPath('data.0.ulid', $modell->ulid);
     $sök('SN-4711')->assertOk()->assertJsonPath('data.0.ulid', $serienummer->ulid);
@@ -217,16 +253,17 @@ it('q kombineras med taggfilter på containerns lista', function () {
 it('resultatet är sorterat på namn', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
+    $tillverkare = sokFalt($container, 'Manufacturer');
 
-    // Samma tillverkare på alla så söktermen träffar allihop; sorteringen är
+    // Samma textvärde på alla så söktermen träffar allihop; sorteringen är
     // `name` stigande, inte relevans (Beslut 7).
     foreach (['Zebra', 'Alfa', 'Mike'] as $namn) {
-        Item::factory()->for($container, 'container')->create([
+        $item = Item::factory()->for($container, 'container')->create([
             'name' => $namn,
-            'manufacturer' => 'Guldheden',
             'created_by_user_id' => $user->id,
             'created_by_account_id' => $account->id,
         ]);
+        sokVarde($item, $tillverkare, 'Guldheden');
     }
 
     $response = getJson('/api/items?q=Guldheden', $headers);
@@ -242,7 +279,6 @@ it('svaret har samma form som containerlistningen', function () {
 
     $item = Item::factory()->for($container, 'container')->create([
         'name' => 'MPPT-regulator',
-        'manufacturer' => 'Victron',
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $account->id,
     ]);
@@ -275,13 +311,14 @@ it('sökningen gör ett konstant antal frågor', function () {
     $container = Container::factory()->for($account, 'account')->create();
 
     // Scenario 1: en container, 3 items.
+    $tillverkare = sokFalt($container, 'Manufacturer');
     foreach (['Alfa', 'Beta', 'Gamma'] as $namn) {
-        Item::factory()->for($container, 'container')->create([
+        $item = Item::factory()->for($container, 'container')->create([
             'name' => $namn,
-            'manufacturer' => 'Guldheden',
             'created_by_user_id' => $user->id,
             'created_by_account_id' => $account->id,
         ]);
+        sokVarde($item, $tillverkare, 'Guldheden');
     }
 
     // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
@@ -314,13 +351,14 @@ it('sökningen gör ett konstant antal frågor', function () {
     // Scenario 2: två containers till och åtta items totalt — antalet
     // frågor ska INTE växa vare sig med antalet träffar eller containers.
     $extraContainers = Container::factory()->for($account, 'account')->count(2)->create();
+    $extraTillverkare = sokFalt($extraContainers->first(), 'Manufacturer');
     foreach (['Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta'] as $namn) {
-        Item::factory()->for($extraContainers->first(), 'container')->create([
+        $item = Item::factory()->for($extraContainers->first(), 'container')->create([
             'name' => $namn,
-            'manufacturer' => 'Guldheden',
             'created_by_user_id' => $user->id,
             'created_by_account_id' => $account->id,
         ]);
+        sokVarde($item, $extraTillverkare, 'Guldheden');
     }
 
     app()->forgetScopedInstances();

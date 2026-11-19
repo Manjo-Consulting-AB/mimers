@@ -68,14 +68,16 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * **Skapandet har två nivåer** (issue 338 · [[ADR-0068 Itemets sida och
  * skapandet]] § 8). Direkt synliga är namn, plats, kategori, taggar och ikon.
- * Resten — beskrivning, tillverkare, modell, serienummer, inköpsdatum, garanti,
- * förvaringsplats och, med fler än ett konto, kontot — står i en `<details>`
- * med rubriken *More details*, hopfälld från början. Fälten ligger alltid i
- * DOM:en, och det är `<details>` som fäller ihop dem, inte en `v-if`
- * (samma linje som AccessLevelField). Kommer servern tillbaka med ett fel på
- * ett av dem fälls avsnittet ut av sig självt, så att felet går att se och
- * att flytta fokus till. Redigeringen behåller sina fält i dagens ordning, utan
- * rubriken.
+ * Resten — beskrivningen, containerns tomma fält, itemets egna tomma fält och,
+ * med fler än ett konto, kontot — står i en `<details>` med rubriken *More
+ * details*, hopfälld från början. Sedan issue 420
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5) är de sex fasta fälten
+ * containerns fält och ritas av samma `FieldValueField` som alla andra.
+ * Fälten ligger alltid i DOM:en, och det är `<details>` som fäller ihop dem,
+ * inte en `v-if` (samma linje som AccessLevelField). Kommer servern tillbaka
+ * med ett fel på ett av dem fälls avsnittet ut av sig självt, så att felet går
+ * att se och att flytta fokus till. Redigeringen behåller sina fält i dagens
+ * ordning, utan rubriken.
  *
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
  * felen renderas av FormField vid sitt fält ([[ADR-0021 Frontendteknik]]).
@@ -225,9 +227,9 @@ const initialFieldRows = () => incomingFields.value.map((field) => ({
 
 /*
  * Fältet har ett sparat värde: då står det direkt i formuläret. Ett tomt fält
- * ligger under *More details* vid skapandet, som de sex fasta fälten gör.
- * Frågan ställs mot det SPARADE värdet och inte mot det man skriver just nu,
- * så en rad inte hoppar mellan avsnitten mitt i en mening.
+ * ligger under *More details* vid skapandet, som containerns övriga tomma
+ * fält gör. Frågan ställs mot det SPARADE värdet och inte mot det man skriver
+ * just nu, så en rad inte hoppar mellan avsnitten mitt i en mening.
  */
 const hasStoredValue = (field) => field.value !== null && field.value !== undefined && field.value !== '';
 
@@ -237,12 +239,6 @@ const foldedFields = computed(() => incomingFields.value.filter((field) => ! has
 const fields = {
     name: props.item?.name ?? '',
     description: props.item?.description ?? '',
-    manufacturer: props.item?.manufacturer ?? '',
-    model: props.item?.model ?? '',
-    serial_number: props.item?.serial_number ?? '',
-    purchased_at: props.item?.purchased_at ?? '',
-    warranty_until: props.item?.warranty_until ?? '',
-    position_note: props.item?.position_note ?? '',
     category: props.item?.category ?? null,
     tags: props.item?.tags?.map((tag) => tag.ulid) ?? [],
     /*
@@ -472,12 +468,6 @@ function removeIcon() {
  */
 const detailFields = [
     'description',
-    'manufacturer',
-    'model',
-    'serial_number',
-    'purchased_at',
-    'warranty_until',
-    'position_note',
     'account',
 ];
 const detailsOpen = ref(false);
@@ -1161,92 +1151,6 @@ function submit() {
                         v-model="form.description"
                         :described-by="describedBy"
                         name="description"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.manufacturer')"
-                    id="manufacturer"
-                    :error="form.errors.manufacturer"
-                >
-                    <UiInput
-                        id="manufacturer"
-                        v-model="form.manufacturer"
-                        :described-by="describedBy"
-                        name="manufacturer"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.model')"
-                    id="model"
-                    :error="form.errors.model"
-                >
-                    <UiInput
-                        id="model"
-                        v-model="form.model"
-                        :described-by="describedBy"
-                        name="model"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.serial_number')"
-                    id="serial_number"
-                    :error="form.errors.serial_number"
-                >
-                    <UiInput
-                        id="serial_number"
-                        v-model="form.serial_number"
-                        :described-by="describedBy"
-                        name="serial_number"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.purchased_at')"
-                    id="purchased_at"
-                    :error="form.errors.purchased_at"
-                >
-                    <UiInput
-                        id="purchased_at"
-                        v-model="form.purchased_at"
-                        :described-by="describedBy"
-                        type="date"
-                        name="purchased_at"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.warranty_until')"
-                    id="warranty_until"
-                    :error="form.errors.warranty_until"
-                >
-                    <UiInput
-                        id="warranty_until"
-                        v-model="form.warranty_until"
-                        :described-by="describedBy"
-                        type="date"
-                        name="warranty_until"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.form.position_note')"
-                    id="position_note"
-                    :error="form.errors.position_note"
-                >
-                    <UiInput
-                        id="position_note"
-                        v-model="form.position_note"
-                        :described-by="describedBy"
-                        name="position_note"
                     />
                 </FormField>
 

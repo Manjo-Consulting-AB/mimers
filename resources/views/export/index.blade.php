@@ -67,30 +67,15 @@
                     <dt>{{ trans('export.description') }}</dt>
                     <dd>{{ $item['description'] }}</dd>
                 @endif
-                @if ($item['manufacturer'] !== null)
-                    <dt>{{ trans('export.manufacturer') }}</dt>
-                    <dd>{{ $item['manufacturer'] }}</dd>
-                @endif
-                @if ($item['model'] !== null)
-                    <dt>{{ trans('export.model') }}</dt>
-                    <dd>{{ $item['model'] }}</dd>
-                @endif
-                @if ($item['serial_number'] !== null)
-                    <dt>{{ trans('export.serial_number') }}</dt>
-                    <dd>{{ $item['serial_number'] }}</dd>
-                @endif
-                @if ($item['purchased_at'] !== null)
-                    <dt>{{ trans('export.purchased_at') }}</dt>
-                    <dd>{{ $item['purchased_at'] }}</dd>
-                @endif
-                @if ($item['warranty_until'] !== null)
-                    <dt>{{ trans('export.warranty_until') }}</dt>
-                    <dd>{{ $item['warranty_until'] }}</dd>
-                @endif
-                @if ($item['position_note'] !== null)
-                    <dt>{{ trans('export.position_note') }}</dt>
-                    <dd>{{ $item['position_note'] }}</dd>
-                @endif
+                {{-- Itemets fält med sina värden (issue 420). Rubriken är
+                     användarens egen och översätts därför inte; ett tomt
+                     fält ritas inte. --}}
+                @foreach ($item['fields'] as $field)
+                    @if ($field['value'] !== null)
+                        <dt>{{ $field['label'] }}</dt>
+                        <dd>{{ $field['value'] }}</dd>
+                    @endif
+                @endforeach
             </dl>
 
             @if (count($item['tags']) > 0)

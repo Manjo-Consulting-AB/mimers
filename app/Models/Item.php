@@ -32,10 +32,17 @@ use Laravel\Scout\Searchable;
  * `Container::$account_id`. `created_at`/`updated_at` timestamps are set by
  * Eloquent.
  *
- * `model` is a column name here — `$item->model` is a product designation,
- * not an Eloquent model. It is the document's name and does not change.
+ * **The six fixed fields are no longer item columns here.** `manufacturer`,
+ * `model`, `serial_number`, `purchased_at`, `warranty_until` and
+ * `position_note` are container fields with their values in
+ * `item_field_value` since issue 420 ([[ADR-0089 Egna fält på items]]
+ * § Riktning 5). The columns stay on the table until issue 425 but are
+ * neither mass-assignable nor searched through this model. The casts for the
+ * two date columns stay only so MCP's reads (out of scope until issue 423)
+ * keep returning dates through `?->toDateString()`; they go with the columns
+ * in 425.
  */
-#[Fillable(['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'icon', 'icon_color'])]
+#[Fillable(['name', 'description', 'notes', 'icon', 'icon_color'])]
 #[RouteKey('ulid')]
 class Item extends Model
 {
@@ -67,6 +74,11 @@ class Item extends Model
      * `toIso8601String()`, a purchase date has no timezone, see issue 13a
      * § Beslut 5.
      *
+     * The two casts remain after issue 420 only because the MCP tools read
+     * the columns until issue 423 and call `->toDateString()` on them; they
+     * go with the columns in issue 425. Nothing in `app/` outside `app/Mcp/`
+     * reads them.
+     *
      * @return array<string, string>
      */
     protected function casts(): array
@@ -78,21 +90,22 @@ class Item extends Model
     }
 
     /**
-     * The searchable columns, issue 15b § Beslut 3 — the document's six
-     * columns, same as the FULLTEXT index: the five from 13a § Beslut 4 plus
-     * `notes`, which issue 96 added to both lists in the same migration. The
-     * database driver searches these via Scout's LIKE formulation; the keys
-     * are the columns, the values are ignored by the engine.
+     * The searchable columns, issue 15b § Beslut 3 and now issue 420: the
+     * item's own text columns — `name`, `description` and `notes`. The six
+     * fixed fields are no longer item columns. Their values are searched
+     * through `item_field_value.value_text` by
+     * App\Models\Item::scopeMatchingText(), which is the one place the app
+     * formulates "what free text matches".
      *
-     * The two lists are documented mirrors and must not drift apart: a column
-     * the index carries but this array does not is never searched, and a key
-     * here without an index is a full scan. tests/Feature/Item/
-     * AnteckningsfaltTest compares them column for column.
+     * The keys are the columns, the values are ignored by the engine. The
+     * FULLTEXT index on `item` still carries the six columns until issue
+     * 425, so the two lists are a documented mirror only after the columns
+     * are dropped — tests/Feature/Item/AnteckningsfaltTest says so.
      *
      * No #[SearchUsingFullText] on purpose: that attribute makes Scout emit
      * `whereFullText(...)`, which MariaDB handles and SQLite (the in-memory
      * test database) does not — the suite would fall on every search
-     * (Beslut 3). The FULLTEXT index therefore stays unused until CI runs
+     * (Beslut 3). The FULLTEXT indexes therefore stay unused until CI runs
      * against MariaDB or Meilisearch arrives; turning it on is one line.
      *
      * @return array<string, mixed>
@@ -103,10 +116,52 @@ class Item extends Model
             'name' => $this->name,
             'description' => $this->description,
             'notes' => $this->notes,
-            'manufacturer' => $this->manufacturer,
-            'model' => $this->model,
-            'serial_number' => $this->serial_number,
         ];
+    }
+
+    /**
+     * Begränsar frågan till de items vars fritext matchar $term: itemets egna
+     * textkolumner (`toSearchableArray()`) och de textvärden som hör till
+     * itemet i `item_field_value.value_text` — issue 420 och
+     * [[Items och organisation]] § Sök och filtrering.
+     *
+     * **Formuleringen bor HÄR** därför att båda sökvägarna
+     * (App\Actions\Item\SearchAccessibleItems och
+     * App\Actions\Item\ListItems) måste söka samma sak: en andra avskrift
+     * glider isär precis som en andra formulering av "vad mottagaren når".
+     *
+     * `%term%` och inte `whereFullText`: samma LIKE-formulering som Scout's
+     * databasdrivrutin använder i dag, och den enda som SQLite i testsviten
+     * klarar (se toSearchableArray()). `item_field_value.value_text` bär
+     * dessutom ett eget FULLTEXT-index, redo när sökningen flyttas till
+     * MariaDB eller Meilisearch.
+     *
+     * Ett värde i ett fält som ligger i papperskorgen räknas inte: fältet
+     * syns inte på itemet och ska inte heller göra det i sökningen
+     * ([[ADR-0089 Egna fält på items]] § Riktning 3).
+     *
+     * @param  Builder<Item>  $query
+     * @return Builder<Item>
+     */
+    public function scopeMatchingText(Builder $query, string $term): Builder
+    {
+        $like = '%'.$term.'%';
+        $columns = array_keys($this->toSearchableArray());
+
+        return $query->where(function (Builder $query) use ($like, $columns): void {
+            foreach ($columns as $column) {
+                $query->orWhere($query->qualifyColumn($column), 'like', $like);
+            }
+
+            $query->orWhereExists(function ($sub) use ($like): void {
+                $sub->selectRaw('1')
+                    ->from('item_field_value')
+                    ->join('item_field', 'item_field.id', '=', 'item_field_value.item_field_id')
+                    ->whereColumn('item_field_value.item_id', 'item.id')
+                    ->whereNull('item_field.deleted_at')
+                    ->where('item_field_value.value_text', 'like', $like);
+            });
+        });
     }
 
     /**

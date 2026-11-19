@@ -11,9 +11,14 @@ use Illuminate\Validation\Rule;
 /**
  * POST /api/containers/{container}/items, see issue 13a § Beslut 5–7 and
  * issue 13b § Beslut 2–5. The body is `{"name", "description"?, "notes"?,
- * "manufacturer"?, "model"?, "serial_number"?, "purchased_at"?,
- * "warranty_until"?, "position_note"?, "category"?, "tags"?, "parent"?,
- * "account"}`.
+ * "icon"?, "icon_color"?, "category"?, "tags"?, "parent"?, "account"?,
+ * "fields"?}`.
+ *
+ * Sedan issue 420 ([[ADR-0089 Egna fält på items]] § Riktning 5) finns inte
+ * `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until`
+ * eller `position_note` i reglerna: de är containerns fält nu och skrivs som
+ * `fields`. En kropp som ändå skickar dem får dem tyst ignorerade — de finns
+ * inte i `validated()`.
  *
  * `account` is a required account-ULID — the account the item is
  * attributed to, never a server-side "active account", see § Beslut 6. A
@@ -45,9 +50,6 @@ use Illuminate\Validation\Rule;
  * in rules() and each element is then checked in memory with `Rule::in` —
  * a `Rule::exists` per element would run a `count(*)` query per tag, see §
  * Beslut 6.
- *
- * `purchased_at` and `warranty_until` validate with `date_format:Y-m-d`,
- * NOT `date` — the latter accepts "next tuesday", see § Beslut 5.
  *
  * `description` is TEXT, not VARCHAR, so it has no `max:255` — see § Att
  * se upp med. No length rule at all. `notes` (issue 96) is TEXT too and
@@ -141,12 +143,6 @@ class StoreItemRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
-            'manufacturer' => ['nullable', 'string', 'max:255'],
-            'model' => ['nullable', 'string', 'max:255'],
-            'serial_number' => ['nullable', 'string', 'max:255'],
-            'purchased_at' => ['nullable', 'date_format:Y-m-d'],
-            'warranty_until' => ['nullable', 'date_format:Y-m-d'],
-            'position_note' => ['nullable', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
             'icon_color' => ['nullable', Rule::in(Item::ICON_COLORS)],
             'category' => [

@@ -44,10 +44,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * "saknas" från "tomt". Resursen hittar inget namn åt den — den som vill
  * visa *Removed account* formulerar det själv.
  *
- * Dates: `purchased_at`/`warranty_until` are DATE columns and serialize
- * with `toDateString()` ("2024-05-17"), never `toIso8601String()` — see
- * § Beslut 5. `created_at`/`updated_at` are timestamps and keep
+ * Dates: `created_at`/`updated_at` are timestamps and keep
  * `toIso8601String()`, like ContainerResource.
+ *
+ * Sedan issue 420 ([[ADR-0089 Egna fält på items]] § Riktning 5) finns inte
+ * `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until`
+ * eller `position_note` som egna nycklar: de är containerns fält och står i
+ * `fields` med sin rubrik, typ och sitt värde, som varje annat fält. Kolumnerna
+ * på tabellen rörs inte förrän issue 425.
  *
  * `category` and `createdByAccount` are read through the relations, so
  * the controller must load them (index: `->with([...])`, show/update:
@@ -101,12 +105,6 @@ class ItemResource extends JsonResource
             'name' => $this->name,
             'description' => $this->description,
             'notes' => $this->notes,
-            'manufacturer' => $this->manufacturer,
-            'model' => $this->model,
-            'serial_number' => $this->serial_number,
-            'purchased_at' => $this->purchased_at?->toDateString(),
-            'warranty_until' => $this->warranty_until?->toDateString(),
-            'position_note' => $this->position_note,
             'icon' => $this->icon,
             'icon_color' => $this->icon_color,
             'category' => $this->category?->ulid,
