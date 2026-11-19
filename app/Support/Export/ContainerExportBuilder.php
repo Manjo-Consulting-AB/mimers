@@ -8,6 +8,8 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Export;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\Schedule;
@@ -82,7 +84,7 @@ class ContainerExportBuilder
         // med i ZIP:en (issue 158), och en lat läsning per bilaga vore en
         // fråga per export i stället för två.
         $container = Container::query()
-            ->with(['categories', 'tags', 'coverAttachment.storedFile'])
+            ->with(['categories', 'tags', 'fields', 'coverAttachment.storedFile'])
             ->findOrFail($export->container_id);
 
         // Upplösningen sker här och inte i konstruktorn: `scoped()` tömmer
@@ -104,7 +106,7 @@ class ContainerExportBuilder
 
         $items = $container->items()
             ->inScope($scope)
-            ->with(['category', 'tags', 'attachments.storedFile', 'schedules.occurrences', 'loans'])
+            ->with(['category', 'tags', 'attachments.storedFile', 'schedules.occurrences', 'loans', 'ownFields', 'fieldValues'])
             ->orderBy('id')
             ->get();
 
@@ -130,7 +132,7 @@ class ContainerExportBuilder
         }
 
         try {
-            $itemArrays = $this->buildItems($items, $zip, $disk);
+            $itemArrays = $this->buildItems($items, $container, $zip, $disk);
 
             $this->addLinks($itemArrays, $items);
 
@@ -166,10 +168,15 @@ class ContainerExportBuilder
      * Nyckeln är itemets löpnummer så att addLinks() kan hitta rätt array;
      * payload() gör om den till en lista.
      *
+     * **Fälten, inte de sex kolumnerna** (issue 420 · [[ADR-0089 Egna fält på
+     * items]] § Riktning 5 och 9): varje item bär `fields` med rubrik, typ och
+     * värde — containerns fält först i `position`-ordning och sedan itemets
+     * egna. Raderna är redan eager-laddade, så exporten förblir N+1-fri.
+     *
      * @param  Collection<int, Item>  $items
      * @return array<int, array<string, mixed>>
      */
-    private function buildItems($items, ZipArchive $zip, FilesystemAdapter $disk): array
+    private function buildItems($items, Container $container, ZipArchive $zip, FilesystemAdapter $disk): array
     {
         $itemArrays = [];
 
@@ -201,12 +208,10 @@ class ContainerExportBuilder
                 'ulid' => $item->ulid,
                 'name' => $item->name,
                 'description' => $item->description,
-                'manufacturer' => $item->manufacturer,
-                'model' => $item->model,
-                'serial_number' => $item->serial_number,
-                'purchased_at' => self::toDate($item->purchased_at),
-                'warranty_until' => self::toDate($item->warranty_until),
-                'position_note' => $item->position_note,
+                // Itemets fält med värden (issue 420). Ett fält utan värde
+                // står kvar med `value: null`, som varje annan nullbar nyckel
+                // i filen; vyn ritar det inte.
+                'fields' => $this->fieldEntries($item, $container),
                 // Itemets ikon och palettnyckel (issue 301 ·
                 // [[ADR-0060 Itemets ikon]] § 7). Alltid med som nycklar,
                 // även som null, som resten av itemets innehåll.
@@ -516,6 +521,56 @@ class ContainerExportBuilder
         // en levande kategori, men en kategori som mjukraderats efter att
         // itemet lästs ska inte fälla exporten.
         return $item->category?->ulid;
+    }
+
+    /**
+     * Itemets fältrader i exporten: containerns fält i `position`-ordning
+     * först, sedan itemets egna, med rubrik, typ och värde (issue 420 ·
+     * [[ADR-0089 Egna fält på items]] § Riktning 9). Fält i papperskorgen
+     * följer med SoftDeletes-scopet och syns därför inte — samma regel som i
+     * App\Http\Resources\ItemResource::fields().
+     *
+     * `container` har redan sina `fields` eager-laddade; itemets `ownFields`
+     * och `fieldValues` laddades i build().
+     *
+     * @return list<array{label: string, type: string, value: string|null}>
+     */
+    private function fieldEntries(Item $item, Container $container): array
+    {
+        $values = $item->fieldValues->keyBy('item_field_id');
+
+        return $container->fields
+            ->concat($item->ownFields)
+            ->map(function (ItemField $field) use ($values): array {
+                $row = $values->get($field->id);
+
+                return [
+                    'label' => $field->label,
+                    'type' => $field->type,
+                    'value' => $this->fieldValue($field, $row),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Värdet som en sträng, eller null när raden saknas. Ett tal är alltid
+     * en decimalsträng, ett datum `Y-m-d` — samma form som
+     * App\Http\Resources\ItemResource::fieldValue() ger
+     * ([[ADR-0089 Egna fält på items]] § Riktning 9).
+     */
+    private function fieldValue(ItemField $field, ?ItemFieldValue $row): ?string
+    {
+        if ($row === null) {
+            return null;
+        }
+
+        return match ($field->type) {
+            'number' => $row->value_number,
+            'date' => $row->value_date?->toDateString(),
+            default => $row->value_text,
+        };
     }
 
     /**

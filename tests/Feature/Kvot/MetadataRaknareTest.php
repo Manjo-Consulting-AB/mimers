@@ -91,10 +91,6 @@ it('MetadataSize räknar byte och inte tecken', function () {
     $item = Item::factory()->make([
         'name' => 'åäö',
         'description' => null,
-        'manufacturer' => null,
-        'model' => null,
-        'serial_number' => null,
-        'position_note' => null,
     ]);
 
     expect(mb_strlen('åäö'))->toBe(3);
@@ -103,12 +99,13 @@ it('MetadataSize räknar byte och inte tecken', function () {
 });
 
 it('MetadataSize summerar alla fritextkolumner och ofAttributes ger samma tal som of', function () {
+    // De sex fasta fälten räknas inte längre på itemraden (issue 420): deras
+    // värden bor i item_field_value. Kvar är itemets tre textkolumner.
     $item = Item::factory()->make([
-        'name' => 'a', 'description' => 'bb', 'notes' => 'ccc', 'manufacturer' => 'dddd',
-        'model' => 'eeeee', 'serial_number' => 'ffffff', 'position_note' => 'ggggggg',
+        'name' => 'a', 'description' => 'bb', 'notes' => 'ccc',
     ]);
 
-    expect(MetadataSize::of($item))->toBe(1 + 2 + 3 + 4 + 5 + 6 + 7 + 256);
+    expect(MetadataSize::of($item))->toBe(1 + 2 + 3 + 256);
     expect(MetadataSize::ofAttributes('item', $item->getAttributes()))->toBe(MetadataSize::of($item));
     expect(MetadataSize::ofAttributes('loan', ['borrower_name' => 'Åsa', 'borrower_email' => null, 'note' => 'x']))
         ->toBe(4 + 1 + 256);

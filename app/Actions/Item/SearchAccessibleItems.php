@@ -30,14 +30,16 @@ use Illuminate\Database\Eloquent\Collection;
  * (`Api\ItemSearchController::index()` och
  * `App\Http\Controllers\SearchController::index()`) ligger bakom `auth`.
  *
- * Sökningen går via Scouts databasdrivrutin: en `LIKE`-formulering över
- * Item::toSearchableArray()s fem kolumner (issue 15b § Beslut 3), ingen
- * relevansordning utan `name` stigande (Beslut 7), taggarna laddas i förväg
- * så 13b § Beslut 10:s N+1-skydd inte förloras (Beslut 9). `container` laddas
- * däremot INTE här: `/api` bad aldrig om containern, och att ladda den i den
- * delade `with([...])` är en extra fråga på en rutt som ska svara exakt som
- * förut (issue 59b Klart när). Behöver en anropare containern — webbens sida gör
- * det, varje träff ska kunna säga vilken container den ligger i (Beslut 3) — laddar
+ * Sökningen går över `name`, `description` och `notes` samt textvärdena i
+ * `item_field_value` — formuleringen bor i
+ * `Item::scopeMatchingText()` så att den här vägen och
+ * App\Actions\Item\ListItems söker samma sak (issue 420). Ingen
+ * relevansordning utan `name` stigande, taggarna laddas i förväg så
+ * 13b § Beslut 10:s N+1-skydd inte förloras. `container` laddas däremot INTE
+ * här: `/api` bad aldrig om containern, och att ladda den i den delade
+ * `with([...])` är en extra fråga på en rutt som ska svara exakt som förut
+ * (issue 59b Klart när). Behöver en anropare containern — webbens sida gör
+ * det, varje träff ska kunna säga vilken container den ligger i — laddar
  * den den själv, riktat, efter anropet.
  *
  * Åtkomstvillkoret är utbrutet till `Container::scopeAccessibleBy()`
@@ -77,7 +79,7 @@ class SearchAccessibleItems
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
-     * Alla items användaren når vars fem sökbara kolumner matchar $q,
+     * Alla items användaren når vars fritext matchar $q,
      * sorterade på namn.
      *
      * **`$onlyContainerIds` kom med issue 403** (MCP-verktyget `items_search`).
@@ -123,31 +125,26 @@ class SearchAccessibleItems
             }
         }
 
-        return Item::search($q)
-            ->query(function (Builder $query) use ($user, $accountIds, $unrestrictedContainerIds, $itemIds, $onlyContainerIds, $refine) {
-                $query
-                    ->when($onlyContainerIds !== null, fn (Builder $query) => $query->whereIn('item.container_id', $onlyContainerIds))
-                    ->whereHas('container', function (Builder $query) use ($user, $accountIds) {
-                        /** @var Builder<Container> $query */
-                        $query->accessibleBy($user, $accountIds);
-                    })
-                    ->where(function (Builder $query) use ($unrestrictedContainerIds, $itemIds) {
-                        $query->whereIn('item.id', []);
+        return Item::query()
+            ->matchingText($q)
+            ->when($onlyContainerIds !== null, fn (Builder $query) => $query->whereIn('item.container_id', $onlyContainerIds))
+            ->whereHas('container', function (Builder $query) use ($user, $accountIds) {
+                /** @var Builder<Container> $query */
+                $query->accessibleBy($user, $accountIds);
+            })
+            ->where(function (Builder $query) use ($unrestrictedContainerIds, $itemIds) {
+                $query->whereIn('item.id', []);
 
-                        if ($unrestrictedContainerIds !== []) {
-                            $query->orWhereIn('item.container_id', $unrestrictedContainerIds);
-                        }
+                if ($unrestrictedContainerIds !== []) {
+                    $query->orWhereIn('item.container_id', $unrestrictedContainerIds);
+                }
 
-                        if ($itemIds !== []) {
-                            $query->orWhereIn('item.id', $itemIds);
-                        }
-                    })
-                    ->with(['category', 'createdByAccount', 'tags']);
-
-                if ($refine !== null) {
-                    $refine($query);
+                if ($itemIds !== []) {
+                    $query->orWhereIn('item.id', $itemIds);
                 }
             })
+            ->with(['category', 'createdByAccount', 'tags'])
+            ->when($refine !== null, fn (Builder $query) => $refine($query))
             ->orderBy('name')
             ->get();
     }

@@ -7,6 +7,8 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Export;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -275,6 +277,64 @@ it('container.json bär itemets ikon och färg', function () {
     expect($items['Utan ikon'])->toHaveKey('icon_color');
     expect($items['Utan ikon']['icon'])->toBeNull();
     expect($items['Utan ikon']['icon_color'])->toBeNull();
+});
+
+it('container.json bär itemets fält och värden i stället för de sex kolumnerna', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    $tillverkare = ItemField::factory()->for($container, 'container')->create([
+        'label' => 'Manufacturer', 'type' => 'text', 'position' => 1,
+    ]);
+    $inkop = ItemField::factory()->for($container, 'container')->create([
+        'label' => 'Purchase date', 'type' => 'date', 'position' => 2,
+    ]);
+
+    $item = exporteringItem($container, $account, $user, ['name' => 'Prylen']);
+    $eget = ItemField::factory()->forItem($item)->create([
+        'label' => 'Liter', 'type' => 'text', 'position' => 1,
+    ]);
+
+    ItemFieldValue::factory()->create([
+        'item_id' => $item->id,
+        'item_field_id' => $tillverkare->id,
+        'value_text' => 'Victron',
+        'billed_account_id' => $account->id,
+    ]);
+    ItemFieldValue::factory()->create([
+        'item_id' => $item->id,
+        'item_field_id' => $inkop->id,
+        'value_text' => null,
+        'value_date' => '2024-05-17',
+        'billed_account_id' => $account->id,
+    ]);
+    ItemFieldValue::factory()->create([
+        'item_id' => $item->id,
+        'item_field_id' => $eget->id,
+        'value_text' => '40',
+        'billed_account_id' => $account->id,
+    ]);
+
+    $export = exporteringBeställOchKör($headers, $container);
+
+    $zip = new ZipArchive;
+    expect($zip->open(Storage::disk('files')->path($export->storage_path)))->toBeTrue();
+    $json = $zip->getFromName('container.json');
+    $payload = json_decode($json, true);
+    $zip->close();
+
+    $exported = $payload['items'][0];
+
+    // Rubrik, typ och värde — containerns fält först, itemets egna efter.
+    expect($exported['fields'])->toBe([
+        ['label' => 'Manufacturer', 'type' => 'text', 'value' => 'Victron'],
+        ['label' => 'Purchase date', 'type' => 'date', 'value' => '2024-05-17'],
+        ['label' => 'Liter', 'type' => 'text', 'value' => '40'],
+    ]);
+
+    // Och inte de sex gamla nycklarna.
+    foreach (['manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'] as $kolumn) {
+        expect($exported)->not->toHaveKey($kolumn);
+    }
 });
 
 it('container.json bär containerns ikon och färg', function () {

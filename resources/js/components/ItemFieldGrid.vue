@@ -1,6 +1,5 @@
 <script setup>
 import { computed } from 'vue';
-import { itemFields } from './itemPresentation.js';
 import { customFieldRows } from './fields/fieldPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -8,13 +7,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Fältrutnätet på itemets översikt ([[ADR-0068 Itemets sida och skapandet]]
  * § 5, punkt 1): varje ifyllt fält, i ett rutnät med två kolumner från `md:`.
  *
- * Kategorin står först, sedan de fält `itemFields()` ger i datamodellens
- * ordning. Ett tomt fält ritas inte — regeln bor i `itemFields()` och
- * kategorins motsvarighet är att namnet saknas — och utan något ifyllt fält
- * ritas ingenting alls, ingen rubrik och ingen tom ruta. Det finns ingen rubrik
- * *Quick facts* och ingen länk till en annan flik: alla fält står här.
+ * Kategorin står först, sedan itemets fält i den ordning servern gav dem —
+ * containerns först och itemets egna efter. Sedan issue 420
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5) är de sex fasta fälten
+ * containerns fält och kommer ur samma `customFieldRows()` som de egna; det
+ * finns ingen särskild lista för dem längre. Ett tomt fält ritas inte — regeln
+ * bor i `customFieldRows()` och kategorins motsvarighet är att namnet saknas —
+ * och utan något ifyllt fält ritas ingenting alls, ingen rubrik och ingen tom
+ * ruta.
  *
- * Etiketten är `item.show.<key>`, densamma som fältet alltid haft.
+ * Etiketten är fältets egen rubrik, som är användarens text; bara kategorin
+ * slås upp i `lang/`.
  */
 const props = defineProps({
     /* Itemet ur detaljvyns props, ur App\Http\Resources\ItemResource. */
@@ -27,25 +30,15 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
-/*
- * Kategorin och de sex fasta fälten först, sedan itemets EGNA fält (issue 419
- * · [[ADR-0089 Egna fält på items]] § Riktning 1–2). De egna raderna kommer
- * ur customFieldRows(), som filtrerar bort tomma värden och formaterar tal
- * och datum efter typ — samma två regler som de fasta fälten lyder, i samma
- * modul som formuläret använder. Rubriken är användarens egen och slås inte
- * upp i `lang/`; systemet vet inte vad den betyder.
- */
-const fixedFields = computed(() => {
-    const rows = itemFields(props.item, props.locale);
+const fields = computed(() => {
+    const rows = customFieldRows(props.item, props.locale);
 
     if (props.categoryName !== null && props.categoryName !== '') {
-        rows.unshift({ key: 'category', value: props.categoryName });
+        rows.unshift({ key: 'category', label: t('item.show.category'), value: props.categoryName });
     }
 
-    return rows.map((field) => ({ ...field, label: t(`item.show.${field.key}`) }));
+    return rows;
 });
-
-const fields = computed(() => [...fixedFields.value, ...customFieldRows(props.item, props.locale)]);
 </script>
 
 <template>

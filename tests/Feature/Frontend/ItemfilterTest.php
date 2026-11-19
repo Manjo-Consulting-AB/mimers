@@ -7,6 +7,8 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\ItemField;
+use App\Models\ItemFieldValue;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -249,13 +251,15 @@ function itemfilterFrågor(Closure $värm, Closure $anrop): int
 
 /*
  * Klart när: `/containers/{c}?q=...` filtrerar listan på fritext över namn,
- * beskrivning, tillverkare, modell och serienummer.
+ * beskrivning, anteckning och fältens textvärden.
  *
- * Termen ligger i EN kolumn per item, så ett filter som bara såg `name` hade
- * gett ett svar — ett kortare. Kontrollitemet utan termen bevisar att
- * filtret inte svarar med hela containern.
+ * Termen ligger i EN kolumn eller ETT fält per item, så ett filter som bara
+ * såg `name` hade gett ett svar — ett kortare. Kontrollitemet utan termen
+ * bevisar att filtret inte svarar med hela containern. Sedan issue 420 är
+ * tillverkare, modell och serienummer containerns fält
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5).
  */
-it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
+it('filtrerar på fritext över de sökbara kolumnerna och fältens textvärden', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare] = itemfilterPärm();
@@ -265,11 +269,26 @@ it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
     foreach ([
         ['name' => "A $term"],
         ['description' => "B $term"],
-        ['manufacturer' => "C $term"],
-        ['model' => "D $term"],
-        ['serial_number' => "E $term"],
+        ['notes' => "C $term"],
     ] as $kolumn) {
         itemfilterItem($container, 'Item', $anvandare, $kolumn);
+    }
+
+    foreach ([['Manufacturer', 1], ['Model', 2], ['Serial number', 3]] as [$label, $position]) {
+        $falt = ItemField::factory()->for($container, 'container')->create([
+            'label' => $label,
+            'type' => 'text',
+            'position' => $position,
+        ]);
+
+        $item = itemfilterItem($container, $label, $anvandare);
+
+        ItemFieldValue::factory()->create([
+            'item_id' => $item->id,
+            'item_field_id' => $falt->id,
+            'value_text' => $term,
+            'billed_account_id' => $container->account_id,
+        ]);
     }
 
     itemfilterItem($container, 'Kontrollen', $anvandare);
@@ -280,16 +299,16 @@ it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
         ->where('filter.q', $term)
     );
 
-    expect(itemfilterNamn($svar))->toHaveCount(5);
+    expect(itemfilterNamn($svar))->toHaveCount(6);
     expect(itemfilterNamn($svar))->not->toContain('Kontrollen');
 
-    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela containern, tio
-    // rader, inte noll.
+    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela containern,
+    // elva rader, inte noll.
     $blank = actingAs($anvandare)->get(itemfilterUrl($container, ['q' => '   ']))->assertOk();
 
     $blank->assertInertia(fn (AssertableInertia $page) => $page->where('filter.q', null));
 
-    expect(itemfilterNamn($blank))->toHaveCount(10);
+    expect(itemfilterNamn($blank))->toHaveCount(11);
 });
 
 /*

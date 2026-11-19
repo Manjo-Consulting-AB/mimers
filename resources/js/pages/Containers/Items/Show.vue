@@ -27,7 +27,7 @@ import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { coverUrl } from '../../../components/coverPresentation.js';
 import { customFieldRows } from '../../../components/fields/fieldPresentation.js';
-import { formatDateOnly, itemFields } from '../../../components/itemPresentation.js';
+import { formatDateOnly } from '../../../components/itemPresentation.js';
 import { useCreationUpload } from '../../../composables/useCreationUpload.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
@@ -468,9 +468,12 @@ onBeforeUnmount(() => {
 const locale = computed(() => page.props.locale);
 
 /*
- * Itemets egna fält, filtrerade och formaterade i
- * resources/js/components/itemPresentation.js — se den modulens docblock för
- * varför tomma rader utelämnas och varför datumen inte räknas om.
+ * Itemets fältrader, filtrerade och formaterade i
+ * resources/js/components/fields/fieldPresentation.js — se den modulens
+ * docblock för varför tomma rader utelämnas och varför datumen inte räknas
+ * om. Sedan issue 420 ([[ADR-0089 Egna fält på items]] § Riktning 5) räknas
+ * containerns fält med på samma sätt som itemets egna; de sex fasta fälten
+ * har ingen egen väg längre.
  *
  * Det här är FÄLTRADERNA på översiktsfliken, under itemets ledande stycken.
  * `description` och `notes` står inte bland dem: de är styckena och hade i en
@@ -478,18 +481,11 @@ const locale = computed(() => page.props.locale);
  * och 102).
  */
 /*
- * Sedan issue 419 räknas de EGNA fälten med: frågan är om itemet är
- * oskrivet, och ett item vars enda uppgift står i ett eget fält är skrivet.
- * Rutnätet ritar båda sorterna (ItemFieldGrid), så den här listan är bara
- * underlaget för `overviewEmpty` nedan.
+ * Frågan är om itemet är oskrivet, och ett item vars enda uppgift står i ett
+ * fält är skrivet. Rutnätet ritar fälten (ItemFieldGrid), så den här listan
+ * är bara underlaget för `overviewEmpty` nedan.
  */
-const fields = computed(() => [
-    ...itemFields(props.item, locale.value).map((field) => ({
-        ...field,
-        label: t(`item.show.${field.key}`),
-    })),
-    ...customFieldRows(props.item, locale.value),
-]);
+const fields = computed(() => customFieldRows(props.item, locale.value));
 
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
@@ -196,8 +197,6 @@ it('skapar ett item med kategori och taggar och landar på detaljvyn', function 
 
     $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/items", itemformKropp($konto, [
         'description' => 'En diesel.',
-        'manufacturer' => 'Yanmar',
-        'purchased_at' => '2024-05-17',
         'category' => $kategori->ulid,
         'tags' => [$tagg->ulid],
     ]));
@@ -209,8 +208,6 @@ it('skapar ett item med kategori och taggar och landar på detaljvyn', function 
 
     expect($item->name)->toBe('Motorn')
         ->and($item->description)->toBe('En diesel.')
-        ->and($item->manufacturer)->toBe('Yanmar')
-        ->and($item->purchased_at->toDateString())->toBe('2024-05-17')
         ->and($item->category_id)->toBe($kategori->id)
         ->and($item->container_id)->toBe($container->id)
         ->and($item->created_by_user_id)->toBe($anvandare->id)
@@ -319,12 +316,6 @@ it('ändrar fälten, byter kategori och ersätter hela taggmängden', function (
     actingAs($anvandare)->patch($url, itemformKropp($konto, [
         'name' => 'Nya motorn',
         'description' => 'Bytte impeller.',
-        'manufacturer' => 'Yanmar',
-        'model' => '3YM30',
-        'serial_number' => 'SN-42',
-        'purchased_at' => '2024-05-17',
-        'warranty_until' => '2027-05-17',
-        'position_note' => 'Bakom panelen',
         'category' => $el->ulid,
         'tags' => [$viktig->ulid],
     ]))->assertRedirect($url)->assertSessionHas('status', 'item-updated');
@@ -333,8 +324,6 @@ it('ändrar fälten, byter kategori och ersätter hela taggmängden', function (
 
     expect($item->name)->toBe('Nya motorn')
         ->and($item->description)->toBe('Bytte impeller.')
-        ->and($item->serial_number)->toBe('SN-42')
-        ->and($item->warranty_until->toDateString())->toBe('2027-05-17')
         ->and($item->category_id)->toBe($el->id)
         ->and($item->tags()->pluck('tag.id')->all())->toBe([$viktig->id]);
 
@@ -452,12 +441,20 @@ it('lägger valideringsfelen på sina egna fält och behåller inmatningen', fun
 
     expect(Item::query()->count())->toBe(0);
 
+    $datum = ItemField::factory()->for($container, 'container')->create([
+        'label' => 'Purchase date',
+        'type' => 'date',
+        'position' => 1,
+    ]);
+
     actingAs($anvandare)
         ->post("/containers/{$container->ulid}/items", itemformKropp($konto, [
             'name' => 'Motorn',
-            'purchased_at' => 'next tuesday',
+            'fields' => [
+                ['field' => $datum->ulid, 'value' => 'next tuesday'],
+            ],
         ]))
-        ->assertSessionHasErrors('purchased_at')
+        ->assertSessionHasErrors('fields.0.value')
         // Fältet behåller det användaren skrev — felet tömmer inte formuläret.
         ->assertSessionHasInput('name', 'Motorn');
 
@@ -896,9 +893,20 @@ it('lägger de övriga fälten under More details som är hopfällt från börja
     $slut = (int) strpos($kod, '</component>', $rubrik);
     $avsnitt = substr($kod, $rubrik, $slut - $rubrik);
 
-    foreach (['description', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'account'] as $falt) {
+    // Sedan issue 420 är de sex fasta fälten containerns fält; kvar under
+    // *More details* är beskrivningen, containerns tomma fält (FieldValueField),
+    // itemets egna tomma fält och kontot.
+    foreach (['description', 'account'] as $falt) {
         expect($avsnitt)->toContain("id=\"{$falt}\"");
     }
+
+    foreach (['manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'] as $falt) {
+        expect($avsnitt)->not->toContain("id=\"{$falt}\"");
+    }
+
+    expect($avsnitt)->toContain('FieldValueField')
+        ->toContain('v-for="field in foldedFields"')
+        ->toContain('v-for="field in incomingFields"');
 
     foreach (['category', 'tags'] as $falt) {
         expect($avsnitt)->not->toContain("id=\"{$falt}\"");
@@ -912,11 +920,13 @@ it('lägger de övriga fälten under More details som är hopfällt från börja
 it('fäller ut More details när servern ger ett fel på ett fält under rubriken', function () {
     $kod = itemformKomponent();
 
-    foreach (['description', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'account'] as $falt) {
+    foreach (['description', 'account'] as $falt) {
         expect($kod)->toContain("'{$falt}',");
     }
 
+    // Ett fel på ett containerns/eget fält fäller också ut avsnittet.
     expect($kod)->toContain('detailFields.some((name) => form.errors[name] !== undefined)')
+        ->toContain("name.startsWith('fields.')")
         ->toContain('watch(detailsHasError, (hasError) => {')
         ->toContain('detailsOpen.value = true;')
         ->toContain('@toggle="item === null && (detailsOpen = $event.target.open)"');
@@ -948,17 +958,14 @@ it('har ingen anteckning i skapaformuläret och behåller redigeringens ordning'
 
     expect($kod)->not->toContain('notes');
 
-    // Redigeringen: ikon, omslag, de sju fälten och sist kategori och taggar.
+    // Redigeringen: ikon, omslag, beskrivningen och sedan fälten. De sex
+    // fasta fälten är containerns fält sedan issue 420 och ritas i samma
+    // `incomingFields`-lista som itemets egna, efter `<template v-if="item
+    // !== null">`.
     $ordning = [
         "t('item.form.name')",
         "t('item.form.cover')",
         "t('item.form.description')",
-        "t('item.form.manufacturer')",
-        "t('item.form.model')",
-        "t('item.form.serial_number')",
-        "t('item.form.purchased_at')",
-        "t('item.form.warranty_until')",
-        "t('item.form.position_note')",
     ];
     $senast = 0;
 

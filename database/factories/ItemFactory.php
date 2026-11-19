@@ -25,12 +25,6 @@ class ItemFactory extends Factory
             'category_id' => null,
             'name' => fake()->words(2, true),
             'description' => null,
-            'manufacturer' => null,
-            'model' => null,
-            'serial_number' => null,
-            'purchased_at' => null,
-            'warranty_until' => null,
-            'position_note' => null,
             'created_by_user_id' => User::factory(),
             'created_by_account_id' => Account::factory(),
             // Betalaren är författaren (ADR-0081 § 3).

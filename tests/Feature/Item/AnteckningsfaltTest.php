@@ -23,9 +23,10 @@ use function Pest\Laravel\postJson;
  *    ingen fallback i ett formulär eller en resurs. `rör inte description ...`
  *    prövar båda riktningarna.
  * 2. **`notes` står i BÅDA listorna.** App\Models\Item::toSearchableArray() och
- *    FULLTEXT-indexet är dokumenterade speglar; `har notes i FULLTEXT-indexet`
- *    jämför dem kolumn för kolumn, och `hittar itemet på ett ord som bara står
- *    i anteckningen` bevisar att fältet faktiskt går att söka i.
+ *    FULLTEXT-indexet; `har anteckningen i FULLTEXT-indexet` prövar att varje
+ *    sökbar kolumn finns i indexet, och `hittar itemet på ett ord som bara står
+ *    i anteckningen` bevisar att fältet faktiskt går att söka i. Sedan issue
+ *    420 bär indexet fortfarande de sex kolumnerna tills 425.
  * 3. **`ItemResource` bär fältet, alltid som `null` när det saknas.** Till
  *    skillnad från omslagsbilden i issue 93, som ligger bredvid resursen.
  * 4. **`#[SearchUsingFullText]` sätts fortfarande inte.** Attributet får Scout
@@ -280,13 +281,12 @@ it('bär anteckningen i ItemResource, som null när den saknas', function () {
  * Klart när: `notes` finns i `Item::toSearchableArray()`.
  */
 it('har anteckningen i sökmängden', function () {
+    // Sedan issue 420 är de sex fasta fälten inte längre itemets kolumner;
+    // deras värden söks i item_field_value.value_text.
     expect(array_keys((new Item)->toSearchableArray()))->toBe([
         'name',
         'description',
         'notes',
-        'manufacturer',
-        'model',
-        'serial_number',
     ]);
 });
 
@@ -294,18 +294,22 @@ it('har anteckningen i sökmängden', function () {
  * Klart när: `notes` finns i FULLTEXT-indexet, lagt i samma migrering som
  * kolumnen.
  *
- * De två listorna är dokumenterade speglar — docblocken över toSearchableArray()
- * säger uttryckligen att de är samma kolumner — och det är just därför de
- * prövas mot varandra i stället för var för sig. En kolumn i indexet som
- * sökmängden inte räknar upp blir aldrig sökt; en nyckel i sökmängden utan
- * index blir en full genomsökning.
+ * Fram till issue 425 bär indexet fortfarande de sex kolumner som blir
+ * containerns fält (issue 420). Spegeln är därför inte exakt längre: varje
+ * kolumn i sökmängden MÅSTE finnas i indexet — en nyckel utan index blir en
+ * full genomsökning — medan indexet får bära fler. När kolumnerna tas bort
+ * blir listorna identiska igen.
  */
-it('har anteckningen i FULLTEXT-indexet, samma kolumner som sökmängden', function () {
+it('har anteckningen i FULLTEXT-indexet, och varje sökbar kolumn finns i indexet', function () {
     $kolumner = anteckningFulltextKolumner();
 
     expect($kolumner)->not->toBeEmpty('inget fullText-anrop hittades för item');
-    expect($kolumner)->toBe(array_keys((new Item)->toSearchableArray()));
     expect($kolumner)->toContain('notes');
+
+    // Varje nyckel i sökmängden finns i indexet — riktningen som betyder
+    // något. Det omvända gäller först när de sex kolumnerna är borta (425).
+    expect(array_values(array_intersect(array_keys((new Item)->toSearchableArray()), $kolumner)))
+        ->toBe(array_keys((new Item)->toSearchableArray()));
 });
 
 /*

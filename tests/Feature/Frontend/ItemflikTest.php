@@ -233,12 +233,12 @@ function itemflikPaneler(string $vy): array
  * väg som ItemdetaljTest och av samma skäl: modulen går att köra, och en mall
  * gör det inte.
  */
-function itemflikKor(string $skript): string
+function itemflikKor(string $skript, string $modul = 'js/components/itemPresentation.js'): string
 {
     $kod = implode("\n", [
         "const { pathToFileURL } = await import('node:url');",
         'const m = await import(pathToFileURL('
-            .json_encode(resource_path('js/components/itemPresentation.js'), JSON_UNESCAPED_SLASHES).').href);',
+            .json_encode(resource_path($modul), JSON_UNESCAPED_SLASHES).').href);',
         $skript,
     ]);
 
@@ -433,14 +433,15 @@ it('alla sex befintliga propar når sin flik', function () {
     }
 
     // Och de sex proparna är desamma som förut: ingen ny ändpunkt, ingen ny
-    // fråga. Fälten kommer ur `itemFields`, de fem listorna ur detaljvyns
-    // props — se ItemController::show().
+    // fråga. Fälten kommer ur samma `ItemResource` som allt annat — sedan
+    // issue 420 ur `customFieldRows()`, som ritar containerns fält och
+    // itemets egna på samma sätt.
     expect($vy)->toContain('<ItemFieldGrid :item="item" :locale="locale"');
 
     $rutnat = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/components/ItemFieldGrid.vue')));
 
-    expect($rutnat)->toContain("import { itemFields } from './itemPresentation.js'")
-        ->toContain('itemFields(props.item, props.locale)');
+    expect($rutnat)->toContain("import { customFieldRows } from './fields/fieldPresentation.js'")
+        ->toContain('customFieldRows(props.item, props.locale)');
 
     // Länken *Show all fields* är borta (issue 332): informationsfliken finns
     // inte längre, och fältrutnätet byggs i issue 333.
@@ -631,7 +632,7 @@ it('flikraden ligger inuti containerns ram', function () {
  * M42 · issue 325 en egen ruta längre ned ([[ADR-0066 Itemets anteckning]]
  * § 4), där den ritas ur `notesHtml`. Provet skiljer dem åt på tre ställen:
  * ytorna på översikten, fältlistan på informationsfliken, och modulen som
- * bygger listan — `itemFields` lämnar dem ifrån sig, och det prövas på den
+ * bygger listan — `customFieldRows` lämnar dem ifrån sig, och det prövas på den
  * modul klienten importerar.
  *
  * Att båda ligger på översikten är punkt 4 i arkitektens svar: det finns
@@ -658,21 +659,23 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
 
     // Regeln bor i modulen. Ett item med både beskrivning och anteckning ger
     // därför EN rad i fältlistan — tillverkaren — och de två styckena står
-    // kvar orörda ovanför den.
+    // kvar orörda ovanför den. Sedan issue 420 ritas alla fält genom
+    // customFieldRows() ([[ADR-0089 Egna fält på items]] § Riktning 5).
     $item = json_encode([
         'description' => 'En bronsimpeller till sjövattenpumpen.',
         'notes' => 'Bytte impeller 2024.',
-        'manufacturer' => 'Yanmar',
-        'model' => null,
-        'serial_number' => null,
-        'purchased_at' => null,
-        'warranty_until' => null,
-        'position_note' => null,
+        'fields' => [
+            ['id' => 'a', 'label' => 'Manufacturer', 'type' => 'text', 'scope' => 'container', 'value' => 'Yanmar'],
+            ['id' => 'b', 'label' => 'Model', 'type' => 'text', 'scope' => 'container', 'value' => null],
+        ],
     ], JSON_UNESCAPED_UNICODE);
 
-    $rader = itemflikKor("process.stdout.write(JSON.stringify(m.itemFields({$item}, 'sv-SE').map((rad) => rad.key)));");
+    $rader = itemflikKor(
+        "process.stdout.write(JSON.stringify(m.customFieldRows({$item}, 'sv-SE').map((rad) => rad.label)));",
+        'js/components/fields/fieldPresentation.js',
+    );
 
-    expect($rader)->toBe('["manufacturer"]');
+    expect($rader)->toBe('["Manufacturer"]');
 });
 
 /*

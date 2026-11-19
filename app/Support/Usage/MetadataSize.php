@@ -38,7 +38,11 @@ final class MetadataSize
         'container' => ['name', 'description', 'kind'],
         'category' => ['name'],
         'tag' => ['name'],
-        'item' => ['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'position_note'],
+        // De sex fasta fälten är containerns fält sedan issue 420
+        // ([[ADR-0089 Egna fält på items]] § Riktning 5): deras värden räknas
+        // i `item_field_value`, inte här. Kolumnerna står kvar till 425 men
+        // räknas inte — de är inte längre itemets lagrade innehåll.
+        'item' => ['name', 'description', 'notes'],
         // En version väger som itemraden: de tre fritextkolumnerna och
         // `field_values` (issue 411 · [[ADR-0088 Versionshistorik för items]]
         // Riktning 3). `tag_ids` är löpnummer i JSON och räknas inte, samma

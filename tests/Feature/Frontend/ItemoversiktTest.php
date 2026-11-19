@@ -50,14 +50,16 @@ function itemoversiktSektion(): string
 it('ritar varje ifyllt fält i rutnätet och inget tomt fält', function () {
     $rutnat = itemoversiktKod('components/ItemFieldGrid.vue');
 
-    expect($rutnat)->toContain("import { itemFields } from './itemPresentation.js'")
-        ->toContain('itemFields(props.item, props.locale)')
+    // Sedan issue 420 ritas alla fält — även de sex före detta fasta — genom
+    // customFieldRows() ([[ADR-0089 Egna fält på items]] § Riktning 5).
+    expect($rutnat)->toContain("import { customFieldRows } from './fields/fieldPresentation.js'")
+        ->toContain('customFieldRows(props.item, props.locale)')
         ->toContain("key: 'category'")
         ->toContain('v-for="field in fields"')
         ->toContain('{{ field.value }}')
         ->toContain('{{ field.label }}')
         ->toContain('v-if="fields.length > 0"')
-        ->toContain('t(`item.show.${field.key}`)');
+        ->toContain("t('item.show.category')");
 
     // Kategorin ritas bara med ett namn, och rubriken Quick facts finns inte.
     expect($rutnat)->toContain('props.categoryName !== null')
@@ -65,9 +67,8 @@ it('ritar varje ifyllt fält i rutnätet och inget tomt fält', function () {
 
     expect(itemoversiktSektion())->toContain('<ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName" />');
 
-    foreach (['category', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'] as $nyckel) {
-        expect(Lang::has("ui.item.show.{$nyckel}", 'en'))->toBeTrue("etiketten item.show.{$nyckel} saknas");
-    }
+    // Bara kategorin slås upp i lang; fältens rubriker är användarens text.
+    expect(Lang::has('ui.item.show.category', 'en'))->toBeTrue('etiketten item.show.category saknas');
 });
 
 it('ger rutnätet två kolumner från md', function () {

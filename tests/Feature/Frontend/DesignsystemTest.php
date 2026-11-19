@@ -439,8 +439,10 @@ it('bär id på varje Ui-kontroll i de fem migrerade formulären', function () {
     }
 
     // Ett prov som letar i en tom mängd är tyst, och ett tyst prov är värre än
-    // inget. Golvet är de 25 anrop som finns i dag.
-    expect($anrop)->toBeGreaterThan(20);
+    // inget. Golvet är de 19 anrop som finns sedan issue 420 tog bort de sex
+    // fasta fälten ur ItemForm — de ritas nu som containerns fält av
+    // FieldValueField i stället för av FormField + UiInput.
+    expect($anrop)->toBeGreaterThanOrEqual(19);
 });
 
 it('ger UiButton fyra varianter och två storlekar', function () {

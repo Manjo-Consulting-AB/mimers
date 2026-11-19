@@ -18,6 +18,11 @@ use Illuminate\Validation\Rule;
  * means "leave it alone", while `category: null` explicitly clears the
  * category, see § Beslut 7.
  *
+ * Sedan issue 420 ([[ADR-0089 Egna fält på items]] § Riktning 5) finns inte
+ * `manufacturer`, `model`, `serial_number`, `purchased_at`, `warranty_until`
+ * eller `position_note` i reglerna: de är containerns fält nu och skrivs som
+ * `fields`. En kropp som ändå skickar dem får dem tyst ignorerade.
+ *
  * `notes` (issue 96) is `sometimes` + `nullable` like `description`: an
  * omitted `notes` leaves the column alone, while `notes: null` EMPTIES it.
  * The three states — unset, set, emptied — are all reachable, and the field
@@ -145,12 +150,6 @@ class UpdateItemRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
             'notes' => ['sometimes', 'nullable', 'string'],
-            'manufacturer' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'model' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'serial_number' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'purchased_at' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
-            'warranty_until' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
-            'position_note' => ['sometimes', 'nullable', 'string', 'max:255'],
             'icon' => ['sometimes', 'nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
             'icon_color' => ['sometimes', 'nullable', Rule::in(Item::ICON_COLORS)],
             'category' => [
