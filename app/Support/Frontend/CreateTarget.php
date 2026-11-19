@@ -2,6 +2,7 @@
 
 namespace App\Support\Frontend;
 
+use App\Actions\Schedule\ListTodo;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
@@ -82,8 +83,15 @@ final class CreateTarget
     }
 
     /**
-     * Målet för en sida inuti en container. Knappen skapar ett item i
-     * containern.
+     * Målet för en sida inuti en container. Överst i containern skapar
+     * knappen ett item i containern.
+     *
+     * **`$inline` är itemflikens träd (issue 1400 · [[ADR-0074 Registrering i
+     * vyn]] § 7 och tillägget 2026-11-18).** Formuläret står i vyn, och
+     * knappen öppnar det i stället för att lämna fliken: `{ kind: 'inline',
+     * form: 'item' }`. Formuläret i vyn skapar på toppnivån, så flaggan får
+     * bara sättas utan `$parent` — kartan, som skapar under mitten, behåller
+     * dagens mål.
      *
      * `$parent` är noden man står på, och läggs till som `?parent` —
      * formuläret tar redan emot den (issue 57b och 58). Ingen sida i den här
@@ -96,8 +104,10 @@ final class CreateTarget
      * här. En omfångsbegränsad mottagare som nått en nod får därför sin knapp
      * (hon får skapa barn under det hon nått), medan samma mottagare utan nod
      * inte får någon: hon når inte containern själv.
+     *
+     * @return array{kind: 'inline', form: 'item'}|array{kind: 'item', href: string}|null
      */
-    public function forContainer(User $user, Container $container, ?Item $parent = null): ?array
+    public function forContainer(User $user, Container $container, ?Item $parent = null, bool $inline = false): ?array
     {
         $gate = $this->gate->forUser($user);
 
@@ -107,6 +117,10 @@ final class CreateTarget
 
         if (! $allows) {
             return null;
+        }
+
+        if ($inline) {
+            return ['kind' => 'inline', 'form' => 'item'];
         }
 
         $href = route('containers.items.create', $container, absolute: false);
@@ -119,73 +133,66 @@ final class CreateTarget
     }
 
     /**
-     * Målet för plusknappen på en av containerns flikar — *Documents*,
-     * *Tasks* och *Costs* (M28 · testarnas fynd 2026-10-07).
+     * Målet för plusknappen på en av containerns flikar — *To do*, *Items*,
+     * *Documents* och *Costs* (M28 · testarnas fynd 2026-10-07; målet i vyn
+     * sedan issue 1400 · [[ADR-0074 Registrering i vyn]] § 7 och tillägget
+     * 2026-11-18).
      *
-     * **Fliken säger redan vad användaren vill göra**, och knappen gör därför
-     * flikens EGEN handling i stället för att öppna den allmänna menyn från
-     * översikten.
+     * **Fliken säger redan vad användaren vill göra**, och knappen öppnar
+     * därför flikens EGET formulär i vyn — `{ kind: 'inline', form: … }` —
+     * i stället för att leda bort från fliken. Formuläret ägs av sidan och
+     * knappen bor i skalet; sidan lyssnar på knappen genom
+     * resources/js/composables/useInlineCreate.js.
      *
-     * - **`tasks`** leder till formuläret för en ny uppgift, med `?return`
+     * - **`tasks`** öppnar snabbraden. På *Done* ritas ingen snabbrad, och
+     *   där gäller dagens mål: formuläret för en ny uppgift, med `?return`
      *   tillbaka till fliken. Uppgiften börjar i användarens inbox — en
-     *   container är inte ett item, så det finns ingen plats att ärva, och
-     *   platsen byts med *Change…* — precis som *New task* i flikens rubrikrad
-     *   (issue 246 § Beslut 2). Målet ritas alltid: inboxen är alltid ett
-     *   möjligt mål.
-     * - **`documents`** och **`costs`** öppnar en meny med en rad per item
-     *   användaren får skapa i, och raden leder till itemets bilage- respektive
-     *   kostnadsflik.
+     *   container är inte ett item, så det finns ingen plats att ärva — precis
+     *   som *New task* i flikens rubrikrad (issue 246 § Beslut 2). Målet ritas
+     *   alltid: inboxen är alltid ett möjligt mål.
+     * - **`documents`** och **`costs`** öppnar flikens infällbara formulär.
      *
      * **`$items` är flikens egen lista** — samma `creatableItems()` som
      * rubrikknappen ritar, så samma grindar gäller och frågan "vilka items får
      * hon skapa i" aldrig formuleras en andra gång. Är listan tom returneras
-     * null: ingen meny, ingen knapp.
+     * null: ingen knapp, för formuläret har då inget item att spara på.
      *
-     * **`heading` är en NYCKEL efter `create.` och ingen färdig mening**
-     * ([[ADR-0021 Frontendteknik]]): skalet slår upp `create.pick_item` och
-     * formulerar *Choose item* på användarens språk. AppLayout skickar nyckeln
-     * vidare som `headingKey`, skild från `CreateMenu`s `heading`, som bär
-     * färdig text och ritas ordagrant — ett itemnamn är användarens eget och
-     * får aldrig slås upp som en nyckel.
+     * **`$list` är flikens lista**, normaliserad av
+     * {@see ListTodo::forContainer()}. *Done* är det enda läget utan snabbrad,
+     * och därför det enda som får dagens href.
      *
      * En flik utan plusknapp — och en okänd flik — ger null: skalet ritar
      * ingen knapp åt en sida som inte frågar.
      *
      * @param  list<array{ulid: string, name: string}>  $items  items användaren får skapa i, redan grindade av kontrollern
-     * @return array{kind: string, href: string}|array{kind: string, heading: string, rows: list<array{key: string, label: string, href: string}>}|null
+     * @param  string|null  $list  flikens `?list=` ur ListTodo::forContainer()
+     * @return array{kind: 'inline', form: 'task'|'document'|'cost'}|array{kind: 'task', href: string}|null
      */
-    public function forContainerTab(Container $container, string $tab, array $items = []): ?array
+    public function forContainerTab(Container $container, string $tab, array $items = [], ?string $list = null): ?array
     {
         if ($tab === 'tasks') {
-            return [
-                'kind' => 'task',
-                'href' => route('tasks.create', absolute: false)
-                    .'?return='.route('containers.tasks', $container, absolute: false),
-            ];
+            if ($list === 'done') {
+                return [
+                    'kind' => 'task',
+                    'href' => route('tasks.create', absolute: false)
+                        .'?return='.route('containers.tasks', $container, absolute: false),
+                ];
+            }
+
+            return ['kind' => 'inline', 'form' => 'task'];
         }
 
-        $targetTab = match ($tab) {
-            'documents' => 'attachments',
-            'costs' => 'costs',
+        $form = match ($tab) {
+            'documents' => 'document',
+            'costs' => 'cost',
             default => null,
         };
 
-        if ($targetTab === null || $items === []) {
+        if ($form === null || $items === []) {
             return null;
         }
 
-        $rows = [];
-
-        foreach ($items as $item) {
-            $rows[] = [
-                'key' => 'item_target',
-                'label' => $item['name'],
-                'href' => route('containers.items.show', [$container, $item['ulid']], absolute: false)
-                    .'?tab='.$targetTab,
-            ];
-        }
-
-        return ['kind' => 'menu', 'heading' => 'pick_item', 'rows' => $rows];
+        return ['kind' => 'inline', 'form' => $form];
     }
 
     /**

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import UiIcon from './UiIcon.vue';
+import { useInlineCreate } from '../composables/useInlineCreate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -16,13 +17,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  *     formuläret
  *   - `{ kind: 'menu', rows }`                       → en `<button>` som
  *     öppnar menyn
+ *   - `{ kind: 'inline', form }`                     → en `<button>` som ber
+ *     sidan öppna sitt eget formulär (issue 1400 · [[ADR-0074 Registrering i
+ *     vyn]] § 7)
  *
  * Det är hela skillnaden mellan en knapp som skapar en container, en som
- * skapar ett item, en som öppnar uppgiftsformuläret och en som öppnar en meny:
- * samma knapp, fyra mål. En knapp
+ * skapar ett item, en som öppnar uppgiftsformuläret, en som öppnar en meny och
+ * en som fäller ut flikens formulär: samma knapp, fem mål. En knapp
  * som själv räknade ut sitt mål ur adressen hade varit samma fråga ställd på
  * två ställen — och den hade svarat fel på varje sida vars adress inte säger
  * vad man får skapa.
+ *
+ * **`inline` öppnar ingenting själv.** Knappen sitter i skalet och formuläret
+ * ägs av sidan, så klicket går genom resources/js/composables/useInlineCreate.js
+ * — en räknare på modulnivå som sidan lyssnar på medan den är monterad. Här
+ * finns ingen meny och inget formulär, bara en händelse.
  *
  * **Knappen öppnar ingenting själv.** Menyns öppna-läge bor i skalet
  * (AppLayout), som MobileMenus gör: knappen är en knapp, menyn en yta, och
@@ -52,7 +61,11 @@ const emit = defineEmits(['open']);
 
 const { t } = useTranslations();
 
+const { request } = useInlineCreate();
+
 const isMenu = computed(() => props.create.kind === 'menu');
+
+const isInline = computed(() => props.create.kind === 'inline');
 </script>
 
 <template>
@@ -67,6 +80,22 @@ const isMenu = computed(() => props.create.kind === 'menu');
         class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
         :aria-label="t('create.label')"
         @click="emit('open', $event.currentTarget)"
+    >
+        <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
+    </button>
+
+    <!--
+        Flikens eget formulär (issue 1400). Samma knapp, samma yta och samma
+        namn som de andra målen — det är bara målet som skiljer. Klicket går
+        upp till sidan genom useInlineCreate; formuläret, rullningen och
+        fokuset ägs av den som ritade det.
+    -->
+    <button
+        v-else-if="isInline"
+        type="button"
+        class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
+        :aria-label="t('create.label')"
+        @click="request()"
     >
         <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
     </button>

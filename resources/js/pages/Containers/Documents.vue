@@ -20,6 +20,7 @@ import UiInput from '../../components/UiInput.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
 import { documentFilterQuery } from '../../components/documentFilter.js';
+import { useInlineCreate } from '../../composables/useInlineCreate.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -188,6 +189,26 @@ const base = computed(() => `/containers/${props.container.ulid}/documents`);
  */
 const createOpen = ref(false);
 const uploading = ref(false);
+
+/*
+ * Plusknappen i skalet öppnar formuläret (issue 1400 · [[ADR-0074
+ * Registrering i vyn]] § 7). Klicket kommer upp genom useInlineCreate, för
+ * knappen ägs av skalet och formuläret av sidan. Formuläret rullas in i
+ * bilden — på mobilen sitter knappen längst ned — och första fältet får
+ * fokus; är raden redan öppen stängs den inte, den får fokus igen.
+ */
+const createBox = ref(null);
+
+const { onRequest } = useInlineCreate();
+
+onRequest(async () => {
+    createOpen.value = true;
+
+    await nextTick();
+
+    createBox.value?.scrollIntoView({ block: 'nearest' });
+    createBox.value?.querySelector('summary, input, select, textarea, button')?.focus();
+});
 
 /* Itemet filerna laddas upp till, eller null. Ett enda item är förvalt. */
 const selectedItem = ref(props.items.length === 1 ? props.items[0] : null);
@@ -762,7 +783,7 @@ function destroy() {
             `<details>` med absolut panel; kön under den är avstängd tills ett
             item är valt. Formuläret står kvar efter uppladdningen.
         -->
-        <div v-if="items.length > 0" class="mt-6">
+        <div v-if="items.length > 0" ref="createBox" class="mt-6">
             <InlineCreate v-model:open="createOpen" :label="t('container.documents.add')" :dirty="uploading">
                 <details ref="itemMenu" class="relative" @keydown="closeItemMenu">
                     <summary

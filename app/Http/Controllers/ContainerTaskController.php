@@ -143,12 +143,13 @@ class ContainerTaskController extends Controller
                 'export' => $canView,
             ],
             // Plusknappens mål på den här fliken (M28 · testarnas fynd
-            // 2026-10-07): formuläret för en ny uppgift, med `?return` tillbaka
-            // till fliken — samma mål som *New task* i rubrikraden, och samma
-            // förvalda inbox (issue 246 § Beslut 2). Målet ritas alltid, för
-            // inboxen är alltid ett möjligt mål; se
+            // 2026-10-07; målet i vyn sedan issue 1400 · [[ADR-0074
+            // Registrering i vyn]] § 7). Knappen öppnar snabbraden — utom på
+            // *Done*, som inte har någon snabbrad och därför behåller dagens
+            // mål: formuläret för en ny uppgift med `?return` tillbaka hit.
+            // Målet ritas alltid, för inboxen är alltid ett möjligt mål; se
             // App\Support\Frontend\CreateTarget::forContainerTab().
-            'create' => $createTarget->forContainerTab($container, 'tasks'),
+            'create' => $createTarget->forContainerTab($container, 'tasks', list: $todo['list']),
             // De fyra öppna grupperna, i ritningsordning: försenat, idag,
             // denna vecka, kommande. Vyn itererar objektets nycklar som de
             // kommer och räknar aldrig en grupp själv (issue 64 § Beslut 3).

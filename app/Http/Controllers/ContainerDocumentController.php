@@ -237,9 +237,10 @@ class ContainerDocumentController extends Controller
             // ItemController (issue 1167): uppladdningskön avvisar större filer.
             'maxUploadBytes' => (int) config('files.max_upload_bytes'),
             // Plusknappens mål på den här fliken (M28 · testarnas fynd
-            // 2026-10-07): en meny med samma items som rubrikknappen listar,
-            // och ett val leder till itemets bilageflik. Servern bygger raderna
-            // ur `$items` — samma grindar, en sanning; se
+            // 2026-10-07; målet i vyn sedan issue 1400 · [[ADR-0074
+            // Registrering i vyn]] § 7): knappen öppnar flikens infällbara
+            // formulär. `$items` är samma lista som rubrikknappen listar —
+            // samma grindar, en sanning — och en tom lista ger ingen knapp; se
             // App\Support\Frontend\CreateTarget::forContainerTab().
             'create' => $createTarget->forContainerTab($container, 'documents', $items),
             // Sant när användarfiler levereras från en egen origin (issue 61a

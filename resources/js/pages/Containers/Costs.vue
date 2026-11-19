@@ -14,6 +14,7 @@ import UiCard from '../../components/UiCard.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import UiStat from '../../components/UiStat.vue';
+import { useInlineCreate } from '../../composables/useInlineCreate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({
@@ -227,6 +228,26 @@ function setOpen(open) {
 
     createOpen.value = open;
 }
+
+/*
+ * Plusknappen i skalet öppnar formuläret (issue 1400 · [[ADR-0074
+ * Registrering i vyn]] § 7). Klicket kommer upp genom useInlineCreate, för
+ * knappen ägs av skalet och formuläret av sidan. Formuläret rullas in i
+ * bilden — på mobilen sitter knappen längst ned — och första fältet får
+ * fokus; är raden redan öppen stängs den inte, den får fokus igen.
+ */
+const createBox = ref(null);
+
+const { onRequest } = useInlineCreate();
+
+onRequest(async () => {
+    setOpen(true);
+
+    await nextTick();
+
+    createBox.value?.scrollIntoView({ block: 'nearest' });
+    createBox.value?.querySelector('summary, input, select, textarea, button')?.focus();
+});
 
 function cancel() {
     if (createDirty.value) {
@@ -463,7 +484,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             på, efter brickorna, donuten och Pro-delen. Ritas bara när
             användaren har ett item att skriva på.
         -->
-        <div v-if="items.length > 0" class="mt-4">
+        <div v-if="items.length > 0" ref="createBox" class="mt-4">
             <InlineCreate :open="createOpen" :label="t('container.costs.add')" :dirty="createDirty" @update:open="setOpen">
                 <details ref="itemMenu" class="relative mb-4" @keydown="closeItemMenu">
                     <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink hover:bg-surface-sunken">

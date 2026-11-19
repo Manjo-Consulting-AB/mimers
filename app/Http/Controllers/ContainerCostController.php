@@ -199,9 +199,10 @@ class ContainerCostController extends Controller
             'rows' => $listContainerCosts->handle($user, $container, $reportData['filter'] ?? []),
             'items' => $items,
             // Plusknappens mål på den här fliken (M28 · testarnas fynd
-            // 2026-10-07): en meny med samma items som rubrikknappen listar,
-            // och ett val leder till itemets kostnadsflik. Servern bygger
-            // raderna ur `$items` — samma grindar, en sanning; se
+            // 2026-10-07; målet i vyn sedan issue 1400 · [[ADR-0074
+            // Registrering i vyn]] § 7): knappen öppnar flikens infällbara
+            // formulär. `$items` är samma lista som rubrikknappen listar —
+            // samma grindar, en sanning — och en tom lista ger ingen knapp; se
             // App\Support\Frontend\CreateTarget::forContainerTab().
             'create' => $createTarget->forContainerTab($container, 'costs', $items),
             // Registreringen i vyn (issue 369 · M56): formuläret på fliken får
