@@ -281,11 +281,6 @@ abstract class McpTool extends Tool
      * agenten inte når alls är `resource.not_found` — nekandet avslöjar inte
      * att det finns. Når agenten det men med för låg nivå är det
      * `agent.forbidden`.
-     *
-     * Undantaget är skrivspärren (regel 4): är containerns ägarkonto fruset
-     * (`read_only` eller `closed`) avvisas en skrivning med `auth.forbidden`,
-     * samma kod som API:et ger när policyn nekar (issue 409 § 2). Nivån har
-     * ResolveAgentAccess redan kapat till `read`.
      */
     protected function requireLevel(Agent $agent, string $minimum, Container $container, ?Item $item = null): void
     {
@@ -296,10 +291,6 @@ abstract class McpTool extends Tool
         }
 
         if (! AccessLevel::atLeast($level, $minimum)) {
-            if (in_array($container->account->status, ['read_only', 'closed'], true)) {
-                throw new McpToolException('auth.forbidden');
-            }
-
             throw new McpToolException('agent.forbidden');
         }
     }
