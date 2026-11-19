@@ -9,10 +9,12 @@ use App\Http\Requests\Invitation\StoreInvitationRequest;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Support\Access\AccessLevel;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -74,6 +76,12 @@ class ContainerInvitationController extends Controller
             ? null
             : Item::where('ulid', $request->validated('item'))->firstOrFail();
 
+        // *Agent access* (issue 408): fältet finns bara med Pro hos båda och
+        // `mcp.enabled`. Utan det är värdet alltid NULL, vad klienten än skickar.
+        $agentLevel = ContainerAgentController::available($request->user(), $container)
+            ? $request->validate(['agent_level' => ['nullable', 'string', Rule::in(AccessLevel::LADDER)]])['agent_level'] ?? null
+            : null;
+
         try {
             $createInvitation->handle(
                 $request->user(),
@@ -81,6 +89,7 @@ class ContainerInvitationController extends Controller
                 $request->validated('email'),
                 $request->validated('level'),
                 $item,
+                $agentLevel,
             );
         } catch (ApiException $e) {
             throw ValidationException::withMessages([$this->field($e->errorCode()) => $translator->message($e)]);
@@ -126,6 +135,10 @@ class ContainerInvitationController extends Controller
      */
     private function field(string $code): string
     {
-        return $code === 'invitation.already_pending' ? 'email' : 'quota';
+        return match ($code) {
+            'invitation.already_pending' => 'email',
+            'invitation.agent_level_too_high' => 'agent_level',
+            default => 'quota',
+        };
     }
 }

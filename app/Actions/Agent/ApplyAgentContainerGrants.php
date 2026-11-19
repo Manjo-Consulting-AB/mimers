@@ -29,13 +29,14 @@ class ApplyAgentContainerGrants
 {
     /**
      * @param  array<string, string|null>|null  $levels  grupp => nivå; null = allt upp till kontots nivå
+     * @param  string|null  $ceiling  ägarens tak i containern (issue 408); `null` ger inga rader
      * @return array<string, string> det som sparades, grupp => nivå
      */
-    public function handle(Agent $agent, Container $container, ?array $levels = null): array
+    public function handle(Agent $agent, Container $container, ?array $levels = null, ?string $ceiling = AccessLevel::DELETE): array
     {
         $this->validate($levels);
 
-        return DB::transaction(function () use ($agent, $container, $levels): array {
+        return DB::transaction(function () use ($agent, $container, $levels, $ceiling): array {
             // Lås agentraden så en samtidig sänkning på kontot väntar:
             // invarianten container ≤ konto ska hålla.
             Agent::query()->whereKey($agent->id)->lockForUpdate()->first();
@@ -47,7 +48,7 @@ class ApplyAgentContainerGrants
             foreach (AgentGroup::cases() as $group) {
                 $accountLevel = $account[$group->value] ?? null;
                 $wanted = $levels === null ? $accountLevel : ($levels[$group->value] ?? null);
-                $level = $wanted === null ? null : AgentLevels::cap($wanted, $accountLevel);
+                $level = $wanted === null ? null : AgentLevels::min($wanted, $accountLevel, $ceiling);
 
                 if ($level !== null) {
                     $rows[$group->value] = $level;

@@ -1,8 +1,9 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import AccessLevelField from './AccessLevelField.vue';
 import UiConfirmDialog from './UiConfirmDialog.vue';
+import UiSelect from './UiSelect.vue';
 import { accessScopeLabel, granteeLabel } from './accessPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -81,6 +82,9 @@ const props = defineProps({
     itemNames: { type: Object, required: true },
     granteeNames: { type: Object, required: true },
     levels: { type: Array, required: true },
+    /* Fältet *Agent access* (issue 408), ägarens tak för medlemmens agenter. */
+    agentAccess: { type: Boolean, default: false },
+    agentLevel: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -182,6 +186,34 @@ function saveLevel(value) {
  * aldrig `onError`, så fältet ställs tillbaka i `onFinish` när propen inte
  * bär det nya datumet.
  */
+/* Nivåerna upp till radens egen — taket är aldrig högre (issue 408). */
+const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(props.access.level) + 1));
+const agentError = ref(null);
+const agentSaved = ref(false);
+
+/* Sparas direkt, som nivån (issue 1250). Tomt värde är `null`: inga agenter. */
+function saveAgentLevel(value) {
+    agentError.value = null;
+    agentSaved.value = false;
+
+    router.patch(`${url}/agent-level`, { agent_level: value === '' ? null : value }, {
+        preserveScroll: true,
+        preserveState: true,
+        onStart: () => {
+            pending.value = true;
+        },
+        onFinish: () => {
+            pending.value = false;
+        },
+        onSuccess: () => {
+            agentSaved.value = true;
+        },
+        onError: (errors) => {
+            agentError.value = errors.agent_level ?? null;
+        },
+    });
+}
+
 function saveExpiry() {
     const saved = hasExpiry ? dateInput(props.access.expires_at) : null;
 
@@ -286,6 +318,29 @@ function remove() {
             :disabled="pending"
             @update:model-value="saveLevel"
         />
+
+        <div v-if="agentAccess" class="flex flex-col gap-1">
+            <label :for="field('agent_level')" class="text-meta font-medium text-ink">
+                {{ t('agents.access_field.label') }}
+            </label>
+
+            <UiSelect
+                :id="field('agent_level')"
+                :model-value="agentLevel ?? ''"
+                :disabled="pending"
+                class="self-start"
+                @update:model-value="saveAgentLevel"
+            >
+                <option value="">{{ t('agents.access_field.none') }}</option>
+                <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
+            </UiSelect>
+
+            <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
+
+            <p v-if="agentSaved" role="status" class="text-meta text-ink-subtle">{{ t('agents.access_field.saved') }}</p>
+
+            <p v-if="agentError" role="alert" class="text-body text-danger">{{ agentError }}</p>
+        </div>
 
         <div v-if="hasExpiry" class="flex flex-col gap-1">
             <label :for="field('expires_at')" class="text-meta font-medium text-ink">

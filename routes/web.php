@@ -14,6 +14,7 @@ use App\Http\Controllers\CalendarFeedController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
+use App\Http\Controllers\ContainerAgentController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerCostController;
 use App\Http\Controllers\ContainerCoverController;
@@ -1719,6 +1720,19 @@ Route::middleware('auth')->group(function () {
     Route::patch('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'update'])
         ->scopeBindings()
         ->name('containers.accesses.update');
+
+    // Issue 408 · ägarens tak för medlemmens agenter, sparat direkt.
+    Route::patch('/containers/{container}/accesses/{access}/agent-level', [ContainerAccessController::class, 'agentLevel'])
+        ->scopeBindings()
+        ->name('containers.accesses.agent-level');
+
+    // Issue 408 · avsnittet *Agents* i containerns inställningar. Pro hos
+    // både användaren och ägarkontot och `mcp.enabled` krävs, annars 404.
+    Route::put('/containers/{container}/agents/{agent}', [ContainerAgentController::class, 'update'])
+        ->name('containers.agents.update');
+
+    Route::delete('/containers/{container}/agents/{agent}', [ContainerAgentController::class, 'destroy'])
+        ->name('containers.agents.destroy');
 
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy'])
         ->scopeBindings()

@@ -4,15 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Actions\Access\RevokeContainerAccess;
 use App\Actions\Access\UpdateContainerAccess;
+use App\Actions\Agent\SetMemberAgentLevel;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\ContainerAccess\UpdateContainerAccessRequest;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
+use App\Support\Access\AccessLevel;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -87,6 +90,42 @@ class ContainerAccessController extends Controller
             $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['level' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'access-updated');
+    }
+
+    /**
+     * PATCH /containers/{container}/accesses/{access}/agent-level — ägarens
+     * tak för medlemmens agenter, sparat direkt (issue 408, ADR-0087
+     * Riktning 6). `null` stänger ute medlemmens agenter. Fältet finns bara
+     * med Pro hos båda och `mcp.enabled`, annars 404. Ändringen syns i
+     * `ResolveAgentAccess` direkt: taket läses vid varje anrop.
+     */
+    public function agentLevel(
+        Request $request,
+        Container $container,
+        ContainerAccess $access,
+        ApiErrorTranslator $translator,
+        SetMemberAgentLevel $setMemberAgentLevel,
+    ): RedirectResponse {
+        Gate::authorize('manageAccess', $container);
+
+        /** @var User $actor */
+        $actor = $request->user();
+
+        $container->loadMissing('account');
+
+        abort_unless(ContainerAgentController::available($actor, $container), 404);
+
+        $data = $request->validate([
+            'agent_level' => ['present', 'nullable', 'string', Rule::in(AccessLevel::LADDER)],
+        ]);
+
+        try {
+            $setMemberAgentLevel->handle($container, $access, $data['agent_level'], $actor);
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['agent_level' => $translator->message($e)]);
         }
 
         return back()->with('status', 'access-updated');

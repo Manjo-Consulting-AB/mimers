@@ -1,4 +1,5 @@
 <script setup>
+import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import AccessLevelField from './AccessLevelField.vue';
 import FormField from './FormField.vue';
@@ -36,6 +37,8 @@ const props = defineProps({
     containerUlid: { type: String, required: true },
     levels: { type: Array, required: true },
     items: { type: Array, required: true },
+    /* Fältet *Agent access* (issue 408); false ritar det inte. */
+    agentAccess: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -44,11 +47,25 @@ const form = useForm({
     email: '',
     level: 'read',
     item: '',
+    agent_level: '',
+});
+
+/* Nivåerna upp till inbjudans egen — aldrig högre (issue 408). */
+const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(form.level) + 1));
+
+watch(() => form.level, () => {
+    if (form.agent_level !== '' && ! agentLevels.value.includes(form.agent_level)) {
+        form.agent_level = form.level;
+    }
 });
 
 function submit() {
     form
-        .transform((data) => ({ ...data, item: data.item === '' ? null : data.item }))
+        .transform((data) => ({
+            ...data,
+            item: data.item === '' ? null : data.item,
+            agent_level: props.agentAccess && data.agent_level !== '' ? data.agent_level : null,
+        }))
         .post(`/containers/${props.containerUlid}/invitations`, {
             // Sidan är en lista, och ett hopp till toppen efter en skickad
             // inbjudan tappar läsarens plats.
@@ -113,6 +130,26 @@ function submit() {
                 <option value="">{{ t('sharing.invitations.item_container') }}</option>
                 <option v-for="item in items" :key="item.ulid" :value="item.ulid">{{ item.name }}</option>
             </UiSelect>
+        </FormField>
+
+        <FormField
+            v-if="agentAccess"
+            v-slot="{ describedBy }"
+            :label="t('agents.access_field.label')"
+            id="invitation-agent-level"
+            :error="form.errors.agent_level"
+        >
+            <UiSelect
+                id="invitation-agent-level"
+                v-model="form.agent_level"
+                :described-by="describedBy"
+                name="agent_level"
+                class="self-start"
+            >
+                <option value="">{{ t('agents.access_field.none') }}</option>
+                <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
+            </UiSelect>
+            <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
         </FormField>
 
         <UiButton type="submit" :pending="form.processing" class="self-start">

@@ -151,6 +151,13 @@ class ContainerSharingController extends Controller
             'grantedByNames' => (object) ($names['grantedBy'] ?? []),
             'invitedByNames' => (object) ($invitations === null ? [] : $this->invitedByNames($invitations)),
             'items' => $mayViewAccesses ? $this->items($container) : [],
+            // Fältet *Agent access* (issue 408): bara med Pro hos båda och
+            // `mcp.enabled`, och bara för den som får förvalta åtkomsterna.
+            'agentAccess' => $mayViewAccesses && ContainerAgentController::available($user, $container),
+            // Access-ULID → ägarens tak för medlemmens agenter. `{}` utan fältet.
+            'agentLevels' => (object) ($accesses !== null && ContainerAgentController::available($user, $container)
+                ? $accesses->pluck('agent_level', 'ulid')->all()
+                : []),
             'levels' => AccessLevel::LADDER,
             'can' => [
                 'manage' => Gate::forUser($user)->allows('manageAccess', $container),
