@@ -45,6 +45,14 @@ final class MetadataSize
         // regel som för kopplingsrader ([[ADR-0081 All lagrad data räknas mot
         // kvoten]] § 2).
         'item_version' => ['name', 'description', 'notes', 'field_values'],
+        // Egna fält (issue 417 · [[ADR-0089 Egna fält på items]]
+        // § Riktning 3): definitionen bär rubriken, värdet den skrivna
+        // texten. Ett fälts `label` är användarens fritext och räknas som en
+        // rad; `item_field_value` räknas med samma påslag som allt annat,
+        // oavsett om värdet är text, tal eller datum — bara `value_text` är
+        // fritext ([[ADR-0081 All lagrad data räknas mot kvoten]] § 2).
+        'item_field' => ['label'],
+        'item_field_value' => ['value_text'],
         'schedule' => ['title', 'notes'],
         'schedule_occurrence' => ['completion_note'],
         'cost_entry' => ['description', 'supplier'],

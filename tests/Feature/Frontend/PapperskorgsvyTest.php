@@ -724,7 +724,8 @@ it('gör fyra frågor för listan', function () {
     ));
 
     // Omfånget först, så att memon sitter — exakt som i en request, där
-    // ListTrash löser upp det innan de fyra typ-frågorna ställs.
+    // ListTrash löser upp det innan typ-frågorna ställs. Fem frågor sedan
+    // issue 417: fälten är den femte typen.
     app(ResolveItemScope::class)->handle($ägare, $container);
 
     DB::enableQueryLog();
@@ -733,7 +734,7 @@ it('gör fyra frågor för listan', function () {
     DB::disableQueryLog();
 
     expect($lista['entries'])->toHaveCount(6);
-    expect($antal)->toBe(4);
+    expect($antal)->toBe(5);
 });
 
 it('gör ett konstant antal frågor på sidan, oavsett antal rader', function () {

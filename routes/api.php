@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
+use App\Http\Controllers\Api\ItemFieldController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemMoveController;
 use App\Http\Controllers\Api\ItemSearchController;
@@ -288,6 +289,29 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
+
+    // Issue 417 · Egna fält — containerns och ett items egna, se
+    // App\Http\Controllers\Api\ItemFieldController och
+    // App\Actions\Field\*. `{field}` binds av gruppens scopeBindings() genom
+    // App\Models\Container::fields(), och `{ownField}` genom
+    // App\Models\Item::ownFields() — en ULID från en annan container eller
+    // ett annat item blir 404. Parametern heter `ownField` därför att
+    // Laravel härleder relationsnamnet ur den. Grindarna är befintliga:
+    // `view`/`update` på containern för dess fält, `view`/`update` på ITEMET
+    // för dess egna ([[ADR-0028 Åtkomst på itemnivå]]) — ingen ny
+    // policymetod. `fields/order` ligger FÖRE `fields/{field}`, annars binds
+    // "order" som en fält-ULID.
+    Route::get('/containers/{container}/fields', [ItemFieldController::class, 'index']);
+    Route::post('/containers/{container}/fields', [ItemFieldController::class, 'store']);
+    Route::patch('/containers/{container}/fields/order', [ItemFieldController::class, 'reorder']);
+    Route::patch('/containers/{container}/fields/{field}', [ItemFieldController::class, 'update']);
+    Route::delete('/containers/{container}/fields/{field}', [ItemFieldController::class, 'destroy']);
+
+    Route::get('/containers/{container}/items/{item}/fields', [ItemFieldController::class, 'indexForItem']);
+    Route::post('/containers/{container}/items/{item}/fields', [ItemFieldController::class, 'storeForItem']);
+    Route::patch('/containers/{container}/items/{item}/fields/order', [ItemFieldController::class, 'reorderForItem']);
+    Route::patch('/containers/{container}/items/{item}/fields/{ownField}', [ItemFieldController::class, 'updateForItem']);
+    Route::delete('/containers/{container}/items/{item}/fields/{ownField}', [ItemFieldController::class, 'destroyForItem']);
 
     // Issue 16a · Uppladdning av bilagor — bara POST här; listning och
     // radering är 16b, nedladdning 19a. `{item}` nästlas under `{container}`

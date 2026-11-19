@@ -6,6 +6,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 
 /**
@@ -36,9 +37,9 @@ use App\Models\Tag;
 class FindTrashedInContainer
 {
     /**
-     * @param  'item'|'attachment'|'category'|'tag'  $type
+     * @param  'item'|'attachment'|'category'|'tag'|'field'  $type
      */
-    public function handle(Container $container, string $type, string $ulid): Item|Attachment|Category|Tag|null
+    public function handle(Container $container, string $type, string $ulid): Item|Attachment|Category|Tag|ItemField|null
     {
         $cutoff = now()->subDays((int) config('files.trash_retention_days'));
 
@@ -54,6 +55,15 @@ class FindTrashedInContainer
                 ->where('deleted_at', '>=', $cutoff)
                 ->first(),
             'tag' => Tag::query()->onlyTrashed()
+                ->where('container_id', $container->id)
+                ->where('ulid', $ulid)
+                ->where('deleted_at', '>=', $cutoff)
+                ->first(),
+            // Issue 417: ett fält hör till containern genom `container_id`
+            // — också ett items eget fält, som bär containern. Det egna
+            // fältets item kan ligga i papperskorgen; RestoreContent svarar
+            // `trash.parent_deleted` i så fall.
+            'field' => ItemField::query()->onlyTrashed()
                 ->where('container_id', $container->id)
                 ->where('ulid', $ulid)
                 ->where('deleted_at', '>=', $cutoff)

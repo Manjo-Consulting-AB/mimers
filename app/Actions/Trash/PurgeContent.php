@@ -7,6 +7,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\Schedule;
@@ -24,8 +25,9 @@ use Illuminate\Support\Facades\DB;
  * grinden, precis som PurgeAttachment.
  *
  * Fyra publika metoder, en per typ (Beslut 2): `attachment()`, `item()`,
- * `category()`, `tag()`. Varje metod kapslar sitt arbete i en transaktion —
- * ett delvis genomfört item får aldrig lämnas kvar med bilagor borta.
+ * `category()`, `tag()` — och sedan issue 417 `field()`. Varje metod kapslar
+ * sitt arbete i en transaktion — ett delvis genomfört item får aldrig lämnas
+ * kvar med bilagor borta.
  *
  * Främmande nycklar är RESTRICT genomgående ([[Datamodell – översikt]]), så
  * ordningen är inte en detalj: bilagorna och pivotraderna måste bort före
@@ -212,6 +214,18 @@ class PurgeContent
             DB::table('container_access')->where('item_id', $itemId)->delete();
             DB::table('invitation')->where('item_id', $itemId)->delete();
 
+            // Issue 417: ett items egna fält följer itemet och gallras med
+            // det ([[ADR-0089 Egna fält på items]] § Riktning 2 och 3),
+            // och dess värden — både i egna och i containerns fält — likaså.
+            // Räknaren minskas FÖRE raderingarna, som för de andra
+            // tabellerna: `forceDelete()` på en byggare och `DB::table()`
+            // känner inga modellhändelser.
+            MetadataLedger::releaseWhere('item_field_value', fn (Builder $query) => $query->where('item.id', $itemId));
+            MetadataLedger::releaseWhere('item_field', fn (Builder $query) => $query->where('item_field.item_id', $itemId));
+
+            DB::table('item_field_value')->where('item_id', $itemId)->delete();
+            DB::table('item_field')->where('item_id', $itemId)->delete();
+
             $item->forceDelete();
         });
     }
@@ -259,6 +273,38 @@ class PurgeContent
             DB::table('item_tag')->where('tag_id', $tag->getKey())->delete();
 
             $tag->forceDelete();
+        });
+    }
+
+    /**
+     * Gallrar en fältdefinition med dess värden (issue 417 § 5). Värdena har
+     * ingen `deleted_at` och ligger kvar medan definitionen ligger i
+     * papperskorgen — de syns inte, kommer tillbaka med fältet och gallras
+     * först här. Både definitionen och värdena räknas i `metadata_bytes`
+     * ([[ADR-0081 All lagrad data räknas mot kvoten]] § 2), så räknaren
+     * minskas FÖRE raderingarna.
+     *
+     * Värdena tas före definitionen: `item_field_value.item_field_id` är
+     * RESTRICT i praktiken genom kaskaden, och ordningen ska vara densamma
+     * oavsett vilken nyckel databasen prövar först.
+     */
+    public function field(ItemField $field): void
+    {
+        DB::transaction(function () use ($field): void {
+            $fieldId = $field->getKey();
+
+            MetadataLedger::releaseWhere(
+                'item_field_value',
+                fn (Builder $query) => $query->where('item_field_value.item_field_id', $fieldId),
+            );
+            MetadataLedger::releaseWhere(
+                'item_field',
+                fn (Builder $query) => $query->where('item_field.id', $fieldId),
+            );
+
+            DB::table('item_field_value')->where('item_field_id', $fieldId)->delete();
+
+            $field->forceDelete();
         });
     }
 }

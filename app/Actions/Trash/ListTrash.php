@@ -7,6 +7,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Access\ItemScope;
@@ -21,7 +22,7 @@ use Illuminate\Support\Collection;
  * 4, 5 och 11 och issue 74 § Beslut 1–4.
  *
  * Kroppen är `App\Http\Controllers\Api\TrashController::index()`s,
- * övertagen oförändrad: de fyra typ-frågorna, retentionsgränsen,
+ * övertagen oförändrad: typ-frågorna, retentionsgränsen,
  * omfångsfiltret, sorteringen och `entry()`-byggandet. `/api` anropar
  * Actionen för att sidan inte ska bli en andra formulering av samma lista,
  * och webben anropar den av samma skäl.
@@ -32,12 +33,13 @@ use Illuminate\Support\Collection;
  * därför på "vilka rader finns", aldrig på "vem får se dem" — den som
  * anropar har redan prövat `ContainerPolicy::view()`.
  *
- * **Exakt FYRA frågor**, en per typ, oavsett hur många rader som finns
- * (issue 20a § Beslut 11). `context` för bilagor och underkategorier hämtas
- * med en join i respektive typ-fråga, aldrig med en fråga per rad.
- * `attachment` är det enda uppslaget som går två steg: en bilaga hör till
- * containern genom `attachment.item.container_id`, så den frågan joinar mot
- * `item` i stället för att hämta containerns items och fråga per item.
+ * **En fråga per typ**, oavsett hur många rader som finns (issue 20a
+ * § Beslut 11): item, bilaga, kategori, tagg och — sedan issue 417 — fält.
+ * `context` för bilagor, underkategorier och ett items egna fält hämtas med
+ * en join i respektive typ-fråga, aldrig med en fråga per rad. `attachment`
+ * är det enda uppslaget som går två steg: en bilaga hör till containern
+ * genom `attachment.item.container_id`, så den frågan joinar mot `item` i
+ * stället för att hämta containerns items och fråga per item.
  *
  * **Utgånget innehåll finns inte** (issue 20a § Beslut 5): rader vars
  * `deleted_at` är äldre än retentionen listas inte, även om gallringsjobbet
@@ -48,10 +50,10 @@ use Illuminate\Support\Collection;
  *
  * **Omfångsbegränsningen** (issue 74 § Beslut 1): en OMFÅNGSBEGRÄNSAD
  * mottagare ser bara de items hon når och de bilagor som hänger på dem —
- * aldrig en kategori och aldrig en tagg. Kategorier och taggar är
- * containervid organisation, inte itemets innehåll, och de två frågorna
- * hoppas därför över helt för henne. Ett OMFATTANDE omfång är oförändrat:
- * alla fyra typerna.
+ * aldrig en kategori, en tagg eller ett fält. Kategorier, taggar och fält är
+ * containervid organisation, inte itemets innehåll, och de frågorna hoppas
+ * därför över helt för henne. Ett OMFATTANDE omfång är oförändrat: alla
+ * typerna.
  *
  * **`subjects` är den andra halvan av svaret.** Varje post bär sin laddade
  * rad i `subjects`, nycklad på ULID — webbkontrollern frågar `ItemPolicy`
@@ -81,7 +83,7 @@ class ListTrash
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
-     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}
+     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag|ItemField>, subcategory_counts: array<string, int>}
      */
     public function handle(?User $user, Container $container): array
     {
@@ -140,6 +142,41 @@ class ListTrash
                 ->get(['ulid', 'name', 'deleted_at']) as $tag) {
                 $entries[] = self::entry('tag', $tag->ulid, $tag->name, null, $tag->deleted_at, $retentionDays);
                 $subjects[$tag->ulid] = $tag;
+            }
+
+            // Egna fält (issue 417) — containerns fält och de egna fält vars
+            // item lever. Ett eget fält som följde sitt item till
+            // papperskorgen listas inte för sig: det kommer tillbaka med
+            // itemet (App\Models\Item::booted()), och en återställning av det
+            // ensamt skulle ge ett fält på ett item ingen ser. `item_name`
+            // är `context` precis som förälderns namn är det för en
+            // underkategori — annars är "Liter" i en lista utan sammanhang
+            // obrukbart.
+            foreach (ItemField::query()->onlyTrashed()
+                ->leftJoin('item', 'item.id', '=', 'item_field.item_id')
+                ->where('item_field.container_id', $container->id)
+                ->where('item_field.deleted_at', '>=', $cutoff)
+                ->where(fn (Builder $query) => $query
+                    ->whereNull('item_field.item_id')
+                    ->orWhereNull('item.deleted_at'))
+                ->get([
+                    'item_field.ulid',
+                    'item_field.label',
+                    'item_field.item_id',
+                    'item_field.deleted_at',
+                    'item.name as item_name',
+                ]) as $field) {
+                $itemName = $field->getAttribute('item_name');
+
+                $entries[] = self::entry(
+                    'field',
+                    $field->ulid,
+                    $field->label,
+                    $field->item_id === null || ! is_string($itemName) ? null : $itemName,
+                    $field->deleted_at,
+                    $retentionDays,
+                );
+                $subjects[$field->ulid] = $field;
             }
         }
 

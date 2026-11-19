@@ -366,6 +366,31 @@ class Container extends Model
     }
 
     /**
+     * Containerns egna fältdefinitioner — de som gäller alla items i
+     * containern, alltså de med `item_id` NULL, se [[ADR-0089 Egna fält på
+     * items]] § Riktning 1 och issue 417. Ett items egna fält ligger i
+     * App\Models\Item::ownFields(), inte här.
+     *
+     * Ordningen är `position` stigande med `id` som tiebreak, så listningen
+     * är densamma varje gång även när två fält delar position. Relationen
+     * krävs dessutom av `scopeBindings()` i routes: `{field}` under
+     * containern löses genom den, och en ULID för ett items eget fält — eller
+     * för en annan container — blir därför 404.
+     *
+     * Globala SoftDeletes-scopet gäller: ett fält i papperskorgen är inte
+     * med.
+     *
+     * @return HasMany<ItemField, $this>
+     */
+    public function fields(): HasMany
+    {
+        return $this->hasMany(ItemField::class)
+            ->whereNull('item_id')
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
+    /**
      * The container's items, see [[Items och organisation]] § item and
      * issue 13a — the table M2 (files), M3 (tasks), M6 (loans) and M8
      * (costs) all hang off. The relation is required by `scopeBindings()`

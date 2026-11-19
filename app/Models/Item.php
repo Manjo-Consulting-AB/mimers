@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasUlid;
 use App\Models\Concerns\RecordsAgentDeletion;
 use App\Support\Access\ItemScope;
+use Carbon\Carbon;
 use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -255,6 +256,88 @@ class Item extends Model
             ->orderByDesc('created_at')
             ->orderByDesc('id');
     }
+
+    /**
+     * Itemets EGNA fält — de som gäller bara det här itemet, utöver
+     * containerns, se [[ADR-0089 Egna fält på items]] § Riktning 2 och issue
+     * 417. Containerns fält ligger i App\Models\Container::fields().
+     *
+     * Ordningen är `position` stigande med `id` som tiebreak. Relationen
+     * krävs dessutom av `scopeBindings()`: `{ownField}` under itemet löses
+     * genom den, så en ULID för ett annat items fält — eller för ett
+     * containerfält — blir 404.
+     *
+     * Globala SoftDeletes-scopet gäller: ett fält i papperskorgen är inte
+     * med.
+     *
+     * @return HasMany<ItemField, $this>
+     */
+    public function ownFields(): HasMany
+    {
+        return $this->hasMany(ItemField::class, 'item_id')
+            ->orderBy('position')
+            ->orderBy('id');
+    }
+
+    /**
+     * Ett items egna fält följer itemet till papperskorgen och tillbaka, se
+     * [[ADR-0089 Egna fält på items]] § Riktning 2 och 3 och
+     * [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26:
+     * medan itemet ligger i papperskorgen syns dess fält ingenstans, och
+     * när itemet kommer tillbaka gör fälten det också.
+     *
+     * **EN tidsstämpel binder dem samman**, samma mekanism som kategorins
+     * underträd (App\Actions\Category\DeleteCategory): fälten får itemets
+     * `deleted_at`, och återställningen tar bara tillbaka de fält som delar
+     * just den tiden. Ett eget fält som raderades FÖRE itemet har en annan
+     * tidsstämpel och ligger kvar i papperskorgen för sig.
+     *
+     * Kroken ligger i modellen och inte i App\Actions\Item\DeleteItem,
+     * eftersom den måste gälla varje väg som mjukraderar ett item — API:et,
+     * webben och containerpapperskorgen — och `deleting` redan bär
+     * mjukraderingens betydelse i den här modellen (jämför
+     * App\Models\Concerns\RecordsAgentDeletion). En fysisk gallring
+     * (`isForceDeleting()`) rör inga fält här: App\Actions\Trash\PurgeContent
+     * bokför och raderar dem själv, i samma transaktion.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (Item $item): void {
+            if ($item->isForceDeleting()) {
+                return;
+            }
+
+            ItemField::query()
+                ->where('item_id', $item->getKey())
+                ->whereNull('deleted_at')
+                ->update(['deleted_at' => $item->deleted_at ?? now()]);
+        });
+
+        static::restoring(function (Item $item): void {
+            $item->ownFieldsRestoredAt = $item->deleted_at;
+        });
+
+        static::restored(function (Item $item): void {
+            if ($item->ownFieldsRestoredAt === null) {
+                return;
+            }
+
+            ItemField::onlyTrashed()
+                ->where('item_id', $item->getKey())
+                ->where('deleted_at', $item->ownFieldsRestoredAt)
+                ->update(['deleted_at' => null]);
+
+            $item->ownFieldsRestoredAt = null;
+        });
+    }
+
+    /**
+     * Tidsstämpeln som de egna fälten kastades med i den pågående
+     * återställningen — satt av `restoring`, läst och nollad av `restored`
+     * (se `booted()`). Ingen kolumn och ingen relation: den lever bara under
+     * ett `restore()`.
+     */
+    protected ?Carbon $ownFieldsRestoredAt = null;
 
     /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
