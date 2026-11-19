@@ -156,6 +156,14 @@ const checking = ref(false);
 const confirmNames = ref(null);
 
 /*
+ * Löpnumret för frågan i luften. Ett svar som kommer efter att dialogen har
+ * stängts, nollställts eller valet ändrats är inaktuellt och får varken skicka
+ * flytten eller sätta ett steg (issue 1402, fynd 1). Varje ny fråga tar ett
+ * nummer, och stängningen tar ett — då matchar inget gammalt svar längre.
+ */
+let askToken = 0;
+
+/*
  * Texten i bekräftelsesteget. Namnen kommer bara med när servern gav dem
  * (ägarkontot); annars står meningen utan namn och utan antal, och det är
  * hela skillnaden mellan de två nycklarna.
@@ -267,6 +275,8 @@ function findNode(nodes, ulid) {
 watch(
     () => props.open,
     async (open) => {
+        askToken++;
+
         if (open) {
             query.value = '';
             chosen.value = props.selected === null ? null : findNode(props.structure, props.selected);
@@ -314,16 +324,32 @@ async function choose() {
  * har bekräftat.
  */
 async function askBeforeMoving() {
+    const token = ++askToken;
+    const node = chosen.value;
+    const plats = placement.value;
+
     checking.value = true;
 
     let svar = { widens: true };
 
     try {
-        svar = (await props.check?.(chosen.value, placement.value)) ?? { widens: true };
+        svar = (await props.check?.(node, plats)) ?? { widens: true };
     } catch {
         svar = { widens: true };
-    } finally {
+    }
+
+    /*
+     * Medan anropet var i luften kan dialogen ha stängts (Esc, stängknappen
+     * eller förälderns `open`) eller valet ha ändrats. Då avbryts allt tyst:
+     * ingen POST skickas och inget steg sätts. `checking` nollställs bara när
+     * det är vårt eget anrop — en nyare fråga äger flaggan.
+     */
+    if (token === askToken) {
         checking.value = false;
+    }
+
+    if (token !== askToken || chosen.value !== node || placement.value !== plats) {
+        return;
     }
 
     if (svar.widens !== true) {
@@ -375,6 +401,9 @@ function close() {
  * inte finns.
  */
 function onClosed() {
+    /* Ett svar som landar efter stängningen får inte flytta något. */
+    askToken++;
+
     emit('close');
 
     props.trigger?.focus();

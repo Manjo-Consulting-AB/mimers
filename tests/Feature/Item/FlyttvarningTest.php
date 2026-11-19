@@ -310,6 +310,19 @@ it('kräver createItem för en flytt till toppnivån', function () {
  * ---------------------------------------------------------------------------
  */
 
+it('avbryter tyst när frågan hinner bli inaktuell', function () {
+    $valjaren = flyttvarningKod('components/ParentPicker.vue');
+
+    // Ett löpnummer vid anropet, kontrollerat efter `await`: ett svar som
+    // kommer efter att dialogen stängts eller valet ändrats får varken
+    // skicka flytten eller sätta ett steg (issue 1402, fynd 1).
+    expect($valjaren)
+        ->toContain('const token = ++askToken')
+        ->toContain('token !== askToken')
+        ->toContain('chosen.value !== node')
+        ->toContain('placement.value !== plats');
+});
+
 it('visar bekräftelsesteget i väljaren med ägarens och mottagarens text', function () {
     $valjaren = flyttvarningKod('components/ParentPicker.vue');
 
