@@ -365,8 +365,8 @@ it('bär plusknappens mål efter samma grind som can.create', function () {
     $begränsad = itemlistaMottagare($container, $motorn, 'delete');
 
     actingAs($bred)->get("/containers/{$container->ulid}/items")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.kind', 'item')
-            ->where('create.href', "/containers/{$container->ulid}/items/create"),
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'item'),
     );
 
     actingAs($begränsad)->get("/containers/{$container->ulid}/items")->assertInertia(

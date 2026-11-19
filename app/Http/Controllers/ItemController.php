@@ -494,13 +494,21 @@ class ItemController extends Controller
             // och går tillsammans, och flaggan är presentation medan
             // App\Support\Frontend\CreateTarget bär målet.
             //
+            // **I trädet öppnar den flikens formulär** (issue 1400 ·
+            // [[ADR-0074 Registrering i vyn]] § 7): `inline: true` svarar
+            // `{ kind: 'inline', form: 'item' }`, och sidan fäller ut raden
+            // ovanför trädet i stället för att lämna fliken. Formuläret i vyn
+            // skapar på toppnivån.
+            //
             // **I kartan skapar den under mitten** (issue 296 · [[ADR-0059
             // Kartan med en mitt]] § 4): `$center` är itemet i mitten, och
             // `forContainer()` lägger det på adressen som `?parent` och prövar
             // `create` på det i stället för `createItem` på containern — samma
             // två grenar som `ItemController::create()` prövar. Är mitten
-            // containern är målet containern, precis som i listan.
-            'create' => $createTarget->forContainer($user, $container, $center),
+            // containern är målet containern, precis som i trädet före issue
+            // 1400. Kartans formulär finns inte i vyn, så där gäller dagens
+            // mål.
+            'create' => $createTarget->forContainer($user, $container, $center, inline: $view !== 'map'),
 
             // Läget i itemfliken (issue 154 och 157 · [[ADR-0046 Containerns
             // karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]], två

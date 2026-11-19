@@ -1066,12 +1066,17 @@ it('bär plusknappens mål till skapandeformuläret för ett item', function () 
 
     [, $anvandare, $container] = containerKontext();
 
-    foreach (["/containers/{$container->ulid}", "/containers/{$container->ulid}/items"] as $url) {
-        actingAs($anvandare)->get($url)->assertInertia(
-            fn (AssertableInertia $page) => $page->where('create.kind', 'item')
-                ->where('create.href', "/containers/{$container->ulid}/items/create"),
-        );
-    }
+    // Översikten leder till formuläret; itemfliken öppnar sitt eget formulär
+    // i trädet (issue 1400 · [[ADR-0074 Registrering i vyn]] § 7).
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'item')
+            ->where('create.href', "/containers/{$container->ulid}/items/create"),
+    );
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'item'),
+    );
 });
 
 /*

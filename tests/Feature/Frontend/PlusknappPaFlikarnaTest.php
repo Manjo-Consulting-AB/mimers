@@ -13,25 +13,27 @@ use function Pest\Laravel\withoutVite;
 
 /*
  * M28 · Testarnas fynd 2026-10-07: plusknappen i toppraden finns också på
- * containerns flikar *Documents*, *Tasks* och *Costs*, och den startar flikens
- * EGEN handling.
+ * containerns flikar, och den startar flikens EGEN handling. Målet i vyn kom
+ * med issue 1400 · [[ADR-0074 Registrering i vyn]] § 7 och tillägget
+ * 2026-11-18: knappen öppnar flikens eget formulär i stället för att lämna
+ * fliken.
  *
- * **Fliken säger redan vad användaren vill göra**, och knappen öppnar därför
- * inte den allmänna menyn från översikten (Tonys beslut 2026-10-07).
- * *Tasks* leder till uppgiftsformuläret, och *Documents* och *Costs* öppnar en
- * meny med en rad per item användaren får skapa i. Målet byggs av
- * App\Support\Frontend\CreateTarget::forContainerTab() och blir sidans
- * `create`-propp, precis som på de fem ytorna i PlusknappTest.
+ * **Fliken säger redan vad användaren vill göra.** Knappen får därför
+ * `{ kind: 'inline', form: 'task' | 'item' | 'document' | 'cost' }` och ber
+ * sidan öppna sitt formulär — knappen sitter i skalet, formuläret ägs av
+ * sidan, och de två möts i resources/js/composables/useInlineCreate.js.
  *
- * **Listan är flikens egen.** `documents` och `costs` får sina rader ur samma
- * `creatableItems()` som rubrikknappen redan ritar — samma grindar, en
- * sanning — och en tom lista ger `null`: ingen meny, ingen knapp. Provet
- * fäster det med en `read`-mottagare, som når fliken men inte får skapa något.
+ * **Grindarna är oförändrade.** En `read`-mottagare får ingen knapp på
+ * *Documents* — listan över items hon får skapa i är tom, och formuläret har
+ * då inget item att spara på. Samma tomma lista ger ingen knapp på *Costs*.
  *
- * **Formen prövas i källkoden** där den bara syns där: att menyn ritar radens
- * eget namn när den har ett, och att de tre sidorna skickar proppen vidare till
- * `ContainerLayout`. Ett skal som glömmer raden får ingen knapp, och det är
- * tyst.
+ * **Dagens mål står kvar där formuläret inte finns i vyn.** *Done* har ingen
+ * snabbrad och får därför `href` till uppgiftsformuläret, och kartläget skapar
+ * under mitten och får därför `href` med `?parent`.
+ *
+ * **Formen prövas i källkoden** där den bara syns där: knappens inline-gren,
+ * räknaren i komposabeln, och att sidorna lyssnar, rullar fram formuläret och
+ * sätter fokus.
  *
  * Hjälparna har prefixet `flikknapp` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -104,85 +106,95 @@ function flikknappKod(string $sokvag): string
  */
 
 /*
- * Klart när: "tasks-fliken har en plusknapp till formuläret".
+ * Klart när: "plusknappen på To do öppnar flikens formulär".
  *
- * Målet är flikens EGET — formuläret för en ny uppgift — och inte den
- * allmänna menyn från översikten. `?return` bär fliken tillbaka, precis som
- * *New task* i rubrikraden (issue 246 § Beslut 3), och förvalet är inboxen:
- * en container är inte ett item. Målet ritas alltid — inboxen är alltid ett
- * möjligt mål — och därför prövas det för en `read`-mottagare längst ned.
+ * Målet är flikens EGET — snabbraden — och inte formuläret på en annan sida.
+ * Servern skickar formen, inte ett `href`: knappen ber sidan öppna formuläret
+ * genom resources/js/composables/useInlineCreate.js.
  */
-it('har en plusknapp till formuläret på tasks-fliken', function () {
+it('öppnar flikens formulär på tasks-fliken', function () {
     withoutVite();
 
     [, $anvandare, $container] = flikknappKontext();
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/tasks")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'task')
+            ->missing('create.href'),
+    );
+});
+
+/*
+ * Klart när: "Done har dagens mål".
+ *
+ * *Done* har ingen snabbrad — avbockade uppgifter är ingenting att lägga till
+ * — och servern skickar därför formuläret med `?return` tillbaka till fliken,
+ * precis som före issue 1400.
+ */
+it('behåller dagens mål på Done', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = flikknappKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/tasks?list=done")->assertInertia(
         fn (AssertableInertia $page) => $page->where('create.kind', 'task')
             ->where('create.href', "/tasks/create?return=/containers/{$container->ulid}/tasks"),
     );
 });
 
 /*
- * Klart när: "documents-fliken listar items användaren får skapa i".
+ * Klart när: "plusknappen på Documents öppnar flikens formulär".
  *
- * En rad per item, och raden leder till itemets bilageflik — samma mål som
- * rubrikknappen *Lägg till dokument* (Beslut 5). `create.heading` är en NYCKEL,
- * inte en färdig mening: skalet formulerar rubriken på användarens språk
- * ([[ADR-0021 Frontendteknik]]).
+ * Formen, inte en meny: uppladdningen står i vyn, och knappen behöver bara
+ * säga vilket formulär sidan ska fälla ut.
  */
-it('listar items användaren får skapa i på documents-fliken', function () {
+it('öppnar flikens formulär på documents-fliken', function () {
     withoutVite();
 
     [, $anvandare, $container] = flikknappKontext();
 
-    $motorn = flikknappItem($container, 'Motorn');
-    $seglet = flikknappItem($container, 'Seglet');
+    flikknappItem($container, 'Motorn');
+    flikknappItem($container, 'Seglet');
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/documents")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
-            ->where('create.heading', 'pick_item')
-            ->has('create.rows', 2)
-            ->where('create.rows', [
-                [
-                    'key' => 'item_target',
-                    'label' => 'Motorn',
-                    'href' => "/containers/{$container->ulid}/items/{$motorn->ulid}?tab=attachments",
-                ],
-                [
-                    'key' => 'item_target',
-                    'label' => 'Seglet',
-                    'href' => "/containers/{$container->ulid}/items/{$seglet->ulid}?tab=attachments",
-                ],
-            ]),
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'document'),
     );
 });
 
 /*
- * Klart när: "costs-fliken leder till itemets kostnadsflik".
- *
- * Samma form som documents, med `tab=costs` i stället för `tab=attachments`:
- * en kostnadsrad hör till ett item, och ytan där den skrivs är itemets
- * kostnadsflik (issue 168).
+ * Klart när: "plusknappen på Costs öppnar flikens formulär".
  */
-it('leder till itemets kostnadsflik på costs-fliken', function () {
+it('öppnar flikens formulär på costs-fliken', function () {
     withoutVite();
 
     [, $anvandare, $container] = flikknappKontext();
 
-    $motorn = flikknappItem($container, 'Motorn');
+    flikknappItem($container, 'Motorn');
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/costs")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
-            ->where('create.heading', 'pick_item')
-            ->where('create.rows', [
-                [
-                    'key' => 'item_target',
-                    'label' => 'Motorn',
-                    'href' => "/containers/{$container->ulid}/items/{$motorn->ulid}?tab=costs",
-                ],
-            ]),
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'cost'),
     );
+});
+
+/*
+ * Klart när: "en tom itemlista på Documents och Costs ger ingen knapp".
+ *
+ * Utan ett item finns ingenstans att spara, och formuläret har inget mål.
+ * Samma svar som före issue 1400, och samma regel som rubrikknappen: raden
+ * ritas bara när listan har items.
+ */
+it('ger ingen knapp på documents och costs när itemlistan är tom', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = flikknappKontext();
+
+    foreach (['documents', 'costs'] as $flik) {
+        actingAs($anvandare)->get("/containers/{$container->ulid}/{$flik}")->assertInertia(
+            fn (AssertableInertia $page) => $page->where('create', null),
+        );
+    }
 });
 
 /*
@@ -210,10 +222,90 @@ it('ger en läsare ingen plusknapp på documents', function () {
 });
 
 /*
+ * Klart när: "Items (lista och träd) öppnar flikens formulär, kartläget har
+ * dagens mål".
+ *
+ * I trädet står formuläret i vyn och skapar på toppnivån, så knappen får
+ * `{ kind: 'inline', form: 'item' }`. Kartan skapar under mitten, och
+ * formuläret i vyn kan inte det: där gäller dagens mål med `?parent`
+ * (issue 296 · [[ADR-0059 Kartan med en mitt]] § 4). Kontrollern vet vilket
+ * läge som visas.
+ */
+it('öppnar flikens formulär på items-fliken och behåller dagens mål i kartan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = flikknappKontext();
+
+    $motorn = flikknappItem($container, 'Motorn');
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'item'),
+    );
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items?view=map&focus={$motorn->ulid}")
+        ->assertOk()
+        ->assertInertia(
+            fn (AssertableInertia $page) => $page->where('create.kind', 'item')
+                ->where('create.href', "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"),
+        );
+});
+
+/*
  * ---------------------------------------------------------------------------
  * Formen. Klart när-punkt 5, och kopplingen mellan proppen och skalet.
  * ---------------------------------------------------------------------------
  */
+
+/*
+ * Klart när: "knappen ber sidan öppna formuläret".
+ *
+ * Knappen sitter i skalet och formuläret ägs av sidan, så klicket går genom
+ * en räknare på modulnivå i stället för en prop nedåt: `request()` ökar den,
+ * och `onRequest()` lyssnar så länge sidan är monterad. Sidan rullar fram
+ * formuläret — på mobilen sitter knappen längst ned — och sätter fokus i
+ * första fältet. Snabbraden har sin egen `focus()`; de andra fäller ut
+ * `InlineCreate` och får fokus i dess första fält.
+ */
+it('låter knappen be sidan öppna formuläret', function () {
+    $knapp = flikknappKod('components/CreateButton.vue');
+
+    expect($knapp)->toContain("props.create.kind === 'inline'")
+        ->toContain("import { useInlineCreate } from '../composables/useInlineCreate.js'")
+        ->toContain('@click="request()"')
+        ->toContain("t('create.label')");
+
+    $komposabel = flikknappKod('composables/useInlineCreate.js');
+
+    expect($komposabel)->toContain('let requests = 0')
+        ->toContain('listeners.forEach')
+        ->toContain('onBeforeUnmount')
+        ->toContain('listeners.delete(callback)');
+
+    foreach ([
+        'pages/Containers/Tasks.vue',
+        'pages/Containers/Items/Index.vue',
+        'pages/Containers/Documents.vue',
+        'pages/Containers/Costs.vue',
+    ] as $sokvag) {
+        expect(flikknappKod($sokvag))->toContain('useInlineCreate')
+            ->toContain('onRequest(')
+            ->toContain("scrollIntoView({ block: 'nearest' })");
+    }
+
+    // Fokus: snabbraden via sin egen focus(), de tre formulären i första fältet.
+    expect(flikknappKod('pages/Containers/Tasks.vue'))->toContain('quickCreate.value?.focus()');
+
+    foreach ([
+        'pages/Containers/Items/Index.vue',
+        'pages/Containers/Documents.vue',
+        'pages/Containers/Costs.vue',
+    ] as $sokvag) {
+        expect(flikknappKod($sokvag))
+            ->toContain("querySelector('summary, input, select, textarea, button')?.focus()");
+    }
+});
 
 /*
  * Klart när: "menyn ritar radens namn när den har ett".

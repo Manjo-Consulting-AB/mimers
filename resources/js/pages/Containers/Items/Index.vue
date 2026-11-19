@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
@@ -14,6 +14,7 @@ import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
+import { useInlineCreate } from '../../../composables/useInlineCreate.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 defineOptions({
@@ -299,6 +300,32 @@ function requestForm(target) {
 
     switchForm(target);
 }
+
+/*
+ * Plusknappen i skalet öppnar formuläret (issue 1400 · [[ADR-0074
+ * Registrering i vyn]] § 7). Klicket kommer upp genom useInlineCreate, för
+ * knappen ägs av skalet och formuläret av sidan, och går samma väg som raden
+ * *Add item*: `requestForm('root')` ställer frågan om osparade ändringar i ett
+ * annat öppet formulär på samma sätt. Formuläret rullas in i bilden och första
+ * fältet får fokus — men bara när raden faktiskt öppnades; väntar en
+ * bekräftelsedialog står det gamla formuläret kvar.
+ */
+const createBox = ref(null);
+
+const { onRequest } = useInlineCreate();
+
+onRequest(async () => {
+    requestForm('root');
+
+    await nextTick();
+
+    if (openForm.value !== 'root') {
+        return;
+    }
+
+    createBox.value?.scrollIntoView({ block: 'nearest' });
+    createBox.value?.querySelector('summary, input, select, textarea, button')?.focus();
+});
 
 const createOpen = computed({
     get: () => openForm.value === 'root',
@@ -593,7 +620,7 @@ const overflowHref = computed(() => base.value);
             § 2): rad noll, före trädet. Bara i trädläget och bara när hon får
             skapa.
         -->
-        <div v-if="can.create" class="mb-4">
+        <div v-if="can.create" ref="createBox" class="mb-4">
             <InlineCreate v-model:open="createOpen" :label="t('item.index.create')" :dirty="createDirty">
                 <ItemForm
                     inline

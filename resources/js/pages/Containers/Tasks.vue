@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
@@ -9,6 +9,7 @@ import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
 import UiTabs from '../../components/UiTabs.vue';
+import { useInlineCreate } from '../../composables/useInlineCreate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({
@@ -238,8 +239,9 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
 /*
  * Registreringen sker i vyn, med snabbraden som rad noll över listan
  * ([[ADR-0074 Registrering i vyn]] § 4 och 6, M52 · issue 358). *New task*
- * lämnar fliken; plusknappen (`create`) leder fortfarande till
- * hela formuläret. Raden ritas inte på *Done*: där finns inget att lägga till.
+ * lämnar fliken; plusknappen öppnar snabbraden (issue 1400 · § 7 och tillägget
+ * 2026-11-18). Raden ritas inte på *Done*: där finns inget att lägga till, och
+ * servern skickar då dagens mål — formuläret — i stället för `inline`.
  *
  * `entryUlids` är ULID:erna i de öppna grupperna just nu; snabbraden jämför
  * dem före och efter ett svar och skickar de nya i `created`, som markeras
@@ -248,6 +250,31 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
 const entryUlids = computed(() => Object.values(props.groups).flat().map((entry) => entry.ulid));
 
 const highlighted = ref(new Set());
+
+/*
+ * Plusknappen i skalet öppnar snabbraden (issue 1400 · [[ADR-0074
+ * Registrering i vyn]] § 7). Klicket kommer upp genom useInlineCreate, för
+ * knappen ägs av skalet och formuläret av sidan. Raden rullas in i bilden —
+ * på mobilen sitter knappen längst ned och formuläret högt upp — och fältet
+ * får fokus, oavsett om raden redan var framme eller inte. Är listan *Done*
+ * finns ingen snabbrad; servern skickar då ett `href` i stället, så klicket
+ * når aldrig hit, men vakten står kvar för att säga varför.
+ */
+const quickCreate = ref(null);
+const quickCreateBox = ref(null);
+
+const { onRequest } = useInlineCreate();
+
+onRequest(async () => {
+    if (props.list === 'done') {
+        return;
+    }
+
+    await nextTick();
+
+    quickCreateBox.value?.scrollIntoView({ block: 'nearest' });
+    quickCreate.value?.focus();
+});
 
 let highlightTimer = null;
 
@@ -297,14 +324,15 @@ function onCreated(ulids) {
     </label>
 
     <!-- Snabbraden: rad noll, före listan och det tomma läget (ADR-0074 § 2). -->
-    <ContainerTaskQuickCreate
-        v-if="list !== 'done'"
-        class="mt-4"
-        :container-ulid="container.ulid"
-        :list="list"
-        :entry-ulids="entryUlids"
-        @created="onCreated"
-    />
+    <div v-if="list !== 'done'" ref="quickCreateBox" class="mt-4">
+        <ContainerTaskQuickCreate
+            ref="quickCreate"
+            :container-ulid="container.ulid"
+            :list="list"
+            :entry-ulids="entryUlids"
+            @created="onCreated"
+        />
+    </div>
 
     <!--
         Listan till vänster och panelen till höger över `lg:`, panelen

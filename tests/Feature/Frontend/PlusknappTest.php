@@ -121,15 +121,21 @@ it('leder till formuläret för ett nytt item i containern', function () {
 
     [, $anvandare, $container] = plusknappKontext();
 
-    // Översikten och itemlistan — de två containervyer som finns i den här
-    // issuen. Trädet och kartan (154, 156 och 157) skickar samma mål, med
-    // `?parent` när man står på en nod; `forContainer()` tar emot den.
-    foreach (["/containers/{$container->ulid}", "/containers/{$container->ulid}/items"] as $url) {
-        actingAs($anvandare)->get($url)->assertInertia(
-            fn (AssertableInertia $page) => $page->where('create.kind', 'item')
-                ->where('create.href', "/containers/{$container->ulid}/items/create"),
-        );
-    }
+    // Översikten leder fortfarande till formuläret; där finns ingen
+    // registreringsrad att fälla ut.
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'item')
+            ->where('create.href', "/containers/{$container->ulid}/items/create"),
+    );
+
+    // Itemfliken öppnar sitt eget formulär i trädet (issue 1400 ·
+    // [[ADR-0074 Registrering i vyn]] § 7). Kartan har inget formulär i vyn
+    // och behåller dagens mål, med `?parent` när man står på en nod —
+    // `forContainer()` tar emot den.
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'inline')
+            ->where('create.form', 'item'),
+    );
 });
 
 /*
@@ -330,9 +336,13 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
     expect($flikrad)->toContain('import CreateButton from')
         ->toContain('<CreateButton');
 
-    // Knappen vet inte vad den gör: formen på målet avgör om den är en länk
-    // eller en knapp som öppnar menyn.
+    // Knappen vet inte vad den gör: formen på målet avgör om den är en länk,
+    // en knapp som öppnar menyn, eller en knapp som ber sidan öppna sitt
+    // formulär (issue 1400 · [[ADR-0074 Registrering i vyn]] § 7).
     expect($knapp)->toContain("props.create.kind === 'menu'")
+        ->toContain("props.create.kind === 'inline'")
+        ->toContain('@click="request()"')
+        ->toContain("import { useInlineCreate } from '../composables/useInlineCreate.js'")
         ->toContain('<Link')
         ->toContain('<button')
         ->toContain("t('create.label')");
