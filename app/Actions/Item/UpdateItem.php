@@ -46,6 +46,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Ändringen, taggbytet och raden ligger i EN transaktion, samma skäl som i
  * App\Actions\Item\CreateItem.
+ *
+ * **Läget före ändringen sparas som en version** (issue 412 · [[ADR-0088
+ * Versionshistorik för items]]), i samma transaktion och före
+ * `MetadataLedger::save()`. Skurven och taket bor i
+ * App\Actions\Item\RecordItemVersion; hit hör bara jämförelsen av
+ * taggmängden, som actionen behöver för att veta om något ändras alls.
  */
 class UpdateItem
 {
@@ -73,6 +79,7 @@ class UpdateItem
         private readonly RecordAuditEvent $recordAuditEvent,
         private readonly SyncItemTags $syncItemTags,
         private readonly SyncItemFieldValues $syncItemFieldValues,
+        private readonly RecordItemVersion $recordItemVersion,
     ) {}
 
     /**
@@ -97,6 +104,18 @@ class UpdateItem
         $meta = $this->metaFor($item);
 
         DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields): void {
+            // Läget FÖRE ändringen sparas som en version, i samma transaktion
+            // (issue 412 · [[ADR-0088 Versionshistorik för items]]). Taggar
+            // byts först efteråt av SyncItemTags, och ett nytt item har
+            // ingen tidigare version — därför jämförs mängden här och fälten
+            // och taggarna sparas tillsammans. `null` betyder att anroparen
+            // inte rör taggarna.
+            $this->recordItemVersion->handle(
+                $item,
+                $actor,
+                tagIds: $syncTags ? $tags->pluck('id')->all() : null,
+            );
+
             MetadataLedger::save($item);
 
             // Fältvärdena skrivs i samma transaktion som itemet. Actionen

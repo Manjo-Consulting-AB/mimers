@@ -65,11 +65,17 @@ afterEach(function () {
 /**
  * Ett personkonto med en medlem som ägare.
  *
+ * Versionshistoriken är AVSTÄNGD (issue 412): den här filen prövar räknaren
+ * för de skrivningar som äger rum, och en version hade lagt sin egen vikt på
+ * varje ändring och gjort talen här till en fråga om taket i stället för om
+ * skrivningen. Versionernas bokföring prövas i
+ * tests/Feature/Versionering/.
+ *
  * @return array{0: Account, 1: User}
  */
 function löpandeKonto(): array
 {
-    $konto = Account::factory()->create(['type' => 'personal']);
+    $konto = Account::factory()->create(['type' => 'personal', 'versioning_max_versions' => 0]);
     $användare = User::factory()->create();
     $konto->users()->attach($användare, ['role' => 'owner']);
 

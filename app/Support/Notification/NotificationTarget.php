@@ -42,6 +42,11 @@ final class NotificationTarget
             // papperskorgen, där hela tillfället kan återställas
             // ([[ADR-0087 MCP-server för agenter]] Riktning 8 och 14).
             Notification::TYPE_AGENT_DELETED => route('trash.index', [], false),
+            // Issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning 3:
+            // ägaren får veta att lagringen är full och ska kunna göra något
+            // åt det, så raden länkar till lagringsytan. Sidan väljer konto
+            // själv (valfritt `?account=`), så ingen ULID behövs.
+            Notification::TYPE_VERSIONING_SKIPPED => route('settings.storage', [], false),
             default => null,
         };
     }

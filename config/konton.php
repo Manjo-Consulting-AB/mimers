@@ -102,6 +102,17 @@ return [
 
     'versioning' => [
         'max_versions_limit' => 20,
+
+        /*
+        | Hur länge skrivningar räknas som SAMMA arbetspass (issue 412 ·
+        | [[ADR-0088 Versionshistorik för items]] Riktning 4). Skriver samma
+        | aktör itemet igen inom fönstret sparas ingen ny version —
+        | `replaced_at` flyttas framåt i stället, och fönstret glider. Det är
+        | samma tio minuter som anteckningens autosparning använder
+        | ([[ADR-0066 Itemets anteckning]] § 10).
+        */
+
+        'burst_minutes' => 10,
     ],
 
 ];

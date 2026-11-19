@@ -104,6 +104,15 @@ class Notification extends Model
     public const TYPE_AGENT_ACCESS_LOST = 'agent.access_lost';
 
     /**
+     * En version fick inte plats i containerns ägares kvot, se [[ADR-0088
+     * Versionshistorik för items]] Riktning 3 och issue 412. Går till
+     * ägarkontot i appen, en gång per container och dygn: skrivningen som
+     * utlöste den gick igenom ändå, och notisen säger bara att lagringen är
+     * full. E-postens förval är avstängt — den som vill kan slå på det.
+     */
+    public const TYPE_VERSIONING_SKIPPED = 'versioning.skipped';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

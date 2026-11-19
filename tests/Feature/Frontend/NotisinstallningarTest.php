@@ -118,8 +118,8 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
-            // Sju e-postrader och tre `in_app`-rader (issue 386).
-            ->has('preferences', 11)
+            // Nio e-postrader och fyra `in_app`-rader (issue 386, 412).
+            ->has('preferences', 13)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all()
                 === app(NotificationPreferences::class)->types())
@@ -149,7 +149,7 @@ it('listar inte kanalen webhook bland preferenserna', function () {
  * Issue 386 · Kolumnen In app. Serverns lista över typer som kan ha kanalen
  * bärs som propp; vyn ritar växeln bara för dem. Förvalet är påslaget.
  */
-it('bär kolumnen In app för de tre typerna och ingen växel för de andra', function () {
+it('bär kolumnen In app för typerna som har kanalen och ingen växel för de andra', function () {
     withoutVite();
 
     actingAs(User::factory()->create())
@@ -159,12 +159,14 @@ it('bär kolumnen In app för de tre typerna och ingen växel för de andra', fu
                 Notification::TYPE_CONTAINER_DELETED,
                 Notification::TYPE_TRANSFER_REQUESTED,
                 Notification::TYPE_QUOTA_WARNING,
+                // Issue 412.
+                Notification::TYPE_VERSIONING_SKIPPED,
             ])->sort()->values()->all())
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_IN_APP)
                 ->every(fn (array $rad) => $rad['enabled'] === true && $rad['is_default'] === true))
             ->where('preferences', fn ($rader) => collect($rader)
-                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)->count() === 3)
+                ->where('channel', NotificationDelivery::CHANNEL_IN_APP)->count() === 4)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('type', Notification::TYPE_TASK_DUE)->pluck('channel')->all()
                 === [NotificationDelivery::CHANNEL_EMAIL])
@@ -628,8 +630,8 @@ it('lämnar /api-rutterna oförändrade', function () {
 
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
-    // Sju e-postrader och tre `in_app`-rader (issue 386).
-    expect($svar->json('data'))->toHaveCount(11);
+    // Nio e-postrader och fyra `in_app`-rader (issue 386, 412).
+    expect($svar->json('data'))->toHaveCount(13);
     expect(collect($svar->json('data'))->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());
     expect(collect($svar->json('data'))->every(fn (array $rad) => $rad['is_default'] === true))->toBeTrue();

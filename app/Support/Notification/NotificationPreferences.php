@@ -60,6 +60,12 @@ final class NotificationPreferences
         // MANDATORY_IN_APP_TYPES nedan (issue 406 · [[ADR-0087 MCP-server för
         // agenter]] Riktning 13 och 14).
         Notification::TYPE_AGENT_DELETED => ['enabled' => true, 'digest' => false],
+        // `versioning.skipped` (issue 412 · [[ADR-0088 Versionshistorik för
+        // items]] Riktning 3) går till containerns ägare när en version inte
+        // fick plats i kvoten. Avstängt i mejlet som förval — det är en
+        // notis om lagringen, inte om en händelse användaren väntar på — men
+        // går att slå på. Appkanalen är påslagen i IN_APP_DEFAULTS.
+        Notification::TYPE_VERSIONING_SKIPPED => ['enabled' => false, 'digest' => false],
     ];
 
     /**
@@ -78,6 +84,8 @@ final class NotificationPreferences
         Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
         Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_CONTAINER_DELETED => ['enabled' => true, 'digest' => false],
+        // Issue 412: ägaren får veta att lagringen är full i appen.
+        Notification::TYPE_VERSIONING_SKIPPED => ['enabled' => true, 'digest' => false],
     ];
 
     /**
