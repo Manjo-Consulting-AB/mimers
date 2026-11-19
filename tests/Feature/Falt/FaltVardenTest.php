@@ -300,6 +300,25 @@ it('låser typen när fältet har fått ett värde genom itemets endpoint', func
     expect($response->json('error.code'))->toBe('field.type_locked');
 });
 
+it('skriver ett värde i itemets eget fält med scope item', function () {
+    [, , $headers, $container] = faltVardenKontext();
+    $item = faltVardenItem($container);
+
+    $eget = ItemField::factory()->forItem($item)->create([
+        'label' => 'Serienummer',
+        'type' => 'text',
+    ]);
+
+    faltVardenSkriv($container, $item, [['field' => $eget->ulid, 'value' => 'HQ2148']], $headers);
+
+    $fält = collect(
+        getJson("/api/containers/{$container->ulid}/items/{$item->ulid}", $headers)->json('data.fields')
+    )->firstWhere('id', $eget->ulid);
+
+    expect($fält['scope'])->toBe('item')
+        ->and($fält['value'])->toBe('HQ2148');
+});
+
 it('döljer ett fält i papperskorgen och tar tillbaka värdet när fältet återställs', function () {
     [, , $headers, $container] = faltVardenKontext();
     $item = faltVardenItem($container);
