@@ -19,7 +19,10 @@ use Illuminate\Validation\Rule;
  * (`field.label_taken`) och inte ett `validation.failed`.
  *
  * `position` är valfri: utelämnad sätter App\Actions\Field\CreateField nästa
- * lediga i omfånget.
+ * lediga i omfånget. Angiven är den 1–1000 — samma golv som ordningen
+ * (App\Actions\Field\ReorderFields skriver 1, 2, 3 …) och ett tak som ryms i
+ * kolumnen med god marginal; utan gränserna blev ett negativt värde eller
+ * `99999999999` ett databasfel i stället för ett valideringssvar.
  *
  * Behörigheten prövas av kontrollern — `ContainerPolicy::update()` för
  * containerns fält, `ItemPolicy::update()` för itemets egna — aldrig här,
@@ -47,7 +50,7 @@ class StoreFieldRequest extends FormRequest
         return [
             'label' => ['required', 'string', 'min:1', 'max:100'],
             'type' => ['required', 'string', Rule::in(ItemField::TYPES)],
-            'position' => ['nullable', 'integer'],
+            'position' => ['nullable', 'integer', 'min:1', 'max:1000'],
         ];
     }
 }

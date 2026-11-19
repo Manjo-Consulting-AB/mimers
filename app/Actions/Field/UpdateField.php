@@ -37,6 +37,11 @@ class UpdateField
         $type = $attributes['type'] ?? null;
 
         DB::transaction(function () use ($container, $field, $label, $type): void {
+            // Rubrikkrocken är en applikationsregel över flera rader, så
+            // containerraden låses först: två samtidiga ändringar ska inte
+            // båda se samma rubrik som ledig (granskningsfynd 3).
+            Container::query()->whereKey($container->getKey())->lockForUpdate()->first();
+
             // Läsningen sker inuti transaktionen: ett värde som skrivs
             // samtidigt som typbytet får inte slinka igenom mellan
             // prövningen och skrivningen.

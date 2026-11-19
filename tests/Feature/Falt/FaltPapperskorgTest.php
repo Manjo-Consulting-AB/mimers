@@ -5,6 +5,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemFieldValue;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
@@ -110,6 +111,83 @@ it('ett eget fält som raderades före itemet stannar i papperskorgen', function
 
     $trash = getJson("/api/containers/{$container->ulid}/trash", $headers);
     expect(collect($trash->json('data'))->pluck('ulid')->all())->toContain($fält->ulid);
+});
+
+it('stämplar itemets egna fält med itemets egen deleted_at', function () {
+    [, , , $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+    $fält = ItemField::factory()->forItem($item)->create(['label' => 'Color']);
+
+    Carbon::setTestNow('2026-11-19 12:00:00');
+
+    // Flyttar klockan över en sekundgräns EFTER modellens egna raderingskrok
+    // men FÖRE itemets `deleted_at` sätts — precis vad en långsam begäran kan
+    // göra. Itemet får den senare tiden, och fältet ska bära exakt samma;
+    // annars matchar återställningen ingenting och fältet blir kvar i
+    // papperskorgen som skräp (granskningsfynd 1).
+    Item::deleting(function (): void {
+        Carbon::setTestNow(Carbon::now()->addSecond());
+    });
+
+    $item->delete();
+
+    expect($fält->fresh()->deleted_at->equalTo($item->fresh()->deleted_at))->toBeTrue();
+
+    $item->restore();
+
+    expect($fält->fresh()->trashed())->toBeFalse();
+});
+
+it('lämnar ett eget fält i papperskorgen när ett containerfält tagit dess rubrik', function () {
+    [, , $headers, $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+    $eget = ItemField::factory()->forItem($item)->create(['label' => 'Color']);
+
+    $item->delete();
+
+    // Medan itemet ligger i papperskorgen tar containern rubriken — dess
+    // fält syns på itemet när itemet kommer tillbaka, och två fält med samma
+    // rubrik får inte uppstå ([[ADR-0089 Egna fält på items]] § Riktning 9).
+    ItemField::factory()->for($container, 'container')->create(['label' => 'color']);
+
+    $item->restore();
+
+    expect($eget->fresh()->trashed())->toBeTrue();
+
+    // Itemet visar bara containerns fält; det egna ligger kvar i
+    // papperskorgen och går att återställa när rubriken är ledig.
+    expect(getJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields", $headers)->json('data'))->toBe([]);
+
+    $trash = getJson("/api/containers/{$container->ulid}/trash", $headers);
+    expect(collect($trash->json('data'))->pluck('ulid')->all())->toContain($eget->ulid);
+});
+
+it('nekar en item-delad read-mottagare att återställa ett eget fält', function () {
+    [, , , $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+    $kastat = ItemField::factory()->forItem($item)->create(['label' => 'Color']);
+    $kastat->delete();
+
+    postJson("/api/containers/{$container->ulid}/trash/restore", [
+        'type' => 'field',
+        'ulid' => $kastat->ulid,
+    ], faltItemHeaders($container, $item, 'read'))->assertStatus(403);
+
+    expect($kastat->fresh()->trashed())->toBeTrue();
+});
+
+it('låter en item-delad write-mottagare återställa ett eget fält', function () {
+    [, , , $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+    $kastat = ItemField::factory()->forItem($item)->create(['label' => 'Color']);
+    $kastat->delete();
+
+    postJson("/api/containers/{$container->ulid}/trash/restore", [
+        'type' => 'field',
+        'ulid' => $kastat->ulid,
+    ], faltItemHeaders($container, $item, 'write'))->assertOk();
+
+    expect($kastat->fresh()->trashed())->toBeFalse();
 });
 
 it('kan inte återställa ett eget fält medan itemet ligger i papperskorgen', function () {

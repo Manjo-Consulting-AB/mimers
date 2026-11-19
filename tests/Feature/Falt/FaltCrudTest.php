@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\User;
@@ -49,6 +50,30 @@ function faltGastHeaders(Container $container, string $level): array
     beviljaAccess($container, $gast, $level, 'guest');
 
     return ['Authorization' => 'Bearer '.$gast->createToken('api')->plainTextToken];
+}
+
+/**
+ * En token för en mottagare UTANFÖR ägarkontot med den nivån på ETT item —
+ * det minsta omfånget som ändå ger `ItemPolicy::update` på itemets egna
+ * fält ([[ADR-0028 Åtkomst på itemnivå]]).
+ *
+ * @return array<string, string>
+ */
+function faltItemHeaders(Container $container, Item $item, string $level): array
+{
+    $mottagare = User::factory()->create();
+
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => $item->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $mottagare->id,
+        'level' => $level,
+        'kind' => 'guest',
+        'granted_by_user_id' => User::factory()->create()->id,
+    ]);
+
+    return ['Authorization' => 'Bearer '.$mottagare->createToken('api')->plainTextToken];
 }
 
 it('skapar ett containerfält med rubrik och typ', function () {
@@ -211,6 +236,86 @@ it('en fält-ULID från ett annat item eller från containern ger 404', function
         ->assertStatus(404);
     patchJson("/api/containers/{$container->ulid}/fields/{$annansFält->ulid}", ['label' => 'Kapad'], $headers)
         ->assertStatus(404);
+});
+
+it('låter en item-delad write-mottagare skapa ett eget fält', function () {
+    [, , , $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $response = postJson(
+        "/api/containers/{$container->ulid}/items/{$item->ulid}/fields",
+        ['label' => 'Color', 'type' => 'text'],
+        faltItemHeaders($container, $item, 'write'),
+    );
+
+    $response->assertCreated();
+    expect($response->json('data.item'))->toBe($item->ulid);
+    expect(ItemField::query()->where('ulid', $response->json('data.ulid'))->value('item_id'))->toBe($item->id);
+});
+
+it('en item-delad read-mottagare får 403 på att skapa, ändra, sortera och radera ett eget fält', function () {
+    [, , , $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+    $fält = ItemField::factory()->forItem($item)->create(['label' => 'Color']);
+    $headers = faltItemHeaders($container, $item, 'read');
+
+    postJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields", ['label' => 'Ny', 'type' => 'text'], $headers)
+        ->assertStatus(403);
+    patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields/{$fält->ulid}", ['label' => 'Annan'], $headers)
+        ->assertStatus(403);
+    patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields/order", ['fields' => [$fält->ulid]], $headers)
+        ->assertStatus(403);
+    deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields/{$fält->ulid}", [], $headers)
+        ->assertStatus(403);
+
+    expect($fält->fresh()->label)->toBe('Color');
+    expect($fält->fresh()->trashed())->toBeFalse();
+});
+
+it('sorterar itemets egna fält', function () {
+    [, , $headers, $container] = faltKontext();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $a = ItemField::factory()->forItem($item)->create(['label' => 'A', 'position' => 1]);
+    $b = ItemField::factory()->forItem($item)->create(['label' => 'B', 'position' => 2]);
+    $c = ItemField::factory()->forItem($item)->create(['label' => 'C', 'position' => 3]);
+
+    $response = patchJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields/order", [
+        'fields' => [$c->ulid, $a->ulid, $b->ulid],
+    ], $headers);
+
+    $response->assertOk();
+    expect(collect($response->json('data'))->pluck('label')->all())->toBe(['C', 'A', 'B']);
+
+    expect(collect(getJson("/api/containers/{$container->ulid}/items/{$item->ulid}/fields", $headers)->json('data'))->pluck('label')->all())
+        ->toBe(['C', 'A', 'B']);
+});
+
+it('avvisar en position utanför 1–1000 med ett valideringsfel, inte ett databasfel', function () {
+    [, , $headers, $container] = faltKontext();
+
+    foreach ([0, -1, 1001, 99999999999] as $position) {
+        $response = postJson("/api/containers/{$container->ulid}/fields", [
+            'label' => "Falt {$position}",
+            'type' => 'text',
+            'position' => $position,
+        ], $headers);
+
+        $response->assertStatus(422);
+        expect($response->json('error.code'))->toBe('validation.failed');
+    }
+
+    expect(ItemField::query()->where('container_id', $container->id)->exists())->toBeFalse();
+
+    // Taket självt är giltigt.
+    $response = postJson("/api/containers/{$container->ulid}/fields", [
+        'label' => 'Kant',
+        'type' => 'text',
+        'position' => 1000,
+    ], $headers);
+
+    $response->assertCreated();
+    expect($response->json('data.position'))->toBe(1000);
 });
 
 it('en ny definition räknas i metadata_bytes för billed_account_id', function () {

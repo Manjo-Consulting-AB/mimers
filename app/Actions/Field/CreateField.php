@@ -44,20 +44,28 @@ class CreateField
     ): ItemField {
         $label = trim($label);
 
-        FieldRules::assertWithinLimit($container, $item);
-        FieldRules::assertLabelAvailable($container, $item, $label);
+        $field = DB::transaction(function () use ($container, $item, $label, $type, $position, $actor): ItemField {
+            // Gränsen och rubrikkrocken är applikationsregler över flera
+            // rader. Containerraden låses först, så att två samtidiga
+            // skapanden serialiseras och inte båda ser en ledig plats eller
+            // samma rubrik som ledig (granskningsfynd 3).
+            Container::query()->whereKey($container->getKey())->lockForUpdate()->first();
 
-        $field = new ItemField([
-            'label' => $label,
-            'type' => $type,
-            'position' => $position ?? $this->nextPosition($container, $item),
-        ]);
-        $field->container_id = $container->id;
-        $field->item_id = $item?->id;
-        $field->billed_account_id = Payer::idFor($actor, $container);
+            FieldRules::assertWithinLimit($container, $item);
+            FieldRules::assertLabelAvailable($container, $item, $label);
 
-        DB::transaction(function () use ($field): void {
+            $field = new ItemField([
+                'label' => $label,
+                'type' => $type,
+                'position' => $position ?? $this->nextPosition($container, $item),
+            ]);
+            $field->container_id = $container->id;
+            $field->item_id = $item?->id;
+            $field->billed_account_id = Payer::idFor($actor, $container);
+
             MetadataLedger::save($field);
+
+            return $field;
         });
 
         if ($item !== null) {

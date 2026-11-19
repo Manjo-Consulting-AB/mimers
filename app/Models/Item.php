@@ -294,23 +294,29 @@ class Item extends Model
      *
      * Kroken ligger i modellen och inte i App\Actions\Item\DeleteItem,
      * eftersom den måste gälla varje väg som mjukraderar ett item — API:et,
-     * webben och containerpapperskorgen — och `deleting` redan bär
-     * mjukraderingens betydelse i den här modellen (jämför
-     * App\Models\Concerns\RecordsAgentDeletion). En fysisk gallring
-     * (`isForceDeleting()`) rör inga fält här: App\Actions\Trash\PurgeContent
+     * webben och containerpapperskorgen. Den hänger på `trashed`, inte på
+     * `deleting`: `deleting` körs FÖRE `runSoftDelete()`, alltså innan
+     * itemet har fått sin `deleted_at`, och ett eget `now()` där kan hamna en
+     * sekund före itemets `freshTimestamp()` — då matchar återställningen
+     * ingenting och fälten blir kvar i papperskorgen som skräp. `trashed`
+     * (registrerad med `softDeleted()`) körs efter att `deleted_at` satts, så
+     * fälten får exakt itemets tidsstämpel. En fysisk gallring rör inga fält
+     * här — `trashed` avfyras aldrig för den; App\Actions\Trash\PurgeContent
      * bokför och raderar dem själv, i samma transaktion.
+     *
+     * **En rubrik som containern har fått medan itemet låg i papperskorgen
+     * vinner.** Ett eget fält vars rubrik krockar med ett levande
+     * containerfält lämnas kvar i papperskorgen i stället för att ge två
+     * fält med samma rubrik på itemet; det går att återställa för sig när
+     * rubriken är ledig ([[ADR-0089 Egna fält på items]] § Riktning 9).
      */
     protected static function booted(): void
     {
-        static::deleting(function (Item $item): void {
-            if ($item->isForceDeleting()) {
-                return;
-            }
-
+        static::softDeleted(function (Item $item): void {
             ItemField::query()
                 ->where('item_id', $item->getKey())
                 ->whereNull('deleted_at')
-                ->update(['deleted_at' => $item->deleted_at ?? now()]);
+                ->update(['deleted_at' => $item->deleted_at]);
         });
 
         static::restoring(function (Item $item): void {
@@ -322,10 +328,25 @@ class Item extends Model
                 return;
             }
 
-            ItemField::onlyTrashed()
+            $fields = ItemField::onlyTrashed()
                 ->where('item_id', $item->getKey())
                 ->where('deleted_at', $item->ownFieldsRestoredAt)
-                ->update(['deleted_at' => null]);
+                ->get();
+
+            foreach ($fields as $field) {
+                $conflict = ItemField::query()
+                    ->where('container_id', $item->container_id)
+                    ->whereNull('item_id')
+                    ->where('label', $field->label)
+                    ->exists();
+
+                if ($conflict) {
+                    continue;
+                }
+
+                $field->restore();
+                $field->clearAgentDeletionMark();
+            }
 
             $item->ownFieldsRestoredAt = null;
         });
