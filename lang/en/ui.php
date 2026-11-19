@@ -183,6 +183,12 @@ return [
         // och står kvar.
         'label' => 'Add',
         'close' => 'Close',
+        // Kortkommandot `N` (issue 1401): skalet lyssnar på bokstaven, och
+        // knappen bär den i `aria-keyshortcuts` och i sin tooltip. Formen på
+        // tooltipen är etiketten följd av kortkommandot — *Add (N)* — och står
+        // här i stället för i komponenten, som all annan text användaren möter.
+        'shortcut' => 'N',
+        'title' => ':label (:shortcut)',
         // Arkets rubrik. Samma ord som knappens — ytan är knappens meny, och
         // två ord för samma sak hade glidit isär.
         'heading' => 'Add',
