@@ -23,14 +23,14 @@ final class ToolError
     /**
      * @param  array<string, mixed>  $data
      */
-    public static function response(string $code, array $data = []): Response
+    public static function response(string $code, array $data = [], ?string $hint = null): Response
     {
         $error = [
             'code' => $code,
             'data' => ApiError::asJsonObject($data),
         ];
 
-        $hint = Hints::for($code);
+        $hint ??= Hints::for($code);
 
         if ($hint !== null) {
             $error['hint'] = $hint;
@@ -42,7 +42,7 @@ final class ToolError
     public static function fromThrowable(Throwable $e): Response
     {
         if ($e instanceof McpToolException) {
-            return self::response($e->errorCode, $e->data);
+            return self::response($e->errorCode, $e->data, $e->hint);
         }
 
         if ($e instanceof ApiException) {
