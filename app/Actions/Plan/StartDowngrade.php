@@ -5,7 +5,6 @@ namespace App\Actions\Plan;
 use App\Actions\Notification\CreateNotification;
 use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
-use App\Models\Agent;
 use App\Models\Container;
 use App\Models\Notification as NotificationModel;
 use Illuminate\Support\Facades\DB;
@@ -92,8 +91,6 @@ class StartDowngrade
      */
     private function notifyContainerOwners(Account $account, ?string $movesOn): void
     {
-        $hasAgent = Agent::query()->where('account_id', $account->getKey())->exists();
-
         foreach ((new TransferBilling)->foreignContainers($account) as $containerId => $info) {
             $container = Container::withTrashed()->with('account.users')->find($containerId);
 
@@ -106,12 +103,6 @@ class StartDowngrade
                 'account' => $account->name,
                 'bytes' => $info['bytes'],
             ];
-
-            // Issue 409: MCP stängs när planen tar slut, och varningen säger
-            // det bara när kontot har en agent som kan beröras.
-            if ($hasAgent) {
-                $payload['mcp'] = true;
-            }
 
             if ($movesOn !== null) {
                 $payload['moves_on'] = $movesOn;

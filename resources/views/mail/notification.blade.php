@@ -20,12 +20,6 @@
 
 {{ trans($lineKey, $replace) }}
 
-{{-- Issue 409 · varningen vid nedgradering nämner MCP, men bara när kontot
-     har en agent (StartDowngrade sätter `mcp` i payloaden). --}}
-@if ($type === 'container.content_moving' && ! empty($payload['mcp']))
-{{ trans('notiser.container_content_moving.mcp_line', ['account' => $payload['account'] ?? '']) }}
-@endif
-
 <x-mail::button :url="$actionUrl">
 {{ trans("notiser.{$key}.action") }}
 </x-mail::button>

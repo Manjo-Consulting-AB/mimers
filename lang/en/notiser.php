@@ -63,9 +63,6 @@ return [
         'line' => 'The account ":account" is being downgraded. On :moves_on, the files and entries it added to ":container" (:bytes) move to your storage. You can remove anything you don\'t want before then.',
         'line_no_date' => 'The account ":account" is being downgraded. The files and entries it added to ":container" (:bytes) will move to your storage. You can remove anything you don\'t want before then.',
         'action' => 'Go to Mimers',
-        // Issue 409: bara när det nedgraderade kontot har en agent. Vyn lägger
-        // meningen efter den vanliga raden.
-        'mcp_line' => 'Agents connected to ":account" lose their MCP access when its plan ends.',
     ],
     /*
      * Agenten som anslöts, se [[ADR-0087 MCP-server för agenter]] Riktning 14
