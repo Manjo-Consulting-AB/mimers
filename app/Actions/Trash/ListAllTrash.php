@@ -4,6 +4,7 @@ namespace App\Actions\Trash;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Inbox\ResolveInbox;
+use App\Models\Agent;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -127,6 +128,8 @@ class ListAllTrash
      *         deleted_at: Carbon|null,
      *         expires_at: Carbon|null,
      *         deleted_by: string|null,
+     *         deleted_by_agent: string|null,
+     *         agent_deletion_batch: string|null,
      *     }>,
      *     next_cursor: string|null,
      *     subjects: array<string, Item|Attachment|Container>,
@@ -242,6 +245,7 @@ class ListAllTrash
         $hasMore = count($candidates) > self::PER_PAGE;
 
         $deletedBy = $this->deletedBy($page);
+        $agents = $this->agentNames($page);
 
         $entries = [];
         $subjects = [];
@@ -256,6 +260,8 @@ class ListAllTrash
                 $retentionDays,
             );
 
+            $agentId = $candidate['subject']->getAttribute('deleted_by_agent_id');
+
             $entries[] = [
                 'type' => $core['type'],
                 'ulid' => $core['ulid'],
@@ -267,6 +273,11 @@ class ListAllTrash
                 'deleted_at' => $core['deleted_at'],
                 'expires_at' => $core['expires_at'],
                 'deleted_by' => $deletedBy[$candidate['type'].':'.$candidate['ulid']] ?? null,
+                // En agentradering tar över raden: papperskorgen säger
+                // *Deleted by {agentens namn}* i stället för användarens
+                // (issue 406 § 3, [[ADR-0087 MCP-server för agenter]] Riktning 8).
+                'deleted_by_agent' => $agentId === null ? null : ($agents[(int) $agentId] ?? null),
+                'agent_deletion_batch' => $candidate['subject']->getAttribute('agent_deletion_batch'),
             ];
 
             $subjects[$candidate['ulid']] = $candidate['subject'];
@@ -374,7 +385,7 @@ class ListAllTrash
             ->orderByDesc('item.deleted_at')
             ->orderBy('item.ulid')
             ->limit(self::PER_PAGE + 1)
-            ->get(['item.id', 'item.ulid', 'item.name', 'item.icon', 'item.icon_color', 'item.deleted_at', 'item.container_id']);
+            ->get(['item.id', 'item.ulid', 'item.name', 'item.icon', 'item.icon_color', 'item.deleted_at', 'item.container_id', 'item.deleted_by_agent_id', 'item.agent_deletion_batch']);
     }
 
     /**
@@ -419,6 +430,8 @@ class ListAllTrash
                 'attachment.filename',
                 'attachment.deleted_at',
                 'attachment.item_id',
+                'attachment.deleted_by_agent_id',
+                'attachment.agent_deletion_batch',
                 'item.ulid as item_ulid',
                 'item.name as item_name',
                 'item.container_id as item_container_id',
@@ -452,6 +465,8 @@ class ListAllTrash
                 'container.icon_color',
                 'container.deleted_at',
                 'container.account_id',
+                'container.deleted_by_agent_id',
+                'container.agent_deletion_batch',
                 // ContainerPolicy::delete() prövar isInbox() först.
                 'container.inbox_user_id',
             ]);
@@ -472,6 +487,39 @@ class ListAllTrash
                         ->where($table.'.ulid', '>', $cursor['ulid']);
                 });
         });
+    }
+
+    /**
+     * Agentnamnen för sidans rader, i EN fråga — som `deletedBy` ovan.
+     *
+     * Kolumnen `deleted_by_agent_id` finns bara på en rad en agent raderat
+     * (issue 406). Agenten kan ha kopplats bort efteråt; främmande nyckeln
+     * släpper då taget och kolumnen är null, så raden faller tillbaka på
+     * användaren ur händelseloggen.
+     *
+     * @param  list<array{type: string, ulid: string, subject: Item|Attachment|Container}>  $rows
+     * @return array<int, string> agentens id → namn
+     */
+    private function agentNames(array $rows): array
+    {
+        $ids = [];
+
+        foreach ($rows as $row) {
+            $id = $row['subject']->getAttribute('deleted_by_agent_id');
+
+            if ($id !== null) {
+                $ids[] = (int) $id;
+            }
+        }
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return Agent::query()
+            ->whereIn('id', array_values(array_unique($ids)))
+            ->pluck('name', 'id')
+            ->all();
     }
 
     /**

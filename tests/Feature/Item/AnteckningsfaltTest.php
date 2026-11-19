@@ -133,6 +133,8 @@ it('har en nullbar textkolumn för anteckningen, skild från description', funct
         'created_by_account_id',
         'billed_account_id',
         'deleted_at',
+        'deleted_by_agent_id',
+        'agent_deletion_batch',
         'created_at',
         'updated_at',
     ])->sort()->values()->all());

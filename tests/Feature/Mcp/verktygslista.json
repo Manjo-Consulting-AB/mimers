@@ -1,5 +1,21 @@
 [
     {
+        "name": "attachments_delete",
+        "parameters": {
+            "attachment": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "attachment"
+        ],
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "attachments_get",
         "parameters": {
             "attachment": {
@@ -166,6 +182,22 @@
         }
     },
     {
+        "name": "containers_delete",
+        "parameters": {
+            "container": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container"
+        ],
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "containers_list",
         "parameters": {
             "cursor": {
@@ -265,6 +297,22 @@
         ],
         "annotations": {
             "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "costs_delete",
+        "parameters": {
+            "cost": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "cost"
+        ],
+        "annotations": {
+            "destructiveHint": true,
             "idempotentHint": false,
             "readOnlyHint": false
         }
@@ -403,6 +451,22 @@
         ],
         "annotations": {
             "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "items_delete",
+        "parameters": {
+            "item": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": true,
             "idempotentHint": false,
             "readOnlyHint": false
         }
@@ -804,6 +868,22 @@
         ],
         "annotations": {
             "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "schedules_delete",
+        "parameters": {
+            "schedule": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "schedule"
+        ],
+        "annotations": {
+            "destructiveHint": true,
             "idempotentHint": false,
             "readOnlyHint": false
         }

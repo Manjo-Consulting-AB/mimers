@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use Database\Factories\TagFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -30,7 +31,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Tag extends Model
 {
     /** @use HasFactory<TagFactory> */
-    use HasFactory, HasUlid, SoftDeletes;
+    use HasFactory, HasUlid, RecordsAgentDeletion, SoftDeletes;
 
     /**
      * Tabellen heter `tag`, inte Eloquents standardplural `tags`.

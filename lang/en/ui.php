@@ -299,6 +299,12 @@ return [
          */
         'agent' => [
             'connected' => ':client is connected as an agent',
+            // Issue 406 · [[ADR-0087 MCP-server för agenter]] Riktning 8 och
+            // 14. The clock's sentence; the notification row itself uses
+            // `notifications.list.type.agent.deleted`
+            // (resources/js/components/NotificationRow.vue), which also
+            // carries the container counts.
+            'deleted' => ':agent deleted :total things',
         ],
 
         /*
@@ -1661,6 +1667,19 @@ return [
                     'description' => 'When a container you had access to is deleted together with the account that owned it.',
                 ],
             ],
+            /*
+             * Issue 406 · [[ADR-0087 MCP-server för agenter]] Riktning 14.
+             * The email can be turned off here; the In app channel cannot,
+             * because reading the notification is what releases the agent's
+             * deletion limit (Riktning 13). The In app switch is therefore not
+             * drawn — the type is not in NotificationPreferences::IN_APP_DEFAULTS.
+             */
+            'agent' => [
+                'deleted' => [
+                    'label' => 'An agent deleted content',
+                    'description' => 'When an agent connected to your account deletes something. The notification in the app cannot be turned off, because reading it releases the agent\'s deletion limit.',
+                ],
+            ],
         ],
 
         // The three modes, see Decision 2.
@@ -1749,6 +1768,18 @@ return [
                 ],
                 'quota' => [
                     'warning' => 'You have used :percent % of your storage space.',
+                ],
+                /*
+                 * Issue 406 · Riktning 8 and 14. One sentence per occasion,
+                 * with the count; a deleted container also says how many items
+                 * it held, because the content follows the container into the
+                 * trash while the limit counted the container as one deletion
+                 * (Riktning 9). resources/js/components/NotificationRow.vue
+                 * joins the container sentences after the first.
+                 */
+                'agent' => [
+                    'deleted' => ':agent deleted :total things. Anything in the trash can be restored.',
+                    'container' => 'The container ":container" held :items items.',
                 ],
             ],
         ],
@@ -5262,6 +5293,23 @@ return [
             'in_item' => 'On :item in :container',
             'deleted_by' => 'Deleted :date by :user',
             'deleted_by_former' => 'Deleted :date by a former user',
+            // Issue 406 § 3: a row an agent deleted names the agent instead.
+            // The agent may have been disconnected since, in which case the
+            // server sends no name and the row falls back to the user from
+            // the history.
+            'deleted_by_agent' => 'Deleted :date by :agent',
+            // One action for the whole occasion: every row sharing the batch,
+            // behind the app's confirmation dialog (ADR-0068 § 6).
+            'restore_agent_batch' => 'Restore everything the agent deleted',
+            'restore_agent_batch_title' => 'Restore everything?',
+            'restore_agent_batch_body' => 'Everything the agent deleted at this occasion is restored from the trash in one action. Nothing else is touched.',
+            'restore_agent_batch_submit' => 'Restore everything',
+            // Issue 406 § 3: a row in the batch can depend on something that
+            // is still in the trash (for example an attachment whose item is
+            // in another batch). The rest is restored; the count says how
+            // many rows stayed, so the answer is never silently partial
+            // (review finding 4).
+            'agent_batch_skipped' => 'Could not restore :count of the rows, because something they depend on is still in the trash.',
         ],
 
         // The row under the container list, see issue 62b decision 8 and issue

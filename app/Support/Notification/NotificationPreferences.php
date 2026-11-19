@@ -56,6 +56,10 @@ final class NotificationPreferences
         // preferensmodellen har inget "obligatorisk"-läge, så den ligger här
         // och kan stängas av som de andra. Se PR:ens Frågor och antaganden.
         Notification::TYPE_CONTAINER_DELETED => ['enabled' => true, 'digest' => false],
+        // `agent.deleted` kan stängas av i mejlet men aldrig i appen — se
+        // MANDATORY_IN_APP_TYPES nedan (issue 406 · [[ADR-0087 MCP-server för
+        // agenter]] Riktning 13 och 14).
+        Notification::TYPE_AGENT_DELETED => ['enabled' => true, 'digest' => false],
     ];
 
     /**
@@ -102,6 +106,25 @@ final class NotificationPreferences
      */
     private const MANDATORY_EMAIL_TYPES = [
         Notification::TYPE_AGENT_CONNECTED,
+    ];
+
+    /**
+     * Typer vars `in_app`-kanal aldrig kan stängas av.
+     *
+     * `agent.deleted` är den första (issue 406 · [[ADR-0087 MCP-server för
+     * agenter]] Riktning 13 och 14): användarens LÄSNING av notisen är det som
+     * släpper agentens raderingstak, så en avstängd appkanal hade låst taket
+     * för alltid. Mejlet kan stängas av som vanligt — det bär ingen nyckel.
+     *
+     * Typerna står INTE i IN_APP_DEFAULTS: listan där är växlarna
+     * inställningssidan ritar, och en kanal som inte går att stänga av ska
+     * inte ritas som en växel. Förvalet formuleras i stället här, i
+     * isEnabled().
+     *
+     * @var list<string>
+     */
+    private const MANDATORY_IN_APP_TYPES = [
+        Notification::TYPE_AGENT_DELETED,
     ];
 
     /**
@@ -169,6 +192,12 @@ final class NotificationPreferences
             return true;
         }
 
+        // Appkanalen för en typ som inte får stängas av: en sparad rad med
+        // enabled = false biter inte. Se MANDATORY_IN_APP_TYPES.
+        if ($channel === NotificationDelivery::CHANNEL_IN_APP && $this->isMandatoryInApp($type)) {
+            return true;
+        }
+
         return $this->resolve($user, $type, $channel)['enabled'];
     }
 
@@ -181,6 +210,14 @@ final class NotificationPreferences
     public function isMandatoryEmail(string $type): bool
     {
         return in_array($type, self::MANDATORY_EMAIL_TYPES, true);
+    }
+
+    /**
+     * Kan typens `in_app`-kanal stängas av? Se MANDATORY_IN_APP_TYPES.
+     */
+    public function isMandatoryInApp(string $type): bool
+    {
+        return in_array($type, self::MANDATORY_IN_APP_TYPES, true);
     }
 
     /**

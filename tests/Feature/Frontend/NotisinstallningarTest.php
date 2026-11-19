@@ -119,7 +119,7 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
             // Sju e-postrader och tre `in_app`-rader (issue 386).
-            ->has('preferences', 10)
+            ->has('preferences', 11)
             ->where('preferences', fn ($rader) => collect($rader)
                 ->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all()
                 === app(NotificationPreferences::class)->types())
@@ -629,7 +629,7 @@ it('lämnar /api-rutterna oförändrade', function () {
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
     // Sju e-postrader och tre `in_app`-rader (issue 386).
-    expect($svar->json('data'))->toHaveCount(10);
+    expect($svar->json('data'))->toHaveCount(11);
     expect(collect($svar->json('data'))->where('channel', NotificationDelivery::CHANNEL_EMAIL)->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());
     expect(collect($svar->json('data'))->every(fn (array $rad) => $rad['is_default'] === true))->toBeTrue();

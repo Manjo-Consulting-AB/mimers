@@ -54,8 +54,16 @@ final class McpRateLimiter
         $buckets = [];
         $limits = (array) config('mcp.rate_limits.'.$kind->value, []);
 
-        foreach ((array) ($limits['agent'] ?? []) as [$max, $decay]) {
-            $buckets[] = ['mcp:agent:'.$agent->id.':'.$kind->value.':'.$decay, (int) $max, (int) $decay];
+        // Raderingsgränsen per agent ägs av App\Support\Mcp\AgentDeletionLimit:
+        // den räknar LYCKADE raderingar och släpps när användaren läst notisen
+        // i appen ([[ADR-0087 MCP-server för agenter]] Riktning 9 och 13). En
+        // tidsstyrd hink här hade stängt ute den vägen tillbaka — den 21:a
+        // raderingen hade fått `agent.rate_limited` i stället för
+        // `agent.delete_limit`, och läst notis hade inte hjälpt.
+        if ($kind !== ToolKind::Delete) {
+            foreach ((array) ($limits['agent'] ?? []) as [$max, $decay]) {
+                $buckets[] = ['mcp:agent:'.$agent->id.':'.$kind->value.':'.$decay, (int) $max, (int) $decay];
+            }
         }
 
         foreach ((array) ($limits['account'] ?? []) as [$max, $decay]) {

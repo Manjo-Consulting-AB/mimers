@@ -646,10 +646,14 @@ it('har ingen ny kolumn på attachment', function () {
     sort($kolumner);
 
     expect($kolumner)->toBe([
+        // Issue 406 · agentens radering, se
+        // 2026_11_19_000000_add_agent_deletion_to_trashable_tables.php.
+        'agent_deletion_batch',
         'billed_account_id',
         'container_id',
         'created_at',
         'deleted_at',
+        'deleted_by_agent_id',
         'filename',
         'id',
         'item_id',

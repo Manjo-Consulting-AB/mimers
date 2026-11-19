@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import { formatDate } from '../../components/accessPresentation.js';
 import { remainingLabel } from '../../components/trashPresentation.js';
@@ -87,6 +88,36 @@ const restoreFlags = ref({ ...props.canRestore });
 const pending = ref(false);
 const loadingMore = ref(false);
 const searchInFlight = ref(false);
+
+/*
+ * Återställningen av ett helt agenttillfälle (issue 406 § 3). Batchen hör
+ * till raden, inte till filtret: en sida kan visa flera tillfällen, och
+ * knappen ritas en gång per batch — på den första raden som bär den.
+ */
+const batchDialogOpen = ref(false);
+const batchProcessing = ref(false);
+const batchPending = ref(null);
+let batchTrigger = null;
+
+const batchLeaders = computed(() => {
+    const seen = new Set();
+    const leaders = new Set();
+
+    for (const entry of rows.value) {
+        // Bara en rad användaren får återställa kan bära knappen — annars
+        // hade en rad utanför hennes räckvidd kunnat stjäla den från batchen.
+        if (!entry.agent_deletion_batch
+            || restoreFlags.value[entry.ulid] !== true
+            || seen.has(entry.agent_deletion_batch)) {
+            continue;
+        }
+
+        seen.add(entry.agent_deletion_batch);
+        leaders.add(`${entry.type}:${entry.ulid}`);
+    }
+
+    return leaders;
+});
 
 let searchTimer = null;
 let cancelToken = null;
@@ -312,9 +343,46 @@ watch(
 function deletedByLabel(entry) {
     const date = formatDate(entry.deleted_at, page.props.locale);
 
+    // En agentradering tar över raden: papperskorgen säger *Deleted by
+    // {agentens namn}* i stället för användarens (issue 406 § 3).
+    if (entry.deleted_by_agent) {
+        return t('trash.overview.deleted_by_agent', { date, agent: entry.deleted_by_agent });
+    }
+
     return entry.deleted_by === null || entry.deleted_by === undefined
         ? t('trash.overview.deleted_by_former', { date })
         : t('trash.overview.deleted_by', { date, user: entry.deleted_by });
+}
+
+/* Öppnar bekräftelsedialogen för raden, med knappen som fokusmål. */
+function openBatchDialog(entry, event) {
+    batchPending.value = entry;
+    batchTrigger = event?.currentTarget ?? null;
+    batchDialogOpen.value = true;
+}
+
+/* POSTar hela tillfället. `preserveState: false` remountar listan, så
+ * raderna försvinner ur vyn när servern svarat — samma skäl som den enskilda
+ * återställningen (se kommentaren ovan). */
+function restoreBatch() {
+    if (batchPending.value === null) {
+        return;
+    }
+
+    router.post('/trash/batches/restore', {
+        batch: batchPending.value.agent_deletion_batch,
+    }, {
+        preserveState: false,
+        preserveScroll: true,
+        onStart: () => {
+            batchProcessing.value = true;
+        },
+        onFinish: () => {
+            batchProcessing.value = false;
+            batchDialogOpen.value = false;
+            batchPending.value = null;
+        },
+    });
 }
 
 onBeforeUnmount(() => {
@@ -435,6 +503,22 @@ onBeforeUnmount(() => {
                 >
                     {{ t('trash.restore') }}
                 </Link>
+
+                <!--
+                    Hela tillfället i ett svep (issue 406 § 3). Knappen ritas
+                    en gång per batch: `batchLeaders` pekar ut den första raden
+                    som bär den, så en sida med tio rader ur samma tillfälle
+                    inte visar tio likadana knappar.
+                -->
+                <button
+                    v-if="entry.agent_deletion_batch && restoreFlags[entry.ulid] === true
+                        && batchLeaders.has(`${entry.type}:${entry.ulid}`)"
+                    type="button"
+                    class="inline-flex min-h-11 items-center self-start text-sm text-accent underline"
+                    @click="openBatchDialog(entry, $event)"
+                >
+                    {{ t('trash.overview.restore_agent_batch') }}
+                </button>
             </span>
         </li>
     </ul>
@@ -455,4 +539,16 @@ onBeforeUnmount(() => {
             {{ loadingMore ? t('common.pending.default') : t('trash.overview.load_more') }}
         </button>
     </p>
+
+    <!-- Bekräftelsen ägs av appens dialog, se ADR-0068 § 6. -->
+    <UiConfirmDialog
+        :open="batchDialogOpen"
+        :heading="t('trash.overview.restore_agent_batch_title')"
+        :body="t('trash.overview.restore_agent_batch_body')"
+        :confirm-label="t('trash.overview.restore_agent_batch_submit')"
+        :pending="batchProcessing"
+        :trigger="batchTrigger"
+        @confirm="restoreBatch"
+        @cancel="batchDialogOpen = false"
+    />
 </template>

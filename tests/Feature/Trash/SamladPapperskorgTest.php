@@ -185,6 +185,10 @@ it('varje post bär ikon, container och item där de finns', function () {
             'deleted_at',
             'expires_at',
             'deleted_by',
+            // Issue 406: agentens namn och tillfället, så att raden kan säga
+            // *Deleted by {agent}* och hela batchen kan återställas.
+            'deleted_by_agent',
+            'agent_deletion_batch',
         ]);
     }
 

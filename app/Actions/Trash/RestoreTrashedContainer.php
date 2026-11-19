@@ -68,6 +68,11 @@ class RestoreTrashedContainer
 
             $container->restore();
 
+            // Agentmärkningen hör till raderingen i papperskorgen, inte till
+            // den levande containern. En senare radering ska inte ärva
+            // agentens namn eller batch (issue 406, granskningsfynd 1).
+            $container->clearAgentDeletionMark();
+
             if ($varMjukraderad) {
                 (new AdjustUsage)->handle($container->account_id, containersDelta: 1);
 

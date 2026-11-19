@@ -80,6 +80,25 @@ return [
         'disconnect' => 'If you did not connect this agent, disconnect it here:',
         'disconnect_link' => 'Disconnect the agent',
     ],
+    /*
+     * En agent raderade innehåll, se [[ADR-0087 MCP-server för agenter]]
+     * Riktning 8, 9 och 14 och issue 406 § 4. Notisen skapas 15 minuter efter
+     * tillfällets sista radering och räknar upp vad som raderades; länken går
+     * till papperskorgen, där hela tillfället kan återställas.
+     *
+     * `line_containers` används när en eller flera containrar raderades:
+     * innehållet följer med containern till papperskorgen fast taket räknade
+     * containern som EN radering, så raden säger hur många items som följde
+     * med. Mejlet kan stängas av; appnotisen kan inte (se
+     * App\Support\Notification\NotificationPreferences).
+     */
+    'agent_deleted' => [
+        'subject' => 'An agent deleted :total things',
+        'greeting' => 'Hello!',
+        'line' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored.',
+        'line_containers' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored. The deleted containers held :container_items items in total.',
+        'action' => 'Open the trash',
+    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',
@@ -101,6 +120,7 @@ return [
             'account_inactive' => 'inactive account warnings',
             'container_deleted' => 'container deletion notices',
             'container_content_moving' => 'notices about content moving to your storage',
+            'agent_deleted' => 'agent deletion notices',
         ],
     ],
     /*

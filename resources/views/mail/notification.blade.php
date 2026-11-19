@@ -2,7 +2,17 @@
 @php($key = str_replace('.', '_', $type))
 @php($lineKey = isset($payload['reason']) ? "notiser.{$key}.line_{$payload['reason']}" : "notiser.{$key}.line")
 @php($lineKey = $type === 'container.content_moving' && ! isset($payload['moves_on']) ? "notiser.{$key}.line_no_date" : $lineKey)
-@php($actionUrl = $type === 'agent.connected' ? url('/settings/agents') : config('app.url'))
+{{-- Issue 406 · en raderad container bär sitt innehåll med sig, men taket
+     räknade den som en radering — då väljer raden varianten som säger hur
+     många items som följde med. --}}
+@php($lineKey = $type === 'agent.deleted' && ($payload['container_items'] ?? 0) > 0 ? "notiser.{$key}.line_containers" : $lineKey)
+{{-- Knappen går till papperskorgen när det som raderats kan återställas där
+     (issue 406 § 4); de andra typerna behåller appens startsida. --}}
+@php($actionUrl = match ($type) {
+    'agent.connected' => url('/settings/agents'),
+    'agent.deleted' => url('/trash'),
+    default => config('app.url'),
+})
 
 # {{ trans("notiser.{$key}.greeting") }}
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use Database\Factories\ContainerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -66,7 +67,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Container extends Model
 {
     /** @use HasFactory<ContainerFactory> */
-    use HasFactory, HasUlid, SoftDeletes;
+    use HasFactory, HasUlid, RecordsAgentDeletion, SoftDeletes;
 
     /**
      * Tabellen heter `container`, inte Eloquents standardplural `containers`.

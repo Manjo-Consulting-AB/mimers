@@ -118,6 +118,12 @@ class RestoreContent
             // synkar instansens deleted_at för den som anropar.
             $model->restore();
 
+            // Agentmärkningen beskriver raderingen som låg i papperskorgen.
+            // När raden är tillbaka är den ingen agents radering längre, och
+            // en senare mänsklig radering ska inte ärva namnet eller batchen
+            // (issue 406, granskningsfynd 1).
+            $model->clearAgentDeletionMark();
+
             // Kategorin kom med ett underträd i papperskorgen (issue 150), och
             // återställningen tar med exakt de rader som kastades SAMTIDIGT:
             // samma `deleted_at` som raden hade. En ättling som raderades
@@ -200,6 +206,7 @@ class RestoreContent
         while ($pending !== []) {
             $row = array_pop($pending);
             $row->restore();
+            $row->clearAgentDeletionMark();
 
             foreach ($childrenByParent[$row->id] ?? [] as $child) {
                 $pending[] = $child;
