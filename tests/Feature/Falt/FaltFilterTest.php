@@ -163,6 +163,38 @@ it('räknar ett relativt datum i användarens dag', function () {
     Carbon::setTestNow();
 });
 
+it('tar within:0 som användarens dag', function () {
+    [, $user, $headers, $container] = faltFilterKontext();
+
+    // 23:30 UTC är redan nästa dag i Stockholm, alltså 21 nov.
+    $user->forceFill(['timezone' => 'Europe/Stockholm'])->save();
+    travelTo('2026-11-20 23:30:00');
+
+    $garanti = faltFilterFalt($container, 'Garanti till', 'date');
+
+    foreach ([
+        'Igår' => '2026-11-20',
+        'Idag' => '2026-11-21',
+        'Imorgon' => '2026-11-22',
+    ] as $namn => $datum) {
+        faltFilterVarde(faltFilterItem($container, $namn), $garanti, $datum);
+    }
+
+    // within:0 är noll dagar framåt, alltså användarens dag — inte ett
+    // valideringsfel. Ett bokmärke med within:0 ska ge samma svar som ett
+    // absolut datum för idag.
+    $response = getJson(faltFilterUrl($container, [
+        'field' => [$garanti->ulid => ['max' => 'within:0']],
+        'sort' => $garanti->ulid,
+        'direction' => 'asc',
+    ]), $headers);
+
+    $response->assertOk();
+    expect(faltFilterNamn($response))->toBe(['Igår', 'Idag']);
+
+    Carbon::setTestNow();
+});
+
 it('kombinerar två fältfilter med OCH', function () {
     [, , $headers, $container] = faltFilterKontext();
     $farg = faltFilterFalt($container, 'Färg', 'text');

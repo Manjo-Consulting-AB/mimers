@@ -58,10 +58,12 @@ class ResolveFieldFilters
 {
     /**
      * De relativa datumvärdena. `within:N` är N dagar framåt och `past:N` N
-     * dagar bakåt, båda räknade från användarens dag. Fyra siffror räcker
-     * för ett intervall som fortfarande är ett datum.
+     * dagar bakåt, båda räknade från användarens dag. N är ett heltal ≥ 0 —
+     * `within:0` är användarens dag — och fyra siffror räcker för ett
+     * intervall som fortfarande är ett datum. Mönstret ska stämma med
+     * date(): båda läser samma N.
      */
-    public const RELATIVE_PATTERN = '/^(today|within:[1-9]\d{0,3}|past:[1-9]\d{0,3})$/';
+    public const RELATIVE_PATTERN = '/^(today|within:\d{1,4}|past:\d{1,4})$/';
 
     /**
      * Operatorerna per typ: text jämförs med `eq`, tal och datum med
