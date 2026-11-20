@@ -49,10 +49,6 @@ function bbUppsättning(int $bytes = 500): array
         'name' => 'Item-A',
         'description' => null,
         'notes' => null,
-        'manufacturer' => null,
-        'model' => null,
-        'serial_number' => null,
-        'position_note' => null,
         'created_by_account_id' => $gäst->id,
         'billed_account_id' => $gäst->id,
     ]);

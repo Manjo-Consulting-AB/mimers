@@ -56,10 +56,12 @@ use App\Models\StoredFile;
 use App\Models\Subscription;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Testing\TestResponse;
 use Laravel\Passport\Client;
@@ -926,4 +928,29 @@ function mcpMejlhtml(Notification $notis): string
     $anvandare = User::query()->findOrFail($notis->user_id);
 
     return (new NotificationMail($anvandare, $notis->type, $notis->payload))->render();
+}
+
+/**
+ * Lägger tillbaka itemets sex fasta fält som kolumner på `item`.
+ *
+ * Issue 425 tar bort dem ur schemat. Två historiska migreringar läser dem
+ * ändå — 2026_11_15_030000:s frysta ifyllning och 2026_11_19_020000:s
+ * kopiering — och på en färsk databas kör de före borttagningen
+ * (migrationernas ordning). Ett prov som vill köra dem igen måste därför
+ * återskapa formen de skrevs mot. Kolumnerna rullas tillbaka med testets
+ * transaktion (RefreshDatabase).
+ *
+ * Anropas av SexFaltenBlirFaltTest, MetadataIfyllningFrystTest och
+ * MetadataRaknareTest.
+ */
+function sexFaltKolumnerTillbaka(): void
+{
+    Schema::table('item', function (Blueprint $table): void {
+        $table->string('manufacturer', 255)->nullable();
+        $table->string('model', 255)->nullable();
+        $table->string('serial_number', 255)->nullable();
+        $table->date('purchased_at')->nullable();
+        $table->date('warranty_until')->nullable();
+        $table->string('position_note', 255)->nullable();
+    });
 }

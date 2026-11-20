@@ -7,7 +7,6 @@ use App\Models\ItemField;
 use App\Models\ItemFieldValue;
 use App\Models\UsageCounter;
 use App\Support\Usage\CountedRows;
-use Illuminate\Support\Facades\File;
 
 use function Pest\Laravel\getJson;
 
@@ -20,6 +19,12 @@ use function Pest\Laravel\getJson;
  * den på en tom databas, så containrar och items som skapas här är exakt det
  * "befintligt" som `up()` ska fylla i. Att anropa `up()` igen är samtidigt
  * idempotensprovet.
+ *
+ * Sedan issue 425 är kolumnerna borta ur schemat. Proven som matar in värden
+ * lägger därför tillbaka dem med sexFaltKolumnerTillbaka(): det är den enda
+ * form migreringen någonsin kopierade från, och på en färsk databas kör den
+ * före 425 (migrationernas ordning). Kolumnerna rullas tillbaka med testets
+ * transaktion (RefreshDatabase).
  *
  * Hjälparna har prefixet `sexFalt` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -47,7 +52,8 @@ function sexFaltKontext(): array
 /**
  * Ett item med de sex kolumnerna ifyllda. Kolumnerna är inte längre
  * mass-assignbara (issue 420), så de sätts med `forceFill()` — samma väg en
- * MCP-skrivning tar tills issue 423.
+ * MCP-skrivning tog fram till issue 423. Kolumnerna läggs tillbaka först,
+ * eftersom issue 425 har tagit bort dem ur schemat.
  *
  * @param  array<string, mixed>  $kolumner
  */
@@ -59,6 +65,7 @@ function sexFaltItem(Container $container, Account $betalare, array $kolumner = 
     ]);
 
     if ($kolumner !== []) {
+        sexFaltKolumnerTillbaka();
         $item->forceFill($kolumner)->save();
     }
 
@@ -232,38 +239,4 @@ it('ett fält i papperskorgen ger inga sökträffar och värdet kommer tillbaka'
     $falt->restore();
 
     expect($sok()->json('data'))->toHaveCount(1);
-});
-
-it('ingen kod utanför app/Mcp läser de sex kolumnerna', function () {
-    $mönster = '/->(?:manufacturer|serial_number|position_note|purchased_at|warranty_until)\b|->model\b/';
-
-    $träffar = [];
-
-    foreach (File::allFiles(app_path()) as $fil) {
-        $sokvag = $fil->getPathname();
-
-        if (! str_ends_with($sokvag, '.php') || str_contains($sokvag, DIRECTORY_SEPARATOR.'Mcp'.DIRECTORY_SEPARATOR)) {
-            continue;
-        }
-
-        $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get($sokvag));
-        $kod = (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
-
-        if (preg_match_all($mönster, $kod, $match) > 0) {
-            $träffar[] = $fil->getRelativePathname().': '.implode(', ', array_unique($match[0]));
-        }
-    }
-
-    // Frontenden låser samma kolumner med punktnotation.
-    $jsMönster = '/\.(?:manufacturer|serial_number|position_note|purchased_at|warranty_until)\b|\.model\b/';
-
-    foreach (File::allFiles(resource_path('js')) as $fil) {
-        $kod = File::get($fil->getPathname());
-
-        if (preg_match_all($jsMönster, $kod, $match) > 0) {
-            $träffar[] = $fil->getRelativePathname().': '.implode(', ', array_unique($match[0]));
-        }
-    }
-
-    expect($träffar)->toBe([]);
 });

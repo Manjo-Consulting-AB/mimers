@@ -23,10 +23,10 @@ use function Pest\Laravel\postJson;
  *    ingen fallback i ett formulär eller en resurs. `rör inte description ...`
  *    prövar båda riktningarna.
  * 2. **`notes` står i BÅDA listorna.** App\Models\Item::toSearchableArray() och
- *    FULLTEXT-indexet; `har anteckningen i FULLTEXT-indexet` prövar att varje
- *    sökbar kolumn finns i indexet, och `hittar itemet på ett ord som bara står
- *    i anteckningen` bevisar att fältet faktiskt går att söka i. Sedan issue
- *    420 bär indexet fortfarande de sex kolumnerna tills 425.
+ *    FULLTEXT-indexet; `har anteckningen i FULLTEXT-indexet` prövar att
+ *    indexet speglar den sökbara mängden, och `hittar itemet på ett ord som
+ *    bara står i anteckningen` bevisar att fältet faktiskt går att söka i.
+ *    Sedan issue 425 bär indexet inget annat än de tre kolumnerna.
  * 3. **`ItemResource` bär fältet, alltid som `null` när det saknas.** Till
  *    skillnad från omslagsbilden i issue 93, som ligger bredvid resursen.
  * 4. **`#[SearchUsingFullText]` sätts fortfarande inte.** Attributet får Scout
@@ -121,12 +121,6 @@ it('har en nullbar textkolumn för anteckningen, skild från description', funct
         'name',
         'description',
         'notes',
-        'manufacturer',
-        'model',
-        'serial_number',
-        'purchased_at',
-        'warranty_until',
-        'position_note',
         'icon',
         'icon_color',
         'cover_attachment_id',
@@ -294,22 +288,19 @@ it('har anteckningen i sökmängden', function () {
  * Klart när: `notes` finns i FULLTEXT-indexet, lagt i samma migrering som
  * kolumnen.
  *
- * Fram till issue 425 bär indexet fortfarande de sex kolumner som blir
- * containerns fält (issue 420). Spegeln är därför inte exakt längre: varje
- * kolumn i sökmängden MÅSTE finnas i indexet — en nyckel utan index blir en
- * full genomsökning — medan indexet får bära fler. När kolumnerna tas bort
- * blir listorna identiska igen.
+ * Sedan issue 425 är indexet och sökmängden identiska: de sex fasta fältens
+ * kolumner är borta, och kvar är `name`, `description` och `notes`. Att
+ * listorna är lika långa och i samma ordning betyder både att varje sökbar
+ * kolumn har ett index och att indexet inte bär något som sökningen inte
+ * frågar efter.
  */
-it('har anteckningen i FULLTEXT-indexet, och varje sökbar kolumn finns i indexet', function () {
+it('har anteckningen i FULLTEXT-indexet, och indexet speglar sökmängden', function () {
     $kolumner = anteckningFulltextKolumner();
 
     expect($kolumner)->not->toBeEmpty('inget fullText-anrop hittades för item');
     expect($kolumner)->toContain('notes');
 
-    // Varje nyckel i sökmängden finns i indexet — riktningen som betyder
-    // något. Det omvända gäller först när de sex kolumnerna är borta (425).
-    expect(array_values(array_intersect(array_keys((new Item)->toSearchableArray()), $kolumner)))
-        ->toBe(array_keys((new Item)->toSearchableArray()));
+    expect($kolumner)->toBe(array_keys((new Item)->toSearchableArray()));
 });
 
 /*

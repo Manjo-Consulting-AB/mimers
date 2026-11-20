@@ -70,10 +70,6 @@ function nedItem(Container $container, Account $betalare, string $namn, array $a
         'name' => $namn,
         'description' => null,
         'notes' => null,
-        'manufacturer' => null,
-        'model' => null,
-        'serial_number' => null,
-        'position_note' => null,
         'created_by_account_id' => $betalare->id,
         'billed_account_id' => $betalare->id,
     ], $attribut));
