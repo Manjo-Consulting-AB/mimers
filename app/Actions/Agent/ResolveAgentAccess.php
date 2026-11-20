@@ -3,6 +3,7 @@
 namespace App\Actions\Agent;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Models\Account;
 use App\Models\Agent;
 use App\Models\AgentAccountGrant;
 use App\Models\AgentContainerGrant;
@@ -41,8 +42,10 @@ use Illuminate\Support\Facades\DB;
  * kunde en item-rad med högt tak lyfta en container-bred rad som ägaren
  * stängt. Taket gäller medlemmens agenter gemensamt (Riktning 6, *Takets regler*).
  *
- * Är containerns ägarkonto fruset (`read_only` eller `closed`) kapas nivån
- * till `read`: agenten kan läsa men inte skriva, som användaren (Riktning 11).
+ * Är kontot fruset (`read_only` eller `closed`) kapas nivån till `read`:
+ * agenten kan läsa men inte skriva, som användaren (Riktning 11). Spärren
+ * gäller agentens eget konto och containerns ägarkonto lika, se regel 4 i
+ * [[Konton och åtkomst]] § Behörighetsregler.
  *
  * Inkorgen är användarens egen när hen äger den; någon annans inkorg ger
  * `ResolveItemScope` ingen åtkomst alls.
@@ -51,8 +54,20 @@ class ResolveAgentAccess
 {
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
-    public function handle(Agent $agent, AgentGroup $group, Container $container, ?Item $item = null): ?string
-    {
+    /**
+     * @param  bool  $respectWriteLock  `false` ger nivån utan skrivspärren.
+     *                                  `McpTool::requireLevel` använder det för
+     *                                  att skilja ett tillfälligt låst konto
+     *                                  (`auth.forbidden`) från en för låg nivå
+     *                                  (`agent.forbidden`).
+     */
+    public function handle(
+        Agent $agent,
+        AgentGroup $group,
+        Container $container,
+        ?Item $item = null,
+        bool $respectWriteLock = true,
+    ): ?string {
         if ($agent->isPaused()) {
             return null;
         }
@@ -96,17 +111,35 @@ class ResolveAgentAccess
 
         $level = AgentLevels::min($accountLevel, $containerLevel, $ceiling, $userLevel);
 
-        // Skrivspärren (regel 4): ett fruset ägarkonto — `read_only` eller
+        // Skrivspärren (regel 4): ett fruset konto — `read_only` eller
         // `closed` — tillåter läsning men inte skrivning, och det gäller
         // agenten som användaren. Policyn prövar det för användaren men ligger
-        // utanför MCP-verktygens väg, så taket sätts här (issue 409).
-        if ($level !== null
+        // utanför MCP-verktygens väg, så taket sätts här (issue 409). Både
+        // agentens eget konto och containerns ägarkonto räknas (#1456).
+        if ($respectWriteLock
+            && $level !== null
             && AccessLevel::rank($level) > AccessLevel::rank(AccessLevel::READ)
-            && in_array($container->account->status, ['read_only', 'closed'], true)) {
+            && $this->isWriteLocked($agent, $container)) {
             return AccessLevel::READ;
         }
 
         return $level;
+    }
+
+    /**
+     * Är något av kontona låst för skrivning? Regel 4 gäller utan skillnad
+     * agentens eget konto och containerns ägarkonto: ett `read_only` eller
+     * `closed` konto nekar allt skrivande oavsett behörighet.
+     */
+    public function isWriteLocked(Agent $agent, Container $container): bool
+    {
+        return $this->accountIsWriteLocked($agent->account)
+            || $this->accountIsWriteLocked($container->account);
+    }
+
+    private function accountIsWriteLocked(Account $account): bool
+    {
+        return in_array($account->status, ['read_only', 'closed'], true);
     }
 
     /**

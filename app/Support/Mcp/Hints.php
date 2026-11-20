@@ -17,6 +17,7 @@ final class Hints
     private const TABLE = [
         'agent.paused' => 'This agent is paused by the user. Stop and tell the user to resume it on /settings/agents.',
         'agent.forbidden' => 'This agent is never allowed to do this. Ask the user to do it in the app.',
+        'auth.forbidden' => 'The account is temporarily locked for writing, not a permission this agent lacks. Reading still works. Tell the user to resolve the account\'s billing or plan; do not retry.',
         'agent.move_widens_access' => 'This move would give more people access. Ask the user to make it in the app.',
         'agent.copy_widens_access' => 'You have read content that some people who can see this target cannot. Ask the user to make this change in the app, or search with the container filter before writing here.',
         'agent.rate_limited' => 'Too many requests. Wait retry_after_seconds before calling again.',

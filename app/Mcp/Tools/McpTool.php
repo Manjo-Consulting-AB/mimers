@@ -281,10 +281,22 @@ abstract class McpTool extends Tool
      * agenten inte når alls är `resource.not_found` — nekandet avslöjar inte
      * att det finns. Når agenten det men med för låg nivå är det
      * `agent.forbidden`.
+     *
+     * **Varför nivån inte räcker avgör koden.** Räcker nivån utan
+     * skrivspärren (regel 4 i [[Konton och åtkomst]] § Behörighetsregler) är
+     * det kontot som är tillfälligt låst, och koden är `auth.forbidden` —
+     * samma som API:ets policy ger. `agent.forbidden` är reserverat för det
+     * agenten aldrig får göra ([[ADR-0087 MCP-server för agenter]] Riktning 7
+     * och 18); en agent som får den koden ska kunna dra slutsatsen att
+     * handlingen är förbjuden för gott. En för låg nivå prövas först, så en
+     * agent som aldrig hade rätt får `agent.forbidden` även på ett låst konto.
      */
     protected function requireLevel(Agent $agent, string $minimum, Container $container, ?Item $item = null): void
     {
-        $level = $this->levelIn($agent, $container, $item);
+        $resolver = app(ResolveAgentAccess::class);
+
+        // Nivån utan skrivspärren: spärren avgör felkoden, inte nivån.
+        $level = $resolver->handle($agent, $this->group, $container, $item, respectWriteLock: false);
 
         if ($level === null) {
             throw new McpToolException('resource.not_found');
@@ -292,6 +304,11 @@ abstract class McpTool extends Tool
 
         if (! AccessLevel::atLeast($level, $minimum)) {
             throw new McpToolException('agent.forbidden');
+        }
+
+        if (AccessLevel::rank($minimum) > AccessLevel::rank(AccessLevel::READ)
+            && $resolver->isWriteLocked($agent, $container)) {
+            throw new McpToolException('auth.forbidden');
         }
     }
 
