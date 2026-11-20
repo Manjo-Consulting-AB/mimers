@@ -1404,6 +1404,12 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     // ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
+        // Issue 413: återställningen av en version. Den skriver en
+        // `item_version`-rad och itemets fält och rör inga
+        // `container_access`-rader alls — grinden är itemets `update`, samma
+        // pinne som att ändra itemet. Ingen ny läsare och ingen ny mottagare
+        // läggs till.
+        'containers/{container}/items/{item}/versions/{version}/restore',
         'containers/{container}/items/{item}/favorite',
         'containers/{container}/items/{item}/loans',
         // Issue 168: kostnadsraden. Den skriver en `cost_entry`-rad och rör
