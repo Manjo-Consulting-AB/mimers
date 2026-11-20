@@ -66,6 +66,7 @@ const ICONS = {
     'account.inactive': 'warning',
     'container.deleted': 'trash',
     'agent.deleted': 'trash',
+    'agent.access_lost': 'warning',
     'account.downgrade_warning': 'warning',
 };
 
@@ -148,6 +149,7 @@ const message = computed(() => {
     const text = t(key, {
         container: payload.container,
         percent: payload.percent,
+        owner: payload.owner,
     });
 
     return text === key ? t('notifications.list.fallback') : text;

@@ -1916,6 +1916,15 @@ return [
                 'agent' => [
                     'deleted' => ':agent deleted :total things. Anything in the trash can be restored.',
                     'container' => 'The container ":container" held :items items.',
+                    /*
+                     * Issue 409 followed by the follow-up: the row for
+                     * `agent.access_lost` says the same as the email
+                     * (lang/en/notiser.php § agent_access_lost), and the
+                     * owner's name comes from the payload. The row links to
+                     * /settings/agents (App\Support\Notification\
+                     * NotificationTarget).
+                     */
+                    'access_lost' => 'Your agents can no longer reach the containers owned by :owner, because their plan no longer includes MCP. Nothing was deleted, and the access returns if the plan does.',
                 ],
                 /*
                  * Issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning
