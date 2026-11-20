@@ -394,3 +394,27 @@ it('raderar inget under rättslig spärr men visar bara så många som taket til
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.name', 'Version 4');
 });
+
+it('pekar sidindelningen på listans egen sökväg och svarar sida 1 även för ?page=2', function () {
+    [$konto, $användare] = livsKonto(5);
+    $container = livsContainer($konto, $användare);
+    $item = livsItem($container, $konto, $användare);
+
+    livsVersioner($item, 3);
+
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/versions";
+
+    getJson($url, livsHeaders($användare))
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.path', url($url))
+        ->assertJsonPath('meta.current_page', 1);
+
+    // Allt som får visas ryms på en sida: `?page=2` får inte ge en falsk
+    // andra sida, och sökvägen ska fortfarande vara listans.
+    getJson($url.'?page=2', livsHeaders($användare))
+        ->assertOk()
+        ->assertJsonCount(3, 'data')
+        ->assertJsonPath('meta.path', url($url))
+        ->assertJsonPath('meta.current_page', 1);
+});

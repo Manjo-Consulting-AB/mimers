@@ -57,8 +57,14 @@ class ItemVersionController extends Controller
 
         ItemVersionResource::prepare($versions);
 
+        // Sida 1 tvingas: allt som får visas ryms på en sida, så `?page=2`
+        // får inte ge en falsk andra sida med samma rader. Sökvägen sätts
+        // uttryckligen — standardvärdet `/` skulle peka `links` och
+        // `meta.path` fel.
         return ItemVersionResource::collection(
-            new LengthAwarePaginator($versions, $versions->count(), self::PER_PAGE),
+            new LengthAwarePaginator($versions, $versions->count(), self::PER_PAGE, 1, [
+                'path' => $request->url(),
+            ]),
         )->response();
     }
 
