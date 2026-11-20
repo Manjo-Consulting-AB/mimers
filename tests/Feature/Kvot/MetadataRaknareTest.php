@@ -408,6 +408,10 @@ it('migreringen räknar fram metadata_bytes för alla konton, och skapar en rad 
     [$tomt] = metadataKonto();
     UsageCounter::factory()->create(['account_id' => $tomt->id, 'metadata_bytes' => 99]);
 
+    // Den frysta ifyllningen läser de sex kolumner issue 425 tar bort; på en
+    // färsk databas kör den före 425 (migrationernas ordning).
+    sexFaltKolumnerTillbaka();
+
     $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
     $migrering->backfillMetadataBytes();
 

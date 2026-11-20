@@ -25,6 +25,12 @@ use Illuminate\Support\Facades\DB;
  * item_field, item_field_value, container_template) och varje kolumn som togs
  * bort (itemets sex fasta fält, issue 425) ändrade då vad en färsk databas
  * fick för `metadata_bytes`. Proven här låser det som gällde 2026-11-15.
+ *
+ * Sedan issue 425 är de sex kolumnerna borta ur schemat, men den frysta
+ * listan läser dem fortfarande — på en färsk databas kör ifyllningen före
+ * migreringen som tar bort dem. Proven återskapar därför kolumnerna med
+ * sexFaltKolumnerTillbaka() ur tests/Support/Testhjalpare.php; de rullas
+ * tillbaka med testets transaktion (RefreshDatabase).
  */
 
 function frystMigreringen(): object
@@ -59,6 +65,8 @@ it('migreringen importerar inget från App\Support\Usage', function () {
 
 it('ifyllningen ger samma byte som förut för tabellerna som fanns 2026-11-15', function () {
     [$konto, $användare] = frystKonto();
+
+    sexFaltKolumnerTillbaka();
 
     // Container: name + kind + description + påslag.
     $container = Container::factory()->for($konto, 'account')->create([
@@ -124,6 +132,9 @@ it('ifyllningen räknar ingen rad i tabellerna som kom efter migreringen', funct
     // tabellerna. Före frysningen hade de räknats på henne.
     [$ägare] = frystKonto();
     [$ny] = frystKonto();
+
+    sexFaltKolumnerTillbaka();
+
     $container = Container::factory()->for($ägare, 'account')->create();
     $item = Item::factory()->for($container, 'container')->create(['billed_account_id' => $ägare->id]);
 
