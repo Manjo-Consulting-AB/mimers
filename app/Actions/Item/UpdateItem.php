@@ -106,12 +106,17 @@ class UpdateItem
      *                                     true`, och `meta.restored_from`
      *                                     namnger versionen. Fritext följer
      *                                     fortfarande aldrig med i `meta`.
+     * @param  int|null  $agentId  Agenten när en agent skriver (issue 415):
+     *                             följer med till versionen som
+     *                             `replaced_by_agent_id`, så att skurven
+     *                             skiljer agentens skrivning från
+     *                             användarens egen.
      */
-    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags, array $fields = [], ?string $restoredFrom = null): void
+    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags, array $fields = [], ?string $restoredFrom = null, ?int $agentId = null): void
     {
         $meta = $this->metaFor($item);
 
-        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields, $restoredFrom): void {
+        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields, $restoredFrom, $agentId): void {
             // Läget FÖRE ändringen sparas som en version, i samma transaktion
             // (issue 412 · [[ADR-0088 Versionshistorik för items]]). Taggar
             // byts först efteråt av SyncItemTags, fältvärdena av
@@ -122,6 +127,7 @@ class UpdateItem
             $this->recordItemVersion->handle(
                 $item,
                 $actor,
+                $agentId,
                 breakBurst: $restoredFrom !== null,
                 tagIds: $syncTags ? $tags->pluck('id')->all() : null,
                 fieldValues: $this->desiredFieldValues($fields),

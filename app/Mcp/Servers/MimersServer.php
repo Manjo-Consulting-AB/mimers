@@ -26,6 +26,8 @@ use App\Mcp\Tools\ItemsMove;
 use App\Mcp\Tools\ItemsNotesUpdate;
 use App\Mcp\Tools\ItemsSearch;
 use App\Mcp\Tools\ItemsUpdate;
+use App\Mcp\Tools\ItemsVersionsList;
+use App\Mcp\Tools\ItemsVersionsRestore;
 use App\Mcp\Tools\LoansCreate;
 use App\Mcp\Tools\LoansList;
 use App\Mcp\Tools\LoansReturn;
@@ -83,6 +85,8 @@ class MimersServer extends Server
         ItemsNotesUpdate::class,
         ItemsSearch::class,
         ItemsUpdate::class,
+        ItemsVersionsList::class,
+        ItemsVersionsRestore::class,
         ItemsDelete::class,
         LoansCreate::class,
         LoansList::class,

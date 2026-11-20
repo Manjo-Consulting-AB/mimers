@@ -45,12 +45,16 @@ class UpdateItemNotes
     /**
      * @param  User  $actor  Den som sparar; blir `user_id` på loggraden.
      *                       Behörigheten är redan prövad.
+     * @param  int|null  $agentId  Agenten när en agent skriver (issue 415):
+     *                             följer med till versionen som
+     *                             `replaced_by_agent_id`, så att skurven
+     *                             skiljer agentens sparning från användarens.
      */
-    public function handle(Item $item, User $actor, ?string $notes): void
+    public function handle(Item $item, User $actor, ?string $notes, ?int $agentId = null): void
     {
         $item->notes = $notes;
 
-        DB::transaction(function () use ($item, $actor): void {
+        DB::transaction(function () use ($item, $actor, $agentId): void {
             if (! $item->isDirty('notes')) {
                 return;
             }
@@ -59,7 +63,7 @@ class UpdateItemNotes
             // samma transaktion (issue 412 · [[ADR-0088 Versionshistorik för
             // items]]). Skurven gör att ett helt arbetspass blir EN version —
             // samma tio minuter som loggens undantag nedan använder.
-            $this->recordItemVersion->handle($item, $actor);
+            $this->recordItemVersion->handle($item, $actor, $agentId);
 
             MetadataLedger::save($item);
 
