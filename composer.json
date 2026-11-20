@@ -71,6 +71,9 @@
         "analyse": [
             "@php vendor/bin/phpstan analyse --no-progress"
         ],
+        "phpstan": [
+            "@php vendor/bin/phpstan analyse --memory-limit=1G"
+        ],
         "test": [
             "@php .github/scripts/testforutsattningar.php",
             "@php artisan config:clear --ansi @no_additional_args",
