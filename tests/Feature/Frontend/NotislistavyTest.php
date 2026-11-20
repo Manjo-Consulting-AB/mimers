@@ -279,6 +279,39 @@ it('har notislistans strängar i ui.php, båda skälen för container.deleted in
 });
 
 /*
+ * Uppföljningen av issue 409: `agent.access_lost` var den enda av klockans
+ * typer utan egen mening — raden visade reservtexten, den neutrala ikonen och
+ * gick inte att klicka. Meningen ska säga samma sak som mejlet
+ * (lang/en/notiser.php § agent_access_lost) och bära ägarens namn ur
+ * payloaden; ikonen ska vara radens egen, och målet byggs på servern i samma
+ * uppslag som klockan använder.
+ */
+it('ger agent.access_lost en egen mening med ägarens namn, en ikon och ett mål', function () {
+    $rad = notisvyKod('components/NotificationRow.vue');
+
+    /** @var array<string, mixed> $ui */
+    $ui = require lang_path('en/ui.php');
+
+    $mening = $ui['notifications']['list']['type']['agent']['access_lost'] ?? '';
+    $mejl = require lang_path('en/notiser.php');
+
+    // Meningen finns under den nyckel raden slår upp, och namnger ägaren —
+    // samma `:owner` som mejlet bär.
+    expect($mening)->not->toBe('')
+        ->and($mening)->toContain(':owner')
+        ->and($mejl['agent_access_lost']['line'] ?? '')->toContain(':owner');
+
+    // Raden skickar ägaren från payloaden till uppslaget och ger typen en
+    // egen ikon i stället för klockan.
+    expect($rad)->toContain('owner: payload.owner')
+        ->and($rad)->toContain("'agent.access_lost': 'warning'");
+
+    // Målet: samma uppslag som klockan använder, inte en rutt i klienten.
+    expect(File::get(app_path('Support/Notification/NotificationTarget.php')))
+        ->toContain('Notification::TYPE_AGENT_ACCESS_LOST => route(\'settings.agents\'');
+});
+
+/*
  * Klockans siffra på sidan själv. `/notifications` bär `notifications` som
  * sidpropp och skuggar den delade sammanfattningen; 384 skickar därför med
  * `unread` i kartan, annars hade märket försvunnit just på notissidan.

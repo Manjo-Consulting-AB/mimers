@@ -418,6 +418,25 @@ it('länkar en uppgift och ett lån till sitt item, och ett ägarbyte till /tran
     expect($rader[2]['url'])->toBe($itemUrl);
 });
 
+/*
+ * Uppföljningen av issue 409: åtkomsten är kvar och gäller igen när ägaren
+ * uppgraderar, så raden för `agent.access_lost` leder till sidan där kontot
+ * ser sina anslutna agenter ([[ADR-0087 MCP-server för agenter]] Riktning 11
+ * och 12).
+ */
+it('länkar en förlorad agentåtkomst till /settings/agents', function () {
+    $anvandare = klockaAnvandare();
+
+    klockaRad($anvandare, Notification::TYPE_AGENT_ACCESS_LOST, now(), [
+        'owner' => 'Anna', 'agents' => 1,
+    ]);
+
+    $rader = klockaListan($anvandare)['notificationList'];
+
+    expect($rader[0]['type'])->toBe(Notification::TYPE_AGENT_ACCESS_LOST)
+        ->and($rader[0]['url'])->toBe('/settings/agents');
+});
+
 it('länkar inte en kvotvarning eller en inaktivitetsvarning', function () {
     $anvandare = klockaAnvandare();
 

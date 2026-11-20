@@ -42,6 +42,11 @@ final class NotificationTarget
             // papperskorgen, där hela tillfället kan återställas
             // ([[ADR-0087 MCP-server för agenter]] Riktning 8 och 14).
             Notification::TYPE_AGENT_DELETED => route('trash.index', [], false),
+            // Issue 409 och uppföljningen: åtkomsten är kvar och gäller igen
+            // när ägaren uppgraderar, så raden leder till sidan där kontot ser
+            // och hanterar sina anslutna agenter ([[ADR-0087 MCP-server för
+            // agenter]] Riktning 11 och 12).
+            Notification::TYPE_AGENT_ACCESS_LOST => route('settings.agents', [], false),
             // Issue 412 · [[ADR-0088 Versionshistorik för items]] Riktning 3:
             // ägaren får veta att lagringen är full och ska kunna göra något
             // åt det, så raden länkar till lagringsytan. Sidan väljer konto
