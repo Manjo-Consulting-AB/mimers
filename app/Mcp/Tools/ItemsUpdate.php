@@ -119,6 +119,7 @@ class ItemsUpdate extends WritesItems
             $agent->user,
             $tagsGiven,
             $tags,
+            agentId: $agent->id,
         ));
 
         return Response::structured([

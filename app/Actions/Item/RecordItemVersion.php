@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  * `konton.versioning.burst_minutes` sparas ingen ny version; den nyaste
  * versionens `replaced_at` flyttas framåt i stället, så fönstret glider.
  * Aktören är användaren och, när en agent skriver, även agenten
- * (`replaced_by_agent_id`, fylls i av issue 415). En återställning (issue
+ * (`replaced_by_agent_id`, satt av issue 415). En återställning (issue
  * 413) bryter alltid skurven med `breakBurst: true`.
  *
  * **Taket (Riktning 6).** Efter en ny version tas itemets äldsta versioner

@@ -38,16 +38,19 @@ use Illuminate\Support\Collection;
  * att räknas i `skipped`, som bara namnger de tre fälten i issuen.
  *
  * Behörigheten prövas av anroparen (`ItemPolicy::update`); actionen äger bara
- * skrivningen.
+ * skrivningen. Skriver en agent (`$agentId`, issue 415) får både
+ * återställningens egen `item.updated`-rad (via App\Support\Mcp\AgentAudit)
+ * och versionen av nuläget agenten som aktör.
  */
 class RestoreItemVersion
 {
     public function __construct(private readonly UpdateItem $updateItem) {}
 
     /**
+     * @param  int|null  $agentId  Agenten när en agent återställer (issue 415).
      * @return list<string> de fält som hoppades över: `category`, `tags`, `cover`
      */
-    public function handle(Item $item, ItemVersion $version, User $actor): array
+    public function handle(Item $item, ItemVersion $version, User $actor, ?int $agentId = null): array
     {
         $skipped = ['category' => false, 'tags' => false, 'cover' => false];
 
@@ -70,6 +73,7 @@ class RestoreItemVersion
             $tags ?? new Collection,
             $this->fieldEntries($item, $version),
             restoredFrom: $version->ulid,
+            agentId: $agentId,
         );
 
         return array_keys(array_filter($skipped));

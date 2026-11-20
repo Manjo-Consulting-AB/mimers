@@ -635,6 +635,50 @@
         }
     },
     {
+        "name": "items_versions_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "items_versions_restore",
+        "parameters": {
+            "item": {
+                "type": "string"
+            },
+            "version": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "version"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "loans_create",
         "parameters": {
             "borrower_email": {

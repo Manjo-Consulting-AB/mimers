@@ -54,6 +54,7 @@ class ItemsNotesUpdate extends WritesItems
             $item,
             $agent->user,
             $args['notes'] ?? null,
+            $agent->id,
         ));
 
         // Anteckningens text lämnas aldrig tillbaka (issue 404 § 1).
