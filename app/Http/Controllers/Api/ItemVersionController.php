@@ -9,8 +9,10 @@ use App\Http\Resources\ItemVersionResource;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemVersion;
+use App\Support\Versioning\VersionLimit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -28,9 +30,12 @@ use Illuminate\Support\Facades\Gate;
  * **ULID:er utåt, aldrig löpnummer** (AGENTS.md § Databaskonventioner):
  * `ItemVersionResource` bär versionens egen ULID och pekarna som ULID:er.
  *
- * Listan är sidindelad som de andra listorna under itemet. Taket för antalet
- * versioner är tjugo (ADR-0088 Riktning 1), så sidan rymmer i praktiken
- * alltid hela listan — formen är den samma ändå.
+ * Listan är sidindelad som de andra listorna under itemet, men bär bara så
+ * många versioner som taket tillåter (issue 414 · ADR-0088 Riktning 6).
+ * Ligger fler rader kvar — under en rättslig spärr tar trimjobbet ingenting —
+ * är det de nyaste som visas, aldrig överskottet. Taket är högst tjugo och
+ * sidan tjugofem, så allt som får visas ryms på en sida; sidindelningen finns
+ * kvar som form, inte för att det någonsin blir en andra sida.
  */
 class ItemVersionController extends Controller
 {
@@ -43,11 +48,18 @@ class ItemVersionController extends Controller
     {
         Gate::authorize('view', $item);
 
-        $versions = $item->versions()->paginate(self::PER_PAGE);
+        $limit = VersionLimit::for($container);
 
-        ItemVersionResource::prepare($versions->getCollection());
+        // `limit(0)` ger inga rader, så en avstängd historik svarar tomt utan
+        // ett eget specialfall. Sidindelningens total är det som faktiskt
+        // visas, inte antalet rader i tabellen.
+        $versions = $item->versions()->limit($limit)->get();
 
-        return ItemVersionResource::collection($versions)->response();
+        ItemVersionResource::prepare($versions);
+
+        return ItemVersionResource::collection(
+            new LengthAwarePaginator($versions, $versions->count(), self::PER_PAGE),
+        )->response();
     }
 
     /**

@@ -1044,6 +1044,11 @@ class ItemController extends Controller
         // tak sänkts till noll kan ännu bära versioner innan jobbet i issue
         // 414 har tagit bort dem, och de ska inte synas.
         //
+        // **Bara så många som taket tillåter** (issue 414 · ADR-0088
+        // Riktning 6). Ligger fler rader kvar — under en rättslig spärr tar
+        // jobbet ingenting — visas de nyaste `$versionLimit`, aldrig
+        // överskottet. `versions()` är nyast först.
+        //
         // Formen är App\Http\Resources\ItemVersionResource — samma format som
         // `/api` svarar med — och `prepare()` laddar pekarna i ett fast antal
         // frågor.
@@ -1051,9 +1056,10 @@ class ItemController extends Controller
         $itemCoverUlid = null;
         $versionCategoryNames = [];
         $versionsLoaded = $request->query('tab') === 'history';
+        $versionLimit = $versionsLoaded ? VersionLimit::for($container) : 0;
 
-        if ($versionsLoaded && VersionLimit::for($container) > 0) {
-            $versionRows = $item->versions()->get();
+        if ($versionLimit > 0) {
+            $versionRows = $item->versions()->limit($versionLimit)->get();
 
             ItemVersionResource::prepare($versionRows);
 
