@@ -152,6 +152,104 @@ def test_ingen_lasbar_ruta_ger_ingen_analys():
 
 
 # =====================================================================
+# Notistyperna
+# =====================================================================
+#
+# M66-retron 2026-11-20: PR #1422 (406), #1448 (412) och #1425 (409) rörde
+# samma sju filer, och rutan missade dem i alla tre. Villkoret är mekaniskt:
+# ett `x.y` som varken är en filändelse eller en TYPE_-konstant, som issuen
+# talar om som en notistyp, och som källkoden inte känner igen - en rad per fil
+# rutan inte täcker.
+
+NOTISTYP_KROPP = """### Mål
+
+En ny notistyp skickas när något händer.
+
+### In scope
+
+```
+.github/scripts/omfangslint.py
+```
+
+### Klart när
+
+- [ ] `agent.example` skickas en gång per användare
+"""
+
+
+def test_ny_notistyp_ger_en_rad_per_fil_rutan_saknar():
+    """PR #1448 (412) saknade `NotificationTarget.php` i rutan; PR #1425 (409)
+    saknade `NotificationRow.vue`, och notisen visades med reservtexten."""
+    mekaniska, _, _, _ = _analys(NOTISTYP_KROPP)
+    assert any("NotificationTarget.php" in rad for rad in mekaniska), mekaniska
+    assert any("NotificationRow.vue" in rad for rad in mekaniska), mekaniska
+    assert len(mekaniska) == len(l.NOTISTYP_FILER), mekaniska
+
+
+def test_ny_notistyp_i_en_ny_namnrymd_ger_rad():
+    """Issue 412 introducerade `versioning.skipped` - en typ vars namnrymd inte
+    fanns i modellen sedan förut. Utan notisordet hade den gått förbi, och det
+    var just det fallet PR #1448 missade."""
+    kropp = NOTISTYP_KROPP.replace("agent.example", "webhook.failed")
+    mekaniska, _, _, _ = _analys(kropp)
+    assert len(mekaniska) == len(l.NOTISTYP_FILER), mekaniska
+
+
+def test_notistypens_filer_som_rutan_tacker_ger_ingen_rad():
+    kropp = NOTISTYP_KROPP.replace(
+        ".github/scripts/omfangslint.py",
+        "app/Support/Notification/**\ntests/Feature/Frontend/SprakTest.php",
+    )
+    mekaniska, _, _, _ = _analys(kropp)
+    assert not any("NotificationTarget" in rad for rad in mekaniska), mekaniska
+    assert len(mekaniska) == len(l.NOTISTYP_FILER) - 3, mekaniska
+
+
+def test_befintlig_notistyp_ger_ingen_rad():
+    """Klart när 2: typen finns redan som TYPE_-konstant i modellen."""
+    mekaniska, _, _, _ = _analys(NOTISTYP_KROPP.replace("agent.example", "agent.deleted"))
+    assert mekaniska == [], mekaniska
+
+
+def test_ruttnamn_filnamn_och_felkoder_ar_inga_notistyper():
+    """Utan det ledet hade varje issue som nämner `containers.show` eller
+    `agent.forbidden` fått sju rader om notiser - de skrivs `x.y` allihop och
+    står redan i koden, men ingen av dem är en notistyp."""
+    kropp = NOTISTYP_KROPP.replace(
+        "- [ ] `agent.example` skickas en gång per användare",
+        "- [ ] `containers.show`, `composer.json` och `agent.forbidden` nämns",
+    )
+    mekaniska, _, _, _ = _analys(kropp)
+    notisrader = [rad for rad in mekaniska if any(fil in rad for fil in l.NOTISTYP_FILER)]
+    assert notisrader == [], notisrader
+
+
+def test_okant_x_y_utan_notisord_ar_ingen_notistyp():
+    """Issue 659 nämner `os.symlink` och `shutil.rmtree`; ingen av dem finns i
+    källkoden, men ingen av dem är en notistyp och issuen talar inte om
+    notiser. Utan det ledet hade en deploy-issue fått sju rader om notiser."""
+    kropp = NOTISTYP_KROPP.replace(
+        "En ny notistyp skickas när något händer.",
+        "Deployen anropar `os.symlink` och `shutil.rmtree`.",
+    ).replace(
+        "- [ ] `agent.example` skickas en gång per användare",
+        "- [ ] `os.symlink` används",
+    )
+    mekaniska, _, _, _ = _analys(kropp)
+    assert mekaniska == [], mekaniska
+
+
+def test_notistypfil_out_of_scope_pekas_ut_sarskilt():
+    kropp = NOTISTYP_KROPP.replace(
+        "### In scope",
+        "### Out of scope\n\n```\nlang/**\n```\n\n### In scope",
+    )
+    mekaniska, _, _, _ = _analys(kropp)
+    rader = [rad for rad in mekaniska if "lang/en/notiser.php" in rad]
+    assert len(rader) == 1 and "**Out of scope**" in rader[0], mekaniska
+
+
+# =====================================================================
 # Den bedömande halvan
 # =====================================================================
 

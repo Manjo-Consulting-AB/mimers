@@ -37,6 +37,23 @@ Två halvor, med olika säkerhet:
    inte står i tabellen. Precisionen kommer ur att svaret verifieras mot
    filsystemet, inte ur att frågan är snäv.
 
+Ett tredje, lika mekaniskt villkor kom ur M66-retron (2026-11-20): en ny
+notistyp. PR #1422 (issue 406, `agent.deleted`), PR #1448 (issue 412,
+`versioning.skipped`) och PR #1425 (issue 409, `agent.access_lost`) rörde
+samma sju filer — modellen, `NotificationPreferences`, `NotificationTarget`,
+`lang/en/notiser.php`, mejlmallen, `NotificationRow.vue` och `SprakTest` — och
+rutan missade dem i alla tre; i 406 kostade det åtta deklarationer. Villkoret
+(`notistypfynd`) är att ett bakåtciterat `x.y` är en ny notistyp när fyra
+mekaniska led håller med: formen är `x.y` och inte en filändelse, modellen
+(`app/Models/Notification.php`) har den inte som `TYPE_`-konstant, issuen talar
+om notiser (eller så är namnrymden en modellen redan använder), och appens egen
+källkod känner inte igen den. De två sista leden är det som skiljer den från
+allt annat en issue skriver `x.y` om: ruttnamn, felkoder, kolumnnamn,
+språknycklar och filnamn står redan i koden, och en deploy-issue som nämner
+`os.symlink` talar inte om notiser. Mätt mot repots ~400 issuekroppar
+2026-11-20 gav villkoret 14 träffar; formen och modellens konstanter allena
+hade gett 44, och med källkodsledet men utan notisordet 39.
+
 Därtill läslistan (`lasfynd`, M21-retron): det `Läs` pekar på slås upp i
 trädet kön grenar ur. En ADR som ligger på en omergad gren, eller en rubrik
 som aldrig fanns, syns då före sessionen och inte i dess frågeavsnitt.
@@ -87,6 +104,46 @@ URL_I_TEXT = re.compile(r"(?<![\w/])(/[a-z0-9][a-z0-9\-/]*(?:\{[a-z_]+\}[a-z0-9\
 # Ruttnamn står alltid i bakåtcitat i issuerna: `containers.show`.
 NAMN_I_TEXT = re.compile(r"`([a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+)`")
 KLART_NAR_PUNKT = re.compile(r"^\s*-\s*\[[ xX]\]\s*(.+?)\s*$", re.MULTILINE)
+
+# Filerna en notistyp rör, i den ordning M66-retron listade dem. Det är inte
+# en gissning: PR #1422 (406), #1448 (412) och #1425 (409) ändrade alla sju,
+# och bara den mellersta hade dem i rutan. Glöms `NotificationRow.vue` visas
+# notisen med reservtexten i klockan - det hände 409.
+NOTISTYP_FILER = (
+    "app/Models/Notification.php",
+    "app/Support/Notification/NotificationPreferences.php",
+    "app/Support/Notification/NotificationTarget.php",
+    "lang/en/notiser.php",
+    "resources/views/mail/notification.blade.php",
+    "resources/js/components/NotificationRow.vue",
+    "tests/Feature/Frontend/SprakTest.php",
+)
+NOTISTYP_MODELL = "app/Models/Notification.php"
+NOTISTYP_KONSTANT = re.compile(r"const\s+TYPE_[A-Z0-9_]+\s*=\s*'([^']+)'")
+# En notistyp skrivs `x.y`: två ord, båda minst två tecken. Formen utesluter
+# platshållaren `x.y` i den här issuen, versionsnummer (`v1.2`) och JSON-nycklar
+# (`data.0`), som annars hade varit kandidater.
+NOTISTYP_I_TEXT = re.compile(r"`([a-z][a-z0-9_-]+)\.([a-z][a-z0-9_-]+)`")
+# En issue som introducerar en notistyp talar om notiser; gör den inte det är
+# ett okänt `x.y` något annat - en symbol ur ett annat språk (`os.symlink`,
+# `shutil.rmtree`) eller en platshållare. Undantaget är namnrymder modellen
+# redan använder, som `agent.example`: de räknas som notistyper utan stödord.
+NOTISORD = re.compile(r"notis|notifikation|notification", re.IGNORECASE)
+# `ci.yml`, `composer.json`, `process_next_issue.py`, `staging.yml`: en
+# filändelse är inget notistypnamn, hur mycket den än liknar `x.y`.
+FILANDEL = frozenset((
+    "php", "vue", "js", "ts", "tsx", "jsx", "md", "yml", "yaml", "json", "css",
+    "sh", "py", "txt", "lock", "xml", "sql", "ini", "conf", "env", "html",
+    "svg", "scss", "neon", "nix", "png", "jpg", "jpeg", "gif", "pdf", "jsonl",
+    "log", "toml", "cjs", "mjs", "csv", "zip", "gz",
+))
+# Källkoden en ny notistyp måste vara okänd för. Det är det ledet som skiljer
+# den från ruttnamn (`containers.show`), felkoder (`agent.forbidden`),
+# kolumnnamn (`container.currency`) och språknycklar (`create.heading`) - alla
+# skrivs `x.y`, alla står redan i koden, och ingen av dem är en notistyp.
+KALLKATALOGER = ("app", "routes", "database", "lang", "resources", "config")
+KALLANDELSER = (".php", ".js", ".ts", ".tsx", ".jsx", ".vue", ".json", ".css",
+                ".xml", ".yml", ".yaml", ".neon")
 
 
 class Rutt:
@@ -215,9 +272,127 @@ def namnda_rutter(kropp: str, tabell: list[Rutt]) -> list[tuple[str, Rutt]]:
     return trafffar
 
 
+def notistyper_i_modellen(rot: str = REPO_ROOT) -> set[str]:
+    """Värdena på `TYPE_`-konstanterna i app/Models/Notification.php.
+
+    Modellen har medvetet ingen `TYPES`-lista (issue 30 § Beslut 4), så
+    konstanterna är den enda samlade sanningen om vilka typer som finns.
+    Saknas filen - en fräsch worktree där allt ännu inte är utcheckat - blir
+    svaret tomt, och då kan ingen nämnd typ kännas igen. Det är rätt håll att
+    fela åt: en rad för mycket kostar en läsning, en rad för litet kostar en
+    deklaration.
+    """
+    sokvag = os.path.join(rot, NOTISTYP_MODELL)
+    if not os.path.exists(sokvag):
+        return set()
+    with open(sokvag, encoding="utf-8") as f:
+        return set(NOTISTYP_KONSTANT.findall(f.read()))
+
+
+def kalltexten(rot: str = REPO_ROOT) -> str:
+    """Appens egen källkod som en enda text.
+
+    Används bara för att avgöra om ett `x.y` issuen nämner redan finns i koden
+    i någon annan roll. Läses i ett svep först när det finns kandidater, och
+    bara ur de kataloger som bär appens beteende - docs/ står utanför med
+    flit: valvet beskriver typer som ännu inte är byggda, och en notistyp
+    skriven i en ADR är fortfarande en ny notistyp.
+    """
+    bitar: list[str] = []
+    for katalog in KALLKATALOGER:
+        for mapp, _, namn in os.walk(os.path.join(rot, katalog)):
+            for n in namn:
+                if not n.endswith(KALLANDELSER):
+                    continue
+                try:
+                    with open(os.path.join(mapp, n), encoding="utf-8", errors="replace") as f:
+                        bitar.append(f.read())
+                except OSError:
+                    continue
+    return "\n".join(bitar)
+
+
+def nya_notistyper(kropp: str, rot: str = REPO_ROOT) -> list[str]:
+    """Notistyperna issuen nämner som modellen inte har som `TYPE_`-konstant.
+
+    Fyra filter, i ordning: formen (`x.y`, inte en filändelse), modellens
+    konstanter, att issuen talar om notiser (eller att namnrymden redan är en
+    notistypnamnrymd — `agent.example` behöver inget `notis` i kroppen), och
+    källkoden. De två sista är det som gör villkoret användbart: utan dem hade
+    varje issue som nämner `containers.show`, `agent.forbidden` eller
+    `os.symlink` fått sju rader om notiser. Mätt mot repots ~400 issuekroppar
+    2026-11-20 gav hela villkoret 14 träffar; formen + konstanterna allena gav
+    44 och formen + konstanterna + källkoden 39.
+    """
+    kandidater = [
+        f"{namnrymd}.{handelse}"
+        for namnrymd, handelse in dict.fromkeys(NOTISTYP_I_TEXT.findall(kropp))
+        if handelse not in FILANDEL
+    ]
+    kanda = notistyper_i_modellen(rot)
+    kandidater = [namn for namn in kandidater if namn not in kanda]
+    if not kandidater:
+        return []
+
+    rymder = {namn.split(".")[0] for namn in kanda}
+    talar_om_notiser = NOTISORD.search(kropp) is not None
+    kandidater = [
+        namn for namn in kandidater
+        if talar_om_notiser or namn.split(".")[0] in rymder
+    ]
+    if not kandidater:
+        return []
+
+    kod = kalltexten(rot)
+    return [namn for namn in kandidater if namn not in kod]
+
+
+def notistypfynd(kropp: str, innanfor: list[str], utanfor: list[str],
+                 rot: str = REPO_ROOT) -> list[str]:
+    """Filerna en ny notistyp rör, som rutan inte täcker — en rad per fil.
+
+    En notistyp rör samma sju filer varje gång, och en ruta som glömmer en av
+    dem kostar antingen en deklaration eller en notis som visas med
+    reservtexten i klockan (PR #1425). Därför skrivs hela listan ut när en typ
+    är ny, inte bara den fil som råkade stå i `Klart när`.
+
+    `In scope` räknas som täckning; ligger filen i stället i `Out of scope` är
+    det en motsägelse som förtjänar den skarpare formuleringen — samma två
+    utfall som den mekaniska halvan ger för rutter.
+    """
+    nya = nya_notistyper(kropp, rot)
+    if not nya:
+        return []
+
+    namn = ", ".join(f"`{n}`" for n in nya)
+    vad = f"notistypen {namn}" if len(nya) == 1 else f"notistyperna {namn}"
+    fynd: list[str] = []
+    for fil in NOTISTYP_FILER:
+        if any(o.matchar(fil, m) for m in innanfor):
+            continue
+        traffad_utanfor = [m for m in utanfor if o.matchar(fil, m)]
+        if traffad_utanfor:
+            fynd.append(
+                f"- `{fil}` rörs av {vad}, som issuen nämner men `{NOTISTYP_MODELL}` inte "
+                f"känner — men filen ligger **Out of scope** ({', '.join(traffad_utanfor)}). "
+                f"En ny notistyp behöver den ändå: ska typen skapas säger issuen emot sig själv."
+            )
+        else:
+            fynd.append(
+                f"- `{fil}` rörs av {vad}, som issuen nämner men `{NOTISTYP_MODELL}` inte "
+                f"har som `TYPE_`-konstant, och matchar ingen glob i `In scope`."
+            )
+    return fynd
+
+
 def mekaniska_fynd(kropp: str, innanfor: list[str], utanfor: list[str],
-                   tabell: list[Rutt]) -> list[str]:
-    """Filer som bär något issuen nämner men som rutan inte täcker."""
+                   tabell: list[Rutt], rot: str = REPO_ROOT) -> list[str]:
+    """Filer som bär något issuen nämner men som rutan inte täcker.
+
+    Två villkor, båda deterministiska: en nämnd rutt (uppslagen i tabellen) och
+    en nämnd ny notistyp (se `notistypfynd`). Båda ger rader att läsa, ingen av
+    dem fäller något.
+    """
     fynd: list[str] = []
     rapporterade: set[str] = set()
 
@@ -237,7 +412,7 @@ def mekaniska_fynd(kropp: str, innanfor: list[str], utanfor: list[str],
                 )
             else:
                 fynd.append(f"- `{fil}` bär {vad}, som issuen nämner, men matchar ingen glob i `In scope`.")
-    return fynd
+    return fynd + notistypfynd(kropp, innanfor, utanfor, rot)
 
 
 def klart_nar_punkter(kropp: str) -> list[str]:
@@ -491,10 +666,10 @@ def rapport(mekaniska: list[str], modellfynd: list[str], lage: str,
     if not mekaniska and not modellfynd:
         return "\n".join(rader).rstrip()
     rader += ["Rutan verkar sakna filer som bär det issuen beskriver. "
-              "Linten fäller ingenting — den läser `routes/` innan sessionen startar, "
+              "Linten fäller ingenting — den läser koden innan sessionen startar, "
               "så att rutan går att rätta medan det kostar en redigering.", ""]
     if mekaniska:
-        rader += ["**Nämnda rutter, upplösta mot ruttabellen:**", ""] + mekaniska + [""]
+        rader += ["**Nämnda rutter och notistyper, upplösta mot koden:**", ""] + mekaniska + [""]
     if modellfynd:
         rader += ["**`Klart när`-punkter utan en fil i rutan:**", ""] + modellfynd + [""]
     out_of_scope = [OUT_OF_SCOPE_MARKOR in rad for rad in mekaniska + modellfynd]
@@ -520,7 +695,8 @@ def analysera(kropp: str, rot: str = REPO_ROOT) -> tuple[list[str], str | None, 
     if not innanfor:
         return [], None, [], lage
     tabell = rutter(rot)
-    return mekaniska_fynd(kropp, innanfor, utanfor, tabell), bygg_modellfraga(kropp, innanfor, tabell), innanfor, lage
+    return (mekaniska_fynd(kropp, innanfor, utanfor, tabell, rot),
+            bygg_modellfraga(kropp, innanfor, tabell), innanfor, lage)
 
 
 def main() -> int:
