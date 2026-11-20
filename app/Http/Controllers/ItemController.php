@@ -37,6 +37,7 @@ use App\Http\Resources\CostEntryResource;
 use App\Http\Resources\ItemFieldResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
+use App\Http\Resources\ItemVersionResource;
 use App\Http\Resources\LoanResource;
 use App\Http\Resources\ScheduleResource;
 use App\Http\Resources\TagResource;
@@ -59,11 +60,13 @@ use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
 use App\Support\Usage\Features;
+use App\Support\Versioning\VersionLimit;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -1030,6 +1033,52 @@ class ItemController extends Controller
             ? $presentAuditEvents->handle($listAuditEvents->forItem($user, $item))
             : null;
 
+        // Versionerna (issue 413 · [[ADR-0088 Versionshistorik för items]]
+        // Riktning 5). Avsnittet *Earlier versions* står överst på
+        // *History*-fliken, nyast först, och läses bara när fliken är aktiv —
+        // samma skäl som `$auditRows` ovan: den som öppnar itemet för att se
+        // bilagorna ska inte betala för historiken.
+        //
+        // **Avstängd historik ritar inget avsnitt.** `VersionLimit::for()`
+        // frågas i stället för att gissa ur antalet rader: en container vars
+        // tak sänkts till noll kan ännu bära versioner innan jobbet i issue
+        // 414 har tagit bort dem, och de ska inte synas.
+        //
+        // Formen är App\Http\Resources\ItemVersionResource — samma format som
+        // `/api` svarar med — och `prepare()` laddar pekarna i ett fast antal
+        // frågor.
+        $versions = [];
+        $itemCoverUlid = null;
+        $versionCategoryNames = [];
+        $versionsLoaded = $request->query('tab') === 'history';
+
+        if ($versionsLoaded && VersionLimit::for($container) > 0) {
+            $versionRows = $item->versions()->get();
+
+            ItemVersionResource::prepare($versionRows);
+
+            $versions = ItemVersionResource::collection($versionRows)->resolve($request);
+
+            // Namnen på versionernas kategorier, även de som sedan dess
+            // ligger i papperskorgen: dialogen visar versionens kategori vid
+            // namn, och en mjukraderad kategori hade annars fallit tillbaka
+            // på sitt ULID. Läggs BREDVID `categories`-proppen och inte i
+            // resursen — resursen är `/api`:s format och bär ULID:en.
+            $versionCategoryIds = $versionRows->pluck('category_id')->filter()->unique()->values()->all();
+
+            $versionCategoryNames = $versionCategoryIds === []
+                ? []
+                : DB::table('category')->whereIn('id', $versionCategoryIds)->pluck('name', 'ulid')->all();
+
+            // Omslagsbilden som den står NU, så att dialogen kan markera
+            // fältet som ändrat. `ItemResource` bär inte pekaren, och
+            // upplösningen (`cover`) är en annan fråga — den väljer en bild
+            // när itemet inte valt någon.
+            $itemCoverUlid = $item->cover_attachment_id === null
+                ? null
+                : DB::table('attachment')->where('id', $item->cover_attachment_id)->value('ulid');
+        }
+
         // Den aktuella förekomsten, som en sträng eller ingenting. `?path[]=x`
         // är en array, och en array ska bli samma svar som en okänd väg: ingen
         // väg. Utan raden hade `forItem()` fått en array mot en `?string`.
@@ -1056,7 +1105,12 @@ class ItemController extends Controller
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
-            'categories' => $this->categoryNames([$item]),
+            // Kategorins namn, ULID → namn. Versionernas egna kategorier
+            // läggs till när *History* är aktiv — även mjukraderade — så att
+            // dialogen kan visa versionens kategori vid namn och inte som en
+            // ULID (issue 413). Den nuvarande kategorin vinner vid krock, som
+            // före den här issuen.
+            'categories' => [...$versionCategoryNames, ...$this->categoryNames([$item])],
 
             // Anteckningen ritad som HTML (M42 · issue 324 · [[ADR-0066
             // Itemets anteckning]] § 2). `item.notes` står kvar som rå text:
@@ -1359,6 +1413,31 @@ class ItemController extends Controller
             // linje som `categories`, `variants` och `paths`: `ItemResource` är
             // `/api`:s format och har inte bett om fältet.
             ...($auditRows === null ? [] : ['history' => $auditRows]),
+
+            // Versionernas avsnitt (issue 413 · [[ADR-0088 Versionshistorik
+            // för items]] Riktning 5). Propparna finns BARA när *History* är
+            // den aktiva fliken, som `history` ovan och av samma skäl — den
+            // som öppnar itemet för att se bilagorna ska inte betala för
+            // versionerna. `versions` är `[]` när historiken är avstängd, och
+            // vyn ritar då inget avsnitt.
+            //
+            // `itemCover` är omslagsbildens ULID som den står NU, bredvid
+            // resursen: `ItemResource` bär inte pekaren, och dialogen behöver
+            // den för att markera fältet som ändrat.
+            //
+            // `restoredSkipped` är de fält en återställning hoppade över,
+            // lästa ur sessionen efter omdirigeringen. `flash.status` bär en
+            // kod och inga parametrar, så listan får en egen propp.
+            ...($versionsLoaded
+                ? [
+                    'versions' => $versions,
+                    'itemCover' => $itemCoverUlid,
+                    'restoredSkipped' => array_values(array_filter(
+                        (array) $request->session()->get('restored_skipped', []),
+                        'is_string',
+                    )),
+                ]
+                : []),
 
             // **Reglaget *Include child items* står i querysträngen** (M24 ·
             // issue 227 Beslut 3; issue 1247 · [[ADR-0068 Itemets sida och

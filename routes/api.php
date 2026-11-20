@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\ItemFieldController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemMoveController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\ItemVersionController;
 use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MailgunWebhookController;
 use App\Http\Controllers\Api\NotificationController;
@@ -329,6 +330,16 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
+
+    // Issue 413 · Versionerna av ett item, se App\Http\Controllers\Api\
+    // ItemVersionController och [[ADR-0088 Versionshistorik för items]]
+    // Riktning 5. Läsning kräver itemets `view`, återställning itemets
+    // `update`. `{version}` binds INTE av scopeBindings() — kontrollern hämtar
+    // den genom $item->versions(), så en version från ett annat item blir 404
+    // i stället för att lösas upp mot containern.
+    Route::get('/containers/{container}/items/{item}/versions', [ItemVersionController::class, 'index']);
+    Route::get('/containers/{container}/items/{item}/versions/{version}', [ItemVersionController::class, 'show']);
+    Route::post('/containers/{container}/items/{item}/versions/{version}/restore', [ItemVersionController::class, 'restore']);
 
     // Issue 417 · Egna fält — containerns och ett items egna, se
     // App\Http\Controllers\Api\ItemFieldController och

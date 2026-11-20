@@ -392,6 +392,10 @@ it('har fliken Kostnader i itemets flikrad', function () {
  * det här provets ärende i den här sessionen: en yta som byter flik är precis
  * vad tabellen finns för att fånga, och den som blev kvar på översikten —
  * snabbfakta — prövas där den nu står.
+ *
+ * **Versionerna kom till historikfliken i issue 413** och prövas därför i
+ * samma tabell: *Earlier versions* hör till *History* och till ingen annan
+ * flik.
  */
 it('alla sex befintliga propar når sin flik', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
@@ -403,7 +407,7 @@ it('alla sex befintliga propar når sin flik', function () {
         'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
         'costs' => ['<ItemCostSection', ':costs="costs"', ':cost-defaults="costDefaults"'],
-        'history' => ['<HistoryRow', 'v-for="row in history"', ':row="row"'],
+        'history' => ['<ItemVersionSection', '<HistoryRow', 'v-for="row in history"', ':row="row"'],
     ];
 
     $paneler = itemflikPaneler($vy);

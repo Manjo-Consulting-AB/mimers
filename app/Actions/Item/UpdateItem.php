@@ -100,12 +100,18 @@ class UpdateItem
      *                                                             Ett fält som
      *                                                             inte nämns
      *                                                             lämnas orört.
+     * @param  string|null  $restoredFrom  Versionens ULID när skrivningen är
+     *                                     en återställning (issue 413): då
+     *                                     sparas nuläget med `breakBurst:
+     *                                     true`, och `meta.restored_from`
+     *                                     namnger versionen. Fritext följer
+     *                                     fortfarande aldrig med i `meta`.
      */
-    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags, array $fields = []): void
+    public function handle(Item $item, User $actor, bool $syncTags, Collection $tags, array $fields = [], ?string $restoredFrom = null): void
     {
         $meta = $this->metaFor($item);
 
-        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields): void {
+        DB::transaction(function () use ($item, $actor, $syncTags, $tags, $meta, $fields, $restoredFrom): void {
             // Läget FÖRE ändringen sparas som en version, i samma transaktion
             // (issue 412 · [[ADR-0088 Versionshistorik för items]]). Taggar
             // byts först efteråt av SyncItemTags, fältvärdena av
@@ -116,6 +122,7 @@ class UpdateItem
             $this->recordItemVersion->handle(
                 $item,
                 $actor,
+                breakBurst: $restoredFrom !== null,
                 tagIds: $syncTags ? $tags->pluck('id')->all() : null,
                 fieldValues: $this->desiredFieldValues($fields),
             );
@@ -128,7 +135,10 @@ class UpdateItem
             // [[ADR-0043 Tre loggar]]).
             $changedFields = $this->syncItemFieldValues->handle($item, $fields);
 
-            $meta = $this->withChangedFields($meta, $changedFields);
+            $meta = $this->withRestoredFrom(
+                $this->withChangedFields($meta, $changedFields),
+                $restoredFrom,
+            );
 
             if ($meta !== null) {
                 $this->recordAuditEvent->handle(
@@ -180,6 +190,29 @@ class UpdateItem
         }
 
         return $values;
+    }
+
+    /**
+     * `meta.restored_from` när skrivningen är en återställning (issue 413),
+     * annars `meta` oförändrad. Nyckeln bär versionens ULID och ingenting
+     * annat — fritext följer fortfarande aldrig med i loggen.
+     *
+     * En återställning som bara rör taggar eller fältvärden skriver ändå en
+     * `item.updated`-rad: `restored_from` gör `meta` icke-tom.
+     *
+     * @param  array<string, mixed>|null  $meta
+     * @return array<string, mixed>|null
+     */
+    private function withRestoredFrom(?array $meta, ?string $restoredFrom): ?array
+    {
+        if ($restoredFrom === null) {
+            return $meta;
+        }
+
+        $meta ??= [];
+        $meta['restored_from'] = $restoredFrom;
+
+        return $meta;
     }
 
     /**

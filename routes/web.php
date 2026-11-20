@@ -42,6 +42,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemFieldController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
+use App\Http\Controllers\ItemVersionController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\Mcp\DisconnectAgentController;
 use App\Http\Controllers\NotificationController;
@@ -1121,6 +1122,27 @@ Route::middleware('auth')->group(function () {
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update'])
         ->scopeBindings()
         ->name('containers.items.update');
+
+    /*
+     * Issue 413 · Återställningen av en version, se
+     * App\Http\Controllers\ItemVersionController och [[ADR-0088
+     * Versionshistorik för items]] Riktning 5.
+     *
+     * **En POST och ingen GET.** Versionerna läses i *History*-fliken och
+     * kommer med detaljvyns props; den här rutten är den enda skrivningen.
+     * Grinden är itemets `update` — den som bara får se itemet får 403 här.
+     *
+     * **`{version}` binds som en sträng**, inte som en modell:
+     * kontrollern hämtar den genom `$item->versions()`, så en version från ett
+     * annat item blir 404. `scopeBindings()` gäller `{container}` och
+     * `{item}`, som vanligt.
+     *
+     * Svaret är en 302 tillbaka till *History*-fliken med en flash-kod och de
+     * hoppade fälten, som varje annan skrivyta i webben.
+     */
+    Route::post('/containers/{container}/items/{item}/versions/{version}/restore', [ItemVersionController::class, 'restore'])
+        ->scopeBindings()
+        ->name('containers.items.versions.restore');
 
     /*
      * M42 · issue 324 — anteckningens egen rutt, se [[ADR-0066 Itemets

@@ -794,6 +794,11 @@ return [
         'tag-deleted' => 'The tag has been deleted.',
         'item-created' => 'The item has been created.',
         'item-updated' => 'The item has been saved.',
+        // Issue 413 · [[ADR-0088 Versionshistorik för items]] Riktning 5. The
+        // receipt after a version was restored. The fields that were skipped
+        // are listed by the History tab itself, because a flash code carries
+        // no parameters.
+        'item-version-restored' => 'The version has been restored.',
         'item-deleted' => 'The item is in the trash. It can be restored within 30 days.',
         'item-link-created' => 'The relation has been created.',
         'item-moved' => 'The item has been moved.',
@@ -3661,6 +3666,44 @@ return [
     // The item pages, see issue 57a decision 10. Same split as `container`:
     // `index` is the list, `show` is the detail view.
     'item' => [
+        /*
+         * Versionerna av ett item, se issue 413 · [[ADR-0088
+         * Versionshistorik för items]] Riktning 5 och
+         * resources/js/components/ItemVersion*.vue.
+         *
+         * `replaced_by` säger vem som ersatte versionen — agentens namn när
+         * en agent skrev, annars användarens — och `heading` är avsnittets
+         * rubrik över *History*-flikens vanliga rader. `changed` är märket på
+         * en rad vars värde skiljer sig från itemets nuvarande; det är ett
+         * ord och inte bara en nyans.
+         *
+         * `restore_body` säger att nuläget sparas först — återställningen går
+         * att ångra — och `restored_skipped` räknar upp de fält som inte
+         * längre fanns. `skipped.*` är API:ets `meta.skipped`-namn, med
+         * samma understreck: `category`, `tags`, `cover`.
+         */
+        'version' => [
+            'heading' => 'Earlier versions',
+            'replaced_by' => 'Replaced by :name',
+            'changed' => 'Changed',
+            'empty' => '—',
+            'no_tags' => 'None',
+            'icon' => 'Icon',
+            'icon_none' => 'None',
+            'cover' => 'Cover image',
+            'cover_set' => 'An image is set',
+            'cover_none' => 'No image',
+            'restore' => 'Restore',
+            'restore_heading' => 'Restore this version?',
+            'restore_body' => 'The current values are saved as a new version first, so this can be undone.',
+            'restored_skipped' => 'Restored, but these fields were left as they were: :fields.',
+            'skipped' => [
+                'category' => 'category',
+                'tags' => 'tags',
+                'cover' => 'cover image',
+            ],
+        ],
+
         // The filter bar lives in resources/js/components/ItemFilterBar.vue
         // and the empty-result sentence in pages/Containers/Items/Index.vue,
         // see issue 59a decisions 4, 5, 6 and 8. `filter_empty` lists what the

@@ -20,6 +20,7 @@ import ItemQuickActions from '../../../components/ItemQuickActions.vue';
 import ParentPicker from '../../../components/ParentPicker.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
+import ItemVersionSection from '../../../components/ItemVersionSection.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
 import UiButton from '../../../components/UiButton.vue';
 import UiConfirmDialog from '../../../components/UiConfirmDialog.vue';
@@ -381,6 +382,30 @@ const props = defineProps({
      * 108), och en gäst ser sina egna och ägaren allas ur samma svar.
      */
     history: { type: Array, default: null },
+    /*
+     * Versionerna (issue 413 · [[ADR-0088 Versionshistorik för items]]
+     * Riktning 5), ur App\Http\Resources\ItemVersionResource — nyast först.
+     *
+     * **Proppen finns BARA när fliken är aktiv, och standarden är `null`.**
+     * Servern lämnar nyckeln helt när `?tab=` inte är `history`, och skickar
+     * en TOM lista när historiken är avstängd. Avsnittet *Earlier versions*
+     * ritar därför ingenting i något av fallen — samma två tillstånd som
+     * `history` ovan skiljer på, fast vyn här bara bryr sig om listans längd.
+     */
+    versions: { type: Array, default: null },
+    /*
+     * Omslagsbildens ULID som itemet pekar på NU (issue 413), eller null.
+     * Ligger BREDVID resursen av samma skäl som `cover`: `ItemResource` bär
+     * inte pekaren, och versionens dialog behöver den för att markera fältet
+     * som ändrat. Finns bara på *History*-fliken.
+     */
+    itemCover: { type: String, default: null },
+    /*
+     * De fält en återställning hoppade över (issue 413), ur sessionen efter
+     * omdirigeringen: `category`, `tags`, `cover`. Räknas upp jämte kvittot;
+     * `flash.status` bär bara en kod och inga parametrar.
+     */
+    restoredSkipped: { type: Array, default: () => [] },
     /*
      * Översiktens händelserader (issue 213 · [[ADR-0043 Tre loggar]]
      * § Händelseloggen), ur App\Actions\Audit\PresentAuditEvents — nyast
@@ -1395,6 +1420,25 @@ function toggleFavorite() {
                 listan säger vilket — samma val som översiktsfliken gör.
             -->
             <section v-if="activeTab === 'history'" class="mt-8">
+                <!--
+                    *Earlier versions* (issue 413 · [[ADR-0088
+                    Versionshistorik för items]] Riktning 5): itemets sparade
+                    versioner överst på fliken, nyast först. Avsnittet ritar
+                    ingenting när listan är tom eller historiken är avstängd —
+                    servern skickar `versions` bara när fliken är aktiv och en
+                    tom lista när taket är noll.
+                -->
+                <ItemVersionSection
+                    v-if="versions !== null"
+                    :versions="versions"
+                    :item="item"
+                    :can="can"
+                    :container="container"
+                    :categories="categories"
+                    :item-cover="itemCover"
+                    :restored-skipped="restoredSkipped"
+                />
+
                 <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
 
                 <UiEmptyState v-if="history.length === 0" class="mt-2">
