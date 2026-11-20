@@ -22,7 +22,7 @@ use function Pest\Laravel\travel;
 /*
  * Issue 409 · Agenterna följer planen, se [[ADR-0087 MCP-server för agenter]]
  * Riktning 11 och 14. Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(),
- * mcpResultat() och mcpEgenContainer() bor i McpEndpointTest.php.
+ * mcpResultat() och mcpEgenContainer() bor i tests/Support/McpHjalpare.php.
  */
 
 beforeEach(function (): void {

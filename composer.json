@@ -45,7 +45,8 @@
             "Tests\\": "tests/"
         },
         "files": [
-            "tests/Support/Testhjalpare.php"
+            "tests/Support/Testhjalpare.php",
+            "tests/Support/McpHjalpare.php"
         ]
     },
     "scripts": {

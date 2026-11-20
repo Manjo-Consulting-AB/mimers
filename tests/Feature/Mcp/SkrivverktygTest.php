@@ -22,8 +22,8 @@ use App\Models\User;
  * `agent.forbidden` när agentens nivå i gruppen inte räcker, och lämnar en rad
  * i `audit_log` med `agent_id` när det lyckas.
  *
- * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel() och mcpResultat() bor i
- * McpEndpointTest.php, mcpEgenContainer() i samma fil.
+ * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(), mcpResultat(),
+ * mcpEgenContainer() och skrivNiva() bor i tests/Support/McpHjalpare.php.
  */
 
 beforeEach(function (): void {
@@ -47,24 +47,6 @@ function skrivMiljo(): array
     $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn']);
 
     return [$agent, $token, $anvandare, $container, $item];
-}
-
-/**
- * Sänker eller höjer agentens nivå i en grupp — både kontoraden och
- * containerraden, eftersom ResolveAgentAccess tar den lägsta av dem.
- */
-function skrivNiva(Agent $agent, Container $container, string $grupp, string $niva): void
-{
-    AgentAccountGrant::query()
-        ->where('agent_id', $agent->id)
-        ->where('group', $grupp)
-        ->update(['level' => $niva]);
-
-    AgentContainerGrant::query()
-        ->where('agent_id', $agent->id)
-        ->where('container_id', $container->id)
-        ->where('group', $grupp)
-        ->update(['level' => $niva]);
 }
 
 /**

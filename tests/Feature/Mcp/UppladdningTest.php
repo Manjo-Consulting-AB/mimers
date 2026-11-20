@@ -27,7 +27,7 @@ use function Pest\Laravel\travel;
  * och prövas mot kopieringsspärren med itemet som mål.
  *
  * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(), mcpResultat() och
- * mcpEgenContainer() bor i McpEndpointTest.php; beviljaAccess() och
+ * mcpEgenContainer() bor i tests/Support/McpHjalpare.php; beviljaAccess() och
  * sättPlangräns() i tests/Support/Testhjalpare.php.
  */
 
