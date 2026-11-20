@@ -14,6 +14,7 @@ use App\Actions\Item\ListItems;
 use App\Actions\Item\RecordRecentVisit;
 use App\Actions\Item\RenderItemNotes;
 use App\Actions\Item\ResolveContainerGraph;
+use App\Actions\Item\ResolveFieldFilters;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemNeighbourhood;
@@ -293,12 +294,22 @@ class ItemController extends Controller
         $activeContainer->set($user, $container);
 
         // Listorna hämtas FÖRE filtren: de är både filterradens innehåll och
-        // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Två
-        // frågor, oavsett hur många filtervärden som skickas.
+        // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Tre
+        // frågor, oavsett hur många filtervärden som skickas — den tredje är
+        // containerns fält (issue 424), som filterpanelen ritar och
+        // registreringsformuläret redan använde.
         $tags = $listTags->handle($user, $container);
         $categories = $listCategories->handle($user, $container);
+        $containerFields = $listFields->handle($container, null);
+        $containerFieldResources = ItemFieldResource::collection($containerFields)->resolve($request);
 
-        [$filter, $dropped] = $this->filter($request, $tags, $categories);
+        [$filter, $dropped, $fieldFilters, $fieldSort] = $this->filter(
+            $request,
+            $tags,
+            $categories,
+            $containerFields,
+            $user,
+        );
 
         $view = $this->view($request);
 
@@ -307,10 +318,10 @@ class ItemController extends Controller
         // filter är satt — i trädläget för träffarna och i kartläget för
         // träfflistan — precis som tidigare i de två lägena.
         //
-        // Tag- och kategorilistorna ovan hämtas i BÅDA lägena: de är
-        // filterradens innehåll OCH det `filter()` löser upp de inskickade
-        // ULID:na mot (Beslut 3 och 5), och `filter`-proppen bygger växelns
-        // adresser i vyn.
+        // Listorna ovan — taggar, kategorier och fält — hämtas i BÅDA
+        // lägena: de är filterradens innehåll OCH det `filter()` löser upp de
+        // inskickade ULID:na mot (Beslut 3 och 5), och `filter`-proppen
+        // bygger växelns adresser i vyn.
 
         // Kartan (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1): mitten står
         // i querysträngen som `?focus=`, och upplösningen svarar med mitten och
@@ -398,7 +409,8 @@ class ItemController extends Controller
         // HAR gett, och vyn ska kunna skilja det från "inte hämtad".
         $hasFilter = $filter['q'] !== null
             || $filter['tags'] !== []
-            || $filter['category'] !== null;
+            || $filter['category'] !== null
+            || $filter['fields'] !== [];
 
         // Träfflistan i kartläget (issue 299 · [[ADR-0059 Kartan med en mitt]]
         // § 10). Med ett filter väljer `ListItems` samma träffar som listan och
@@ -421,6 +433,8 @@ class ItemController extends Controller
                 'tags' => $filter['tags'],
                 'category' => $filter['category'],
                 'q' => $filter['q'],
+                'fields' => $fieldFilters,
+                'sort' => $fieldSort,
             ]);
 
             $hits = [
@@ -440,6 +454,8 @@ class ItemController extends Controller
                     'tags' => $filter['tags'],
                     'category' => $filter['category'],
                     'q' => $filter['q'],
+                    'fields' => $fieldFilters,
+                    'sort' => $fieldSort,
                 ])->pluck('id')->all())
                 : null;
 
@@ -484,6 +500,13 @@ class ItemController extends Controller
                 'q' => $filter['q'],
                 'tags' => $filter['tags'],
                 'category' => $filter['category'],
+                // Egna fält (issue 424): ULID → `{eq, min, max}` med bara
+                // de operatorer användaren faktiskt satte, och sorteringen
+                // som `{sort, direction}`. Panel och chips byggs ur samma
+                // form som `/api` tar emot.
+                'fields' => $filter['fields'],
+                'sort' => $filter['sort'],
+                'direction' => $filter['direction'],
                 'dropped' => $dropped,
             ],
             'can' => [
@@ -554,7 +577,12 @@ class ItemController extends Controller
             // (issue 419 · [[ADR-0089 Egna fält på items]] § Riktning 1): det
             // är samma ItemForm, och en yta som ritar några av formulärets
             // fält men inte alla hade varit två formulär med ett namn.
-            'fields' => $canRegister ? ItemFieldResource::collection($listFields->handle($container, null))->resolve($request) : [],
+            'fields' => $canRegister ? $containerFieldResources : [],
+            // Filterpanelens fält (issue 424 · [[ADR-0089 Egna fält på items]]
+            // § Riktning 1): containerns fält ritas för alla som når containern,
+            // inte bara för den som får registrera. Samma rader som
+            // registreringsformuläret använder — en fråga, inte två.
+            'filterFields' => $containerFieldResources,
             'preselected' => $canRegister ? $this->defaultCategoryUlid($request, $categories) : null,
             'createdItem' => $canRegister ? $this->createdItem($request) : null,
 
@@ -2234,9 +2262,15 @@ class ItemController extends Controller
      *
      * @param  Collection<int, Tag>  $tags  containerns taggar inom omfånget
      * @param  Collection<int, Category>  $categories  containerns kategoriträd inom omfånget
-     * @return array{0: array{q: string|null, tags: list<string>, category: string|null}, 1: bool} filtret och huruvida något föll bort
+     * @param  Collection<int, ItemField>  $fields  containerns fält, ur ListFields
+     * @return array{
+     *     0: array{q: string|null, tags: list<string>, category: string|null, fields: array<string, array<string, mixed>>, sort: string|null, direction: string},
+     *     1: bool,
+     *     2: list<array{field_id: int, ulid: string, type: string, op: string, value: string, raw: mixed}>,
+     *     3: array{field_id: int, ulid: string, type: string, direction: string}|null
+     * } filtret, huruvida något föll bort, fältspecarna och sorteringen
      */
-    private function filter(Request $request, Collection $tags, Collection $categories): array
+    private function filter(Request $request, Collection $tags, Collection $categories, Collection $fields, User $user): array
     {
         $q = $request->query('q');
         $q = is_string($q) ? trim($q) : null;
@@ -2262,12 +2296,45 @@ class ItemController extends Controller
             ? $requestedCategory
             : null;
 
+        // Egna fält (issue 424). Webbens regel är 59a § Beslut 3: ett värde
+        // som inte längre finns är ett BORTFALLET filter, inte ett fel. Bara
+        // containerns fält ritas i panelen, och ett fält som är borta eller
+        // ligger i en annan container faller därför bort på samma sätt som en
+        // raderad tagg.
+        $resolver = app(ResolveFieldFilters::class);
+        $candidates = $fields->keyBy('ulid');
+        $requestedFields = $request->query('field');
+
+        [$fieldDefinitions, $missingFields] = $resolver->match($candidates, $requestedFields);
+        $fieldFilters = $resolver->specs($fieldDefinitions, $requestedFields, $user);
+
+        $appliedFields = [];
+
+        foreach ($fieldFilters as $spec) {
+            $appliedFields[$spec['ulid']][$spec['op']] = $spec['raw'];
+        }
+
+        $requestedSort = $request->query('sort');
+        $sortRequested = is_string($requestedSort) && trim($requestedSort) !== '';
+        $sort = $resolver->sort($candidates, $requestedSort, $request->query('direction'));
+
         $dropped = $keptTags !== $requestedTags
-            || ($requestedCategory !== null && $keptCategory === null);
+            || ($requestedCategory !== null && $keptCategory === null)
+            || $missingFields !== []
+            || ($sortRequested && $sort === null);
 
         return [
-            ['q' => $q, 'tags' => $keptTags, 'category' => $keptCategory],
+            [
+                'q' => $q,
+                'tags' => $keptTags,
+                'category' => $keptCategory,
+                'fields' => $appliedFields,
+                'sort' => $sort['ulid'] ?? null,
+                'direction' => $sort['direction'] ?? 'asc',
+            ],
             $dropped,
+            $fieldFilters,
+            $sort,
         ];
     }
 

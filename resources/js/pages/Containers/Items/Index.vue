@@ -157,8 +157,15 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Containerns kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
     categoryTree: { type: Array, required: true },
-    /* Filtret som servern tillämpade: { q, tags, category, dropped }. */
+    /* Filtret som servern tillämpade: { q, tags, category, fields, sort, direction, dropped }. */
     filter: { type: Object, required: true },
+    /*
+     * Containerns fält till filterpanelen (issue 424 · [[ADR-0089 Egna fält
+     * på items]] § Riktning 1): `{ulid, label, type}`. Samma rader som
+     * registreringsformuläret använder, men för ALLA som når containern —
+     * fälten ritas även för en läsare, som inte får skapa något.
+     */
+    filterFields: { type: Array, default: () => [] },
     /*
      * `{ create, update }` — behörighetsflaggorna. `create` ritar skapaknappen
      * nedan, och `update` ritar *Redigera container* i hjälten (issue 170 ·
@@ -398,9 +405,13 @@ onBeforeUnmount(() => clearTimeout(highlightTimer));
  */
 const hasFilter = computed(() => props.filter.q !== null
     || props.filter.tags.length > 0
-    || props.filter.category !== null);
+    || props.filter.category !== null
+    || Object.keys(props.filter.fields ?? {}).length > 0);
 
-const summary = computed(() => filterSummary(activeFilters(props.filter, props.tags, props.categoryTree, t), t));
+const summary = computed(() => filterSummary(
+    activeFilters(props.filter, props.tags, props.categoryTree, props.filterFields, t),
+    t,
+));
 
 /*
  * *Expand all* i trädlägets filterrad (issue 295 · [[ADR-0058 Trädet som
@@ -447,6 +458,26 @@ const filterQuery = computed(() => {
 
     if (props.filter.category !== null) {
         params.set('category', props.filter.category);
+    }
+
+    /*
+     * Egna fält (issue 424): `field[<ULID>][eq|min|max]`, samma form som
+     * filterraden skickar. URLSearchParams kodar hakparenteserna, och PHP
+     * läser dem som nästlade nycklar.
+     */
+    for (const [ulid, operations] of Object.entries(props.filter.fields ?? {})) {
+        for (const [operator, value] of Object.entries(operations)) {
+            params.append(`field[${ulid}][${operator}]`, value);
+        }
+    }
+
+    /*
+     * Sorteringen följer med länkarna, så ett läge man kommer tillbaka till
+     * är samma träfflista i samma ordning.
+     */
+    if (props.filter.sort !== null && props.filter.sort !== undefined) {
+        params.set('sort', props.filter.sort);
+        params.set('direction', props.filter.direction ?? 'asc');
     }
 
     return params.toString();
@@ -579,6 +610,7 @@ const overflowHref = computed(() => base.value);
             :container-ulid="container.ulid"
             :tags="tags"
             :categories="categoryTree"
+            :fields="filterFields"
             :filter="filter"
             :view="view === 'map' ? 'map' : null"
         />

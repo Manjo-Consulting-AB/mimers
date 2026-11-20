@@ -17,6 +17,7 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Support\Facades\RateLimiter;
 
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\travel;
 
 /*
@@ -150,6 +151,72 @@ it('söker i fältens textvärden genom samma action som API:et', function () {
     $traffar = mcpResultat(mcpVerktyg($token, 'items_search', ['q' => 'Blåmetallic']));
 
     expect(collect($traffar['items'])->pluck('ulid')->all())->toBe([$item->ulid]);
+});
+
+it('filtrerar items_search på ett fältvärde med samma träffar som API:et', function () {
+    [, $token, $anvandare, $container] = faltMiljo();
+
+    $farg = faltFalt($container, null, 'Färg', 'text', $anvandare);
+    $vikt = faltFalt($container, null, 'Vikt', 'number', $anvandare);
+
+    $rod = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn röd']);
+    $bla = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn blå']);
+
+    mcpResultat(mcpVerktyg($token, 'items_update', [
+        'item' => $rod->ulid,
+        'fields' => [
+            ['field' => $farg->ulid, 'value' => 'Röd'],
+            ['field' => $vikt->ulid, 'value' => 6],
+        ],
+    ]));
+
+    mcpResultat(mcpVerktyg($token, 'items_update', [
+        'item' => $bla->ulid,
+        'fields' => [
+            ['field' => $farg->ulid, 'value' => 'Blå'],
+            ['field' => $vikt->ulid, 'value' => 8],
+        ],
+    ]));
+
+    $svar = mcpResultat(mcpVerktyg($token, 'items_search', [
+        'q' => 'Motorn',
+        'field' => [
+            $farg->ulid => ['eq' => 'Röd'],
+            $vikt->ulid => ['min' => 5, 'max' => 7],
+        ],
+    ]));
+
+    expect(collect($svar['items'])->pluck('ulid')->all())->toBe([$rod->ulid]);
+
+    // Samma fråga mot API:et ger samma träff — formuleringen är delad.
+    $apiToken = $anvandare->createToken('api');
+    $api = getJson(
+        '/api/containers/'.$container->ulid.'/items?'.http_build_query([
+            'q' => 'Motorn',
+            'field' => [
+                $farg->ulid => ['eq' => 'Röd'],
+                $vikt->ulid => ['min' => 5, 'max' => 7],
+            ],
+        ]),
+        ['Authorization' => "Bearer {$apiToken->plainTextToken}"],
+    )->assertOk();
+
+    expect(collect($api->json('data'))->pluck('ulid')->all())->toBe([$rod->ulid]);
+});
+
+it('ger field.not_applicable i items_search för ett fält utanför sökningen', function () {
+    [, $token, $anvandare] = faltMiljo();
+
+    $annan = Container::factory()->for($anvandare->accounts->first(), 'account')->create();
+    $frammande = faltFalt($annan, null, 'Färg', 'text', $anvandare);
+
+    $fel = mcpFel(mcpVerktyg($token, 'items_search', [
+        'q' => 'Motorn',
+        'field' => [$frammande->ulid => ['eq' => 'Röd']],
+    ]));
+
+    expect($fel['code'])->toBe('field.not_applicable')
+        ->and($fel['hint'])->toBeString();
 });
 
 it('har tappat de sex fasta kolumnerna ur items_create och items_update', function () {

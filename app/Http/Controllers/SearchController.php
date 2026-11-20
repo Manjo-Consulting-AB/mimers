@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Item\ResolveFieldFilters;
 use App\Actions\Item\SearchAccessibleItems;
 use App\Http\Resources\ItemResource;
 use App\Models\Item;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -86,7 +88,13 @@ class SearchController extends Controller
             ]);
         }
 
-        $items = $searchAccessibleItems->handle($request->user(), $q);
+        $items = $searchAccessibleItems->handle(
+            $request->user(),
+            $q,
+            null,
+            null,
+            $this->fieldFilters($request),
+        );
 
         // Riktad eager load HÄR, inte i actionens delade with([...]): /api
         // bad aldrig om containern och ska svara med samma antal frågor som förut
@@ -129,5 +137,30 @@ class SearchController extends Controller
         $q = is_string($q) ? trim($q) : null;
 
         return $q === '' ? null : $q;
+    }
+
+    /**
+     * Egna fälts filter på sökningen (issue 424), uppslagna över de
+     * containers användaren når. Sidan har ingen filterpanel för fälten —
+     * den hör till containerns lista — men adressen tar samma
+     * `field[<ULID>][eq|min|max]` som `/api`, och ett värde som inte finns
+     * faller bort utan fel, samma regel som `q` på den här sidan.
+     *
+     * @return list<array{field_id: int, ulid: string, type: string, op: string, value: string, raw: mixed}>
+     */
+    private function fieldFilters(Request $request): array
+    {
+        $user = $request->user();
+        $input = $request->query('field');
+
+        if (! $user instanceof User || ! is_array($input)) {
+            return [];
+        }
+
+        $resolver = app(ResolveFieldFilters::class);
+
+        [$fields] = $resolver->match($resolver->candidatesForSearch($user), $input);
+
+        return $resolver->specs($fields, $input, $user);
     }
 }

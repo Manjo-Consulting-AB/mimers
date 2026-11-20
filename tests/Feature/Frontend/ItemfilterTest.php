@@ -630,7 +630,7 @@ it('gör aktiva filter rensbara ett i taget och alla på en gång', function () 
     expect($rad)->toContain("t('item.index.filter_remove'")
         ->toContain("t('item.index.filter_clear')")
         ->toContain('@click="remove(entry)"')
-        ->toContain("apply({ q: '', tags: [], category: null })")
+        ->toContain("apply({ q: '', tags: [], category: null, fields: {}, sort: null, direction: 'asc' })")
         ->toContain('router.get(');
 
     expect($rad)->not->toContain('router.post');
@@ -752,7 +752,7 @@ it('ersätter historiken för fältet och låter fältet stå öppet medan svare
         ->toContain('apply({ q: next }, { replace: true, fromField: true })')
         ->toContain("apply({ q: '' })")
         ->toContain('apply({ category: null })')
-        ->toContain("apply({ q: '', tags: [], category: null })")
+        ->toContain("apply({ q: '', tags: [], category: null, fields: {}, sort: null, direction: 'asc' })")
         ->toContain('preserveState: true');
 
     // Fältet är aldrig `disabled`; bara chipsen och *Clear* stängs.

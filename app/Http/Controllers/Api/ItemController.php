@@ -73,6 +73,8 @@ class ItemController extends Controller
             'tags' => $request->validated('tags'),
             'category' => $request->validated('category'),
             'q' => $request->validated('q'),
+            'fields' => $request->fieldFilters(),
+            'sort' => $request->fieldSort(),
         ]);
 
         return ItemResource::collection($items)->response();

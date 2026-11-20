@@ -28,7 +28,7 @@ use Illuminate\Support\Collection;
  * rak Eloquent annars. Att bara filtrera den ena är precis den symmetri som
  * glöms bort, och den som glöms läcker.
  *
- * `$filters` är de tre `IndexItemRequest` validerar, och varje nyckel är
+ * `$filters` är de nycklar `IndexItemRequest` validerar, och varje nyckel är
  * valfri:
  *
  * - `tags` (list av tagg-ULID) — VARJE tagg krävs, kombineras med OCH
@@ -36,6 +36,10 @@ use Illuminate\Support\Collection;
  * - `q` (söksträng eller null) — fritext över itemets textkolumner och
  *   `item_field_value.value_text`, formulerad i `Item::scopeMatchingText()`
  *   (issue 420)
+ * - `fields` (lista av specar ur App\Actions\Item\ResolveFieldFilters) —
+ *   ett `EXISTS`-villkor per fält, alltså OCH (issue 424)
+ * - `sort` (fält-spec eller null) — sortering på ett containerfält, med
+ *   items utan värde sist i båda riktningarna (issue 424)
  *
  * `IndexItemRequest` har redan bevisat att varje ULID finns i DEN HÄR
  * containern och inte är mjukraderad — ett okänt värde är 422
@@ -57,15 +61,19 @@ class ListItems
     public function __construct(
         private readonly ResolveItemScope $resolveItemScope,
         private readonly ResolveCategoryDescendants $resolveCategoryDescendants,
+        private readonly ResolveFieldFilters $resolveFieldFilters,
     ) {}
 
     /**
-     * @param  array{tags?: list<string>|null, category?: string|null, q?: string|null}  $filters
+     * @param  array{tags?: list<string>|null, category?: string|null, q?: string|null, fields?: list<array{field_id: int, ulid: string, type: string, op: string, value: string, raw: mixed}>, sort?: array{field_id: int, ulid: string, type: string, direction: string}|null}  $filters
      * @return Collection<int, Item>
      */
     public function handle(?User $user, Container $container, array $filters = []): Collection
     {
         $scope = $this->scope($user, $container);
+
+        $fieldFilters = $filters['fields'] ?? [];
+        $sort = $filters['sort'] ?? null;
 
         $tagUlids = $filters['tags'] ?? null;
         $tagIds = [];
@@ -107,6 +115,9 @@ class ListItems
                 $query->inCategoryTree($categoryIds);
             }
 
+            $this->resolveFieldFilters->apply($query, $fieldFilters);
+            $this->resolveFieldFilters->order($query, $sort);
+
             return $query->orderBy('name')->get();
         }
 
@@ -119,6 +130,9 @@ class ListItems
         if ($categoryIds !== null) {
             $query->inCategoryTree($categoryIds);
         }
+
+        $this->resolveFieldFilters->apply($query, $fieldFilters);
+        $this->resolveFieldFilters->order($query, $sort);
 
         return $query->orderBy('name')->get();
     }

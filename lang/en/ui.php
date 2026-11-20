@@ -3764,6 +3764,31 @@ return [
             'filter_label_tag' => 'the tag :name',
             'filter_label_tags' => 'the tags :names',
             'filter_label_category' => 'the category :name',
+
+            // Custom fields (issue 424). One control per type: text is an
+            // equals box, a number gets From/To, a date gets a range plus the
+            // relative quick picks. The relative words are sent to the server
+            // and counted in the user's day (ADR-0044); the .vue file never
+            // computes a date itself.
+            'filter_fields' => 'Fields',
+            'filter_field_any' => 'Any date',
+            'filter_field_today' => 'Today',
+            'filter_field_within' => 'Within :days days',
+            'filter_field_past' => 'Past :days days',
+            'filter_field_min' => 'From',
+            'filter_field_max' => 'To',
+            'filter_sort' => 'Sort by',
+            'filter_sort_name' => 'Name',
+            'filter_direction' => 'Order',
+            'filter_direction_asc' => 'Ascending',
+            'filter_direction_desc' => 'Descending',
+
+            // The chips above the list: one per field, with the operators the
+            // user actually set.
+            'filter_label_field_eq' => ':label: :value',
+            'filter_label_field_range' => ':label: :min–:max',
+            'filter_label_field_min' => ':label: from :value',
+            'filter_label_field_max' => ':label: to :value',
         ],
 
         'show' => [

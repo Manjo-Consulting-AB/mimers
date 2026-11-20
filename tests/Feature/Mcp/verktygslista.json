@@ -660,6 +660,9 @@
             "due_before": {
                 "type": "string"
             },
+            "field": {
+                "type": "object"
+            },
             "limit": {
                 "minimum": 1,
                 "maximum": 100,

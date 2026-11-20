@@ -76,7 +76,10 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class SearchAccessibleItems
 {
-    public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
+    public function __construct(
+        private readonly ResolveItemScope $resolveItemScope,
+        private readonly ResolveFieldFilters $resolveFieldFilters,
+    ) {}
 
     /**
      * Alla items användaren når vars fritext matchar $q,
@@ -95,12 +98,23 @@ class SearchAccessibleItems
      * kategori, uppgifter, utlåning) på sökfrågan, efter åtkomstvillkoren och
      * aldrig i stället för dem.
      *
+     * **`$fieldFilters` kom med issue 424** — egna fälts filter, uppslagna av
+     * App\Actions\Item\ResolveFieldFilters. De appliceras efter
+     * åtkomstvillkoren, precis som `$refine`, och formuleras på samma ställe
+     * som containerns listning använder.
+     *
      * @param  list<int>|null  $onlyContainerIds
      * @param  (Closure(Builder<Item>): void)|null  $refine
+     * @param  list<array{field_id: int, ulid: string, type: string, op: string, value: string, raw: mixed}>  $fieldFilters
      * @return Collection<int, Item>
      */
-    public function handle(User $user, string $q, ?array $onlyContainerIds = null, ?Closure $refine = null): Collection
-    {
+    public function handle(
+        User $user,
+        string $q,
+        ?array $onlyContainerIds = null,
+        ?Closure $refine = null,
+        array $fieldFilters = [],
+    ): Collection {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containerIds = Container::query()
@@ -125,7 +139,7 @@ class SearchAccessibleItems
             }
         }
 
-        return Item::query()
+        $query = Item::query()
             ->matchingText($q)
             ->when($onlyContainerIds !== null, fn (Builder $query) => $query->whereIn('item.container_id', $onlyContainerIds))
             ->whereHas('container', function (Builder $query) use ($user, $accountIds) {
@@ -143,9 +157,18 @@ class SearchAccessibleItems
                     $query->orWhereIn('item.id', $itemIds);
                 }
             })
-            ->with(['category', 'createdByAccount', 'tags'])
-            ->when($refine !== null, fn (Builder $query) => $refine($query))
-            ->orderBy('name')
-            ->get();
+            ->with(['category', 'createdByAccount', 'tags']);
+
+        if ($refine !== null) {
+            $refine($query);
+        }
+
+        // Egna fält (issue 424), efter åtkomstvillkoren och aldrig i stället
+        // för dem — samma ordning som `$refine`.
+        if ($fieldFilters !== []) {
+            $this->resolveFieldFilters->apply($query, $fieldFilters);
+        }
+
+        return $query->orderBy('name')->get();
     }
 }

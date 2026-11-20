@@ -32,7 +32,7 @@
  * `name` bär namnet utan etikett, för den grupperade taggformuleringen i
  * filterSummary().
  */
-export function activeFilters(filter, tags, categories, t) {
+export function activeFilters(filter, tags, categories, fields, t) {
     const entries = [];
 
     if (filter.q !== null && filter.q !== '') {
@@ -70,7 +70,72 @@ export function activeFilters(filter, tags, categories, t) {
         }
     }
 
+    /*
+     * Egna fält (issue 424). Etiketten räknar upp de operatorer användaren
+     * faktiskt satte — *Färg: Röd*, *Vikt: 5–10*, *Köpt: today–within:30* —
+     * och ett relativt datum visas med samma ord som snabbvalet, aldrig som
+     * ett datum komponenten räknat själv.
+     */
+    for (const [ulid, operations] of Object.entries(filter.fields ?? {})) {
+        const field = (fields ?? []).find((candidate) => candidate.ulid === ulid);
+
+        if (field === undefined) {
+            continue;
+        }
+
+        entries.push({
+            key: 'field',
+            value: ulid,
+            name: field.label,
+            label: fieldFilterLabel(field, operations, t),
+        });
+    }
+
     return entries;
+}
+
+/*
+ * Etiketten för ett fältfilter. Text har ett värde; tal och datum har en
+ * undre och/eller övre gräns.
+ */
+function fieldFilterLabel(field, operations, t) {
+    if (operations.eq !== undefined) {
+        return t('item.index.filter_label_field_eq', { label: field.label, value: operations.eq });
+    }
+
+    const min = operations.min === undefined ? null : fieldValueLabel(operations.min, t);
+    const max = operations.max === undefined ? null : fieldValueLabel(operations.max, t);
+
+    if (min !== null && max !== null) {
+        return t('item.index.filter_label_field_range', { label: field.label, min, max });
+    }
+
+    if (min !== null) {
+        return t('item.index.filter_label_field_min', { label: field.label, value: min });
+    }
+
+    return t('item.index.filter_label_field_max', { label: field.label, value: max });
+}
+
+/*
+ * Ett relativt datum blir snabbvalets ord — *Today*, *Within 30 days*,
+ * *Past 90 days* — och ett absolut datum står som det är.
+ */
+function fieldValueLabel(value, t) {
+    if (value === 'today') {
+        return t('item.index.filter_field_today');
+    }
+
+    const relative = /^(within|past):(\d+)$/.exec(String(value));
+
+    if (relative === null) {
+        return value;
+    }
+
+    return t(
+        relative[1] === 'within' ? 'item.index.filter_field_within' : 'item.index.filter_field_past',
+        { days: relative[2] },
+    );
 }
 
 /*
