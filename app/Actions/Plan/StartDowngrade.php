@@ -7,6 +7,7 @@ use App\Actions\Usage\TransferBilling;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Notification as NotificationModel;
+use App\Models\Subscription;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -35,13 +36,15 @@ use Illuminate\Support\Facades\DB;
  *
  * $reason är ett av `payment_failed` och `over_quota` — de värden
  * `account.read_only_reason` redan tillåter enligt sitt CHECK-villkor
- * (`inactivity` hör till 29a). Varningarna till kontot SJÄLVT skickas inte här
- * (Beslut 7): M5:s notisjobb räknar bakåt från `grace_until`. Notisen till
- * ÄGARNA av de containrar kontot lagt innehåll i är däremot en händelse i
- * steg 1 och skapas här (issue 1304 · [[ADR-0081 All lagrad data räknas mot
- * kvoten]] § 6a): `container.content_moving`, en per främmande container och
- * person i ägarkontot, med byte (filer + text) och datumet då innehållet
- * flyttar.
+ * (`inactivity` hör till 29a). Varningen till kontot SJÄLVT skickas HÄR, som
+ * steg 1 av tre (issue 1457): ägare och administratörer får veta att kontot
+ * är fruset och när steg 4 kan radera innehållet. De två senare tillfällena —
+ * en månad och en vecka före `grace_until` — räknas bakåt från fristen av
+ * App\Console\GeneratesDowngradeWarnings. Notisen till ÄGARNA av de
+ * containrar kontot lagt innehåll i är däremot en händelse i steg 1 och
+ * skapas här (issue 1304 · [[ADR-0081 All lagrad data räknas mot kvoten]]
+ * § 6a): `container.content_moving`, en per främmande container och person i
+ * ägarkontot, med byte (filer + text) och datumet då innehållet flyttar.
  */
 class StartDowngrade
 {
@@ -77,7 +80,26 @@ class StartDowngrade
             }
 
             $this->notifyContainerOwners($rad, $subscription?->grace_until?->toDateString());
+            $this->notifyAccountOwners($rad, $subscription);
         });
+    }
+
+    /**
+     * Varningen till kontot SJÄLVT (issue 1457): ägare och administratörer
+     * får veta att kontot är `read_only`, när steg 4 kan radera innehållet och
+     * hur det undviks. De två senare tillfällena — en månad och en vecka före
+     * fristen — skapas av App\Console\GeneratesDowngradeWarnings.
+     *
+     * Raden skapas i samma transaktion som statusändringen: rullas
+     * nedgraderingen tillbaka ska ingen varning ha gått ut.
+     */
+    private function notifyAccountOwners(Account $account, ?Subscription $subscription): void
+    {
+        app(NotifyDowngradeWarning::class)->handle(
+            $account,
+            $subscription,
+            NotifyDowngradeWarning::STAGE_START,
+        );
     }
 
     /**

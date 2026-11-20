@@ -116,6 +116,10 @@ final class NotificationPreferences
         // `agent.access_lost` (issue 409): agenten har tappat åtkomsten och
         // användaren ska få veta det, inte välja bort det.
         Notification::TYPE_AGENT_ACCESS_LOST,
+        // `account.downgrade_warning` (issue 1457): varningen säger att
+        // innehållet kan raderas i steg 4, och en avstängd kanal hade gjort
+        // raderingen tyst.
+        Notification::TYPE_ACCOUNT_DOWNGRADE_WARNING,
     ];
 
     /**
@@ -150,6 +154,9 @@ final class NotificationPreferences
     private const MANDATORY_IN_APP_TYPES = [
         Notification::TYPE_AGENT_DELETED,
         Notification::TYPE_AGENT_ACCESS_LOST,
+        // `account.downgrade_warning` (issue 1457) varnar för radering och
+        // ska nå ägaren även om hon stängt av kanalen.
+        Notification::TYPE_ACCOUNT_DOWNGRADE_WARNING,
     ];
 
     /**

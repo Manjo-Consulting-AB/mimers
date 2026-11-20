@@ -287,6 +287,10 @@ return [
 
         'account' => [
             'inactive' => 'Your account has been inactive for :months months — it closes :close_at',
+            // Issue 1457: kontot är nedgraderat och det egna innehållet kan
+            // raderas i steg 4. Klockans mening; appraden använder
+            // `notifications.list.type.account.downgrade_warning`.
+            'downgrade_warning' => 'Your account is read-only — everything in your own containers can be deleted',
         ],
 
         // Issue 1235: the container was deleted with the account that owned
@@ -1920,6 +1924,21 @@ return [
                  */
                 'versioning' => [
                     'skipped' => 'Your storage is full, so earlier versions of items in ":container" are not being saved. Free up space under Storage.',
+                ],
+                /*
+                 * Issue 1457 · [[Planer och kvoter]] § Nedgradering. The row
+                 * links to /settings/plan
+                 * (App\Support\Notification\NotificationTarget). The deadline
+                 * is written by the date rule and is null for an account
+                 * without a grace period; the row then uses the no-date
+                 * sentence. `_mcp` is added only when the account has a valid
+                 * agent connection (ADR-0087 Riktning 11) — a separate key
+                 * beside it, because `downgrade_warning` is already a string.
+                 */
+                'account' => [
+                    'downgrade_warning' => 'Your account is read-only. If nothing changes, everything in your own containers is deleted for good: files first, then entries. Pay to keep your plan, or export what you want to keep. Deadline: :date.',
+                    'downgrade_no_date' => 'Your account is read-only. Pay to keep your plan, or export what you want to keep.',
+                    'downgrade_mcp' => 'MCP access ends when the plan does: your connected agents can no longer read or change anything until you upgrade again.',
                 ],
             ],
         ],

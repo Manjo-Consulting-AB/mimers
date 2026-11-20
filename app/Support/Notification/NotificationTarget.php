@@ -47,6 +47,10 @@ final class NotificationTarget
             // åt det, så raden länkar till lagringsytan. Sidan väljer konto
             // själv (valfritt `?account=`), så ingen ULID behövs.
             Notification::TYPE_VERSIONING_SKIPPED => route('settings.storage', [], false),
+            // Issue 1457 · [[Planer och kvoter]] § Nedgradering: raden säger
+            // vad som händer i steg 4, och planvyn är ytan där kontot kan
+            // uppgradera eller se fristen.
+            Notification::TYPE_ACCOUNT_DOWNGRADE_WARNING => route('settings.plan', [], false),
             default => null,
         };
     }

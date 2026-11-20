@@ -623,10 +623,11 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    // Tolv sedan issue 412 lade till `versioning.skipped`. Räkningen är över
+    // Tretton sedan issue 1457 lade till `account.downgrade_warning` (tolv
+    // sedan issue 412 lade till `versioning.skipped`). Räkningen är över
     // KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
     // en typ någon lägger till `in_app` för utan att märka att texten saknas.
-    expect($typer)->toHaveCount(12);
+    expect($typer)->toHaveCount(13);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';

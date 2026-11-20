@@ -2,6 +2,9 @@
 @php($key = str_replace('.', '_', $type))
 @php($lineKey = isset($payload['reason']) ? "notiser.{$key}.line_{$payload['reason']}" : "notiser.{$key}.line")
 @php($lineKey = $type === 'container.content_moving' && ! isset($payload['moves_on']) ? "notiser.{$key}.line_no_date" : $lineKey)
+{{-- Issue 1457 · varningen till det nedgraderade kontot saknar datum när
+     kontot inte har någon frist; då väljer raden varianten utan datum. --}}
+@php($lineKey = $type === 'account.downgrade_warning' && ! isset($payload['grace_until']) ? "notiser.{$key}.line_no_date" : $lineKey)
 {{-- Issue 406 · en raderad container bär sitt innehåll med sig, men taket
      räknade den som en radering — då väljer raden varianten som säger hur
      många items som följde med. --}}
@@ -11,6 +14,7 @@
 @php($actionUrl = match ($type) {
     'agent.connected', 'agent.access_lost' => url('/settings/agents'),
     'agent.deleted' => url('/trash'),
+    'account.downgrade_warning' => url('/settings/plan'),
     default => config('app.url'),
 })
 
@@ -19,6 +23,13 @@
 @php($replace = $type === 'container.content_moving' && isset($payload['bytes']) ? [...$payload, 'bytes' => \Illuminate\Support\Number::fileSize((int) $payload['bytes'], 1)] : $payload)
 
 {{ trans($lineKey, $replace) }}
+
+{{-- Issue 1457 · meningen om MCP står bara med när kontot har en giltig
+     agentanslutning att förlora ([[ADR-0087 MCP-server för agenter]]
+     Riktning 11). `has_agents` räknas av generatorn. --}}
+@if ($type === 'account.downgrade_warning' && ($payload['has_agents'] ?? false))
+{{ trans('notiser.account_downgrade_warning.mcp') }}
+@endif
 
 <x-mail::button :url="$actionUrl">
 {{ trans("notiser.{$key}.action") }}
