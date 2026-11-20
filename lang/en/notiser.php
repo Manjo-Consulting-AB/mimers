@@ -112,6 +112,25 @@ return [
         'action' => 'Manage agents',
     ],
     /*
+     * Kontot är nedgraderat och det egna innehållet kan raderas i steg 4
+     * (issue 1457 · [[Planer och kvoter]] § Nedgradering). Samma mening vid
+     * alla tre tillfällen — steg 1, en månad och en vecka före fristen — och
+     * datumet bär hur nära det är. `line_no_date` används för ett konto utan
+     * prenumeration, där ingen frist finns.
+     *
+     * `mcp` läggs till som ett eget stycke bara när kontot har en giltig
+     * agentanslutning (App\Actions\Agent\AccountHasConnectedAgent); vyn
+     * väljer varianten ur `has_agents`.
+     */
+    'account_downgrade_warning' => [
+        'subject' => 'Your account is read-only',
+        'greeting' => 'Hello!',
+        'line' => 'Your account is read-only. If nothing changes, on :grace_until everything in your own containers is deleted for good: files first, then entries. Pay to keep your plan, or export what you want to keep before then.',
+        'line_no_date' => 'Your account is read-only. Pay to keep your plan, or export what you want to keep.',
+        'mcp' => 'MCP access ends when the plan does: your connected agents can no longer read or change anything until you upgrade again.',
+        'action' => 'View your plan',
+    ],
+    /*
      * `versioning.skipped` (issue 412 · [[ADR-0088 Versionshistorik för
      * items]] Riktning 3) har ingen text här: typen går bara i appen, och
      * appens mening bor i `ui.php`. Mejlkanalen finns inte (se

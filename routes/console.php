@@ -9,6 +9,7 @@ use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
 use App\Console\DeliversWebhooks;
 use App\Console\EnforcesDowngrades;
+use App\Console\GeneratesDowngradeWarnings;
 use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
@@ -272,6 +273,23 @@ Schedule::call(fn () => app(CreatesAgentDeletionNotifications::class)->handle())
 Schedule::call(fn () => app(EnforcesDowngrades::class)->handle())
     ->daily()
     ->name('enforce-downgrades');
+
+/*
+ * Issue 1457 · Varningarna en månad och en vecka före steg 4, se
+ * App\Console\GeneratesDowngradeWarnings och [[Planer och kvoter]]
+ * § Nedgradering. Steg 1-varningen skapas av StartDowngrade; det här jobbet
+ * tar de två senare tillfällena. Kör i samma nattliga fönster som
+ * nedgraderingen, och efter den: ett konto vars frist passerat ägs av
+ * EnforcesDowngrades och ska inte varnas igen. `dedupe_key` gör omkörningar
+ * ofarliga. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Plan/NedgraderingsvarningTest.php.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — se AGENTS.md § Subprocesser i driftmiljön.
+ */
+Schedule::call(fn () => app(GeneratesDowngradeWarnings::class)->handle())
+    ->daily()
+    ->name('generate-downgrade-warnings');
 
 /*
  * Issue 29a · Kontolivscykeln: påminnelsen vid 12 månader och stängningen

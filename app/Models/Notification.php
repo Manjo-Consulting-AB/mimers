@@ -114,6 +114,19 @@ class Notification extends Model
     public const TYPE_VERSIONING_SKIPPED = 'versioning.skipped';
 
     /**
+     * Kontot är nedgraderat och det egna innehållet kan raderas i steg 4, se
+     * [[Planer och kvoter]] § Nedgradering och issue 1457 (uppföljningen av
+     * issue 409). Skickas till kontots ägare och administratörer vid steg 1
+     * och sedan en månad och en vecka före `grace_until`;
+     * `payload['stage']` bär vilket tillfälle raden gäller.
+     *
+     * Går i appen och som mejl, och ingen av kanalerna kan stängas av — den
+     * varnar för radering, se
+     * App\Support\Notification\NotificationPreferences.
+     */
+    public const TYPE_ACCOUNT_DOWNGRADE_WARNING = 'account.downgrade_warning';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

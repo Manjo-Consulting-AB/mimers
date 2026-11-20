@@ -51,7 +51,7 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
-const { eventDate } = useRelativeDate();
+const { eventDate, dueDate } = useRelativeDate();
 
 /*
  * Ikonen per typ. De två uppgiftstyperna delar en ikon, och en typ som inte
@@ -66,6 +66,7 @@ const ICONS = {
     'account.inactive': 'warning',
     'container.deleted': 'trash',
     'agent.deleted': 'trash',
+    'account.downgrade_warning': 'warning',
 };
 
 const icon = computed(() => ICONS[props.notification.type] ?? 'notifications');
@@ -117,6 +118,30 @@ const message = computed(() => {
         ));
 
         return [base, ...containers].join(' ');
+    }
+
+    /*
+     * Issue 1457 · nedgraderingsvarningen. Datumet är fristens slut och
+     * skrivs av datumregeln (useRelativeDate): relativt inom 30 dagar,
+     * absolut bortom. `downgrade_no_date` används för ett konto utan frist.
+     *
+     * MCP-meningen läggs bara till när kontot har en giltig agentanslutning
+     * — samma `has_agents` som mejlet väljer sin variant ur
+     * ([[ADR-0087 MCP-server för agenter]] Riktning 11).
+     */
+    if (row.type === 'account.downgrade_warning') {
+        const deadline = payload.grace_until ? dueDate(payload.grace_until).text : null;
+        const base = t(
+            deadline === null
+                ? 'notifications.list.type.account.downgrade_no_date'
+                : 'notifications.list.type.account.downgrade_warning',
+            { date: deadline },
+        );
+        const mcp = payload.has_agents
+            ? t('notifications.list.type.account.downgrade_mcp')
+            : '';
+
+        return [base, mcp].filter(Boolean).join(' ');
     }
 
     const key = `notifications.list.type.${row.type}`;
