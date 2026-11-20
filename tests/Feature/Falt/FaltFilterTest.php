@@ -5,6 +5,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemFieldValue;
+use App\Models\ItemLink;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -371,6 +372,32 @@ it('låter ett gammalt fältvärde falla bort på webben', function () {
         ->and($props['filter']['fields'])->toBe([]);
 });
 
+it('filtrerar ett items eget fält på webben som API:et', function () {
+    [, $user, $headers] = faltFilterKontext();
+    $container = Container::factory()->for($user->accounts->first(), 'account')->create();
+    $motorn = faltFilterItem($container, 'Motorn');
+    $eget = faltFilterFalt($container, 'Färg', 'text', $motorn);
+    faltFilterVarde($motorn, $eget, 'Röd');
+    faltFilterItem($container, 'Masten');
+
+    withoutVite();
+
+    $query = ['field' => [$eget->ulid => ['eq' => 'Röd']]];
+
+    $api = getJson(faltFilterUrl($container, $query), $headers)->assertOk();
+
+    $props = actingAs($user)->get('/containers/'.$container->ulid.'/items?'.http_build_query([
+        'view' => 'map',
+        ...$query,
+    ]))->assertOk()->inertiaProps();
+
+    // Samma kandidatmängd som API:et: ett items eget fält filtrerar i BÅDA,
+    // i stället för att falla tyst bort på webben.
+    expect(faltFilterNamn($api))->toBe(['Motorn'])
+        ->and(array_column($props['hits']['nodes'], 'name'))->toBe(['Motorn'])
+        ->and($props['filter']['dropped'])->toBeFalse();
+});
+
 it('sorterar webbens träfflista på ett containerfält', function () {
     [, $user] = faltFilterKontext();
     $container = Container::factory()->for($user->accounts->first(), 'account')->create();
@@ -393,6 +420,49 @@ it('sorterar webbens träfflista på ett containerfält', function () {
     expect(array_column($props['hits']['nodes'], 'name'))->toBe(['Tio', 'Nio'])
         ->and($props['filter']['sort'])->toBe($vikt->ulid)
         ->and($props['filter']['direction'])->toBe('desc');
+});
+
+it('sorterar trädets syskon på ett containerfält', function () {
+    [, $user] = faltFilterKontext();
+    $container = Container::factory()->for($user->accounts->first(), 'account')->create();
+    $vikt = faltFilterFalt($container, 'Vikt', 'number');
+
+    $nio = faltFilterItem($container, 'Nio');
+    $tio = faltFilterItem($container, 'Tio');
+    faltFilterVarde($nio, $vikt, '9');
+    faltFilterVarde($tio, $vikt, '10');
+    faltFilterItem($container, 'Utan');
+
+    // Ett barn under Nio, så att provet också ser en NIVÅ och inte bara
+    // rötterna: syskonen sorteras på samma fält var de än står.
+    $barn = faltFilterItem($container, 'Barn');
+    ItemLink::forceCreate([
+        'from_item_id' => $nio->id,
+        'to_item_id' => $barn->id,
+        'relation' => 'parent',
+    ]);
+    faltFilterVarde($barn, $vikt, '1');
+
+    withoutVite();
+
+    $stigande = actingAs($user)->get('/containers/'.$container->ulid.'/items?'.http_build_query([
+        'sort' => $vikt->ulid,
+        'direction' => 'asc',
+    ]))->assertOk()->inertiaProps();
+
+    // 9 före 10, och itemet utan värde sist i båda riktningarna.
+    expect(array_column($stigande['structure'], 'name'))->toBe(['Nio', 'Tio', 'Utan'])
+        ->and(array_column($stigande['structure'][0]['children'], 'name'))->toBe(['Barn'])
+        ->and($stigande['filter']['sort'])->toBe($vikt->ulid)
+        ->and($stigande['filter']['direction'])->toBe('asc');
+
+    $fallande = actingAs($user)->get('/containers/'.$container->ulid.'/items?'.http_build_query([
+        'sort' => $vikt->ulid,
+        'direction' => 'desc',
+    ]))->assertOk()->inertiaProps();
+
+    expect(array_column($fallande['structure'], 'name'))->toBe(['Tio', 'Nio', 'Utan'])
+        ->and($fallande['filter']['direction'])->toBe('desc');
 });
 
 it('ritar filterpanelen med en kontroll per fälttyp', function () {

@@ -86,17 +86,50 @@ class ResolveItemTree
      * trädet urvalet och varje nod är en träff, medan ett tomt filter är
      * listans "inga träffar" och ger ett tomt träd.
      *
+     * `$order` är item-id:na i den ordning en fältsortering gav (issue 424),
+     * eller `null` när trädet sorteras på namn. Ordningen gäller SYFKONEN —
+     * rötter och barn på samma nivå — medan strukturen är densamma. Items
+     * som inte finns i listan behåller namnordningen efter de sorterade.
+     *
      * @param  list<int>|null  $matches
+     * @param  list<int>|null  $order
      */
-    public function handle(User $user, Container $container, ?array $matches = null): ItemTree
+    public function handle(User $user, Container $container, ?array $matches = null, ?array $order = null): ItemTree
     {
         $scope = $this->resolveItemScope->handle($user, $container);
 
+        $items = $this->itemsInScope($container, $scope);
+
         return $this->forest(
             $container,
-            $this->itemsInScope($container, $scope),
+            $order === null ? $items : $this->ordered($items, $order),
             $matches === null ? null : array_fill_keys($matches, true),
         );
+    }
+
+    /**
+     * Itemen i den ordning fältsorteringen gav, med namnordningen kvar för
+     * dem listan inte nämnde.
+     *
+     * `$items` är redan i namnordning, så de osorterade hamnar sist i den
+     * ordningen — samma "utan värde sist" som `ListItems` ritar.
+     *
+     * @param  array<int, Item>  $items  item_id → itemet, namnet stigande
+     * @param  list<int>  $order
+     * @return array<int, Item>
+     */
+    private function ordered(array $items, array $order): array
+    {
+        $ordered = [];
+
+        foreach ($order as $itemId) {
+            if (isset($items[$itemId])) {
+                $ordered[$itemId] = $items[$itemId];
+                unset($items[$itemId]);
+            }
+        }
+
+        return $ordered + $items;
     }
 
     /**

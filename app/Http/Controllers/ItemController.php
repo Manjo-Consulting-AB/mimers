@@ -294,10 +294,12 @@ class ItemController extends Controller
         $activeContainer->set($user, $container);
 
         // Listorna hämtas FÖRE filtren: de är både filterradens innehåll och
-        // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Tre
-        // frågor, oavsett hur många filtervärden som skickas — den tredje är
-        // containerns fält (issue 424), som filterpanelen ritar och
-        // registreringsformuläret redan använde.
+        // det de inskickade tagg- och kategori-ULID:na löses upp mot (Beslut 3
+        // och 5). Två frågor, oavsett hur många filtervärden som skickas.
+        // Fälten (issue 424) löses mot ResolveFieldFilters i `filter()` —
+        // samma kandidatmängd som API:et — och kostar ingenting utan
+        // `field`/`sort`; `$containerFields` är panelens rader, inte
+        // uppslagets.
         $tags = $listTags->handle($user, $container);
         $categories = $listCategories->handle($user, $container);
         $containerFields = $listFields->handle($container, null);
@@ -305,9 +307,9 @@ class ItemController extends Controller
 
         [$filter, $dropped, $fieldFilters, $fieldSort] = $this->filter(
             $request,
+            $container,
             $tags,
             $categories,
-            $containerFields,
             $user,
         );
 
@@ -315,13 +317,15 @@ class ItemController extends Controller
 
         // Sidan hämtar inte längre listans rader (issue 326 · [[ADR-0067
         // Itemfliken utan listläge]] § 8). `ListItems` anropas bara när ett
-        // filter är satt — i trädläget för träffarna och i kartläget för
-        // träfflistan — precis som tidigare i de två lägena.
+        // filter eller en fältsortering är satt — i trädläget för träffarna
+        // och ordningen, i kartläget för träfflistan — precis som tidigare i
+        // de två lägena.
         //
-        // Listorna ovan — taggar, kategorier och fält — hämtas i BÅDA
-        // lägena: de är filterradens innehåll OCH det `filter()` löser upp de
-        // inskickade ULID:na mot (Beslut 3 och 5), och `filter`-proppen
-        // bygger växelns adresser i vyn.
+        // Listorna ovan hämtas i BÅDA lägena: taggarna och kategorierna är
+        // filterradens innehåll OCH det `filter()` löser upp de inskickade
+        // ULID:na mot (Beslut 3 och 5); fälten är panelens innehåll, och
+        // uppslaget av `field`/`sort` gör `filter()` mot samma kandidater som
+        // API:et. `filter`-proppen bygger växelns adresser i vyn.
 
         // Kartan (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1): mitten står
         // i querysträngen som `?focus=`, och upplösningen svarar med mitten och
@@ -455,11 +459,23 @@ class ItemController extends Controller
                     'category' => $filter['category'],
                     'q' => $filter['q'],
                     'fields' => $fieldFilters,
-                    'sort' => $fieldSort,
                 ])->pluck('id')->all())
                 : null;
 
-            $tree = $resolveItemTree->handle($user, $container, $matches);
+            // Fältsorteringen gäller trädet också (issue 424, åtgärdsvarv):
+            // trädet är listan ritad som struktur, och en sortering på ett
+            // containerfält ordnar syskonen på samma sätt som listan. Frågan
+            // ställs UTAN filter, eftersom vägen ned till träffarna också
+            // behöver sin plats i ordningen; `ListItems` lägger items utan
+            // värde sist i båda riktningarna. Utan sortering behåller trädet
+            // namnordningen och kostar ingen fråga.
+            $order = $fieldSort === null
+                ? null
+                : array_map('intval', $listItems->handle($user, $container, [
+                    'sort' => $fieldSort,
+                ])->pluck('id')->all());
+
+            $tree = $resolveItemTree->handle($user, $container, $matches, $order);
         }
 
         $treeRows = $tree === null
@@ -2262,7 +2278,6 @@ class ItemController extends Controller
      *
      * @param  Collection<int, Tag>  $tags  containerns taggar inom omfånget
      * @param  Collection<int, Category>  $categories  containerns kategoriträd inom omfånget
-     * @param  Collection<int, ItemField>  $fields  containerns fält, ur ListFields
      * @return array{
      *     0: array{q: string|null, tags: list<string>, category: string|null, fields: array<string, array<string, mixed>>, sort: string|null, direction: string},
      *     1: bool,
@@ -2270,7 +2285,7 @@ class ItemController extends Controller
      *     3: array{field_id: int, ulid: string, type: string, direction: string}|null
      * } filtret, huruvida något föll bort, fältspecarna och sorteringen
      */
-    private function filter(Request $request, Collection $tags, Collection $categories, Collection $fields, User $user): array
+    private function filter(Request $request, Container $container, Collection $tags, Collection $categories, User $user): array
     {
         $q = $request->query('q');
         $q = is_string($q) ? trim($q) : null;
@@ -2297,13 +2312,28 @@ class ItemController extends Controller
             : null;
 
         // Egna fält (issue 424). Webbens regel är 59a § Beslut 3: ett värde
-        // som inte längre finns är ett BORTFALLET filter, inte ett fel. Bara
-        // containerns fält ritas i panelen, och ett fält som är borta eller
-        // ligger i en annan container faller därför bort på samma sätt som en
-        // raderad tagg.
+        // som inte längre finns är ett BORTFALLET filter, inte ett fel.
+        //
+        // **Kandidaterna är desamma som API:ets** (issue 424, åtgärdsvarv):
+        // `candidatesForContainer()` tar containerns fält OCH itemens egna,
+        // precis som App\Http\Requests\Item\IndexItemRequest gör. Att bara
+        // titta på `Container::fields()` hade gett webben en annan mängd än
+        // `/api` och MCP för samma `field[ULID]`-länk — ett items eget fält
+        // filtrerade i API:et men föll tyst bort här. Ett fält i en annan
+        // container eller i papperskorgen faller fortfarande bort (webbens
+        // gamla bokmärke), medan API:et svarar `field.not_applicable`;
+        // skillnaden är 59a § Beslut 3 och står i PR:ens frågor.
         $resolver = app(ResolveFieldFilters::class);
-        $candidates = $fields->keyBy('ulid');
         $requestedFields = $request->query('field');
+        $requestedSort = $request->query('sort');
+        $sortRequested = is_string($requestedSort) && trim($requestedSort) !== '';
+
+        // Utan `field` och `sort` kostar uppslaget ingenting — samma regel som
+        // IndexItemRequest: den vanliga listningen ska inte betala en fråga
+        // den inte bad om.
+        $candidates = $requestedFields === null && ! $sortRequested
+            ? collect()
+            : $resolver->candidatesForContainer($container);
 
         [$fieldDefinitions, $missingFields] = $resolver->match($candidates, $requestedFields);
         $fieldFilters = $resolver->specs($fieldDefinitions, $requestedFields, $user);
@@ -2314,8 +2344,6 @@ class ItemController extends Controller
             $appliedFields[$spec['ulid']][$spec['op']] = $spec['raw'];
         }
 
-        $requestedSort = $request->query('sort');
-        $sortRequested = is_string($requestedSort) && trim($requestedSort) !== '';
         $sort = $resolver->sort($candidates, $requestedSort, $request->query('direction'));
 
         $dropped = $keptTags !== $requestedTags

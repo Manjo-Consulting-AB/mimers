@@ -446,10 +446,11 @@ onBeforeUnmount(() => {
         <!-- Sorteringen (issue 424): ett containerfält, stigande eller
              fallande. Namnordningen är serverns förval och skrivs som tomt
              värde — den är ingen kolumn användaren väljer.
-             Bara i kartläget: trädet sorterar varje nivå på namnet och ritar
-             ingen platt lista att sortera om (issue 57a § Beslut 8), medan
-             kartans träfflista är i listans ordning. -->
-        <template v-if="fields.length > 0 && view === 'map'">
+             Kontrollen ritas i BÅDA lägena (åtgärdsvarv): trädet är listan
+             ritad som struktur, och servern ordnar syskonen på samma
+             containerfält som kartans träfflista. Utan sortering behåller
+             trädet namnordningen (issue 57a § Beslut 8). -->
+        <template v-if="fields.length > 0">
             <label
                 for="item-filter-sort"
                 class="flex w-full flex-col gap-1 text-sm font-medium text-ink sm:w-auto"
