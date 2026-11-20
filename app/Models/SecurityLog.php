@@ -238,6 +238,20 @@ class SecurityLog extends Model
     public const ACTION_AGENT_RESUMED = 'agent.resumed';
 
     /**
+     * Agentens rättigheter på kontot ändrades (issue 416 · [[ADR-0087
+     * MCP-server för agenter]] Riktning 12, uppföljning 2026-11-18). Skrivs av
+     * App\Actions\Agent\UpdateAgentAccountGrants.
+     *
+     * **En rad per anrop, och bara när något ändrades.** Ändringar i en
+     * container står i händelseloggen; den här raden gäller kontot, dit
+     * ingen container hör. `meta` bär agentens ULID, gamla och nya nivån per
+     * ändrad grupp (`null` = ingen rad), `create_containers` när den
+     * ändrades och antalet containerrader som sänktes — ingen fritext, inga
+     * containernamn och inga e-postadresser.
+     */
+    public const ACTION_AGENT_GRANTS_CHANGED = 'agent.grants_changed';
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
