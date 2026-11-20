@@ -1,13 +1,11 @@
 <?php
 
-use App\Models\Agent;
 use App\Models\AgentAccountGrant;
 use App\Models\AgentContainerGrant;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Support\Agent\AgentGroup;
 use App\Support\Mcp\ContainerGate;
 use App\Support\Mcp\Cursor;
 use App\Support\Mcp\Hints;
@@ -16,10 +14,8 @@ use App\Support\Mcp\ToolError;
 use App\Support\Mcp\ToolKind;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
-use Illuminate\Testing\TestResponse;
 use Laravel\Passport\Passport;
 
-use function Pest\Laravel\postJson;
 use function Pest\Laravel\travel;
 
 /*
@@ -32,103 +28,6 @@ beforeEach(function (): void {
     mcpSakerstallNycklar();
     RateLimiter::clear('x');
 });
-
-/**
- * Ett JSON-RPC-anrop till `/mcp` med en Bearer-token.
- *
- * @param  array<string, mixed>  $params
- */
-function mcpAnropa(?string $token, string $metod, array $params = []): TestResponse
-{
-    auth()->forgetGuards();
-
-    $rubriker = ['Accept' => 'application/json, text/event-stream'];
-
-    if ($token !== null) {
-        $rubriker['Authorization'] = 'Bearer '.$token;
-    }
-
-    return postJson('/mcp', [
-        'jsonrpc' => '2.0',
-        'id' => 1,
-        'method' => $metod,
-        'params' => (object) $params,
-    ], $rubriker);
-}
-
-/**
- * @param  array<string, mixed>  $argument
- */
-function mcpVerktyg(string $token, string $namn, array $argument = []): TestResponse
-{
-    return mcpAnropa($token, 'tools/call', ['name' => $namn, 'arguments' => (object) $argument]);
-}
-
-/**
- * Verktygsfelet ur ett svar: `{"error": {...}}` ur textinnehållet.
- *
- * @return array<string, mixed>
- */
-function mcpFel(TestResponse $svar): array
-{
-    $svar->assertOk()->assertJsonPath('result.isError', true);
-
-    return json_decode($svar->json('result.content.0.text'), true)['error'];
-}
-
-/**
- * @return array<string, mixed>
- */
-function mcpResultat(TestResponse $svar): array
-{
-    $svar->assertOk();
-
-    expect($svar->json('result.isError'))->toBeFalse();
-
-    return $svar->json('result.structuredContent');
-}
-
-/**
- * En ansluten agent på Pro med rättigheter överallt på kontot.
- *
- * @return array{0: Agent, 1: string, 2: User}
- */
-function mcpAgentMedToken(string $plan = 'pro'): array
-{
-    [, $anvandare] = mcpKonto($plan === 'free' ? 'pro' : $plan);
-    $flode = mcpAnslut($anvandare);
-
-    foreach (AgentGroup::values() as $grupp) {
-        $rad = new AgentAccountGrant;
-        $rad->agent_id = $flode['agent']->id;
-        $rad->group = $grupp;
-        $rad->level = 'delete';
-        $rad->save();
-    }
-
-    return [$flode['agent'], $flode['access_token'], $anvandare];
-}
-
-function mcpSlaPaI(Agent $agent, Container $container, string $niva = 'delete'): void
-{
-    foreach (AgentGroup::values() as $grupp) {
-        $rad = new AgentContainerGrant;
-        $rad->agent_id = $agent->id;
-        $rad->container_id = $container->id;
-        $rad->group = $grupp;
-        $rad->level = $niva;
-        $rad->save();
-    }
-}
-
-function mcpEgenContainer(Agent $agent, ?string $namn = null): Container
-{
-    $container = Container::factory()->for($agent->account, 'account')
-        ->create($namn === null ? [] : ['name' => $namn]);
-    mcpSlaPaI($agent, $container);
-
-    return $container;
-}
 
 it('svarar 404 på /mcp när MCP_ENABLED är falsk', function () {
     [, $token] = mcpAgentMedToken();
@@ -382,30 +281,6 @@ it('ger en ny agent utan påslag en tom containers_list med hint', function () {
         ->and($svar['hint'])->toBe(Hints::EMPTY_CONTAINERS)
         ->and($svar['hint'])->toContain('/settings/agents');
 });
-
-/**
- * Ett träd: Båten › Motor › Kolv, och Båten › Segel, och en rot Verktyg.
- *
- * @return array{0: Container, 1: array<string, Item>}
- */
-function mcpTrad(Agent $agent): array
-{
-    $container = mcpEgenContainer($agent);
-    $item = fn (string $namn): Item => Item::factory()->create(['container_id' => $container->id, 'name' => $namn]);
-    $i = ['batan' => $item('Båten'), 'motor' => $item('Motor'), 'kolv' => $item('Kolv'), 'segel' => $item('Segel'), 'verktyg' => $item('Verktyg')];
-
-    foreach ([['batan', 'motor'], ['motor', 'kolv'], ['batan', 'segel']] as [$foralder, $barn]) {
-        DB::table('item_link')->insert([
-            'from_item_id' => $i[$foralder]->id,
-            'to_item_id' => $i[$barn]->id,
-            'relation' => 'parent',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
-    return [$container, $i];
-}
 
 it('respekterar depth i containers_tree', function () {
     [$agent, $token] = mcpAgentMedToken();

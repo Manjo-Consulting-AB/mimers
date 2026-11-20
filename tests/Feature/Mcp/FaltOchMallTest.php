@@ -26,7 +26,7 @@ use function Pest\Laravel\travel;
  * 8, 10, 13 och 15.
  *
  * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(), mcpResultat() och
- * mcpEgenContainer() bor i tests/Feature/Mcp/McpEndpointTest.php. Allt här är
+ * mcpEgenContainer() bor i tests/Support/McpHjalpare.php. Allt här är
  * prefixat `falt` — Pest delar global namnrymd mellan testfilerna.
  */
 

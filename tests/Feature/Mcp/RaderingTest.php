@@ -38,7 +38,7 @@ use function Pest\Laravel\travel;
  * [[ADR-0087 MCP-server för agenter]] Riktning 7, 8, 9, 13 och 14.
  *
  * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(), mcpResultat() och
- * mcpEgenContainer() bor i tests/Feature/Mcp/McpEndpointTest.php, och
+ * mcpEgenContainer() bor i tests/Support/McpHjalpare.php, och
  * papperskorgsItem()/papperskorgsBilaga() i tests/Support/Testhjalpare.php.
  * Allt här är prefixat `raderings` — Pest delar global namnrymd mellan
  * testfilerna.

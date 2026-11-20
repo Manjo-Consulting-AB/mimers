@@ -24,8 +24,7 @@ use Illuminate\Support\Carbon;
  * VerktygslistaTest.php).
  *
  * Hjälparna mcpAgentMedToken(), mcpVerktyg(), mcpFel(), mcpResultat(),
- * mcpEgenContainer() och skrivNiva() bor i McpEndpointTest.php och
- * SkrivverktygTest.php.
+ * mcpEgenContainer() och skrivNiva() bor i tests/Support/McpHjalpare.php.
  */
 
 beforeEach(function (): void {
