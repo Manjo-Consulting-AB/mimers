@@ -145,10 +145,17 @@ class PurgeContent
             // rader räknas, mjukraderade också. Raderna tas med query builder
             // och `forceDelete()` på en byggare, så ingen modellhändelse kan
             // göra avdraget åt oss.
+            //
+            // `item_version` (issue 414 · ADR-0088 Riktning 6) räknas här
+            // även om dess rader tas av kaskaden: FK:n är ON DELETE CASCADE
+            // på `item_id`, så `forceDelete()` nedan tar dem utan en egen
+            // DELETE — men bara om räknaren minskas först. Ett mjukraderat
+            // item behåller sina versioner tills hit.
             MetadataLedger::releaseWhere('schedule_occurrence', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
             MetadataLedger::releaseWhere('schedule', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
             MetadataLedger::releaseWhere('loan', fn (Builder $query) => $query->where('loan.item_id', $itemId));
             MetadataLedger::releaseWhere('cost_entry', fn (Builder $query) => $query->where('cost_entry.item_id', $itemId));
+            MetadataLedger::releaseWhere('item_version', fn (Builder $query) => $query->where('item_version.item_id', $itemId));
             MetadataLedger::releaseWhere('item', fn (Builder $query) => $query->where('item.id', $itemId));
 
             // Förekomsterna måste bort före schemat — schedule_occurrence

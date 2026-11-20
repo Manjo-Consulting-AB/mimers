@@ -22,6 +22,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
 use App\Support\Usage\CountedRows;
+use App\Support\Usage\MetadataLedger;
 use App\Support\Usage\MetadataSize;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,11 @@ use Illuminate\Support\Facades\DB;
  * slängt, mottagaren får inget skräp och slängda bilagors `billed_account_id`
  * blir aldrig en fråga. Tömningen ligger i transaktionen, så ett fel — även
  * mottagarens kvot — rullar tillbaka den.
+ *
+ * Ett tredje steg (issue 414): alla versioner på containerns levande items
+ * raderas i samma transaktion, efter tömningen och före bytena räknas
+ * (ADR-0088 Riktning 6). Köparen ärver inte säljarens historik, och den
+ * förra ägarens räknare frigörs.
  *
  * Anropas av App\Http\Controllers\Api\OwnershipTransferController efter att
  * den bevisat att raden är mottagarens (annars 404) och löst ut vilket
@@ -123,6 +129,13 @@ class AcceptOwnershipTransfer
             // räknas — PurgeContent::item() raderar ett slängt items levande
             // bilagor och räknar ned avsändarens förbrukning.
             $this->tomPapperskorgen($container);
+
+            // Issue 414 · ADR-0088 Riktning 6: versionerna raderas i
+            // ägarbytets transaktion, efter papperskorgens tömning och FÖRE
+            // bytena räknas. Annars ärver köparen det säljaren har rättat
+            // bort. Räknaren frigörs från den förra ägaren i samma svep, och
+            // ett byte som faller rullar raderingen tillbaka med sig.
+            $this->raderaVersioner($container);
 
             $bytesSomFlyttas = $this->bytesAttFlytta($container, $fromAccount);
 
@@ -271,6 +284,39 @@ class AcceptOwnershipTransfer
         }
 
         return $bytes;
+    }
+
+    /**
+     * Raderar alla versioner på containerns items — [[ADR-0088
+     * Versionshistorik för items]] Riktning 6 (issue 414).
+     *
+     * **Efter papperskorgens tömning.** Ett slängt item är redan borta med
+     * sina versioner genom PurgeContent::item(); det som återstår här är de
+     * levande itemsens historik. Att radera den är beslutet (Tony
+     * 2026-11-18): annars ärver köparen det säljaren har rättat bort.
+     *
+     * **Före bytena räknas.** Kvoten prövas på det som faktiskt flyttar, och
+     * versionerna flyttar inte — de försvinner. `CountedRows::moveContainerPayer`
+     * ser dem alltså aldrig.
+     *
+     * `MetadataLedger::releaseWhere()` minskar varje versions betalare —
+     * containerns ägare när raden skrevs — i samma transaktion som raderingen.
+     * Faller bytet, till exempel på mottagarens kvot, rullas både raderna och
+     * räknaren tillbaka.
+     */
+    private function raderaVersioner(Container $container): void
+    {
+        MetadataLedger::releaseWhere(
+            'item_version',
+            fn ($query) => $query->where('container.id', $container->id),
+        );
+
+        DB::table('item_version')
+            ->whereIn(
+                'item_id',
+                DB::table('item')->where('container_id', $container->id)->select('id'),
+            )
+            ->delete();
     }
 
     /**

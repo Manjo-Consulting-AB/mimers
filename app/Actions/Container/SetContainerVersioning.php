@@ -2,7 +2,9 @@
 
 namespace App\Actions\Container;
 
+use App\Jobs\TrimItemVersions;
 use App\Models\Container;
+use App\Support\Versioning\VersionLimit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -19,8 +21,15 @@ use Illuminate\Support\Facades\Gate;
  *
  * **Inget värde kopieras.** Actionen skriver bara containerns egen kolumn;
  * vilket tak som gäller räknas fram vid varje skrivning av
- * App\Support\Versioning\VersionLimit::for(). Att sänka taket tar bort
- * överskottet först i issue 414 — här ändras ingen version.
+ * App\Support\Versioning\VersionLimit::for().
+ *
+ * **Ett sänkt tak trimmar historiken (issue 414).** Sänker ändringen det
+ * gällande taket — inklusive att sätta containern till 0 — köas
+ * App\Jobs\TrimItemVersions för containern, som tar bort överskottet och
+ * frigör kvoten. En höjning köar inget: den skapar inget överskott. Jämförelsen
+ * görs på det EFFEKTIVA taket, så NULL → ett värde på kontots nivå varken
+ * höjer eller sänker och köar inget, medan NULL → ett lägre värde eller 0 gör
+ * det.
  *
  * Raden läses och skrivs under radlås, som SetContainerCoverFocus: containern
  * kan ha hunnit ändras mellan anroparens uppslag och skrivningen.
@@ -31,18 +40,35 @@ class SetContainerVersioning
     {
         Gate::authorize('delete', $container);
 
-        return DB::transaction(function () use ($container, $maxVersions): Container {
+        // Jobbet köas EFTER transaktionen: en köad rad som arbetaren hinner
+        // läsa ur en annan anslutning före commit ser det GAMLA taket och
+        // trimmar ingenting. Samma skäl som StoreAttachment dispatchar efter
+        // sitt transaktionsblock (Beslut 3).
+        $trimma = false;
+
+        $resultat = DB::transaction(function () use ($container, $maxVersions, &$trimma): Container {
             $rad = Container::withTrashed()
                 ->whereKey($container->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $tidigareTak = VersionLimit::for($rad);
+
             $rad->versioning_max_versions = $maxVersions;
             $rad->save();
+
+            $rad->load('account');
+            $trimma = VersionLimit::for($rad) < $tidigareTak;
 
             $container->refresh();
 
             return $container;
         });
+
+        if ($trimma) {
+            dispatch(TrimItemVersions::forContainer($resultat->getKey()));
+        }
+
+        return $resultat;
     }
 }

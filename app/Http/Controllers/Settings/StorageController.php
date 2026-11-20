@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
 use App\Http\Requests\Settings\UpdateStorageVersioningRequest;
 use App\Http\Resources\StorageEntryResource;
+use App\Jobs\TrimItemVersions;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\LegalHold;
@@ -288,8 +289,11 @@ class StorageController extends Controller
      * minskar lagringen och är samma sorts handling som att rensa bilagor
      * (issue 28 § Beslut 4).
      *
-     * Ingen version rörs här. Att sänka taket tar bort överskottet först i
-     * issue 414; den här rutten skriver bara `account.versioning_max_versions`.
+     * **Ett sänkt tak trimmar historiken (issue 414).** Sänks kontots värde
+     * köas App\Jobs\TrimItemVersions för kontot, som tar bort överskottet i
+     * alla kontots containrar och frigör kvoten. En höjning köar inget.
+     * Rättslig spärr på kontot gör jobbet till ett tomt jobb — det är jobbet
+     * som ställer frågan (ADR-0088 Riktning 6).
      */
     public function updateVersioning(UpdateStorageVersioningRequest $request): RedirectResponse
     {
@@ -299,8 +303,15 @@ class StorageController extends Controller
 
         Gate::authorize('manageStorage', $account);
 
-        $account->versioning_max_versions = (int) $request->validated('versioning_max_versions');
+        $tidigareTak = (int) $account->versioning_max_versions;
+        $nyttTak = (int) $request->validated('versioning_max_versions');
+
+        $account->versioning_max_versions = $nyttTak;
         $account->save();
+
+        if ($nyttTak < $tidigareTak) {
+            dispatch(TrimItemVersions::forAccount($account->getKey()));
+        }
 
         return redirect()
             ->route('settings.storage', ['account' => $account->ulid]);
