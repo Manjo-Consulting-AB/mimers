@@ -724,7 +724,7 @@ def main() -> int:
         return 0
 
     text = rapport(mekaniska, [], lage, lasfynd(kropp), foljande_prov(innanfor))
-    print(text or "Rutan täcker varje rutt issuen nämner. Den bedömande halvan körs av kön.")
+    print(text or "Rutan täcker varje rutt och notistyp issuen nämner. Den bedömande halvan körs av kön.")
     return 0
 
 
