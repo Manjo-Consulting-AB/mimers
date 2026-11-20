@@ -22,11 +22,11 @@ use function Pest\Laravel\postJson;
  * 1. **Ingenting flyttar text mellan de två.** Ingen migrering som kopierar,
  *    ingen fallback i ett formulär eller en resurs. `rör inte description ...`
  *    prövar båda riktningarna.
- * 2. **`notes` går att söka.** App\Models\Item::toSearchableArray() bär
- *    fältet, och `hittar itemet på ett ord som bara står i anteckningen`
- *    bevisar att det fungerar. Sedan issue 425 är FULLTEXT-indexet
- *    `(name, description)` — `notes` söks med LIKE i `Item::scopeMatchingText()`,
- *    inte genom indexet.
+ * 2. **`notes` står i BÅDA listorna.** App\Models\Item::toSearchableArray() och
+ *    FULLTEXT-indexet; `har anteckningen i FULLTEXT-indexet` prövar att
+ *    indexet speglar den sökbara mängden, och `hittar itemet på ett ord som
+ *    bara står i anteckningen` bevisar att fältet faktiskt går att söka i.
+ *    Sedan issue 425 bär indexet inget annat än de tre kolumnerna.
  * 3. **`ItemResource` bär fältet, alltid som `null` när det saknas.** Till
  *    skillnad från omslagsbilden i issue 93, som ligger bredvid resursen.
  * 4. **`#[SearchUsingFullText]` sätts fortfarande inte.** Attributet får Scout
@@ -39,16 +39,19 @@ use function Pest\Laravel\postJson;
  */
 
 /**
- * Kolumnlistan i det sista `fullText([...])`-anropet för `item`, i
- * migrationsordning.
+ * Kolumnlistan i det SISTA `fullText([...])`-anropet för `item` som räknar upp
+ * `notes`, i migrationsordning.
  *
  * Indexet går inte att läsa ur schemat: FULLTEXT finns bara på MySQL, och
  * testsviten kör sqlite, där `Schema::getIndexes('item')` inte har någon rad att
- * visa. Källkoden är därför den enda plats indexlistan går att pröva på i den
- * här sviten.
+ * visa. Källkoden är därför den enda plats spegeln går att pröva på i den här
+ * sviten — och den prövas mot toSearchableArray(), som är precis vad docblocken
+ * lovar att de ska stämma överens om.
  *
- * Det sista anropet är det som gäller: migrationerna kör i filnamnsordning, och
- * 425:s `down()` är tom, så dess `up()`-lista är den sista som bygger indexet.
+ * Att det är den sista listan SOM BÄR `notes` som gäller, och inte bara den
+ * sista: `down()` i migreringen som lägger till kolumnen ställer tillbaka
+ * femkolumnsindexet, och en läsning som tog sista träffen utan att se efter
+ * hade jämfört sökmängden mot ett index som bara finns efter en återrullning.
  *
  * @return list<string>
  */
@@ -71,7 +74,9 @@ function anteckningFulltextKolumner(): array
         foreach ($träffar[1] as $lista) {
             preg_match_all("/'([a-z_]+)'/", $lista, $namn);
 
-            $kolumner = $namn[1];
+            if (in_array('notes', $namn[1], true)) {
+                $kolumner = $namn[1];
+            }
         }
     }
 
@@ -280,20 +285,22 @@ it('har anteckningen i sökmängden', function () {
 });
 
 /*
- * Klart när: `notes` går att söka, och FULLTEXT-indexet är det issue 425
- * lämnar — `(name, description)`.
+ * Klart när: `notes` finns i FULLTEXT-indexet, lagt i samma migrering som
+ * kolumnen.
  *
- * Sedan issue 425 är de sex fasta fältens kolumner borta. Indexet byggs på
- * `name` och `description`; issue 425:s `Klart när`, [[ADR-0089 Egna fält på
- * items]] § Konsekvenser och [[Items och organisation]] § item säger alla tre
- * samma sak. `notes` står kvar i sökmängden och söks med LIKE i
- * `Item::scopeMatchingText()` — provet "hittar itemet på ett ord som bara
- * står i anteckningen" bevisar att fältet går att söka i.
+ * Sedan issue 425 är indexet och sökmängden identiska: de sex fasta fältens
+ * kolumner är borta, och kvar är `name`, `description` och `notes`. Att
+ * listorna är lika långa och i samma ordning betyder både att varje sökbar
+ * kolumn har ett index och att indexet inte bär något som sökningen inte
+ * frågar efter.
  */
-it('har anteckningen i sökmängden men inte i det krympta FULLTEXT-indexet', function () {
-    expect(array_keys((new Item)->toSearchableArray()))->toContain('notes');
+it('har anteckningen i FULLTEXT-indexet, och indexet speglar sökmängden', function () {
+    $kolumner = anteckningFulltextKolumner();
 
-    expect(anteckningFulltextKolumner())->toBe(['name', 'description']);
+    expect($kolumner)->not->toBeEmpty('inget fullText-anrop hittades för item');
+    expect($kolumner)->toContain('notes');
+
+    expect($kolumner)->toBe(array_keys((new Item)->toSearchableArray()));
 });
 
 /*

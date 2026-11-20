@@ -32,15 +32,12 @@ use Laravel\Scout\Searchable;
  * `Container::$account_id`. `created_at`/`updated_at` timestamps are set by
  * Eloquent.
  *
- * **The six fixed fields are no longer item columns here.** `manufacturer`,
+ * **The six fixed fields are no longer item columns.** `manufacturer`,
  * `model`, `serial_number`, `purchased_at`, `warranty_until` and
  * `position_note` are container fields with their values in
- * `item_field_value` since issue 420 ([[ADR-0089 Egna fält på items]]
- * § Riktning 5). The columns stay on the table until issue 425 but are
- * neither mass-assignable nor searched through this model. The casts for the
- * two date columns stay only so MCP's reads (out of scope until issue 423)
- * keep returning dates through `?->toDateString()`; they go with the columns
- * in 425.
+ * `item_field_value` since issue 420, and issue 425 drops the columns
+ * ([[ADR-0089 Egna fält på items]] § Riktning 5). They are neither
+ * mass-assignable nor read through this model.
  */
 #[Fillable(['name', 'description', 'notes', 'icon', 'icon_color'])]
 #[RouteKey('ulid')]
@@ -67,29 +64,6 @@ class Item extends Model
     protected $table = 'item';
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * `purchased_at` and `warranty_until` are DATE columns, cast to date
-     * and serialized with `toDateString()` ("2024-05-17") — never
-     * `toIso8601String()`, a purchase date has no timezone, see issue 13a
-     * § Beslut 5.
-     *
-     * The two casts remain after issue 420 only because the MCP tools read
-     * the columns until issue 423 and call `->toDateString()` on them; they
-     * go with the columns in issue 425. Nothing in `app/` outside `app/Mcp/`
-     * reads them.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'purchased_at' => 'date',
-            'warranty_until' => 'date',
-        ];
-    }
-
-    /**
      * The searchable columns, issue 15b § Beslut 3 and now issue 420: the
      * item's own text columns — `name`, `description` and `notes`. The six
      * fixed fields are no longer item columns. Their values are searched
@@ -97,10 +71,10 @@ class Item extends Model
      * App\Models\Item::scopeMatchingText(), which is the one place the app
      * formulates "what free text matches".
      *
-     * The keys are the columns, the values are ignored by the engine. The
-     * FULLTEXT index on `item` still carries the six columns until issue
-     * 425, so the two lists are a documented mirror only after the columns
-     * are dropped — tests/Feature/Item/AnteckningsfaltTest says so.
+     * The keys are the columns, the values are ignored by the engine. Since
+     * issue 425 the FULLTEXT index on `item` is `(name, description, notes)` —
+     * exactly these three columns — so the two lists are a documented mirror
+     * that tests/Feature/Item/AnteckningsfaltTest checks.
      *
      * No #[SearchUsingFullText] on purpose: that attribute makes Scout emit
      * `whereFullText(...)`, which MariaDB handles and SQLite (the in-memory

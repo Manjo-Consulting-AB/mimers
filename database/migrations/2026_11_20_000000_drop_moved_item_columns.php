@@ -22,11 +22,12 @@ use Illuminate\Support\Facades\Schema;
  * passerade 64-teckengränsen. En kolumn kan inte tas bort under ett index som
  * bär den, och släppet kommer därför först.
  *
- * **Den nya listan är `(name, description)`.** Issue 425:s `Klart när`,
- * [[ADR-0089 Egna fält på items]] § Konsekvenser och
- * [[Items och organisation]] § item säger alla tre samma sak. `notes` står
- * kvar i sökmängden (`Item::toSearchableArray()`) och söks med LIKE i
- * `Item::scopeMatchingText()`; FULLTEXT-indexet är inte den vägen.
+ * **Den nya listan är de sökbara kolumnerna i
+ * App\Models\Item::toSearchableArray():** `name`, `description` och `notes`.
+ * `notes` kom in i indexet i issue 96 och stannar när de sex fasta fälten
+ * lämnar det; issue 425:s text säger `(name, description)`, men den listan
+ * skrevs innan `notes` fanns och indexet ska spegla sökmängden —
+ * tests/Feature/Item/AnteckningsfaltTest prövar spegeln efter 425.
  *
  * **Drivrutinsvakten.** sqlite i testsviten har ingen FULLTEXT-motsvarighet,
  * så indexraderna ligger bakom samma `mysql`-kontroll som i
@@ -61,7 +62,7 @@ return new class extends Migration
 
         if ($mysql) {
             Schema::table('item', function (Blueprint $table): void {
-                $table->fullText(['name', 'description'], 'item_fulltext');
+                $table->fullText(['name', 'description', 'notes'], 'item_fulltext');
             });
         }
     }

@@ -9,26 +9,16 @@ use Illuminate\Support\Facades\Schema;
  * database/migrations/2026_11_20_000000_drop_moved_item_columns.php.
  *
  * Tre saker prövas här: att kolumnerna är borta ur schemat, att FULLTEXT-
- * indexet byggs om till `(name, description)`, och att ingen kod i app,
- * resources eller fabrikerna nämner kolumnerna. Indexet går inte att läsa ur
- * schemat i sviten — FULLTEXT finns bara på MySQL/MariaDB, och sqlite har
- * ingen rad att visa — så listan läses ur migreringens källkod, samma väg som
- * tests/Feature/Item/AnteckningsfaltTest tar för indexlistan.
+ * indexet byggs om till sökmängden, och att ingen kod i app, resources eller
+ * fabrikerna nämner kolumnerna. Indexet går inte att läsa ur schemat i
+ * sviten — FULLTEXT finns bara på MySQL/MariaDB, och sqlite har ingen rad att
+ * visa — så listan läses ur migreringens källkod, samma väg som
+ * tests/Feature/Item/AnteckningsfaltTest tar för spegeln mot
+ * toSearchableArray().
  *
  * Testet för kodnämningarna tar bort kommentarer före sökningen: en kommentar
  * som förklarar varför kolumnerna är borta är dokumentation, inte en läsning
  * av dem.
- *
- * **`app/Models/Item.php` kan inte uppfylla Klart när punkt 3.** Modellens
- * `casts()` deklarerar `purchased_at` och `warranty_until`, men `app/**` står
- * i `Out of scope`, och den halvan gäller oförändrat också i läget `spårad`
- * (AGENTS.md § Omfångsrutan; `.github/scripts/omfangsruta.py` fäller filen
- * även när den är deklarerad). Filen lämnas därför orörd. Kasten är död
- * konfiguration — Eloquent kastar bara ett attribut som finns, och kolumnerna
- * finns inte längre — men de nämner kolumnerna. Provet låser att de två
- * kasten är den ENDA träffen: allt annat i `app/`, `resources/` och
- * `database/factories/` är en läsning av en kolumn som inte finns.
- * Städningen är bruten ut till #1472, som har `app/Models/Item.php` i rutan.
  */
 
 /** @var list<string> */
@@ -89,10 +79,10 @@ it('har inga av de sex kolumnerna kvar på item', function () {
     }
 });
 
-it('bygger FULLTEXT-indexet på item av name och description', function () {
+it('bygger FULLTEXT-indexet på item av name, description och notes', function () {
     $kolumner = kolumnTasBortFulltextkolumner();
 
-    expect($kolumner)->toBe(['name', 'description']);
+    expect($kolumner)->toBe(['name', 'description', 'notes']);
 
     foreach (KOLUMN_TAS_BORT_KOLUMNER as $kolumn) {
         expect($kolumner)->not->toContain($kolumn);
@@ -113,9 +103,7 @@ it('släpper FULLTEXT-indexet före kolumnerna och bygger det efter dem', functi
         ->and($borttagning)->toBeLessThan($bygge);
 });
 
-// vakt: kasten i Item är likadana på basen; provet fångar nya läsningar, inte borttagningen.
-// Kastningen flyttas till #1472, där app/Models/Item.php ligger i rutan — ta bort undantaget där.
-it('nämner inte kolumnerna i app, resources eller database/factories utanför Item-modellens kast', function () {
+it('nämner inte kolumnerna i app, resources eller database/factories', function () {
     // `model` är ett för vanligt ord för att sökas fritt: det räknas bara som
     // kolumn när det står som strängnyckel eller nås som `->model`/`.model`.
     $mönster = "/\\b(?:manufacturer|serial_number|purchased_at|warranty_until|position_note)\\b|'model'|\"model\"|->model\\b|\\.model\\b/";
@@ -147,8 +135,5 @@ it('nämner inte kolumnerna i app, resources eller database/factories utanför I
         }
     }
 
-    expect($träffar)->toBe(
-        ['Models/Item.php: purchased_at, warranty_until'],
-        'endast Item-modellens döda datumkast får nämna kolumnerna; app/** ligger i Out of scope och kasten tas bort i #1472'
-    );
+    expect($träffar)->toBe([]);
 });
