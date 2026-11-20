@@ -41,10 +41,12 @@ use Illuminate\Validation\Rule;
  * **Egna fält (issue 424).** Båda rutterna tar `field[<ULID>][eq|min|max]`:
  * `eq` för text, `min`/`max` för tal och datum, och flera fält kombineras
  * med OCH. Uppslaget och reglerna bor i
- * App\Actions\Item\ResolveFieldFilters — ett fält ur en annan container
- * eller ur papperskorgen ger 422 `field.not_applicable`, precis som ett
- * värde i fel fält (issue 418). Containerns lista tar dessutom `sort`
- * (containerns fält-ULID) och `direction` (`asc`/`desc`).
+ * App\Actions\Item\ResolveFieldFilters — bara containerns egna fält
+ * (`item_id IS NULL`) deltar (issue 424 § arkitektsvar); ett items eget
+ * fält, ett fält ur en annan container eller ur papperskorgen ger 422
+ * `field.not_applicable`, precis som ett värde i fel fält (issue 418).
+ * Containerns lista tar dessutom `sort` (containerns fält-ULID) och
+ * `direction` (`asc`/`desc`).
  */
 class IndexItemRequest extends FormRequest
 {
@@ -192,8 +194,9 @@ class IndexItemRequest extends FormRequest
 
         [$fields, $missing] = $resolver->match($candidates, $input);
 
-        // Ett fält i en annan container eller i papperskorgen är en fråga som
-        // är fel ställd — samma domänkod som ett värde i fel fält (issue 418).
+        // Ett items eget fält, ett fält i en annan container eller i
+        // papperskorgen är en fråga som är fel ställd — samma domänkod som
+        // ett värde i fel fält (issue 418, arkitektsvaret på 424).
         if ($missing !== []) {
             throw ApiException::make('field.not_applicable', ['field' => $missing[0]], 422);
         }

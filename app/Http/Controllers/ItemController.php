@@ -2314,15 +2314,13 @@ class ItemController extends Controller
         // Egna fält (issue 424). Webbens regel är 59a § Beslut 3: ett värde
         // som inte längre finns är ett BORTFALLET filter, inte ett fel.
         //
-        // **Kandidaterna är desamma som API:ets** (issue 424, åtgärdsvarv):
-        // `candidatesForContainer()` tar containerns fält OCH itemens egna,
-        // precis som App\Http\Requests\Item\IndexItemRequest gör. Att bara
-        // titta på `Container::fields()` hade gett webben en annan mängd än
-        // `/api` och MCP för samma `field[ULID]`-länk — ett items eget fält
-        // filtrerade i API:et men föll tyst bort här. Ett fält i en annan
-        // container eller i papperskorgen faller fortfarande bort (webbens
-        // gamla bokmärke), medan API:et svarar `field.not_applicable`;
-        // skillnaden är 59a § Beslut 3 och står i PR:ens frågor.
+        // **Kandidaterna är desamma som API:ets** (issue 424, arkitektsvar):
+        // `candidatesForContainer()` tar bara containerns egna fält
+        // (`item_id IS NULL`), precis som App\Http\Requests\Item\
+        // IndexItemRequest gör. Ett items eget fält, ett fält i en annan
+        // container eller i papperskorgen faller därför bort här (webbens
+        // gamla bokmärke), medan API:et och MCP svarar
+        // `field.not_applicable`; skillnaden är 59a § Beslut 3.
         $resolver = app(ResolveFieldFilters::class);
         $requestedFields = $request->query('field');
         $requestedSort = $request->query('sort');

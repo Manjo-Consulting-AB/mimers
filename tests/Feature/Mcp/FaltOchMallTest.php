@@ -219,6 +219,22 @@ it('ger field.not_applicable i items_search för ett fält utanför sökningen',
         ->and($fel['hint'])->toBeString();
 });
 
+it('ger field.not_applicable i items_search för ett items eget fält', function () {
+    [, $token, $anvandare, $container] = faltMiljo();
+
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn']);
+    $eget = faltFalt($container, $item, 'Årgång', 'number', $anvandare);
+
+    // Bara containerns egna fält deltar i filter och sortering (issue 424
+    // § arkitektsvar), alltså samma regel som API:et.
+    $fel = mcpFel(mcpVerktyg($token, 'items_search', [
+        'q' => 'Motorn',
+        'field' => [$eget->ulid => ['min' => 2010]],
+    ]));
+
+    expect($fel['code'])->toBe('field.not_applicable');
+});
+
 it('har tappat de sex fasta kolumnerna ur items_create och items_update', function () {
     [, $token, , $container] = faltMiljo();
 

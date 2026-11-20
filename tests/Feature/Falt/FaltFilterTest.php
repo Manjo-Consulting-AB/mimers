@@ -372,7 +372,7 @@ it('låter ett gammalt fältvärde falla bort på webben', function () {
         ->and($props['filter']['fields'])->toBe([]);
 });
 
-it('filtrerar ett items eget fält på webben som API:et', function () {
+it('ger field.not_applicable för ett items eget fält — i listan och sökningen', function () {
     [, $user, $headers] = faltFilterKontext();
     $container = Container::factory()->for($user->accounts->first(), 'account')->create();
     $motorn = faltFilterItem($container, 'Motorn');
@@ -380,22 +380,34 @@ it('filtrerar ett items eget fält på webben som API:et', function () {
     faltFilterVarde($motorn, $eget, 'Röd');
     faltFilterItem($container, 'Masten');
 
+    // Bara containerns egna fält deltar (issue 424 § arkitektsvar): ett
+    // items eget fält gäller ett item och är ingen kolumn för listan, så
+    // både listan och sökningen svarar som för ett fält i en annan container.
+    foreach ([
+        faltFilterUrl($container, ['field' => [$eget->ulid => ['eq' => 'Röd']]]),
+        '/api/items?'.http_build_query([
+            'q' => 'Motorn',
+            'field' => [$eget->ulid => ['eq' => 'Röd']],
+        ]),
+    ] as $url) {
+        $response = getJson($url, $headers);
+
+        $response->assertStatus(422);
+        expect($response->json('error.code'))->toBe('field.not_applicable');
+    }
+
     withoutVite();
 
-    $query = ['field' => [$eget->ulid => ['eq' => 'Röd']]];
-
-    $api = getJson(faltFilterUrl($container, $query), $headers)->assertOk();
-
+    // Webben behandlar det som ett gammalt bokmärke: filtret faller bort
+    // och listan visas i sin vanliga ordning (59a § Beslut 3).
     $props = actingAs($user)->get('/containers/'.$container->ulid.'/items?'.http_build_query([
         'view' => 'map',
-        ...$query,
+        'field' => [$eget->ulid => ['eq' => 'Röd']],
     ]))->assertOk()->inertiaProps();
 
-    // Samma kandidatmängd som API:et: ett items eget fält filtrerar i BÅDA,
-    // i stället för att falla tyst bort på webben.
-    expect(faltFilterNamn($api))->toBe(['Motorn'])
-        ->and(array_column($props['hits']['nodes'], 'name'))->toBe(['Motorn'])
-        ->and($props['filter']['dropped'])->toBeFalse();
+    expect($props['filter']['dropped'])->toBeTrue()
+        ->and($props['filter']['fields'])->toBe([])
+        ->and($props['hits'])->toBeNull();
 });
 
 it('sorterar webbens träfflista på ett containerfält', function () {

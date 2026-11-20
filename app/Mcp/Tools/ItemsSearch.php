@@ -48,7 +48,7 @@ class ItemsSearch extends McpTool
             'due_before' => $schema->string()->description('Items with a task occurrence due on or before this date (YYYY-MM-DD).'),
             'due_after' => $schema->string()->description('Items with a task occurrence due on or after this date (YYYY-MM-DD).'),
             'loan_status' => $schema->string()->description('lent (out on loan), overdue (loan past its due date) or available (not lent).'),
-            'field' => $schema->object()->description('Filters on custom fields, keyed by field ULID. Text fields take eq; number and date fields take min and max. Dates also accept today, within:N and past:N, counted in the user\'s day. All field filters must match. Field ULIDs come from fields_list.'),
+            'field' => $schema->object()->description('Filters on a container\'s custom fields, keyed by field ULID; an item\'s own field is refused. Text fields take eq; number and date fields take min and max. Dates also accept today, within:N and past:N, counted in the user\'s day. All field filters must match. Field ULIDs come from fields_list.'),
             'container' => $schema->string()->description('A container ULID to search in only.'),
             'limit' => $schema->integer()->description('Rows per page, 1 to 100. Default 25.')->min(1)->max(Cursor::MAX_LIMIT),
             'cursor' => $schema->string()->description('The next_cursor of the previous page.'),
@@ -61,9 +61,11 @@ class ItemsSearch extends McpTool
 
         /*
          * Egna fälts filter (issue 424) — samma `field[<ULID>][eq|min|max]`
-         * som API:et. Fälten måste höra till de containers sökningen gäller,
-         * så en ULID ur en annan container är `field.not_applicable` med
-         * hinten som redan finns för koden (ADR-0087 Riktning 18).
+         * som API:et. Bara containerns egna fält (`item_id IS NULL`) deltar,
+         * och de måste höra till de containers sökningen gäller: ett items
+         * eget fält eller en ULID ur en annan container är
+         * `field.not_applicable` med hinten som redan finns för koden
+         * (ADR-0087 Riktning 18).
          */
         $resolver = app(ResolveFieldFilters::class);
         $fieldInput = $request->get('field');
@@ -73,7 +75,11 @@ class ItemsSearch extends McpTool
         if ($fieldInput !== null) {
             $fieldContainerIds = $this->fieldContainerIds($request, $containerIds);
             [$fieldDefinitions, $missingFields] = $resolver->match(
-                ItemField::query()->whereIn('container_id', $fieldContainerIds)->get()->keyBy('ulid'),
+                ItemField::query()
+                    ->whereIn('container_id', $fieldContainerIds)
+                    ->whereNull('item_id')
+                    ->get()
+                    ->keyBy('ulid'),
                 $fieldInput,
             );
         }

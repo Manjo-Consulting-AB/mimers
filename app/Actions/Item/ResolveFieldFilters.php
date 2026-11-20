@@ -20,9 +20,10 @@ use Throwable;
  *
  * Issuen tar `field[<ULID>][eq|min|max]` på listan och sökningen. Text
  * filtreras med `eq`, tal och datum med `min` och `max`, och flera fält
- * kombineras med OCH precis som taggarna. Ett fält i en annan container
- * eller i papperskorgen är `field.not_applicable`, inte ett tomt svar
- * ([[ADR-0089 Egna fält på items]] § Riktning 9).
+ * kombineras med OCH precis som taggarna. Bara containerns egna fält
+ * (`item_id IS NULL`) deltar: ett items eget fält, ett fält i en annan
+ * container eller i papperskorgen är `field.not_applicable`, inte ett tomt
+ * svar ([[ADR-0089 Egna fält på items]] § Riktning 9).
  *
  * **Formuleringen bor HÄR.** Listan, den globala sökningen och MCP-verktyget
  * ställer samma fråga, och en andra avskrift av `EXISTS`-villkoret hade
@@ -75,8 +76,11 @@ class ResolveFieldFilters
     ];
 
     /**
-     * Fälten i containern — både dess egna och itemens egna — i EN fråga.
-     * Ett fält i papperskorgen är inte med (SoftDeletes-scopet).
+     * Containerns fält i EN fråga — alltså `item_id IS NULL`. Ett items eget
+     * fält gäller ett item och är ingen kolumn för listan: det ger
+     * `field.not_applicable`, precis som ett fält i en annan container
+     * (issue 424 § arkitektsvar). Ett fält i papperskorgen är inte med
+     * (SoftDeletes-scopet).
      *
      * @return Collection<string, ItemField>
      */
@@ -84,12 +88,15 @@ class ResolveFieldFilters
     {
         return ItemField::query()
             ->where('container_id', $container->id)
+            ->whereNull('item_id')
             ->get()
             ->keyBy('ulid');
     }
 
     /**
-     * Fälten i de containers användaren når, för den globala sökningen.
+     * Containernas egna fält i de containers användaren når, för den globala
+     * sökningen. Itemens egna fält är inte med — de gäller ett item, inte en
+     * lista (issue 424 § arkitektsvar).
      *
      * @return Collection<string, ItemField>
      */
@@ -104,6 +111,7 @@ class ResolveFieldFilters
 
         return ItemField::query()
             ->whereIn('container_id', $ids)
+            ->whereNull('item_id')
             ->get()
             ->keyBy('ulid');
     }

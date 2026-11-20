@@ -144,7 +144,10 @@ class SearchController extends Controller
      * containers användaren når. Sidan har ingen filterpanel för fälten —
      * den hör till containerns lista — men adressen tar samma
      * `field[<ULID>][eq|min|max]` som `/api`, och ett värde som inte finns
-     * faller bort utan fel, samma regel som `q` på den här sidan.
+     * faller bort utan fel, samma regel som `q` på den här sidan. Bara
+     * containernas egna fält (`item_id IS NULL`) deltar: ett items eget fält
+     * faller bort här, medan `/api` svarar `field.not_applicable`
+     * (issue 424 § arkitektsvar).
      *
      * @return list<array{field_id: int, ulid: string, type: string, op: string, value: string, raw: mixed}>
      */
