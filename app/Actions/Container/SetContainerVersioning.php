@@ -40,7 +40,13 @@ class SetContainerVersioning
     {
         Gate::authorize('delete', $container);
 
-        return DB::transaction(function () use ($container, $maxVersions): Container {
+        // Jobbet köas EFTER transaktionen: en köad rad som arbetaren hinner
+        // läsa ur en annan anslutning före commit ser det GAMLA taket och
+        // trimmar ingenting. Samma skäl som StoreAttachment dispatchar efter
+        // sitt transaktionsblock (Beslut 3).
+        $trimma = false;
+
+        $resultat = DB::transaction(function () use ($container, $maxVersions, &$trimma): Container {
             $rad = Container::withTrashed()
                 ->whereKey($container->getKey())
                 ->lockForUpdate()
@@ -52,15 +58,17 @@ class SetContainerVersioning
             $rad->save();
 
             $rad->load('account');
-            $nyttTak = VersionLimit::for($rad);
-
-            if ($nyttTak < $tidigareTak) {
-                dispatch(TrimItemVersions::forContainer($rad->getKey()));
-            }
+            $trimma = VersionLimit::for($rad) < $tidigareTak;
 
             $container->refresh();
 
             return $container;
         });
+
+        if ($trimma) {
+            dispatch(TrimItemVersions::forContainer($resultat->getKey()));
+        }
+
+        return $resultat;
     }
 }

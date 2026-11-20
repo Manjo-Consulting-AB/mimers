@@ -12,6 +12,7 @@ use App\Support\Versioning\VersionLimit;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Tar bort versioner som hamnat över taket när taket sänks eller historiken
@@ -157,12 +158,18 @@ class TrimItemVersions implements ShouldQueue
             ->all();
 
         foreach (array_chunk($oldest, self::CHUNK) as $ids) {
-            MetadataLedger::releaseWhere(
-                'item_version',
-                fn (Builder $query) => $query->whereIn('item_version.id', $ids),
-            );
+            // Räknaren och raderna i samma transaktion — MetadataLedger
+            // förutsätter att anroparen redan står i en (klassens docblock),
+            // och radlåset i releaseWhere() ska serialisera mot en samtidig
+            // gallring i stället för att vara verkningslöst i autocommit.
+            DB::transaction(function () use ($ids): void {
+                MetadataLedger::releaseWhere(
+                    'item_version',
+                    fn (Builder $query) => $query->whereIn('item_version.id', $ids),
+                );
 
-            ItemVersion::query()->whereIn('id', $ids)->delete();
+                ItemVersion::query()->whereIn('id', $ids)->delete();
+            });
         }
     }
 }
