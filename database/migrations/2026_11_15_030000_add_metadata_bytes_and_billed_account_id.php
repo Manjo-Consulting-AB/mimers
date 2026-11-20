@@ -1,7 +1,7 @@
 <?php
 
-use App\Support\Usage\CountedRows;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -27,10 +27,17 @@ use Illuminate\Support\Facades\Schema;
  * - `category`, `tag`, `schedule`, `loan`: containerns ägare, eftersom raden
  *   saknar författarkolumn.
  *
- * Sist räknas `metadata_bytes` fram för alla konton genom
- * App\Support\Usage\CountedRows — samma kod som nattens avstämning, så att
- * räknaren stämmer från första stund. Ett konto vars räknarrad saknas får en
- * (övriga kolumner rättas av avstämningen, som i issue 1061).
+ * Sist räknas `metadata_bytes` fram för alla konton. Tabellerna och
+ * fritextkolumnerna står skrivna i migreringen, frysta som de såg ut när den
+ * skrevs (2026-11-15) — den läser inte App\Support\Usage. Listan där växer:
+ * `item_version`, `item_field`, `item_field_value` och `container_template`
+ * kom efter den här migreringen, och `item` tappar de sex fasta fältens
+ * kolumner i issue 425. En migrering som redan kört i produktionen kör inte
+ * om; frysningen gäller bara en färsk databas, där migreringen körs i
+ * tidsordning före de senare tabellerna och kolumnbytena. Räknaren rättas
+ * därefter av nattens avstämning, som läser den levande listan (issue 1061).
+ *
+ * Ett konto vars räknarrad saknas får en.
  *
  * Ifyllningen är en egen metod så att provet kan köra den utan att schemat
  * byggs om.
@@ -39,6 +46,31 @@ return new class extends Migration
 {
     /** @var list<string> */
     private const TABLES = ['category', 'tag', 'item', 'schedule', 'schedule_occurrence', 'cost_entry', 'loan'];
+
+    /**
+     * De räknade tabellernas fritextkolumner, frysta som de såg ut
+     * 2026-11-15. `item` bär de sex fasta fältens kolumner här: det var de
+     * som räknades då, och en färsk databas kör den här migreringen före
+     * issue 420:s migrering som flyttar värdena till `item_field_value`.
+     * `container.kind` är fri text sedan `free_container_kind` och räknas.
+     *
+     * @var array<string, list<string>>
+     */
+    private const TEXT_COLUMNS = [
+        'container' => ['name', 'description', 'kind'],
+        'category' => ['name'],
+        'tag' => ['name'],
+        'item' => ['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'position_note'],
+        'schedule' => ['title', 'notes'],
+        'schedule_occurrence' => ['completion_note'],
+        'cost_entry' => ['description', 'supplier'],
+        'loan' => ['borrower_name', 'borrower_email', 'note'],
+    ];
+
+    private const ROW_OVERHEAD_BYTES = 256;
+
+    /** @var list<string> */
+    private const WITHOUT_OVERHEAD = ['schedule_occurrence'];
 
     public function up(): void
     {
@@ -122,7 +154,7 @@ return new class extends Migration
 
     public function backfillMetadataBytes(): void
     {
-        $perAccount = CountedRows::bytesPerAccount();
+        $perAccount = $this->countedBytesPerAccount();
 
         foreach ($perAccount as $accountId => $bytes) {
             $updated = DB::table('usage_counter')
@@ -138,6 +170,89 @@ return new class extends Migration
                 ]);
             }
         }
+    }
+
+    /**
+     * Summan av radernas vikt per betalande konto, enligt den frysta listan.
+     * Samma regel som App\Support\Usage\MetadataSize::ofAttributes(): summan
+     * av `strlen()` för fritextkolumnerna plus ett fast påslag per rad, utom
+     * `schedule_occurrence` som bara räknar anteckningen. En rad utan
+     * betalare räknas inte.
+     *
+     * @return array<int, int>
+     */
+    private function countedBytesPerAccount(): array
+    {
+        $totals = [];
+
+        foreach (self::TEXT_COLUMNS as $table => $columns) {
+            $this->countedQuery($table)->chunkById(500, function ($rows) use ($table, $columns, &$totals): void {
+                foreach ($rows as $row) {
+                    if ($row->payer_id === null) {
+                        continue;
+                    }
+
+                    $bytes = 0;
+
+                    foreach ($columns as $column) {
+                        $value = $row->{$column} ?? null;
+
+                        if ($value !== null) {
+                            $bytes += strlen((string) $value);
+                        }
+                    }
+
+                    if (! in_array($table, self::WITHOUT_OVERHEAD, true)) {
+                        $bytes += self::ROW_OVERHEAD_BYTES;
+                    }
+
+                    $totals[(int) $row->payer_id] = ($totals[(int) $row->payer_id] ?? 0) + $bytes;
+                }
+            }, "{$table}.id", 'id');
+        }
+
+        return $totals;
+    }
+
+    /**
+     * Raderna i en räknad tabell, med `id`, `payer_id` och fritextkolumnerna.
+     * Vägen till betalaren skiljer per tabell: `container` betalas av sin
+     * ägare, `schedule_occurrence` går genom schemat och itemet, `schedule`
+     * och `loan` genom itemet, och resten bär `container_id` själva.
+     */
+    private function countedQuery(string $table): Builder
+    {
+        $text = array_map(
+            fn (string $column): string => "{$table}.{$column}",
+            self::TEXT_COLUMNS[$table],
+        );
+
+        if ($table === 'container') {
+            return DB::table('container')->select([
+                'container.id',
+                'container.account_id as payer_id',
+                ...$text,
+            ]);
+        }
+
+        $query = DB::table($table);
+
+        $query = match ($table) {
+            'schedule_occurrence' => $query
+                ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
+                ->join('item', 'item.id', '=', 'schedule.item_id')
+                ->join('container', 'container.id', '=', 'item.container_id'),
+            'schedule', 'loan' => $query
+                ->join('item', 'item.id', '=', "{$table}.item_id")
+                ->join('container', 'container.id', '=', 'item.container_id'),
+            default => $query->join('container', 'container.id', '=', "{$table}.container_id"),
+        };
+
+        return $query->select([
+            "{$table}.id",
+            "{$table}.billed_account_id as payer_id",
+            ...$text,
+        ]);
     }
 
     public function down(): void
