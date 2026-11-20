@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
+import ItemFieldFilter from './ItemFieldFilter.vue';
 import TaxonomyPicker from './TaxonomyPicker.vue';
 import { categoryOptions } from './categoryTree.js';
 import { activeFilters } from './itemFilter.js';
@@ -90,7 +91,9 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Containerns kategoriträd inom omfånget, ur ListCategories. */
     categories: { type: Array, required: true },
-    /* Filtret så som servern tillämpade det: { q, tags, category, dropped }. */
+    /* Containerns fält, ur `filterFields`: `{ulid, label, type}` (issue 424). */
+    fields: { type: Array, default: () => [] },
+    /* Filtret så som servern tillämpade det: { q, tags, category, fields, sort, direction, dropped }. */
     filter: { type: Object, required: true },
     /*
      * Läget raden står i, när det ska följa med filtret (issue 293 ·
@@ -105,11 +108,12 @@ const props = defineProps({
 const { t } = useTranslations();
 
 const options = computed(() => categoryOptions(props.categories));
-const entries = computed(() => activeFilters(props.filter, props.tags, props.categories, t));
+const entries = computed(() => activeFilters(props.filter, props.tags, props.categories, props.fields, t));
 
 const q = ref('');
 const selectedTags = ref([]);
 const category = ref(null);
+const selectedFields = ref({});
 
 /* Fördröjningen mellan sista tangenttryckningen och sökningen (ADR-0062 § 7). */
 const SEARCH_DELAY_MS = 300;
@@ -150,6 +154,7 @@ watch(
         q.value = filter.q ?? '';
         selectedTags.value = [...filter.tags];
         category.value = filter.category;
+        selectedFields.value = { ...(filter.fields ?? {}) };
     },
     { immediate: true, deep: true },
 );
@@ -184,6 +189,9 @@ function apply(overrides = {}, options = {}) {
     const query = overrides.q ?? q.value;
     const tags = overrides.tags ?? selectedTags.value;
     const chosen = overrides.category === undefined ? category.value : overrides.category;
+    const fields = overrides.fields === undefined ? selectedFields.value : overrides.fields;
+    const sort = overrides.sort === undefined ? (props.filter.sort ?? null) : overrides.sort;
+    const direction = overrides.direction === undefined ? (props.filter.direction ?? 'asc') : overrides.direction;
 
     const params = {};
 
@@ -206,6 +214,36 @@ function apply(overrides = {}, options = {}) {
 
     if (chosen !== null && chosen !== '') {
         params.category = chosen;
+    }
+
+    /*
+     * Fälten skickas som `field[<ULID>][eq|min|max]` — Inertia bygger den
+     * nästlade strängen ur objektet. Ett tomt värde lämnar objektet, så
+     * adressen inte bär `?field[ULID][eq]=`.
+     */
+    const fieldParams = {};
+
+    for (const [ulid, operations] of Object.entries(fields ?? {})) {
+        const kept = {};
+
+        for (const operator of ['eq', 'min', 'max']) {
+            if (operations[operator] !== undefined && String(operations[operator]).trim() !== '') {
+                kept[operator] = String(operations[operator]).trim();
+            }
+        }
+
+        if (Object.keys(kept).length > 0) {
+            fieldParams[ulid] = kept;
+        }
+    }
+
+    if (Object.keys(fieldParams).length > 0) {
+        params.field = fieldParams;
+    }
+
+    if (sort !== null && sort !== '') {
+        params.sort = sort;
+        params.direction = direction === 'desc' ? 'desc' : 'asc';
     }
 
     router.get(`/containers/${props.containerUlid}/items`, params, {
@@ -292,6 +330,21 @@ function selectTags(ulids) {
     apply({ tags: ulids });
 }
 
+/* Fältpanelen ger hela den nya mängden — samma form som taggväljaren. */
+function selectFields(fields) {
+    selectedFields.value = fields;
+    apply({ fields });
+}
+
+/* Sorteringen: ett fält, eller tomt för namnordningen servern redan ger. */
+function selectSort(ulid) {
+    apply({ sort: ulid === '' ? null : ulid });
+}
+
+function selectDirection(direction) {
+    apply({ direction });
+}
+
 /* Ett kryss tar bort ETT filter och behåller resten. */
 function remove(entry) {
     if (entry.key === 'q') {
@@ -302,6 +355,15 @@ function remove(entry) {
 
     if (entry.key === 'tag') {
         apply({ tags: selectedTags.value.filter((ulid) => ulid !== entry.value) });
+
+        return;
+    }
+
+    if (entry.key === 'field') {
+        const next = { ...selectedFields.value };
+        delete next[entry.value];
+
+        apply({ fields: next });
 
         return;
     }
@@ -380,6 +442,62 @@ onBeforeUnmount(() => {
                 @update:model-value="selectTags"
             />
         </div>
+
+        <!-- Sorteringen (issue 424): ett containerfält, stigande eller
+             fallande. Namnordningen är serverns förval och skrivs som tomt
+             värde — den är ingen kolumn användaren väljer.
+             Kontrollen ritas i BÅDA lägena (åtgärdsvarv): trädet är listan
+             ritad som struktur, och servern ordnar syskonen på samma
+             containerfält som kartans träfflista. Utan sortering behåller
+             trädet namnordningen (issue 57a § Beslut 8). -->
+        <template v-if="fields.length > 0">
+            <label
+                for="item-filter-sort"
+                class="flex w-full flex-col gap-1 text-sm font-medium text-ink sm:w-auto"
+            >
+                {{ t('item.index.filter_sort') }}
+                <select
+                    id="item-filter-sort"
+                    :value="filter.sort ?? ''"
+                    :disabled="pending"
+                    class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink sm:w-auto"
+                    @change="selectSort($event.target.value)"
+                >
+                    <option value="">{{ t('item.index.filter_sort_name') }}</option>
+                    <option v-for="field in fields" :key="field.ulid" :value="field.ulid">
+                        {{ field.label }}
+                    </option>
+                </select>
+            </label>
+
+            <label
+                v-if="filter.sort !== null"
+                for="item-filter-direction"
+                class="flex w-full flex-col gap-1 text-sm font-medium text-ink sm:w-auto"
+            >
+                {{ t('item.index.filter_direction') }}
+                <select
+                    id="item-filter-direction"
+                    :value="filter.direction ?? 'asc'"
+                    :disabled="pending"
+                    class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink sm:w-auto"
+                    @change="selectDirection($event.target.value)"
+                >
+                    <option value="asc">{{ t('item.index.filter_direction_asc') }}</option>
+                    <option value="desc">{{ t('item.index.filter_direction_desc') }}</option>
+                </select>
+            </label>
+        </template>
+
+        <!-- Fälten (issue 424): en kontroll per typ, hopfällda under
+             *Fields* så att tjugofem fält inte trycker sökfältet av raden. -->
+        <ItemFieldFilter
+            v-if="fields.length > 0"
+            :fields="fields"
+            :model-value="selectedFields"
+            :pending="pending"
+            @update:model-value="selectFields"
+        />
     </form>
 
     <p v-if="filter.dropped" class="mt-2 text-sm text-ink-muted">
@@ -410,7 +528,7 @@ onBeforeUnmount(() => {
             type="button"
             :disabled="pending"
             class="inline-flex min-h-11 items-center text-sm text-accent underline"
-            @click="apply({ q: '', tags: [], category: null })"
+            @click="apply({ q: '', tags: [], category: null, fields: {}, sort: null, direction: 'asc' })"
         >
             {{ pending ? t('common.pending.default') : t('item.index.filter_clear') }}
         </button>

@@ -39,7 +39,13 @@ class ItemSearchController extends Controller
      */
     public function index(IndexItemRequest $request, SearchAccessibleItems $searchAccessibleItems): JsonResponse
     {
-        $items = $searchAccessibleItems->handle($request->user(), $request->validated('q'));
+        $items = $searchAccessibleItems->handle(
+            $request->user(),
+            $request->validated('q'),
+            null,
+            null,
+            $request->fieldFilters(),
+        );
 
         return ItemResource::collection($items)->response();
     }
