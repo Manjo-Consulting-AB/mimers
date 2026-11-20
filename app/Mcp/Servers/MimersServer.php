@@ -9,6 +9,7 @@ use App\Mcp\Tools\AttachmentsUploadUrl;
 use App\Mcp\Tools\CategoriesCreate;
 use App\Mcp\Tools\CategoriesList;
 use App\Mcp\Tools\CategoriesUpdate;
+use App\Mcp\Tools\ContainersApplyTemplate;
 use App\Mcp\Tools\ContainersCreate;
 use App\Mcp\Tools\ContainersDelete;
 use App\Mcp\Tools\ContainersList;
@@ -18,6 +19,10 @@ use App\Mcp\Tools\CostsCreate;
 use App\Mcp\Tools\CostsDelete;
 use App\Mcp\Tools\CostsList;
 use App\Mcp\Tools\CostsUpdate;
+use App\Mcp\Tools\FieldsCreate;
+use App\Mcp\Tools\FieldsDelete;
+use App\Mcp\Tools\FieldsList;
+use App\Mcp\Tools\FieldsUpdate;
 use App\Mcp\Tools\HistoryList;
 use App\Mcp\Tools\ItemsCreate;
 use App\Mcp\Tools\ItemsDelete;
@@ -42,6 +47,7 @@ use App\Mcp\Tools\SchedulesList;
 use App\Mcp\Tools\SchedulesUpdate;
 use App\Mcp\Tools\TagsList;
 use App\Mcp\Tools\TagsSet;
+use App\Mcp\Tools\TemplatesList;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Contracts\Transport;
 
@@ -65,6 +71,7 @@ class MimersServer extends Server
         ContainersList::class,
         ContainersTree::class,
         ContainersCreate::class,
+        ContainersApplyTemplate::class,
         ContainersUpdate::class,
         ContainersDelete::class,
         AttachmentsGet::class,
@@ -74,6 +81,10 @@ class MimersServer extends Server
         CategoriesCreate::class,
         CategoriesList::class,
         CategoriesUpdate::class,
+        FieldsCreate::class,
+        FieldsList::class,
+        FieldsUpdate::class,
+        FieldsDelete::class,
         CostsCreate::class,
         CostsList::class,
         CostsUpdate::class,
@@ -102,6 +113,7 @@ class MimersServer extends Server
         SchedulesDelete::class,
         TagsList::class,
         TagsSet::class,
+        TemplatesList::class,
     ];
 
     public function __construct(Transport $transport)

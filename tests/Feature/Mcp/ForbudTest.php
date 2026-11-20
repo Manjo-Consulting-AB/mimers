@@ -1,5 +1,8 @@
 <?php
 
+use App\Actions\Template\DeleteTemplate;
+use App\Actions\Template\RenameTemplate;
+use App\Actions\Template\SaveContainerTemplate;
 use App\Actions\Trash\EmptyTrash;
 use App\Mcp\Servers\MimersServer;
 use App\Mcp\Tools\McpTool;
@@ -117,4 +120,28 @@ it('fäller ett verktyg vars action hör till en förbjuden domän', function ()
     expect(forbudProv([new ForbudProvForbjudenActionVerktyg]))->not->toBe([]);
 
     expect(ForbiddenDomains::offence('items_create', [EmptyTrash::class]))->toBe(EmptyTrash::class);
+});
+
+/*
+ * Issue 423 · [[ADR-0089 Egna fält på items]] § Riktning 8: en agent får
+ * lista och använda mallar, aldrig spara, döpa om eller ta bort dem. Mallarna
+ * ligger på kontot, nära förbudet mot kontoinställningar, och förbudet skrivs
+ * därför här i stället för som ett ord i ForbiddenDomains — `templates` är
+ * också namnet på det läsverktyg som ska finnas.
+ */
+it('har inget verktyg som sparar, döper om eller tar bort en mall', function () {
+    $mallNamn = [];
+
+    foreach (forbudVerktyg() as $verktyg) {
+        if (str_starts_with($verktyg->name(), 'templates_')) {
+            $mallNamn[] = $verktyg->name();
+        }
+
+        foreach ($verktyg->actions() as $action) {
+            expect($action)
+                ->not->toBeIn([SaveContainerTemplate::class, RenameTemplate::class, DeleteTemplate::class]);
+        }
+    }
+
+    expect($mallNamn)->toBe(['templates_list']);
 });

@@ -18,9 +18,9 @@ use Illuminate\Support\Str;
  * raderas — ett avvisat försök lämnar varken märkning eller loggrad och
  * förlänger därför aldrig tillfället (Riktning 9).
  *
- * **Förra raderingen läses ur händelseloggen.** Där ligger alla fem slagen —
- * item, bilaga, container, schema och kostnadsrad — och `agent_id` sätts på
- * raden när den skrivs (App\Support\Mcp\AgentAudit). Papperskorgens kolumner
+ * **Förra raderingen läses ur händelseloggen.** Där ligger alla slagen —
+ * item, bilaga, container, schema, kostnadsrad och fält — och `agent_id` sätts
+ * på raden när den skrivs (App\Support\Mcp\AgentAudit). Papperskorgens kolumner
  * räcker inte som klocka: scheman och kostnadsrader listas inte där.
  *
  * **Sammanhanget är request-bundet**, samma form som AgentAudit: en scoped
@@ -35,8 +35,9 @@ final class AgentDeletion
     public const BATCH_MINUTES = 15;
 
     /**
-     * Handlingarna som räknas som en radering — alla fem verktygen i issue 406
-     * och den enda listan som både batchen, taket och notisen läser.
+     * Handlingarna som räknas som en radering — alla fem verktygen i issue 406,
+     * fältraderingen i issue 423, och den enda listan som både batchen, taket
+     * och notisen läser.
      *
      * @var list<string>
      */
@@ -46,6 +47,7 @@ final class AgentDeletion
         AuditLog::ACTION_SCHEDULE_DELETED,
         AuditLog::ACTION_COST_ENTRY_DELETED,
         AuditLog::ACTION_CONTAINER_DELETED,
+        AuditLog::ACTION_FIELD_DELETED,
     ];
 
     private ?int $agentId = null;

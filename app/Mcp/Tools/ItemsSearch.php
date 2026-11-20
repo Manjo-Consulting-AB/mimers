@@ -39,7 +39,7 @@ class ItemsSearch extends McpTool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'q' => $schema->string()->description('Free text over name, description, notes, manufacturer, model and serial number. Omit to list by filters only.'),
+            'q' => $schema->string()->description('Free text over name, description, notes and the text values of custom fields. Omit to list by filters only.'),
             'tags' => $schema->array()->items($schema->string())->description('Tag ULIDs; an item must carry all of them.'),
             'category' => $schema->string()->description('A category ULID; matches the category and everything under it.'),
             'task_status' => $schema->string()->description('Items with a task occurrence in this status: open, in_progress, completed or skipped.'),

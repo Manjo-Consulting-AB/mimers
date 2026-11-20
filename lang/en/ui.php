@@ -3396,6 +3396,7 @@ return [
             'container' => 'The container',
             'container_access' => 'Access',
             'cost_entry' => 'Costs',
+            'field' => 'Fields',
             'invitation' => 'Invitations',
             'loan' => 'Loans',
             'ownership_transfer' => 'Transfers',
@@ -3514,6 +3515,13 @@ return [
                 'created' => ':user registered a cost on :item',
                 'updated' => ':user changed :fields on a cost on :item',
                 'deleted' => ':user deleted a cost on :item',
+            ],
+
+            // Issue 423 · [[ADR-0089 Egna fält på items]] § Riktning 8. The
+            // label is free text and never appears in the log; the row says
+            // only that a field definition was deleted.
+            'field' => [
+                'deleted' => ':user deleted a field',
             ],
 
             'invitation' => [
