@@ -658,6 +658,11 @@ class ContainerController extends Controller
             // korskoppling som varken `/api` eller vyn har en yta för.
             'templates' => ContainerTemplateResource::collection(
                 ContainerTemplate::query()
+                    // Kontots mallar är kontots medlemmars, inte varje
+                    // `write`-delegats: en delegat utan medlemskap når
+                    // containern men inte kontot, och ska därför inte se
+                    // mallarnas namn eller innehåll (issue 422).
+                    ->memberOf($request->user())
                     ->where('account_id', $container->account_id)
                     ->with('account')
                     ->orderBy('name')

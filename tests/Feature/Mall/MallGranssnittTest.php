@@ -431,6 +431,31 @@ it('nekar en läsare att tillämpa och en gäst att spara', function () {
     expect(ContainerTemplate::query()->count())->toBe(2);
 });
 
+it('skickar inga mallar till en skrivdelegat som inte är medlem i kontot', function () {
+    withoutVite();
+
+    [$account, , $container] = mallgranssnittKontext();
+
+    mallgranssnittMall($account, [
+        'categories' => [['name' => 'Motor']],
+        'fields' => [['label' => 'Serienummer', 'type' => 'text']],
+    ]);
+
+    // En delegat med `write` på containern når den utan att vara medlem i
+    // kontot. Mallarna tillhör kontots medlemmar, inte varje skrivare: vyn
+    // ska därför inte bära någon lista — och därmed ingen knapp att tillämpa
+    // dem med (issue 422, granskningsfynd 1).
+    $delegat = User::factory()->create();
+    beviljaAccess($container, $delegat, 'write', 'guest');
+
+    actingAs($delegat)->get("/containers/{$container->ulid}/edit")->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->component('Containers/Edit')
+            ->has('templates', 0)
+            ->where('can.saveTemplate', false),
+    );
+});
+
 it('kräver inloggning för mallarnas sidor och rutter', function () {
     withoutVite();
 

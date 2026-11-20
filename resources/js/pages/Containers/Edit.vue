@@ -832,10 +832,6 @@ async function destroy() {
             {{ t('container.templates.save') }}
         </button>
 
-        <p v-if="saveTemplateForm.errors.name" role="alert" class="mt-2 text-sm text-danger">
-            {{ saveTemplateForm.errors.name }}
-        </p>
-
         <SaveTemplateDialog
             :open="saveTemplateOpen"
             :trigger="saveTemplateTrigger"

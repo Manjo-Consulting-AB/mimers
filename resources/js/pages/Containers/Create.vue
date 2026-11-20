@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
@@ -87,6 +87,16 @@ const form = useForm({
  * bara ULID:n eller innehållet.
  */
 const source = ref('');
+
+/*
+ * Ett annat konto kan sakna den valda mallen. Valet nollställs därför när
+ * kontot byts — annars pekar `source` på en mall som inte längre finns i
+ * `availableTemplates`, servern får ingen mall och en tom container skapas
+ * medan rutan visar en blank rad (issue 422).
+ */
+watch(() => form.account, () => {
+    source.value = '';
+});
 
 /* Uppsättningarna på användarens språk. Bara `en` finns, se datafilen. */
 const presets = computed(() => presetsFor(page.props.locale));
