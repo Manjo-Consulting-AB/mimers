@@ -13,17 +13,21 @@ use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\Template\CreateContainerFromTemplate;
 use App\Actions\User\ReadOverviewPanels;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Requests\Container\UpdateContainerVersioningRequest;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\ContainerTemplateResource;
 use App\Http\Resources\ItemResource;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ContainerTemplate;
 use App\Models\Item;
+use App\Models\ItemField;
 use App\Models\User;
 use App\Support\Cost\CostReport;
 use App\Support\Frontend\ActiveContainer;
@@ -430,7 +434,33 @@ class ContainerController extends Controller
     {
         return Inertia::render('Containers/Create', [
             'kinds' => $this->kindsUsedBy($request->user()),
+            // Issue 422 · *Start from*: användarens egna mallar, så att en ny
+            // container kan börja som en kopia av en äldre. De inbyggda
+            // förslagen är INTE med här — de bor i klienten
+            // (resources/js/data/categoryPresets.js) och sparas aldrig
+            // ([[ADR-0004 Fria taggar och kategorier]] § Konsekvenser).
+            // Mallen bär sitt kontos ULID, så väljaren kan följa kontovalet.
+            'templates' => ContainerTemplateResource::collection($this->templatesFor($request->user()))->resolve($request),
         ]);
+    }
+
+    /**
+     * Användarens mallar, med kontot laddat — resursen läser `account->ulid`.
+     *
+     * Samma fråga som `/api`:s index (App\Models\ContainerTemplate::
+     * scopeMemberOf()), och samma ordning: namn, sedan löpnummer så att två
+     * mallar med samma namn alltid ritas i samma ordning.
+     *
+     * @return Collection<int, ContainerTemplate>
+     */
+    private function templatesFor(User $user): Collection
+    {
+        return ContainerTemplate::query()
+            ->memberOf($user)
+            ->with('account')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get();
     }
 
     /**
@@ -469,6 +499,7 @@ class ContainerController extends Controller
     public function store(
         StoreContainerRequest $request,
         CreateContainer $createContainer,
+        CreateContainerFromTemplate $createContainerFromTemplate,
         ApiErrorTranslator $translator,
         ActiveContainer $activeContainer,
     ): RedirectResponse {
@@ -478,17 +509,43 @@ class ContainerController extends Controller
         Gate::authorize('create', [Container::class, $account]);
 
         try {
-            $container = $createContainer->handle(
-                $user,
-                $account,
-                $request->validated('name'),
-                $request->validated('kind'),
-                $request->validated('description'),
-                // Ikonen är ett val vid skapandet när formuläret skickar
-                // den (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
-                $request->validated('icon'),
-                $request->validated('icon_color'),
-            );
+            $templateUlid = $request->validated('template');
+            $content = $request->validated('template_content');
+
+            // Issue 422 · *Start from* — en egen mall eller ett inbyggt
+            // förslag fyller den nya containern med en kopia av kategorier
+            // och fält, i SAMMA transaktion som containern
+            // ([[ADR-0089 Egna fält på items]] § Riktning 6). Det inbyggda
+            // förslaget kommer som `template_content` och sparas aldrig på
+            // servern. Utan någondera är vägen oförändrad.
+            $container = ($templateUlid !== null || $content !== null)
+                ? $createContainerFromTemplate->handle(
+                    $user,
+                    $account,
+                    $request->validated('name'),
+                    $request->validated('kind'),
+                    $request->validated('description'),
+                    // Ikonen är ett val vid skapandet när formuläret skickar
+                    // den (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
+                    $request->validated('icon'),
+                    $request->validated('icon_color'),
+                    $templateUlid === null
+                        ? null
+                        : ContainerTemplate::query()
+                            ->memberOf($user)
+                            ->where('ulid', $templateUlid)
+                            ->firstOrFail(),
+                    is_array($content) ? $content : null,
+                )
+                : $createContainer->handle(
+                    $user,
+                    $account,
+                    $request->validated('name'),
+                    $request->validated('kind'),
+                    $request->validated('description'),
+                    $request->validated('icon'),
+                    $request->validated('icon_color'),
+                );
         } catch (ApiException $e) {
             // Textkvoten (issue 1303) hör till namnfältet.
             throw ValidationException::withMessages([($e->errorCode() === 'quota.storage_exceeded' ? 'name' : 'quota') => $translator->message($e)]);
@@ -594,11 +651,46 @@ class ContainerController extends Controller
                 'max' => $container->versioning_max_versions,
                 'accountLimit' => (int) $container->account->versioning_max_versions,
             ],
+            // Issue 422 · *Apply template*: mallarna på containerns konto, med
+            // innehållet så vyn kan förhandsvisa vad som läggs till och vad
+            // som hoppas över innan något skrivs. Bara containerns EGET konto:
+            // att tillämpa en mall från ett annat konto hade varit en
+            // korskoppling som varken `/api` eller vyn har en yta för.
+            'templates' => ContainerTemplateResource::collection(
+                ContainerTemplate::query()
+                    // Kontots mallar är kontots medlemmars, inte varje
+                    // `write`-delegats: en delegat utan medlemskap når
+                    // containern men inte kontot, och ska därför inte se
+                    // mallarnas namn eller innehåll (issue 422).
+                    ->memberOf($request->user())
+                    ->where('account_id', $container->account_id)
+                    ->with('account')
+                    ->orderBy('name')
+                    ->orderBy('id')
+                    ->get(),
+            )->resolve($request),
+            // Rubrikerna som SYNS på containerns items — containerns fält och
+            // itemens egna — så förhandsvisningen kan säga vilka fält som
+            // redan finns och därför hoppas över. Samma mängd som
+            // App\Actions\Field\FieldRules::visibleFields($container, null)
+            // jämför mot; serverns svar är ändå det som gäller.
+            'visibleFieldLabels' => ItemField::query()
+                ->where('container_id', $container->id)
+                ->orderBy('position')
+                ->orderBy('id')
+                ->pluck('label'),
             'can' => [
                 // Formuläret ritar sig ur den här; se docblocken ovan om varför
                 // grinden och flaggan inte är samma fråga.
                 'update' => Gate::forUser($request->user())->allows('update', $container),
                 'delete' => Gate::forUser($request->user())->allows('delete', $container),
+                // Issue 422 · *Save as template* kräver samma två saker som
+                // App\Http\Controllers\ContainerTemplateController::store():
+                // läsrätt i containern och medlemskap i dess konto. En
+                // `write`-delegat som inte är medlem ser knappen inte alls,
+                // i stället för att mötas av en 403.
+                'saveTemplate' => Gate::forUser($request->user())->allows('view', $container)
+                    && $request->user()->accounts()->whereKey($container->account_id)->exists(),
             ],
         ]);
     }

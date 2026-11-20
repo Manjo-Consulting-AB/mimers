@@ -29,6 +29,13 @@
  * som måste vara sann, `mcpAvailable` (Pro eller Pro+ och `mcp.enabled`).
  * SettingsLayout döljer raden annars; sidan svarar 404 av samma skäl.
  *
+ * `templates` kom med issue 422 · [[ADR-0089 Egna fält på items]]
+ * § Riktning 6 och ligger efter `agents`, före `security`: mallarna är
+ * kontots egen återanvändbara struktur — en containers kategorier och fält
+ * sparade för nästa — och hör till kontot, inte till personen. De är ingen
+ * utgång ur produkten som webhookarna och agenterna, men de står bredvid dem
+ * därför att de, som de, förvaltas för hela kontot.
+ *
  * `transfers` kom med M28 · issue 248 och ligger sist: ägarbytena flyttade hit
  * från skalets sidopanel — menyn användaren når via avataren — och rutten
  * `/transfers` är oförändrad. Raden bär `label` med skalets gamla nyckel
@@ -49,6 +56,7 @@ export const settingsSections = [
     { key: 'notifications', href: '/settings/notifications' },
     { key: 'webhooks', href: '/settings/webhooks' },
     { key: 'agents', href: '/settings/agents', requires: 'mcpAvailable' },
+    { key: 'templates', href: '/settings/templates' },
     { key: 'security', href: '/settings/security' },
     { key: 'transfers', href: '/transfers', label: 'nav.transfers' },
 ];

@@ -1451,6 +1451,13 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies',
         'containers',
+        // Issue 422: mallarna. Att spara en mall skriver en `container_template`
+        // -rad på kontot och kräver medlemskap där; att tillämpa en lägger
+        // till kategorier och fält och kräver `ContainerPolicy::update`.
+        // Ingen av dem rör någon `container_access`-rad, och ingen ny läsare
+        // eller mottagare läggs till.
+        'containers/{container}/templates',
+        'containers/{container}/template',
         // Issue 159: containerns bild. Den sätter en bilaga på containern och
         // rör inga `container_access`-rader alls — grinden är
         // `ContainerPolicy::update`, samma pinne som att byta containerns

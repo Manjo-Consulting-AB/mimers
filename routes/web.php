@@ -24,6 +24,7 @@ use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTaskController;
+use App\Http\Controllers\ContainerTemplateController;
 use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
@@ -62,6 +63,7 @@ use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\StorageController;
 use App\Http\Controllers\Settings\TaskPreferenceController;
+use App\Http\Controllers\Settings\TemplateController as SettingsTemplateController;
 use App\Http\Controllers\Settings\UserDeletionController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TaskCreateController;
@@ -978,6 +980,27 @@ Route::middleware('auth')->group(function () {
         ->name('settings.agents.destroy');
 
     /*
+     * Issue 422 · Kontots mallar — en containers kategorier och fält sparade
+     * för att användas igen, se [[ADR-0089 Egna fält på items]]
+     * § Riktning 6 och App\Http\Controllers\Settings\TemplateController.
+     *
+     * Fyra rutter, en sida. Namnen följer `settings.webhooks`: sidan, sedan
+     * skrivningarna. Parametern heter `{containerTemplate}` och inte
+     * `{template}`: `routes/api.php` registrerar en global bindning för
+     * `{template}` (medlemskap i kontot), och den bindningen gäller varje
+     * rutt i appen. Här står uppslaget i kontrollern i stället — samma fråga
+     * och samma 404 — så sidans rutter inte ärver en bindning de inte äger.
+     */
+    Route::get('/settings/templates', [SettingsTemplateController::class, 'index'])
+        ->name('settings.templates');
+
+    Route::patch('/settings/templates/{containerTemplate}', [SettingsTemplateController::class, 'update'])
+        ->name('settings.templates.update');
+
+    Route::delete('/settings/templates/{containerTemplate}', [SettingsTemplateController::class, 'destroy'])
+        ->name('settings.templates.destroy');
+
+    /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
      * App\Http\Controllers\ContainerController.
      *
@@ -1593,6 +1616,26 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/containers/{container}', [ContainerController::class, 'update'])
         ->name('containers.update');
+
+    /*
+     * Issue 422 · *Save as template* och *Apply template* i containerns
+     * inställningar, se App\Http\Controllers\ContainerTemplateController och
+     * [[ADR-0089 Egna fält på items]] § Riktning 6.
+     *
+     * Båda delar sina FormRequests med `/api`, och skrivningarna går genom
+     * samma Actions: `/api` svarar JSON, webben svarar `back()` med en
+     * flash-kod. `{container}` binds på ULID som överallt annars.
+     *
+     * **Spara** kräver `view` i containern och medlemskap i dess konto —
+     * en gäst med läsrätt äger ingen del av kontots mallar. **Tillämpa**
+     * kräver `update`, för det lägger till kategorier och fält. Ett inbyggt
+     * förslag skickas som `template_content` och sparas aldrig på servern.
+     */
+    Route::post('/containers/{container}/templates', [ContainerTemplateController::class, 'store'])
+        ->name('containers.templates.store');
+
+    Route::post('/containers/{container}/template', [ContainerTemplateController::class, 'apply'])
+        ->name('containers.template.apply');
 
     /*
      * Issue 1254 · Containerns valutor för kostnader, se

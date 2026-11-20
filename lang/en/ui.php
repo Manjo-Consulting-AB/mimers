@@ -767,6 +767,13 @@ return [
         'quiet-hours-updated' => 'The quiet hours have been saved.',
         'container-created' => 'The container has been created.',
         'container-updated' => 'The container has been saved.',
+        // Issue 422 · templates. `template-applied` says that skipped fields
+        // were skipped: the preview said which ones before the call, and the
+        // receipt has to be true to the same rule.
+        'template-saved' => 'The template has been saved.',
+        'template-applied' => 'The template has been applied. Fields whose heading already existed were skipped.',
+        'template-renamed' => 'The template has been renamed.',
+        'template-deleted' => 'The template has been deleted.',
         // Issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4. The currency
         // selection saves on every change (#1245), so its own status line in
         // the section says what happened — this is the flash for a redirect
@@ -1089,6 +1096,22 @@ return [
             'parent_not_in_container' => 'The chosen parent category is not in this container.',
         ],
 
+        /*
+         * Issue 422 · the two errors a template can meet on the web, thrown
+         * by App\Actions\Template\SaveContainerTemplate and ApplyTemplate and
+         * turned into a field error by
+         * App\Http\Controllers\ContainerTemplateController.
+         *
+         * `limit_reached` is the account's 50-template ceiling; the sentence
+         * uses the number so the reader knows what she has hit.
+         * `max_categories_exceeded` is the total category-node ceiling in one
+         * template — nothing is written when it fires.
+         */
+        'template' => [
+            'limit_reached' => 'The account has reached its limit of :limit templates.',
+            'max_categories_exceeded' => 'The template has more categories than the limit of :limit.',
+        ],
+
         // The relation form's four domain errors, see issue 58 decision 6.
         // They arrive as App\Exceptions\Api\ApiException from
         // App\Actions\Item\LinkItems and become field errors in
@@ -1335,6 +1358,42 @@ return [
             'webhooks' => 'Webhooks',
             'agents' => 'Agents',
             'security' => 'Security',
+            // Issue 422 · the account's templates — a container's categories
+            // and fields saved for reuse ([[ADR-0089 Egna fält på items]]
+            // § Riktning 6). The page sits after the agents and before the
+            // security page: it is the account's own reusable structure, not
+            // an exit and not a personal setting.
+            'templates' => 'Templates',
+        ],
+
+        /*
+         * Issue 422 · the account's templates, see
+         * resources/js/pages/Settings/Templates.vue.
+         *
+         * A template is a COPY and not a link (ADR-0089 § Riktning 6): the
+         * deletion question says that containers made from it keep their
+         * categories and fields, because that is what happens and the reader
+         * would otherwise fear the opposite.
+         *
+         * `count` reads the template's content: how many categories and
+         * fields it carries. The number is the same for every template and
+         * needs no unit word of its own.
+         */
+        'templates' => [
+            'title' => 'Templates',
+            'heading' => 'Templates',
+            'description' => 'Your templates for containers: the categories and fields you have saved to use again. A template is copied into the container — changing or deleting it later never touches containers made from it.',
+
+            'empty' => 'No templates yet. Save one from a container\'s settings.',
+
+            'name' => 'Name',
+            'save' => 'Save',
+            'destroy' => 'Delete',
+            'count' => ':categories categories · :fields fields',
+
+            'destroy_heading' => 'Delete “:name”?',
+            'destroy_body' => 'The template is removed from the account. Containers made from it keep their categories and fields.',
+            'destroy_confirm' => 'Delete',
         ],
 
         'locales' => [
@@ -2583,6 +2642,16 @@ return [
             'account' => 'Account',
             'account_choose' => 'Choose an account',
 
+            // Issue 422 · *Start from*: an empty container, one of the
+            // account's templates, or a built-in suggestion. The built-in
+            // ones live in resources/js/data/categoryPresets.js and are sent
+            // as `template_content` — the server never learns what the words
+            // mean ([[ADR-0004 Fria taggar och kategorier]] § Konsekvenser).
+            'start_from' => 'Start from',
+            'start_empty' => 'An empty container',
+            'start_own' => 'Your templates',
+            'start_presets' => 'Built-in suggestions',
+
             'submit' => 'Create',
         ],
 
@@ -2855,6 +2924,50 @@ return [
             'destroy_heading' => 'Delete “:label”?',
             'destroy_body' => 'The field and its values go to the trash. You can restore them within 30 days.',
             'destroy_confirm' => 'Delete',
+        ],
+
+        /*
+         * Issue 422 · templates in the container's settings, see
+         * resources/js/pages/Containers/Create.vue and Edit.vue and
+         * resources/js/components/templates/**.
+         *
+         * **The apply preview is the point of the section.** A template adds
+         * categories and fields, but a field whose heading already exists is
+         * skipped ([[ADR-0089 Egna fält på items]] § Riktning 6), and the
+         * reader has to see that BEFORE she applies — not as a surprise in
+         * the flash message afterwards. `preview_categories` and
+         * `preview_fields` count what will be added; `preview_skipped` names
+         * the fields that will not be, one heading each.
+         *
+         * **The save question names the account.** A template belongs to the
+         * account and not to the container (ADR-0089 § Riktning 6), and the
+         * sentence says so — otherwise the reader cannot know where to look
+         * for it afterwards. It also says that no items follow, because a
+         * template without its items is the whole point.
+         */
+        'templates' => [
+            'save_heading' => 'Save as template',
+            'save_description' => 'Save this container\'s categories and fields as a template on the account. No items follow.',
+            'save' => 'Save as template',
+            'save_dialog_heading' => 'Save as template',
+            'name' => 'Template name',
+            'save_confirm' => 'Save',
+
+            'apply_heading' => 'Apply template',
+            'apply_description' => 'Add the categories and fields from a template to this container. Fields whose heading already exists are skipped, and nothing is changed until you confirm.',
+            'apply' => 'Apply template',
+            'apply_dialog_heading' => 'Apply template',
+            'choose' => 'Template',
+            'choose_empty' => 'Choose a template',
+            'empty' => 'This account has no templates yet.',
+
+            'preview_heading' => 'What will be added',
+            'preview_categories' => 'Categories: :count',
+            'preview_fields' => 'Fields: :count',
+            'preview_no_fields' => 'No fields will be added.',
+            'preview_skipped' => 'Skipped — the heading already exists: :labels',
+            'preview_none_skipped' => 'No fields will be skipped.',
+            'apply_confirm' => 'Apply',
         ],
 
         /*

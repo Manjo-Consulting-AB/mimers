@@ -11,6 +11,8 @@ import CurrencyField from '../../components/CurrencyField.vue';
 import FormField from '../../components/FormField.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
 import ItemIconPicker from '../../components/ItemIconPicker.vue';
+import ApplyTemplateDialog from '../../components/templates/ApplyTemplateDialog.vue';
+import SaveTemplateDialog from '../../components/templates/SaveTemplateDialog.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -139,6 +141,14 @@ const props = defineProps({
        värde — `null` är *Follow account* — och `accountLimit` är kontots tak
        som valen ritar sig ur. */
     versioning: { type: Object, required: true },
+    /* Issue 422 · containerns kontos mallar, ur
+       App\Http\Resources\ContainerTemplateResource — valet i *Apply template*.
+       Innehållet följer med så dialogen kan förhandsvisa det. */
+    templates: { type: Array, required: true },
+    /* Rubrikerna som redan syns på containerns items — det förhandsvisningen
+       jämför mot, så *Apply template* kan säga vad som hoppas över INNAN det
+       tillämpas. Samma mängd som serverns förkontroll läser. */
+    visibleFieldLabels: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -448,6 +458,54 @@ function saveVersioning(value) {
     });
 }
 
+// --- Mallar (issue 422 · ADR-0089 Riktning 6) ------------------------------
+//
+// *Save as template* frågar efter namnet i en dialog och postar till
+// `/containers/{ulid}/templates`; *Apply template* väljer bland kontots mallar
+// och visar vad som läggs till och hoppas över innan anropet. Båda använder
+// `useForm`, så vänteläget är formens `processing` och en dubbelpostning är
+// stängd.
+const saveTemplateForm = useForm({ container: props.container.ulid, name: '' });
+const saveTemplateOpen = ref(false);
+const saveTemplateTrigger = ref(null);
+
+function openSaveTemplate(event) {
+    saveTemplateTrigger.value = event.currentTarget;
+    saveTemplateOpen.value = true;
+}
+
+function saveTemplate(name) {
+    saveTemplateForm.container = props.container.ulid;
+    saveTemplateForm.name = name;
+
+    saveTemplateForm.post(`/containers/${props.container.ulid}/templates`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            saveTemplateOpen.value = false;
+        },
+    });
+}
+
+const applyTemplateForm = useForm({ template: null });
+const applyTemplateOpen = ref(false);
+const applyTemplateTrigger = ref(null);
+
+function openApplyTemplate(event) {
+    applyTemplateTrigger.value = event.currentTarget;
+    applyTemplateOpen.value = true;
+}
+
+function applyTemplate(ulid) {
+    applyTemplateForm.template = ulid;
+
+    applyTemplateForm.post(`/containers/${props.container.ulid}/template`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            applyTemplateOpen.value = false;
+        },
+    });
+}
+
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
 // bärs av en egen flagga (issue 68a § Beslut 5).
 const pending = ref(false);
@@ -748,6 +806,74 @@ async function destroy() {
         <p v-else-if="currenciesStatus" role="status" class="mt-2 text-sm text-ink-subtle">
             {{ t('container.edit.currencies_saved') }}
         </p>
+    </section>
+
+    <!--
+        Mallar (issue 422 · [[ADR-0089 Egna fält på items]] § Riktning 6).
+        Två avsnitt och två dialoger: *Save as template* frågar efter namnet,
+        *Apply template* väljer bland kontots mallar och visar vad som läggs
+        till och hoppas över innan något skrivs.
+
+        *Save as template* ritas ur `can.saveTemplate` — läsrätt i containern
+        och medlemskap i dess konto — samma två saker som rutten prövar.
+        *Apply template* ritas ur `can.update`, för det lägger till kategorier
+        och fält.
+    -->
+    <section v-if="can.saveTemplate" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('container.templates.save_heading') }}</h2>
+
+        <p class="mt-1 text-sm text-ink-subtle">{{ t('container.templates.save_description') }}</p>
+
+        <button
+            type="button"
+            class="mt-4 inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+            @click="openSaveTemplate"
+        >
+            {{ t('container.templates.save') }}
+        </button>
+
+        <SaveTemplateDialog
+            :open="saveTemplateOpen"
+            :trigger="saveTemplateTrigger"
+            :pending="saveTemplateForm.processing"
+            :error="saveTemplateForm.errors.name ?? null"
+            @save="saveTemplate"
+            @close="saveTemplateOpen = false"
+        />
+    </section>
+
+    <section v-if="can.update" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('container.templates.apply_heading') }}</h2>
+
+        <p class="mt-1 text-sm text-ink-subtle">{{ t('container.templates.apply_description') }}</p>
+
+        <p v-if="templates.length === 0" class="mt-4 text-sm text-ink-subtle">
+            {{ t('container.templates.empty') }}
+        </p>
+
+        <button
+            v-else
+            type="button"
+            class="mt-4 inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+            @click="openApplyTemplate"
+        >
+            {{ t('container.templates.apply') }}
+        </button>
+
+        <p v-if="applyTemplateForm.errors.template" role="alert" class="mt-2 text-sm text-danger">
+            {{ applyTemplateForm.errors.template }}
+        </p>
+
+        <ApplyTemplateDialog
+            :open="applyTemplateOpen"
+            :trigger="applyTemplateTrigger"
+            :templates="templates"
+            :existing-labels="visibleFieldLabels"
+            :pending="applyTemplateForm.processing"
+            :error="applyTemplateForm.errors.template ?? null"
+            @apply="applyTemplate"
+            @close="applyTemplateOpen = false"
+        />
     </section>
 
     <!--

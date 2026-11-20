@@ -422,6 +422,11 @@ it('tar bort de äldsta versionerna för att ge plats när ägarens kvot är ful
 });
 
 it('hoppar över versionen och noterar ägaren en gång per container och dygn när den inte ryms', function () {
+    // Klockan frystas mitt på dagen: provet flyttar den elva minuter för att
+    // pröva dygnsspärren, och en körning strax före midnatt bytte annars dygn
+    // och fick en andra notis av misstag.
+    Carbon::setTestNow(Carbon::parse('2026-01-15 12:00:00'));
+
     [$ägare, $användare] = versionKonto(3);
     $container = versionContainer($ägare, $användare);
 
