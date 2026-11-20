@@ -266,6 +266,14 @@ class AuditLog extends Model
      */
     public const ACTION_CATEGORY_TEMPLATE_APPLIED = 'category.template_applied';
 
+    /**
+     * En fältdefinition flyttades till papperskorgen — issue 423. Skrivs av
+     * MCP-verktyget `fields_delete`, eftersom det är en agentradering som
+     * räknas mot taket och syns i notisen ([[ADR-0087 MCP-server för agenter]]
+     * Riktning 8 och 13). Rubriken är fritext och följer aldrig med i `meta`.
+     */
+    public const ACTION_FIELD_DELETED = 'field.deleted';
+
     public const ACTION_TAG_CREATED = 'tag.created';
 
     public const ACTION_TAG_UPDATED = 'tag.updated';

@@ -18,8 +18,8 @@ use Illuminate\Support\Collection;
  *
  * **Underlaget är händelseloggen.** Varje radering skrev sin `*.deleted`-rad i
  * samma transaktion som raderingen (issue 406 § 2), och `meta` bär tillfällets
- * ULID. Där finns alla fem slagen — också scheman och kostnadsrader, som inte
- * listas i papperskorgen — så notisen räknar upp allt agenten raderade och
+ * ULID. Där finns alla slagen — också scheman, kostnadsrader och fält, som
+ * inte listas i papperskorgen — så notisen räknar upp allt agenten raderade och
  * taket (App\Support\Mcp\AgentDeletionLimit) räknar samma rader.
  *
  * **Strikt mer än 15 minuter efter den SISTA lyckade raderingen.** Gränsen är
@@ -57,6 +57,7 @@ final class CreatesAgentDeletionNotifications
         AuditLog::ACTION_CONTAINER_DELETED => 'container',
         AuditLog::ACTION_SCHEDULE_DELETED => 'schedule',
         AuditLog::ACTION_COST_ENTRY_DELETED => 'cost_entry',
+        AuditLog::ACTION_FIELD_DELETED => 'field',
     ];
 
     public function __construct(private readonly CreateNotification $createNotification) {}

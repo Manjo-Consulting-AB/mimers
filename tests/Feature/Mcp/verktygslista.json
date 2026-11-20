@@ -160,6 +160,26 @@
         }
     },
     {
+        "name": "containers_apply_template",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "template": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "template"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "containers_create",
         "parameters": {
             "description": {
@@ -169,6 +189,9 @@
                 "type": "string"
             },
             "name": {
+                "type": "string"
+            },
+            "template": {
                 "type": "string"
             }
         },
@@ -373,6 +396,107 @@
         }
     },
     {
+        "name": "fields_create",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "label": {
+                "type": "string"
+            },
+            "position": {
+                "type": "integer"
+            },
+            "type": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "label",
+            "type"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "fields_delete",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "field": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "field"
+        ],
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "fields_list",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "fields_update",
+        "parameters": {
+            "container": {
+                "type": "string"
+            },
+            "field": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "label": {
+                "type": "string"
+            },
+            "type": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "field"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "history_list",
         "parameters": {
             "cursor": {
@@ -408,16 +532,13 @@
             "description": {
                 "type": "string"
             },
+            "fields": {
+                "type": "array"
+            },
             "icon": {
                 "type": "string"
             },
             "icon_color": {
-                "type": "string"
-            },
-            "manufacturer": {
-                "type": "string"
-            },
-            "model": {
                 "type": "string"
             },
             "name": {
@@ -429,20 +550,8 @@
             "parent": {
                 "type": "string"
             },
-            "position_note": {
-                "type": "string"
-            },
-            "purchased_at": {
-                "type": "string"
-            },
-            "serial_number": {
-                "type": "string"
-            },
             "tags": {
                 "type": "array"
-            },
-            "warranty_until": {
-                "type": "string"
             }
         },
         "required": [
@@ -588,6 +697,9 @@
             "description": {
                 "type": "string"
             },
+            "fields": {
+                "type": "array"
+            },
             "icon": {
                 "type": "string"
             },
@@ -597,32 +709,14 @@
             "item": {
                 "type": "string"
             },
-            "manufacturer": {
-                "type": "string"
-            },
-            "model": {
-                "type": "string"
-            },
             "name": {
                 "type": "string"
             },
             "notes": {
                 "type": "string"
             },
-            "position_note": {
-                "type": "string"
-            },
-            "purchased_at": {
-                "type": "string"
-            },
-            "serial_number": {
-                "type": "string"
-            },
             "tags": {
                 "type": "array"
-            },
-            "warranty_until": {
-                "type": "string"
             }
         },
         "required": [
@@ -1044,6 +1138,16 @@
             "destructiveHint": false,
             "idempotentHint": false,
             "readOnlyHint": false
+        }
+    },
+    {
+        "name": "templates_list",
+        "parameters": [],
+        "required": [],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
         }
     }
 ]

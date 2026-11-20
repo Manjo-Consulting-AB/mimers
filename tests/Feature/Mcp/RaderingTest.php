@@ -12,6 +12,7 @@ use App\Mail\NotificationMail;
 use App\Mcp\Tools\AttachmentsDelete;
 use App\Mcp\Tools\ContainersDelete;
 use App\Mcp\Tools\CostsDelete;
+use App\Mcp\Tools\FieldsDelete;
 use App\Mcp\Tools\ItemsDelete;
 use App\Mcp\Tools\SchedulesDelete;
 use App\Models\Agent;
@@ -578,8 +579,8 @@ it('släpper inte taket för att en äldre agent.deleted är läst', function ()
         ->toBe('agent.delete_limit');
 });
 
-it('märker alla fem verktygen som radering med destructiveHint', function () {
-    foreach ([ItemsDelete::class, AttachmentsDelete::class, SchedulesDelete::class, CostsDelete::class, ContainersDelete::class] as $klass) {
+it('märker alla sex raderande verktygen som radering med destructiveHint', function () {
+    foreach ([ItemsDelete::class, AttachmentsDelete::class, SchedulesDelete::class, CostsDelete::class, ContainersDelete::class, FieldsDelete::class] as $klass) {
         $verktyg = app($klass);
 
         expect($verktyg->kind())->toBe(ToolKind::Delete)
