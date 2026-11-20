@@ -13,6 +13,7 @@ use App\Models\NotificationDelivery;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\Agent\AgentGroup;
 use App\Support\Notification\NotificationPreferences;
 use Illuminate\Support\Facades\DB;
 
@@ -106,26 +107,55 @@ it('låter läsverktygen lyckas och avvisar skrivverktygen vid past_due', functi
 
     $fel = nedgSkriv($token, $item);
 
-    // Samma kod som API:et ger när policyn nekar skrivningen (issue 409 § 2).
+    // Samma kod som API:et ger när policyn nekar skrivningen (issue 409 § 2):
+    // kontot är tillfälligt låst, agenten är inte förbjuden.
     expect($fel['code'])->toBe('auth.forbidden')
+        ->and($fel['hint'])->toContain('temporarily locked for writing')
         ->and($item->refresh()->name)->toBe('Motorn');
-})->skip('Väntar på egen issue: felkodsbytet till auth.forbidden kräver ändring i app/Mcp/** (utanför rutan). Tills dess ger ResolveAgentAccess agent.forbidden.');
 
-it('låter läsverktygen lyckas och avvisar skrivverktygen vid past_due, med dagens felkod agent.forbidden', function () {
-    [$agent, $token] = mcpAgentMedToken();
-    $container = mcpEgenContainer($agent);
-    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn']);
+    expect($fel['hint'])->not->toContain('never allowed');
+});
 
-    Subscription::query()->where('account_id', $agent->account_id)->update(['status' => 'past_due']);
-    app(StartDowngrade::class)->handle($agent->account, 'payment_failed');
+it('avvisar skrivverktygen med auth.forbidden när containerns ägarkonto är låst', function (string $status) {
+    [$agent, $token, $container] = nedgAnnansContainer();
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Pumpen']);
 
+    $container->account->forceFill(['status' => $status])->save();
+
+    // Läsverktygen fungerar som i dag.
     mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $item->ulid]));
     mcpResultat(mcpVerktyg($token, 'containers_list'));
 
-    // ResolveAgentAccess kapar nivån till `read`; felkoden blir agent.forbidden
-    // tills felkodsbytet till auth.forbidden görs i en egen issue.
-    expect(nedgSkriv($token, $item)['code'])->toBe('agent.forbidden')
-        ->and($item->refresh()->name)->toBe('Motorn');
+    expect(nedgSkriv($token, $item)['code'])->toBe('auth.forbidden')
+        ->and($item->refresh()->name)->toBe('Pumpen');
+})->with(['read_only', 'closed']);
+
+it('avvisar skrivverktygen med auth.forbidden när agentens eget konto är låst', function (string $status) {
+    [$agent, $token, $container] = nedgAnnansContainer();
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Pumpen']);
+
+    $agent->account->forceFill(['status' => $status])->save();
+
+    mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $item->ulid]));
+
+    expect(nedgSkriv($token, $item)['code'])->toBe('auth.forbidden')
+        ->and($item->refresh()->name)->toBe('Pumpen');
+})->with(['read_only', 'closed']);
+
+it('ger agent.forbidden för en för låg nivå även när kontot är låst', function () {
+    [$agent, $token, $container] = nedgAnnansContainer();
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Pumpen']);
+
+    AgentContainerGrant::query()
+        ->where('agent_id', $agent->id)
+        ->where('container_id', $container->id)
+        ->where('group', AgentGroup::Items->value)
+        ->update(['level' => 'read']);
+
+    $agent->account->forceFill(['status' => 'read_only'])->save();
+
+    // Nivån prövas före skrivspärren: agenten hade aldrig rätt att skriva.
+    expect(nedgSkriv($token, $item)['code'])->toBe('agent.forbidden');
 });
 
 it('låter samma token fungera igen efter en uppgradering, med samma rättigheter', function () {
