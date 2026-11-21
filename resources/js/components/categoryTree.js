@@ -87,6 +87,83 @@ export function descendantUlids(categories, ulid) {
 }
 
 /*
+ * Kategorierna $draggedUlid får släppas på (issue 1484): alla utom kategorin
+ * själv, dess nuvarande förälder och dess ättlingar.
+ *
+ * `$draggedUlid === null` betyder att inget drag pågår, och då är ingen rad
+ * ett mål. Att släppa på sin nuvarande förälder är en flytt till samma plats
+ * och gör ingenting, så raden markeras aldrig som mål under draget.
+ *
+ * Precis som i descendantUlids() är det här en ARTIGHET och inte skyddet.
+ * `MoveCategory` prövar cykeln och djupet på servern, och dess svar är det
+ * som gäller — också för ett släpp vyn hade kunnat räkna ut själv.
+ */
+export function canDropOn(categories, draggedUlid, targetUlid) {
+    if (draggedUlid === null || targetUlid === null || targetUlid === draggedUlid) {
+        return false;
+    }
+
+    const dragged = categories.find((category) => category.ulid === draggedUlid);
+
+    if (dragged === undefined || dragged.parent === targetUlid) {
+        return false;
+    }
+
+    if (!categories.some((category) => category.ulid === targetUlid)) {
+        return false;
+    }
+
+    return !descendantUlids(categories, draggedUlid).has(targetUlid);
+}
+
+/*
+ * Positionen för en kategori som läggs SIST bland $parent:s barn — `null`
+ * betyder roten. Högsta befintliga position plus ett, eller 0 när föräldern
+ * saknar barn.
+ *
+ * Ordningen inom en nivå ändras inte av ett drag i övrigt: den sätts
+ * fortfarande med fältet `position` på raden (issue 1484).
+ */
+export function lastPosition(categories, parent) {
+    let highest = -1;
+
+    for (const category of categories) {
+        if (category.parent === parent) {
+            highest = Math.max(highest, category.position);
+        }
+    }
+
+    return highest + 1;
+}
+
+/*
+ * Kroppen för flytten när $draggedUlid släpps på $targetUlid, eller `null`
+ * när släppet ska göra ingenting. `$targetUlid === null` är ytan *Top level*.
+ *
+ * `parent` skickas ALLTID med — också som `null` — så servern anropar
+ * `MoveCategory` villkorslöst, samma kontrakt som radens väljare (issue 56a
+ * § Beslut 5, issue 1484). Sidan skickar den som samma
+ * `PATCH /containers/{container}/categories/{category}` raden redan skickar.
+ *
+ * @returns {{parent: string|null, position: number}|null}
+ */
+export function movePayload(categories, draggedUlid, targetUlid) {
+    if (draggedUlid === null || !categories.some((category) => category.ulid === draggedUlid)) {
+        return null;
+    }
+
+    if (targetUlid === null) {
+        return { parent: null, position: lastPosition(categories, null) };
+    }
+
+    if (!canDropOn(categories, draggedUlid, targetUlid)) {
+        return null;
+    }
+
+    return { parent: targetUlid, position: lastPosition(categories, targetUlid) };
+}
+
+/*
  * Kategorierna som val i en `<select>`, i trädordning och indragna efter djup
  * — se issue 57b § Beslut 5.
  *

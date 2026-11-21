@@ -21,6 +21,12 @@ import CategoryRow from './CategoryRow.vue';
  *
  * `counts` färdas likadant (issue 150): varje rad behöver sitt eget tal för
  * raderingsfrågan, och raden kan sitta på vilken nivå som helst.
+ *
+ * **Draget färdas också genom rekursionen, men ägs av sidan** (issue 1484):
+ * `draggingUlid` är raden som dras, `moveErrorUlid` raden vars flytt nekades,
+ * och `disabled` säger att en flytt skrivs just nu. Raden säger `dragstart`
+ * och `drop`; trädet bara skickar vidare, för målet kan sitta på vilken nivå
+ * som helst och bara sidan har hela listan.
  */
 defineProps({
     nodes: { type: Array, required: true },
@@ -28,9 +34,15 @@ defineProps({
     categories: { type: Array, required: true },
     counts: { type: Object, required: true },
     deleteErrorUlid: { type: String, default: null },
+    /* ULID:n för den rad som dras just nu, eller null. */
+    draggingUlid: { type: String, default: null },
+    /* ULID:n för den rad vars flytt senast nekades av servern, eller null. */
+    moveErrorUlid: { type: String, default: null },
+    /* Sant medan en flytt skrivs: radernas knappar vilar då. */
+    disabled: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete']);
+const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit']);
 </script>
 
 <template>
@@ -42,7 +54,14 @@ const emit = defineEmits(['delete']);
                 :categories="categories"
                 :counts="counts"
                 :delete-error-ulid="deleteErrorUlid"
+                :dragging-ulid="draggingUlid"
+                :move-error-ulid="moveErrorUlid"
+                :disabled="disabled"
                 @delete="emit('delete', $event)"
+                @dragstart="emit('dragstart', $event)"
+                @dragend="emit('dragend')"
+                @drop="emit('drop', $event)"
+                @submit="emit('submit', $event)"
             />
 
             <CategoryTree
@@ -53,7 +72,14 @@ const emit = defineEmits(['delete']);
                 :categories="categories"
                 :counts="counts"
                 :delete-error-ulid="deleteErrorUlid"
+                :dragging-ulid="draggingUlid"
+                :move-error-ulid="moveErrorUlid"
+                :disabled="disabled"
                 @delete="emit('delete', $event)"
+                @dragstart="emit('dragstart', $event)"
+                @dragend="emit('dragend')"
+                @drop="emit('drop', $event)"
+                @submit="emit('submit', $event)"
             />
         </li>
     </ul>

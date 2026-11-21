@@ -2843,6 +2843,14 @@ return [
             'parent_root' => '— none, put it at the root —',
             'position' => 'Position',
 
+            // Issue 1484: the row's drag handle and the surface above the
+            // tree. The handle is the mouse's way to move a category; the
+            // parent selector stays the keyboard's way, and it is the only
+            // way under `md:`. `drop_top_level` names the surface that is
+            // visible only while a drag is in progress.
+            'drag' => 'Drag to move under another category',
+            'drop_top_level' => 'Top level',
+
             'create_heading' => 'New category',
             'create' => 'Create',
             'save' => 'Save',
