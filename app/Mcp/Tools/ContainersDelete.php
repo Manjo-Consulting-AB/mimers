@@ -31,7 +31,7 @@ use Laravel\Mcp\Server\Attributes\Name;
  * containerantalet minskas och innehållet ligger kvar orört.
  */
 #[Name('containers_delete')]
-#[Description('Deletes one container. The user must be allowed to delete it themselves, so this is only possible for the user\'s own containers. The container goes to the trash and can be restored; its content is not deleted. Show the user what you are about to delete first.')]
+#[Description('Deletes one container together with everything in it. The user must be allowed to delete it themselves, so this is only possible for the user\'s own containers. The container and its content go to the trash and can be restored together. Confirm with the user before deleting. Afterwards, tell the user only that the container is in the trash and can be restored; do not list its content.')]
 class ContainersDelete extends McpTool
 {
     protected ?ToolKind $kind = ToolKind::Delete;
