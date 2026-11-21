@@ -794,6 +794,10 @@ class HandleInertiaRequests extends Middleware
         return $this->pendingInvitation->forUser($user)
             ->with(['container', 'invitedBy'])
             ->orderByDesc('created_at')
+            // `id` skiljer rader med samma `created_at`: kolumnen har
+            // sekundupplösning, och utan en andra nyckel är ordningen
+            // mellan två inbjudningar från samma sekund godtycklig.
+            ->orderByDesc('id')
             ->get()
             ->map(fn (Invitation $invitation): array => [
                 'ulid' => $invitation->ulid,

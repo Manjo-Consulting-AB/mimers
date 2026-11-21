@@ -20,6 +20,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **MCP-server för agenter.** Förslaget samlas i [[ADR-0087 MCP-server för agenter]]. Frågorna från diskussionen 2026-11-18 är besvarade där. Fritext som skrivs över besvaras i [[ADR-0088 Versionshistorik för items]].
 
+- **Ska `AcceptInvitation` läsa nivån med ett uttryckligt lås i stället för `refresh()`?** PR #1493 (issue 430) gjorde nivån på en väntande inbjudan ändringsbar och stängde kapplöpningen mot accepten med `$invitation->refresh()` direkt efter den villkorade UPDATE:n. Fixen är riktig på MariaDB/InnoDB: UPDATE:n väntar på radlåset och arbetar på den senaste committade raden, och en transaktion ser alltid sina egna ändrade rader i aktuell version, så omläsningen får den nivå som gällde när raden låstes. Men korrektheten vilar på den InnoDB-egenskapen, och det syns inte i koden. Att byta `refresh()` mot en uttrycklig läsning med `lockForUpdate()` efter UPDATE:n gör avsikten synlig och håller oberoende av isoleringsnivå. Det ändrar inget beteende i dag, och testsviten kör mot sqlite och kan inte pröva skillnaden. Restes 2026-11-21 när PR #1493 föll på omfångsgrinden.
+
 - **Relationer som tas bort går inte att få tillbaka.** `UnlinkItems` raderar hårt, och varken papperskorgen eller [[ADR-0088 Versionshistorik för items]] fångar det. Det gäller både användaren och en agent via [[ADR-0087 MCP-server för agenter]]. Möjliga svar är att mjukradera relationen eller att versionera relationerna. Inget är bestämt.
 
 ## Avgjort och flyttat

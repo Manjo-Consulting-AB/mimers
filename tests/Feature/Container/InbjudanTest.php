@@ -190,6 +190,26 @@ it('ett read_only ägarkonto kan ändå lista inbjudningar', function () {
     expect($response->json('data'))->toHaveCount(1);
 });
 
+/*
+ * Nyast först (issue 10a § Beslut 14), och `id` avgör mellan två rader från
+ * samma sekund. `created_at` har sekundupplösning, så utan en andra nyckel var
+ * ordningen mellan dem godtycklig.
+ */
+it('listar inbjudningar med samma created_at med den senast skapade först', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $samma = now()->startOfSecond();
+
+    $forsta = bjudInRad($container, 'forsta@exempel.se');
+    $andra = bjudInRad($container, 'andra@exempel.se');
+    Invitation::query()->whereKey([$forsta->id, $andra->id])->update(['created_at' => $samma]);
+
+    $response = getJson("/api/containers/{$container->ulid}/invitations", $headers);
+
+    $response->assertOk();
+    expect(array_column($response->json('data'), 'ulid'))->toBe([$andra->ulid, $forsta->ulid]);
+});
+
 it('en andra pending inbjudan till samma adress avvisas', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
