@@ -100,12 +100,12 @@ const props = defineProps({
     stats: { type: Object, required: true },
     /*
      * Filtret så som servern tillämpade det:
-     * `{ container, type, user, item, from, to }`. `container` finns bara
-     * här — fliken är redan inne i sin container (Beslut 4).
+     * `{ container, type, user, agent, item, from, to }`. `container` finns
+     * bara här — fliken är redan inne i sin container (Beslut 4).
      */
     filter: { type: Object, required: true },
     /*
-     * Filterfältets val: `{ containers, types, users, items }`, redan
+     * Filterfältets val: `{ containers, types, users, agents, items }`, redan
      * filtrerade av servern. `items` är tom utan en vald container (Beslut 6).
      */
     options: { type: Object, required: true },

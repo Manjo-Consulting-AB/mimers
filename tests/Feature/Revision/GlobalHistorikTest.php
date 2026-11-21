@@ -467,6 +467,7 @@ it('user-, type- och datumfiltren verkar som på containerns flik', function () 
             'container' => null,
             'type' => 'cost_entry',
             'user' => $ägare->ulid,
+            'agent' => null,
             'item' => $motorn->ulid,
             'from' => '2026-05-10',
             'to' => '2026-05-10',

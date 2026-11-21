@@ -6,6 +6,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Http\Requests\Audit\HistoryFilterRequest;
+use App\Models\Agent;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
@@ -106,6 +107,7 @@ class HistoryController extends Controller
                 'container' => $filters['container'] ?? null,
                 'type' => $filters['type'] ?? null,
                 'user' => $filters['user'] ?? null,
+                'agent' => $filters['agent'] ?? null,
                 'item' => $filters['item'] ?? null,
                 'from' => $filters['from'] ?? null,
                 'to' => $filters['to'] ?? null,
@@ -122,6 +124,14 @@ class HistoryController extends Controller
                 'types' => $facets['types'],
                 'users' => $facets['users']
                     ->map(static fn (User $actor): array => ['ulid' => (string) $actor->ulid, 'name' => (string) $actor->name])
+                    ->values()
+                    ->all(),
+                'agents' => $facets['agents']
+                    ->map(static fn (Agent $agent): array => [
+                        'ulid' => (string) $agent->ulid,
+                        'name' => (string) $agent->name,
+                        'owner' => (string) $agent->user?->name,
+                    ])
                     ->values()
                     ->all(),
                 'items' => $this->itemOptions($user, $filters, $containers),

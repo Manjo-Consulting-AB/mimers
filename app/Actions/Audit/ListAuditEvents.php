@@ -3,6 +3,7 @@
 namespace App\Actions\Audit;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Models\Agent;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
@@ -80,6 +81,14 @@ use Illuminate\Support\Carbon;
  * bjuda — och läser dem ur samma läsregel, aldrig ur tabellen: en användare
  * som bara förekommer i rader man inte får läsa ska inte gå att välja.
  *
+ * **`agent` är ett filter som `user`, och agenten en relation som `user`**
+ * (issue 428 · [[ADR-0087 MCP-server för agenter]] Riktning 3 och 8). En rad
+ * som en agent skrev bär agentens `agent_id`; filtret slår upp ULID:et till
+ * ett löpnummer på samma sätt som `user` och prövar aldrig existensen, så en
+ * borttagen agent ger samma tomma svar som en som aldrig funnits. `agents` i
+ * `facets()` är de agenter som förekommer i läsbara rader, med sin persons
+ * namn som `owner`.
+ *
  * `statsForContainer()` räknar historikflitens diagram (issue 180) över samma
  * läsregel och samma filter, men UTAN gränsen på hundra: ett tal över de
  * senaste raderna vore ett annat tal än rubriken lovar.
@@ -146,7 +155,7 @@ class ListAuditEvents
      * De läggs EFTER läsregeln och därför i samma fråga — se `filtered()` —
      * och gränsen på hundra rader står kvar över dem.
      *
-     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return Collection<int, AuditLog>
      */
     public function forContainer(User $viewer, Container $container, int $limit = self::LIMIT, array $filters = []): Collection
@@ -175,7 +184,7 @@ class ListAuditEvents
      * stället hade tystat ett val så fort ett filter klippte bort det — och en
      * meny man inte kan ta sig tillbaka ur är en meny utan återväg.
      *
-     * @return array{types: list<string>, users: Collection<int, User>}
+     * @return array{types: list<string>, users: Collection<int, User>, agents: Collection<int, Agent>}
      */
     public function facets(User $viewer, Container $container): array
     {
@@ -191,7 +200,7 @@ class ListAuditEvents
      * användare som bara förekommer i en annan containers rader är därför
      * valbar här men inte på den containerns flik.
      *
-     * @return array{types: list<string>, users: Collection<int, User>}
+     * @return array{types: list<string>, users: Collection<int, User>, agents: Collection<int, Agent>}
      */
     public function facetsForUser(User $viewer): array
     {
@@ -199,16 +208,16 @@ class ListAuditEvents
     }
 
     /**
-     * Kroppen `facets()` och `facetsForUser()` delar: de två `SELECT
-     * DISTINCT`-frågorna och namnuppslaget. Skillnaden mellan dem är bara
+     * Kroppen `facets()` och `facetsForUser()` delar: de tre `SELECT
+     * DISTINCT`-frågorna och namnuppslagen. Skillnaden mellan dem är bara
      * vilka läsbara rader som kommer in, och den formuleras av anroparen.
      *
-     * **Kloner och inte samma byggare två gånger.** `distinct()`, `orderBy()`
-     * och `whereNotNull()` muterar byggaren de sätts på, så den andra frågan
+     * **Kloner och inte samma byggare tre gånger.** `distinct()`, `orderBy()`
+     * och `whereNotNull()` muterar byggaren de sätts på, så de andra frågorna
      * hade ärvt den förstas urval och sortering.
      *
      * @param  Builder<AuditLog>  $readable
-     * @return array{types: list<string>, users: Collection<int, User>}
+     * @return array{types: list<string>, users: Collection<int, User>, agents: Collection<int, Agent>}
      */
     private function facetsFrom(Builder $readable): array
     {
@@ -227,12 +236,22 @@ class ListAuditEvents
             ->pluck('user_id')
             ->all();
 
+        /** @var list<int> $agentIds */
+        $agentIds = (clone $readable)
+            ->whereNotNull('agent_id')
+            ->distinct()
+            ->pluck('agent_id')
+            ->all();
+
         return [
             'types' => array_map('strval', $types),
             // En tom lista ger `whereIn('id', [])`, alltså `0 = 1` och inga
             // rader — rätt svar utan ett specialfall (samma skydd som led 2
             // ovan).
             'users' => User::query()->whereIn('id', $userIds)->orderBy('name')->get(),
+            // Agentens person följer med i EN fråga: `owner` i valet är hennes
+            // namn, och en lazy-laddning hade gett en fråga per agent.
+            'agents' => Agent::query()->whereIn('id', $agentIds)->with('user')->orderBy('name')->get(),
         ];
     }
 
@@ -285,7 +304,7 @@ class ListAuditEvents
      * gallrade itemet. Ett item utanför omfånget eller i papperskorgen blir
      * därför ingen rad alls, inte en namnlös.
      *
-     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return array{perDay: list<array{date: string, count: int}>, perType: list<array{type: string|null, count: int}>, topItems: list<array{ulid: string, name: string, count: int}>}
      */
     public function statsForContainer(User $viewer, Container $container, array $filters = []): array
@@ -316,7 +335,7 @@ class ListAuditEvents
      * `perType` räknar hela den läsbara mängden. De två talen är inte varandras
      * summa, och det gäller här lika lite som där.
      *
-     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return array{perDay: list<array{date: string, count: int}>, perType: list<array{type: string|null, count: int}>, topItems: list<array{ulid: string, name: string, count: int, container_ulid: string|null}>}
      */
     public function statsForUser(User $viewer, array $filters = []): array
@@ -390,7 +409,7 @@ class ListAuditEvents
      * `periodDays()` fyller ut, varken mer eller mindre.
      *
      * @param  Builder<AuditLog>  $base
-     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return list<array{date: string, count: int}>
      */
     private function perDay(Builder $base, User $viewer, array $filters): array
@@ -460,7 +479,7 @@ class ListAuditEvents
      * diagrammet är till för. Ett intervall inom taket rörs inte — också det
      * utan datumfilter, där DEFAULT_DAYS redan ligger under taket.
      *
-     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return list<string>
      */
     private function periodDays(User $viewer, array $filters, string $timezone): array
@@ -663,7 +682,7 @@ class ListAuditEvents
      * filter är ett urval av det läsbara, aldrig en ny väg in i loggen.
      * Dashboardens anrop utan filter ger därför exakt samma svar som förut.
      *
-     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return Collection<int, AuditLog>
      */
     public function forUser(User $viewer, int $limit = self::LIMIT, array $filters = []): Collection
@@ -681,7 +700,7 @@ class ListAuditEvents
     private function readable(User $viewer, int $limit = self::LIMIT): Builder
     {
         return $this->readableQuery($viewer)
-            ->with('user')
+            ->with(['user', 'agent'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($limit);
@@ -738,18 +757,20 @@ class ListAuditEvents
      * Desktopdesignen]] § 17.
      *
      * **Ett filter kan inte vidga läsregeln.** Det läggs efter leden och
-     * snävar bara in: `type` mot `subject_type`, `user` och `item` mot radens
-     * identifierare, `from`/`to` mot `created_at`. Att filtrera FÖRE leden
-     * hade inte varit möjligt ens av misstag — frågan är byggd uppifrån och
-     * ned — men kommentaren står här för att det är den egenskapen Beslut 2
-     * vilar på.
+     * snävar bara in: `type` mot `subject_type`, `user`, `agent` och `item`
+     * mot radens identifierare, `from`/`to` mot `created_at`. Att filtrera
+     * FÖRE leden hade inte varit möjligt ens av misstag — frågan är byggd
+     * uppifrån och ned — men kommentaren står här för att det är den
+     * egenskapen Beslut 2 vilar på.
      *
-     * **Användaren och itemet slås upp till löpnummer och får aldrig ett
-     * `exists`-krav.** Ett filter på en användare vars rader man inte får läsa
-     * ska ge en TOM lista, och samma svar som en användare som inte finns
+     * **Användaren, agenten och itemet slås upp till löpnummer och får aldrig
+     * ett `exists`-krav.** Ett filter på en användare vars rader man inte får
+     * läsa ska ge en TOM lista, och samma svar som en användare som inte finns
      * (Beslut 2) — alltså får existensen inte prövas någonstans, varken i
      * valideringen eller här. Ett ULID som inte finns ger `user_id = 0`, och
-     * ingen rad har löpnummer noll. Itemet slås upp på samma sätt, med
+     * ingen rad har löpnummer noll. Agenten prövas på samma sätt mot
+     * `agent_id` (issue 428): en borttagen agent ger `agent_id = 0` och en tom
+     * lista. Itemet slås upp på samma sätt, med
      * `withTrashed()`: loggen överlever itemet ([[ADR-0043 Tre loggar]]
      * § Händelseloggen), och en fråga om ett item i papperskorgen är precis
      * den fråga en historik finns för.
@@ -769,7 +790,7 @@ class ListAuditEvents
      * UTC-dygn hade lagt den på fel dag.
      *
      * @param  Builder<AuditLog>  $query
-     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null, agent?: string|null}  $filters
      * @return Builder<AuditLog>
      */
     private function filtered(Builder $query, User $viewer, array $filters): Builder
@@ -788,6 +809,10 @@ class ListAuditEvents
 
         if (($user = $filters['user'] ?? null) !== null) {
             $query->where('user_id', User::query()->where('ulid', $user)->value('id') ?? 0);
+        }
+
+        if (($agent = $filters['agent'] ?? null) !== null) {
+            $query->where('agent_id', Agent::query()->where('ulid', $agent)->value('id') ?? 0);
         }
 
         if (($item = $filters['item'] ?? null) !== null) {

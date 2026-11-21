@@ -96,9 +96,15 @@ const props = defineProps({
      * name, count}]}`.
      */
     stats: { type: Object, required: true },
-    /* Filtret så som servern tillämpade det: { type, user, item, from, to }. */
+    /*
+     * Filtret så som servern tillämpade det:
+     * `{ type, user, agent, item, from, to }`.
+     */
     filter: { type: Object, required: true },
-    /* Filterfältets val: { types, users, items }, redan filtrerade av servern. */
+    /*
+     * Filterfältets val: `{ types, users, agents, items }`, redan filtrerade
+     * av servern.
+     */
     options: { type: Object, required: true },
     /*
      * `{ update }` — samma flagga som inställningssidan ritar sitt formulär
