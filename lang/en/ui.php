@@ -809,6 +809,8 @@ return [
         'access-updated' => 'The access has been saved.',
         'access-revoked' => 'The access has been revoked.',
         'invitation-sent' => 'The invitation has been sent.',
+        // Issue 430: the level of a waiting invitation was saved.
+        'invitation-updated' => 'The invitation has been saved.',
         'invitation-revoked' => 'The invitation has been withdrawn.',
         'invitation-accepted' => 'The invitation has been accepted. The container is under Containers.',
         'invitation-rejected' => 'The invitation has been declined.',
@@ -3583,6 +3585,10 @@ return [
 
             'invitation' => [
                 'created' => ':user sent an invitation',
+                // Issue 430: the level (and agent ceiling) of a waiting
+                // invitation was changed. The address never appears in the
+                // log, and the row says what was touched, not what it said.
+                'updated' => ':user changed the level of an invitation',
                 'revoked' => ':user withdrew an invitation',
                 'accepted' => ':user accepted an invitation',
                 'rejected' => ':user declined an invitation',
@@ -5484,6 +5490,12 @@ return [
 
             'submit' => 'Invite',
             'revoke' => 'Withdraw',
+            // Issue 430: a waiting invitation can be edited, and the edit is
+            // its own small form with a button on each side. The level
+            // selector lives inside resources/js/components/InvitationRow.vue.
+            'edit' => 'Edit',
+            'save' => 'Save',
+            'cancel' => 'Cancel',
             'expires' => 'Expires :date',
             'invited_by' => 'Invited by',
             'empty' => 'No invitations yet.',

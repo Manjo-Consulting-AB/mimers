@@ -316,6 +316,12 @@ class AuditLog extends Model
     public const ACTION_INVITATION_REVOKED = 'invitation.revoked';
 
     /**
+     * Nivån på en väntande inbjudan ändrades (issue 430). Adressen står
+     * aldrig i `meta` — bara itemet och nivån.
+     */
+    public const ACTION_INVITATION_UPDATED = 'invitation.updated';
+
+    /**
      * Inbjudan accepterades — avsändarens mening, och den rad som gör
      * övergången från inbjudan till åtkomst läsbar i historiken.
      */

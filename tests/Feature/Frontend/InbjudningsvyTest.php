@@ -3,7 +3,9 @@
 // rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
 
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
@@ -17,6 +19,7 @@ use Inertia\Testing\AssertableInertia;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\delete;
 use function Pest\Laravel\from;
+use function Pest\Laravel\patch;
 use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
@@ -77,6 +80,9 @@ it('skickar en utloggad besökare till inloggningen från inbjudningsrutterna', 
     $inbjudan = bjudInRad($container, 'ny@exempel.se');
 
     post("/containers/{$container->ulid}/invitations", ['email' => 'ny@exempel.se', 'level' => 'read'])
+        ->assertRedirect('/login');
+
+    patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
         ->assertRedirect('/login');
 
     delete("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}")
@@ -295,13 +301,15 @@ it('prövar kontotaket efter delningstaket', function () {
 
 /*
  * Klart när: en member som inte får hantera åtkomster, och varje icke-medlem,
- * får 403 på både POST och DELETE.
+ * får 403 på POST, PATCH och DELETE.
  *
  * Att en `write`-innehavare får 403 är regel 3: att bjuda in ÄR att hantera
  * åtkomster, och `write` är inte medlemskap i ägarkontot (issue 10a § Beslut
- * 10). Grinden är `manageAccess()` på båda rutterna — samma som `/api`.
+ * 10). Grinden är `manageAccess()` på alla tre rutterna — samma som `/api`.
+ * Ändringen (issue 430) är samma sorts hantering som utskicket: den flyttar
+ * vad personen får när hon svarar.
  */
-it('nekar en icke-medlem både POST och DELETE', function () {
+it('nekar en icke-medlem både POST, PATCH och DELETE', function () {
     withoutVite();
 
     [, , $container] = inbjudningsKontext();
@@ -318,20 +326,25 @@ it('nekar en icke-medlem både POST och DELETE', function () {
             ->assertForbidden();
 
         actingAs($nekad)
+            ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
+            ->assertForbidden();
+
+        actingAs($nekad)
             ->delete("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}")
             ->assertForbidden();
     }
 
     expect($inbjudan->refresh()->status)->toBe('pending')
+        ->and($inbjudan->level)->toBe('read')
         ->and(Invitation::query()->count())->toBe(1);
 });
 
 /*
- * Klart när: ett `read_only`-ägarkonto får 403 på POST. Återkallandet av en
- * BEFINTLIG åtkomst är undantaget i regel 4; en inbjudan är ingen befintlig
- * relation.
+ * Klart när: ett `read_only`-ägarkonto får 403 på POST och PATCH.
+ * Återkallandet av en BEFINTLIG åtkomst är undantaget i regel 4; en inbjudan
+ * är ingen befintlig relation, och att ändra den flyttar vad mottagaren får.
  */
-it('nekar ett read_only-ägarkonto att bjuda in och att dra tillbaka', function () {
+it('nekar ett read_only-ägarkonto att bjuda in, att ändra och att dra tillbaka', function () {
     withoutVite();
 
     [, $anvandare, $container] = inbjudningsKontext(['status' => 'read_only']);
@@ -339,6 +352,11 @@ it('nekar ett read_only-ägarkonto att bjuda in och att dra tillbaka', function 
 
     actingAs($anvandare)
         ->post("/containers/{$container->ulid}/invitations", ['email' => 'ny2@exempel.se', 'level' => 'read'])
+        ->assertForbidden();
+
+    // Issue 430: samma grind som utskicket.
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
         ->assertForbidden();
 
     // 10a § Beslut 10: `manageAccess()` auktoriserar tillbakadragandet också —
@@ -352,6 +370,7 @@ it('nekar ett read_only-ägarkonto att bjuda in och att dra tillbaka', function 
     actingAs($anvandare)->get(inbjudningsSida($container))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->has('invitations', 1)
+            ->where('invitations.0.level', 'read')
             ->where('can.manage', false)
     );
 });
@@ -393,6 +412,169 @@ it('drar tillbaka en pending och en utgången inbjudan, men inte en besvarad', f
 });
 
 /*
+ * Klart när (issue 430): en ägare ändrar nivån på en väntande inbjudan,
+ * ändringen syns i listan, och den skriver en historikrad.
+ *
+ * Ingen ny inbjudan skickas, och adressen och omfånget står kvar: det är
+ * samma rad, med en annan nivå. Loggraden bär nivån och itemets ULID —
+ * aldrig adressen (issue 40 § Beslut 10).
+ */
+it('ändrar nivån på en väntande inbjudan och skriver en historikrad', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container] = inbjudningsKontext();
+    $inbjudan = bjudInRad($container, 'ny@exempel.se');
+
+    actingAs($anvandare)
+        ->from(inbjudningsSida($container))
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
+        ->assertRedirect(inbjudningsSida($container))
+        ->assertSessionHas('status', 'invitation-updated');
+
+    $inbjudan->refresh();
+
+    expect($inbjudan->level)->toBe('write')
+        ->and($inbjudan->status)->toBe('pending')
+        ->and($inbjudan->email)->toBe('ny@exempel.se')
+        ->and($inbjudan->item_id)->toBeNull();
+
+    actingAs($anvandare)->get(inbjudningsSida($container))->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('invitations', 1)
+        ->where('invitations.0.level', 'write')
+    );
+
+    $logg = AuditLog::query()
+        ->where('action', AuditLog::ACTION_INVITATION_UPDATED)
+        ->where('subject_id', $inbjudan->ulid)
+        ->sole();
+
+    expect($logg->user_id)->toBe($anvandare->id)
+        ->and($logg->container_id)->toBe($container->id)
+        ->and($logg->account_id)->toBe($konto->id)
+        ->and($logg->meta['level'])->toBe('write')
+        ->and($logg->meta['item'])->toBeNull();
+
+    // Adressen står aldrig i händelseloggen, aldrig tokenet.
+    expect(json_encode($logg->meta))->not->toContain('ny@exempel.se');
+});
+
+/*
+ * Klart när (issue 430): den som sedan accepterar får den nya nivån.
+ * Accepten läser `invitation.level` (App\Actions\Invitation\AcceptInvitation
+ * § createAccess), så en ändring före accept är den nivå som gäller.
+ */
+it('ger den nya nivån till den som accepterar inbjudan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = inbjudningsKontext();
+    $inbjudan = bjudInRad($container, 'ny@exempel.se');
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
+        ->assertRedirect();
+
+    $mottagare = User::factory()->create([
+        'email' => 'ny@exempel.se',
+        'email_verified_at' => now(),
+    ]);
+
+    actingAs($mottagare)
+        ->post("/invitations/{$inbjudan->ulid}/accept")
+        ->assertRedirect(route('containers.index'));
+
+    $access = ContainerAccess::query()->where('container_id', $container->id)->sole();
+
+    expect($access->level)->toBe('write')
+        ->and($access->grantee_id)->toBe($mottagare->id);
+});
+
+/*
+ * Klart när (issue 430): en ändring till en nivå som `CreateInvitation` hade
+ * avvisat avvisas på samma sätt. `CreateInvitation` nekar ett `agent_level`
+ * över inbjudans egen nivå — `UpdateInvitation` gör samma kontroll, och
+ * felet hamnar på `agent_level` som i inbjudningsformuläret.
+ */
+it('avvisar en agentnivå över inbjudans nivå som CreateInvitation gör', function () {
+    config(['mcp.enabled' => true]);
+    withoutVite();
+
+    [$konto, $anvandare] = mcpKonto('pro');
+    $container = Container::factory()->for($konto, 'account')->create();
+    $inbjudan = bjudInRad($container, 'ny@exempel.se');
+
+    $en = require lang_path('en/ui.php');
+
+    $svar = actingAs($anvandare)
+        ->from(inbjudningsSida($container))
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", [
+            'level' => 'read',
+            'agent_level' => 'write',
+        ]);
+
+    $svar->assertRedirect(inbjudningsSida($container));
+    $svar->assertSessionHasErrors(['agent_level' => $en['error']['invitation']['agent_level_too_high']]);
+
+    // Ingenting skrivs: ingen nivå, ingen loggrad.
+    expect($inbjudan->refresh()->level)->toBe('read')
+        ->and(AuditLog::query()->where('action', AuditLog::ACTION_INVITATION_UPDATED)->count())->toBe(0);
+});
+
+/*
+ * Klart när (issue 430): en ändring av en inbjudan som redan accepterats
+ * avvisas och ändrar ingenting. Felet är ett formulärfel på `invitation`,
+ * som för en återkallelse av en besvarad rad — aldrig en rå felkod.
+ */
+it('avvisar en ändring av en inbjudan som redan besvarats', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = inbjudningsKontext();
+    $inbjudan = bjudInRad($container, 'ny@exempel.se', status: 'accepted');
+
+    $en = require lang_path('en/ui.php');
+
+    $svar = actingAs($anvandare)
+        ->from(inbjudningsSida($container))
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write']);
+
+    $svar->assertRedirect(inbjudningsSida($container));
+    $svar->assertSessionHasErrors(['invitation' => $en['error']['invitation']['not_pending']]);
+    expect($svar->getContent())->not->toContain('error.code');
+
+    expect($inbjudan->refresh()->level)->toBe('read')
+        ->and($inbjudan->status)->toBe('accepted')
+        ->and(AuditLog::query()->where('action', AuditLog::ACTION_INVITATION_UPDATED)->count())->toBe(0);
+});
+
+/*
+ * Målet (issue 430): e-postadressen och omfånget ändras inte. Kroppen nekar
+ * dem med `prohibited` i den delade FormRequesten — ett skickat värde är ett
+ * fältfel, aldrig en tyst ignorering.
+ */
+it('nekar en ändring av adressen eller omfånget', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = inbjudningsKontext();
+    $inbjudan = bjudInRad($container, 'ny@exempel.se');
+    $item = Item::factory()->create(['container_id' => $container->id]);
+
+    foreach ([
+        ['email' => 'annan@exempel.se'],
+        ['item' => $item->ulid],
+    ] as $kropp) {
+        actingAs($anvandare)
+            ->patch(
+                "/containers/{$container->ulid}/invitations/{$inbjudan->ulid}",
+                ['level' => 'write'] + $kropp,
+            )
+            ->assertSessionHasErrors(array_key_first($kropp));
+    }
+
+    expect($inbjudan->refresh()->level)->toBe('read')
+        ->and($inbjudan->email)->toBe('ny@exempel.se')
+        ->and($inbjudan->item_id)->toBeNull();
+});
+
+/*
  * Klart när: en inbjudan i en annan container går inte att dra tillbaka via den här
  * containerns rutt (404). `scopeBindings()` på skrivningen, av samma skäl som
  * routes/api.php gör det (issue 9b § Beslut 1).
@@ -405,10 +587,15 @@ it('når inte en inbjudan i en annan container via den här containerns rutt', f
     $inbjudan = bjudInRad($annan, 'ny@exempel.se');
 
     actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}", ['level' => 'write'])
+        ->assertNotFound();
+
+    actingAs($anvandare)
         ->delete("/containers/{$container->ulid}/invitations/{$inbjudan->ulid}")
         ->assertNotFound();
 
-    expect($inbjudan->refresh()->status)->toBe('pending');
+    expect($inbjudan->refresh()->status)->toBe('pending')
+        ->and($inbjudan->level)->toBe('read');
 });
 
 /*
@@ -510,6 +697,60 @@ it('visar inbjudningslistan med adress, nivå, omfång, status, utgång och inbj
 });
 
 /*
+ * Klart när (issue 430): en accepterad, avböjd eller återkallad inbjudan
+ * visas inte i inbjudningslistan; en väntande och en utgången gör det.
+ *
+ * En utgången rad är fortfarande `pending` i kolumnen (issue 10a § Beslut 7),
+ * så filtret är `status = 'pending'` och resursen redovisar utgången som
+ * `expired`. Den accepterade raden hade annars visat samma person två gånger:
+ * en gång bland dem som har åtkomst, och en gång här utan kontroller.
+ */
+it('visar bara inbjudningar som inte har besvarats', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = inbjudningsKontext();
+
+    $vantande = Invitation::factory()->create([
+        'container_id' => $container->id,
+        'email' => 'vantande@exempel.se',
+        'status' => 'pending',
+        'expires_at' => now()->addDays(2),
+        'invited_by_user_id' => $anvandare->id,
+        'created_at' => now()->subMinute(),
+    ]);
+
+    $utgangen = Invitation::factory()->create([
+        'container_id' => $container->id,
+        'email' => 'utgangen@exempel.se',
+        'status' => 'pending',
+        'expires_at' => now()->subDay(),
+        'invited_by_user_id' => $anvandare->id,
+        'created_at' => now()->subMinutes(2),
+    ]);
+
+    foreach (['accepted', 'rejected', 'revoked'] as $i => $status) {
+        Invitation::factory()->create([
+            'container_id' => $container->id,
+            'email' => "{$status}@exempel.se",
+            'status' => $status,
+            'invited_by_user_id' => $anvandare->id,
+            'created_at' => now()->subMinutes(3 + $i),
+        ]);
+    }
+
+    actingAs($anvandare)->get(inbjudningsSida($container))->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('invitations', 2)
+
+        // Nyast först: den väntande raden, sedan den utgångna. Den senare
+        // redovisas som `expired` utan att kolumnen ändras.
+        ->where('invitations.0.ulid', $vantande->ulid)
+        ->where('invitations.0.status', 'pending')
+        ->where('invitations.1.ulid', $utgangen->ulid)
+        ->where('invitations.1.status', 'expired')
+    );
+});
+
+/*
  * Klart när: den enda ytan i M10 där en itemavgränsad delning kan skapas.
  * [[ADR-0028 Åtkomst på itemnivå]] § Beslut säger att `invitation` speglar
  * omfånget, och formuläret bär därför en lista över containerns levande items.
@@ -593,12 +834,14 @@ it('redovisar en inbjudan till ett mjukraderat item med sitt namn', function () 
 it('har inbjudningsformuläret som egen sektion på delningssidan', function () {
     $sida = File::get(resource_path('js/pages/Containers/Sharing.vue'));
     $formular = File::get(resource_path('js/components/InvitationForm.vue'));
+    $rad = File::get(resource_path('js/components/InvitationRow.vue'));
 
     expect($sida)->toContain("t('sharing.invitations.heading')");
     expect($sida)->toContain('v-if="invitations"');
     expect($sida)->toContain('InvitationForm');
     expect($sida)->toContain('v-if="can.manage"');
-    expect($sida)->toContain('t(`sharing.invitations.status.${invitation.status}`)');
+    // Sedan issue 430 ritar raden statusen ur resursen, i sin egen komponent.
+    expect($rad)->toContain('t(`sharing.invitations.status.${invitation.status}`)');
 
     // Nivåfältet är 55a:s komponent, oförändrad — ingen avskrift i formuläret.
     expect($formular)->toContain('AccessLevelField');
@@ -611,6 +854,28 @@ it('har inbjudningsformuläret som egen sektion på delningssidan', function () 
 });
 
 /*
+ * Målet (issue 430): varje inbjudan i listan har *Edit* och *Revoke*, och
+ * redigeringen fäller ut nivåväljaren med *Save* och *Cancel*. Knapparna
+ * ritas bara med `can.manage`; grinden är `manageAccess()` på servern.
+ *
+ * Källkodsprov av samma skäl som grannproven: redigeringen är klientsidans,
+ * och det som går att avgöra på serversidan är formen på anropet.
+ */
+it('ger varje inbjudan Edit och Revoke för den som får hantera', function () {
+    $rad = File::get(resource_path('js/components/InvitationRow.vue'));
+
+    expect($rad)->toContain("t('sharing.invitations.edit')")
+        ->toContain("t('sharing.invitations.revoke')")
+        ->toContain('v-if="canManage"')
+        ->toContain("t('sharing.invitations.save')")
+        ->toContain("t('sharing.invitations.cancel')")
+        ->toContain('AccessLevelField')
+        // Kroppen bär nivån och, när fältet finns, agentnivån — aldrig
+        // adressen eller omfånget.
+        ->toContain('router.patch(url, body');
+});
+
+/*
  * Klart när: varje ny nyckel finns på `sv` och `en`. Formuleringen bor i
  * lang/ och aldrig i en .vue-fil — den grinden ägs av SprakTest, som läser
  * hela resources/js.
@@ -619,7 +884,7 @@ it('har inbjudningstexterna', function () {
     $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
-    foreach (['heading', 'description', 'email', 'item', 'item_container', 'submit', 'revoke', 'expires', 'invited_by', 'empty'] as $nyckel) {
+    foreach (['heading', 'description', 'email', 'item', 'item_container', 'submit', 'revoke', 'edit', 'save', 'cancel', 'expires', 'invited_by', 'empty'] as $nyckel) {
         expect($sv['sharing']['invitations'][$nyckel])->not->toBe('')
             ->and($en['sharing']['invitations'][$nyckel])->not->toBe('');
     }

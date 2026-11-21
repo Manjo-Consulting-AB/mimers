@@ -534,6 +534,7 @@ it('hämtar delningssidans strängar ur ui.php', function () {
     foreach ([
         'js/pages/Containers/Sharing.vue',
         'js/components/ContainerAccessRow.vue',
+        'js/components/InvitationRow.vue',
         'js/components/AccessLevelField.vue',
         'js/components/accessPresentation.js',
     ] as $fil) {
