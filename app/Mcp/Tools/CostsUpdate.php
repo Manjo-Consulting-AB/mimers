@@ -41,7 +41,7 @@ class CostsUpdate extends McpTool
         return [
             'cost' => $schema->string()->description('The ULID of the cost entry.')->required(),
             'incurred_on' => $schema->string()->description('The date of the expense, YYYY-MM-DD.'),
-            'amount' => $schema->string()->description('The amount, as a string in minor units; requires currency.'),
+            'amount' => $schema->string()->description('The amount as a decimal string in the currency\'s main unit, for example "100" or "125.50"; requires currency. A dot or a comma may be used as the decimal separator; never use thousands separators.'),
             'currency' => $schema->string()->description('ISO 4217 code; requires amount.'),
             'description' => $schema->string()->description('What the expense was.'),
             'supplier' => $schema->string()->description('Who was paid.'),

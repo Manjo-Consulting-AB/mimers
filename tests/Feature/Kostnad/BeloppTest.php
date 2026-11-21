@@ -200,3 +200,36 @@ it('currency "eur" normaliseras till versaler och sparas som EUR', function () {
     $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
     expect($rad->currency)->toBe('EUR');
 });
+
+/*
+ * format() är inversen till parse() (issue 1478). MCP-verktygen svarar med
+ * samma decimalsträng i huvudenhet som appen tar emot, i stället för heltalet
+ * i minsta enhet — annars ser agenten två format för samma belopp.
+ */
+
+it('skriver heltalet i minsta enhet som en decimalsträng i huvudenhet', function () {
+    expect(MinorUnits::format(10000, 'SEK'))->toBe('100.00')
+        ->and(MinorUnits::format(12550, 'SEK'))->toBe('125.50')
+        ->and(MinorUnits::format(100, 'JPY'))->toBe('100')
+        ->and(MinorUnits::format(-350, 'SEK'))->toBe('-3.50');
+});
+
+it('sätter en ledande nolla när beloppet är under en enhet', function () {
+    expect(MinorUnits::format(5, 'SEK'))->toBe('0.05')
+        ->and(MinorUnits::format(-5, 'SEK'))->toBe('-0.05')
+        ->and(MinorUnits::format(0, 'SEK'))->toBe('0.00');
+});
+
+it('formaterar med valutans antal decimaler — tre för KWD, noll för JPY', function () {
+    expect(MinorUnits::format(1200505, 'KWD'))->toBe('1200.505')
+        ->and(MinorUnits::format(1200, 'JPY'))->toBe('1200');
+});
+
+it('format(parse($x)) ger tillbaka beloppet med valutans decimaler', function (string $belopp, string $valuta) {
+    expect(MinorUnits::format(MinorUnits::parse($belopp, $valuta), $valuta))->toBe($belopp);
+})->with([
+    'SEK' => ['1200.50', 'SEK'],
+    'JPY' => ['1200', 'JPY'],
+    'KWD' => ['1200.505', 'KWD'],
+    'negativt' => ['-450.25', 'SEK'],
+]);
