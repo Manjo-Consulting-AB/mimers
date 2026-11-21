@@ -72,18 +72,6 @@ class AcceptInvitation
                 throw ApiException::make('invitation.not_pending', [], 422);
             }
 
-            // Kapplöpning mot App\Actions\Invitation\UpdateInvitation (issue
-            // 430): modellen lästes in före den här transaktionen, och en
-            // samtidig nivåändring kan ha hunnit committa mellan bindningen
-            // och UPDATE:n ovan. UPDATE-satsen serialiserar mot samma rad, så
-            // efter den här punkten är raden låst och oföränderlig — men
-            // modellen i minnet bär fortfarande den nivå som gällde vid
-            // inläsningen. Utan omladdningen skapas åtkomsten nedan med den
-            // gamla nivån: sänkte ägaren från `write` till `read` fick
-            // mottagaren ändå `write`. `refresh()` läser inom samma
-            // transaktion och ser därför den committade nivån.
-            $invitation->refresh();
-
             $container = $invitation->container;
 
             // § Beslut 8 punkt 2: finns redan en GILTIG åtkomst — samma

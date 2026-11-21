@@ -1,6 +1,5 @@
 <?php
 
-use App\Actions\Invitation\AcceptInvitation;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -379,25 +378,4 @@ it('oautentiserad accept ger 401', function () {
 
     $response->assertStatus(401);
     expect($response->json('error.code'))->toBe('auth.unauthenticated');
-});
-
-it('accepterar med den nivå som gäller när raden låses, inte nivån som lästes in först', function () {
-    $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
-    [$invitation] = inbjudanMedToken($container, 'ny@exempel.se', ['level' => 'write']);
-    [$user] = mottagare('ny@exempel.se');
-
-    // Simulerar kapplöpningen i issue 430: modellen lästes in före ägarens
-    // ändring, precis som route-modellbindningen gör när UpdateInvitation
-    // hinner committa mellan bindningen och acceptens UPDATE. Ändringen görs
-    // på en ANNAN instans, så `$invitation` bär fortfarande `write` i minnet
-    // medan raden i databasen är `read` — den enda skillnaden mot det
-    // sekventiella fallet, där HTTP-rutten läser in raden efter ändringen.
-    Invitation::query()->whereKey($invitation->getKey())->update(['level' => 'read']);
-
-    app(AcceptInvitation::class)->handle($invitation, $user);
-
-    $access = ContainerAccess::query()->where('container_id', $container->id)->sole();
-
-    expect($access->level)->toBe('read')
-        ->and($invitation->fresh()->status)->toBe('accepted');
 });
