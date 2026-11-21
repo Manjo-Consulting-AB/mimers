@@ -143,6 +143,47 @@ function bildvyTagg(string $fil, string $komponent = 'ContainerCover'): string
     return $träff[0] ?? '';
 }
 
+/**
+ * Rotelementen i en Vue-malls `<template>`: taggar på djup noll, med
+ * självstängda och tomma element (`img`, `input` …) undantagna.
+ *
+ * Kommentarer rensas först, så att en mening i en kommentar aldrig kan räknas
+ * som en tagg. Den yttersta `<template>`-ramen skärs ut med girig matchning,
+ * så att de inre `<template v-if>`-blocken stannar i innehållet och räknas som
+ * de element de är.
+ *
+ * @return list<string>
+ */
+function bildvyRötter(string $fil): array
+{
+    $vy = (string) preg_replace('#<!--.*?-->#s', '', File::get(resource_path($fil)));
+
+    preg_match('#<template>\s*(.*)\s*</template>#s', $vy, $block);
+    preg_match_all('#<(/?)([a-zA-Z][\w-]*)([^>]*?)(/?)>#s', $block[1] ?? '', $träffar, PREG_SET_ORDER);
+
+    $tomma = ['img', 'input', 'br', 'hr', 'meta', 'link'];
+    $djup = 0;
+    $rötter = [];
+
+    foreach ($träffar as [, $stängning, $namn, , $självstängd]) {
+        if ($stängning === '/') {
+            $djup--;
+        } elseif ($självstängd === '/' || in_array(strtolower($namn), $tomma, true)) {
+            if ($djup === 0) {
+                $rötter[] = $namn;
+            }
+        } else {
+            if ($djup === 0) {
+                $rötter[] = $namn;
+            }
+
+            $djup++;
+        }
+    }
+
+    return $rötter;
+}
+
 /*
  * Klart när: en uppladdad bild syns i containerlistan, på dashboardkortet och i
  * toppraden.
@@ -896,6 +937,26 @@ it('använder ImageCropEditor med bred form i arket', function () {
 
     expect(route('containers.cover.focus', $container, false))
         ->toBe("/containers/{$container->ulid}/cover/focus");
+});
+
+/*
+ * Klart när (issue 433): redigeraren har ett enda rotelement.
+ *
+ * Sedan fixen efter granskningen: `ImageCropEditor` bestod av tre `<div>` och
+ * en `<p>` på rotnivå, och då kan Vue inte ärva attribut. `class="mt-2"` som
+ * arket skickar nådde aldrig något element — redigeraren satt tätt under
+ * hjälpraden, och Vue varnade i konsolen. Rotelementet är en `<div>` som
+ * omsluter allt, med `mx-auto`-ramen som första barn.
+ */
+it('har ett enda rotelement så att arkets klass når fram', function () {
+    expect(bildvyRötter('js/components/ImageCropEditor.vue'))->toBe(['div']);
+
+    $vy = File::get(resource_path('js/components/ImageCropEditor.vue'));
+
+    // Rotelementet ärver attributen — `inheritAttrs: false` hade tystat
+    // `class="mt-2"` på samma sätt som de fyra rötterna gjorde.
+    expect($vy)->not->toContain('inheritAttrs')
+        ->and($vy)->toMatch('#<template>\s*(?:<!--.*?-->\s*)?<div>\s*<div class="mx-auto"#s');
 });
 
 /*

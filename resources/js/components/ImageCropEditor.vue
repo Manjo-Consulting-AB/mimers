@@ -349,116 +349,124 @@ function save() {
 </script>
 
 <template>
-    <div class="mx-auto" :style="{ width: `${size.width}px` }">
-        <!--
-            Ytan. `touch-none` låter pekaren äga dragningen i stället för att
-            sidan skrollar, och `tabindex="0"` gör piltangenterna nåbara.
-        -->
-        <div
-            tabindex="0"
-            role="application"
-            :aria-label="t('crop.label')"
-            class="relative touch-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-focus"
-            :class="isRound ? 'rounded-control' : 'rounded-card'"
-            :style="{ width: `${size.width}px`, height: `${size.height}px` }"
-            @pointerdown="startDrag"
-            @pointermove="dragMove"
-            @pointerup="endDrag"
-            @pointercancel="endDrag"
-            @keydown="onKeydown"
-        >
+    <!--
+        Ett enda rotelement. Utan det kunde Vue inte ärva attribut, och
+        `class="mt-2"` från arket (ContainerCoverSheet.vue) nådde aldrig något
+        element — redigeraren satt tätt under hjälpraden och Vue varnade.
+    -->
+    <div>
+        <div class="mx-auto" :style="{ width: `${size.width}px` }">
             <!--
-                Den runda formen: bilden placeras i bildpunkter ur `imageCrop`,
-                och `max-w-none` hindrar Tailwinds preflight från att krympa
-                den vid zoom.
+                Ytan. `touch-none` låter pekaren äga dragningen i stället för
+                att sidan skrollar, och `tabindex="0"` gör piltangenterna
+                nåbara.
             -->
-            <template v-if="isRound">
+            <div
+                tabindex="0"
+                role="application"
+                :aria-label="t('crop.label')"
+                class="relative touch-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                :class="isRound ? 'rounded-control' : 'rounded-card'"
+                :style="{ width: `${size.width}px`, height: `${size.height}px` }"
+                @pointerdown="startDrag"
+                @pointermove="dragMove"
+                @pointerup="endDrag"
+                @pointercancel="endDrag"
+                @keydown="onKeydown"
+            >
+                <!--
+                    Den runda formen: bilden placeras i bildpunkter ur
+                    `imageCrop`, och `max-w-none` hindrar Tailwinds preflight
+                    från att krympa den vid zoom.
+                -->
+                <template v-if="isRound">
+                    <img
+                        v-if="showsImage"
+                        :src="source"
+                        alt=""
+                        draggable="false"
+                        class="pointer-events-none absolute max-w-none select-none"
+                        :style="roundStyle"
+                        @load="onLoad"
+                        @error="onError"
+                    >
+
+                    <span
+                        aria-hidden="true"
+                        class="pointer-events-none absolute inset-0 bg-ink opacity-50"
+                        :style="maskStyle"
+                    ></span>
+
+                    <span
+                        aria-hidden="true"
+                        class="pointer-events-none absolute inset-0 rounded-pill border-2 border-white"
+                    ></span>
+                </template>
+
+                <!--
+                    Den breda formen: samma `object-position` och `transform`
+                    som `ContainerCover` ritar containerns bild med. Rutan
+                    klipper förstoringen.
+                -->
                 <img
-                    v-if="showsImage"
+                    v-else-if="showsImage"
                     :src="source"
                     alt=""
                     draggable="false"
-                    class="pointer-events-none absolute max-w-none select-none"
-                    :style="roundStyle"
+                    class="pointer-events-none absolute inset-0 h-full w-full max-w-none select-none object-cover"
+                    :style="wideStyle"
                     @load="onLoad"
                     @error="onError"
                 >
+            </div>
+        </div>
 
-                <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute inset-0 bg-ink opacity-50"
-                    :style="maskStyle"
-                ></span>
+        <div class="mt-3 flex flex-col gap-1">
+            <label :for="zoomId" class="text-sm font-medium text-ink">
+                {{ t('crop.zoom') }}
+            </label>
 
-                <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute inset-0 rounded-pill border-2 border-white"
-                ></span>
-            </template>
-
-            <!--
-                Den breda formen: samma `object-position` och `transform` som
-                `ContainerCover` ritar containerns bild med. Rutan klipper
-                förstoringen.
-            -->
-            <img
-                v-else-if="showsImage"
-                :src="source"
-                alt=""
-                draggable="false"
-                class="pointer-events-none absolute inset-0 h-full w-full max-w-none select-none object-cover"
-                :style="wideStyle"
-                @load="onLoad"
-                @error="onError"
+            <input
+                :id="zoomId"
+                v-model.number="draftZoom"
+                type="range"
+                min="100"
+                max="300"
+                step="10"
+                :disabled="pending"
+                class="min-h-11"
             >
         </div>
+
+        <div class="mt-1 flex flex-wrap gap-2">
+            <button
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                @click="save"
+            >
+                {{ pending ? t('common.pending.default') : t('crop.save') }}
+            </button>
+
+            <button
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+                @click="reset"
+            >
+                {{ t('crop.reset') }}
+            </button>
+
+            <button
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+                @click="emit('cancel')"
+            >
+                {{ t('crop.cancel') }}
+            </button>
+        </div>
+
+        <p v-if="error" role="alert" class="mt-1 text-sm text-danger">{{ error }}</p>
     </div>
-
-    <div class="mt-3 flex flex-col gap-1">
-        <label :for="zoomId" class="text-sm font-medium text-ink">
-            {{ t('crop.zoom') }}
-        </label>
-
-        <input
-            :id="zoomId"
-            v-model.number="draftZoom"
-            type="range"
-            min="100"
-            max="300"
-            step="10"
-            :disabled="pending"
-            class="min-h-11"
-        >
-    </div>
-
-    <div class="mt-1 flex flex-wrap gap-2">
-        <button
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            @click="save"
-        >
-            {{ pending ? t('common.pending.default') : t('crop.save') }}
-        </button>
-
-        <button
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-            @click="reset"
-        >
-            {{ t('crop.reset') }}
-        </button>
-
-        <button
-            type="button"
-            :disabled="pending"
-            class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-            @click="emit('cancel')"
-        >
-            {{ t('crop.cancel') }}
-        </button>
-    </div>
-
-    <p v-if="error" role="alert" class="mt-1 text-sm text-danger">{{ error }}</p>
 </template>
