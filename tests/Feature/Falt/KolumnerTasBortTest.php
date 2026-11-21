@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Item;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,6 +20,12 @@ use Illuminate\Support\Facades\Schema;
  * Testet för kodnämningarna tar bort kommentarer före sökningen: en kommentar
  * som förklarar varför kolumnerna är borta är dokumentation, inte en läsning
  * av dem.
+ *
+ * Issue 1472 städade det sista spåret i `app/`: de två datumkasten på
+ * App\Models\Item, som låg kvar efter 425 därför att `app/**` stod i dess
+ * Out of scope. Provet "kastar inte de två datumkolumnerna" låser att de inte
+ * kommer tillbaka; kodnämningsprovet nedan fångar samma sak i källtexten,
+ * men bara det här provet frågar modellen själv.
  */
 
 /** @var list<string> */
@@ -70,6 +77,14 @@ function kolumnTasBortFulltextkolumner(): array
 
     return $namn[1];
 }
+
+// vakt: kasten togs bort redan i #1471 (issue 425); provet låser att de inte kommer tillbaka.
+it('kastar inte de två datumkolumnerna på item', function () {
+    $kast = (new Item)->getCasts();
+
+    expect($kast)->not->toHaveKey('purchased_at')
+        ->and($kast)->not->toHaveKey('warranty_until');
+});
 
 it('har inga av de sex kolumnerna kvar på item', function () {
     $kolumner = kolumnTasBortItemkolumner();
