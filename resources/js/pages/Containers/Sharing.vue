@@ -1,11 +1,12 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
 import InvitationForm from '../../components/InvitationForm.vue';
+import InvitationRow from '../../components/InvitationRow.vue';
 import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -64,7 +65,9 @@ defineOptions({
  * lika känslig som förvaltningsvyn; här visas adressen med flit, för det är
  * avsändarens egen lista över vad hon skickat. Formuläret kräver
  * `manageAccess()` (skrivningen) och ritas därför bara för `can.manage`,
- * medan listan ritas ur `invitations`.
+ * medan listan ritas ur `invitations`. Sedan issue 430 bär listan bara
+ * obesvarade inbjudningar, och varje rad har *Edit* och *Revoke* för den som
+ * får hantera åtkomster — se InvitationRow.vue.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -81,6 +84,8 @@ const props = defineProps({
     agentAccess: { type: Boolean, default: false },
     /* Access-ULID → ägarens tak för medlemmens agenter. */
     agentLevels: { type: Object, default: () => ({}) },
+    /* Inbjudnings-ULID → inbjudans agenttak (issue 430). */
+    invitationAgentLevels: { type: Object, default: () => ({}) },
     can: { type: Object, required: true },
 });
 
@@ -109,30 +114,6 @@ const historyDate = (access) =>
     access.revoked_at !== null
         ? t('sharing.history.revoked', { date: formatDate(access.revoked_at, page.props.locale) })
         : t('sharing.history.expired', { date: formatDate(access.expires_at, page.props.locale) });
-
-/*
- * Vilka rader som bär en Dra tillbaka-knapp. `pending` är den väntande raden,
- * och `expired` är samma rad efter att tiden gått ut — `status` i kolumnen står
- * kvar på `pending` (issue 10a § Beslut 7), och det är resursen som redovisar
- * den som `expired`. Alltså går båda att dra tillbaka, medan en accepterad,
- * avvisad eller redan tillbakadragen rad inte gör det (422).
- *
- * Villkoret är presentation. Grinden är policyn: DELETE auktoriserar med
- * `manageAccess()` oavsett vad knappen visade.
- */
-const isWithdrawable = (invitation) => invitation.status === 'pending' || invitation.status === 'expired';
-
-/*
- * Omfånget på en inbjudningsrad. Itemets namn kommer ur `itemNames`, samma
- * uppslag som åtkomstlistan använder — kontrollern fyller det ur båda
- * listorna, med `withTrashed()`, så en inbjudan till ett sedan länge
- * mjukraderat item redovisas med sitt namn och inte som en tom rad.
- */
-const invitationScope = (invitation) =>
-    invitation.item === null ? t('sharing.invitations.item_container') : props.itemNames[invitation.item];
-
-const invitationInviter = (invitation) =>
-    props.invitedByNames[invitation.invited_by] ?? t('sharing.accesses.granted_by_unknown');
 </script>
 
 <template>
@@ -225,33 +206,18 @@ const invitationInviter = (invitation) =>
         />
 
         <ul v-if="invitations.length > 0" class="mt-4 flex flex-col gap-2">
-            <li
+            <InvitationRow
                 v-for="invitation in invitations"
                 :key="invitation.ulid"
-                class="flex flex-col gap-1 rounded-card border border-border bg-surface px-4 py-2 text-body"
-            >
-                <span class="font-medium text-ink">{{ invitation.email }}</span>
-                <span class="text-ink">{{ t(`sharing.level.${invitation.level}.label`) }}</span>
-                <span class="text-ink">{{ invitationScope(invitation) }}</span>
-                <span class="text-ink">{{ t(`sharing.invitations.status.${invitation.status}`) }}</span>
-                <span class="text-meta text-ink-muted">
-                    {{ t('sharing.invitations.expires', { date: formatDate(invitation.expires_at, page.props.locale) }) }}
-                </span>
-                <span class="text-meta text-ink-muted">
-                    {{ t('sharing.invitations.invited_by') }}: {{ invitationInviter(invitation) }}
-                </span>
-
-                <Link
-                    v-if="can.manage && isWithdrawable(invitation)"
-                    :href="`/containers/${container.ulid}/invitations/${invitation.ulid}`"
-                    method="delete"
-                    as="button"
-                    preserve-scroll
-                    class="inline-flex min-h-11 items-center self-start text-body text-danger underline"
-                >
-                    {{ t('sharing.invitations.revoke') }}
-                </Link>
-            </li>
+                :container-ulid="container.ulid"
+                :invitation="invitation"
+                :item-names="itemNames"
+                :invited-by-names="invitedByNames"
+                :levels="levels"
+                :agent-access="agentAccess"
+                :agent-level="invitationAgentLevels[invitation.ulid] ?? null"
+                :can-manage="can.manage"
+            />
         </ul>
 
         <p v-else class="mt-4 text-body text-ink-muted">{{ t('sharing.invitations.empty') }}</p>

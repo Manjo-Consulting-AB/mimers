@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Actions\Invitation\CreateInvitation;
 use App\Actions\Invitation\RevokeInvitation;
+use App\Actions\Invitation\UpdateInvitation;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Invitation\StoreInvitationRequest;
+use App\Http\Requests\Invitation\UpdateInvitationRequest;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
@@ -18,14 +20,16 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Webbens avsändaryta för inbjudningar — bjud in och dra tillbaka, se issue
- * 55b § Beslut 5, 6, 7 och 8.
+ * Webbens avsändaryta för inbjudningar — bjud in, ändra och dra tillbaka, se
+ * issue 55b § Beslut 5, 6, 7 och 8 och issue 430.
  *
- * **Skrivningarna är utbrutna och delas med `/api`** (§ Beslut 7):
- * App\Actions\Invitation\CreateInvitation och
+ * **Skrivningarna är utbrutna** (§ Beslut 7):
+ * App\Actions\Invitation\CreateInvitation,
+ * App\Actions\Invitation\UpdateInvitation och
  * App\Actions\Invitation\RevokeInvitation bär kropparna, och
- * StoreInvitationRequest bär reglerna. Ingen regel formuleras här, och ett
- * fält som avvisas i webben avvisas av samma FormRequest på `/api`.
+ * StoreInvitationRequest/UpdateInvitationRequest bär reglerna. Ingen regel
+ * formuleras här, och ett fält som avvisas i webben avvisas av samma
+ * FormRequest på `/api`.
  *
  * **Kvotgränserna översätts i stället för att renderas som JSON** (§ Beslut
  * 6). `ApiException` implementerar `Responsable` och svarar
@@ -99,6 +103,45 @@ class ContainerInvitationController extends Controller
     }
 
     /**
+     * PATCH /containers/{container}/invitations/{invitation} — 302 tillbaka
+     * till delningssidan, se issue 430.
+     *
+     * Bara nivåerna går att ändra. Adressen och omfånget nekas av
+     * UpdateInvitationRequest, ingen ny inbjudan skickas, och en rad som
+     * redan besvarats blir ett formulärfel på nyckeln `invitation` — samma
+     * uppdelning som `destroy()` gör. `agent_level` läses bara när fältet
+     * *Agent access* finns; annars är värdet alltid NULL, vad klienten än
+     * skickar, av samma skäl som i `store()`.
+     */
+    public function update(
+        UpdateInvitationRequest $request,
+        Container $container,
+        Invitation $invitation,
+        UpdateInvitation $updateInvitation,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('manageAccess', $container);
+
+        $agentLevel = ContainerAgentController::available($request->user(), $container)
+            ? $request->validated('agent_level')
+            : null;
+
+        try {
+            $updateInvitation->handle(
+                $container,
+                $invitation,
+                $request->validated('level'),
+                $agentLevel,
+                $request->user(),
+            );
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages([$this->updateField($e->errorCode()) => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'invitation-updated');
+    }
+
+    /**
      * DELETE /containers/{container}/invitations/{invitation} — 302 tillbaka
      * till delningssidan.
      *
@@ -140,5 +183,15 @@ class ContainerInvitationController extends Controller
             'invitation.agent_level_too_high' => 'agent_level',
             default => 'quota',
         };
+    }
+
+    /**
+     * Formulärnyckeln för de fel `update()` kan få. Till skillnad från
+     * `store()` finns ingen kvot här: en ändring delar inte ut något nytt, och
+     * de enda två felen actionen kastar hör till agenttaket respektive raden.
+     */
+    private function updateField(string $code): string
+    {
+        return $code === 'invitation.agent_level_too_high' ? 'agent_level' : 'invitation';
     }
 }
