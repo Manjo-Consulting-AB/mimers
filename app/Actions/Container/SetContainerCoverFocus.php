@@ -30,17 +30,23 @@ use Illuminate\Support\Facades\Gate;
  * hade skrivits på en container som inte längre har någon bild. `lockForUpdate`
  * är en current read, så den som kommer sist ser den förstas skrivning.
  *
- * Båda kolumnerna skrivs i samma `save()`, så CHECK-villkoret
+ * **`$zoom` är procent 100–300 och sparas bredvid punkten** (issue 433 ·
+ * [[ADR-0090 Dashboardens hjälte]] § 5). Anroparen skickar alltid ett värde —
+ * utelämnad zoom i kroppen betyder 100 i App\Http\Controllers\
+ * ContainerCoverController — men kolumnen är nullbar, så en rad utan valt
+ * utsnitt har `NULL` och ritas som förut.
+ *
+ * Alla tre kolumnerna skrivs i samma `save()`, så CHECK-villkoret
  * `container_cover_focus_pair` (2026_10_04_000000) aldrig ser en halv punkt:
  * `x` utan `y` når aldrig databasen.
  */
 class SetContainerCoverFocus
 {
-    public function handle(Container $container, int $x, int $y): bool
+    public function handle(Container $container, int $x, int $y, int $zoom): bool
     {
         Gate::authorize('update', $container);
 
-        return DB::transaction(function () use ($container, $x, $y): bool {
+        return DB::transaction(function () use ($container, $x, $y, $zoom): bool {
             // withTrashed() — containern kan ha mjukraderats mellan anroparens
             // uppslag och det här låset. Är raden borta finns ingen bild att
             // sätta en punkt på.
@@ -55,6 +61,7 @@ class SetContainerCoverFocus
 
             $rad->cover_focus_x = $x;
             $rad->cover_focus_y = $y;
+            $rad->cover_zoom = $zoom;
             $rad->save();
 
             // Instansen anroparen skickade in bär den nya punkten — annars vore

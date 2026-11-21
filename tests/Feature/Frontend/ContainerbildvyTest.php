@@ -838,44 +838,59 @@ it('sätter och byter bilden genom webbens rutt', function () {
 });
 
 /*
- * Klart när (issue 683): bilden ritas med fokuspunkten som `object-position`.
+ * Klart när (issue 683 och 433): bilden ritas med fokuspunkt och zoom.
  *
- * Ett källkodsprov, för det som avgör är att PUNKTEN blir bildens stil och inget
- * annat. Adressen och variantregeln flyttade till `coverPresentation.js`
- * (Beslut 1), och komponenten importerar `coverUrl` därifrån — två
- * formuleringar av samma regel hade glidit isär. `:style` sitter på
- * `<img>`-taggen, alltså den yta som faktiskt beskär bilden.
+ * Ett källkodsprov, för det som avgör är att UTSNITTET blir bildens stil och
+ * inget annat. Regeln flyttade till `coverPresentation.js` i issue 683
+ * (Beslut 1) och fick zoomen i issue 433 · [[ADR-0090 Dashboardens hjälte]]
+ * § 5: fokuspunkten är `object-position`, zoomen en `transform: scale()` runt
+ * samma punkt, och utan värden blir stilen `null`. `ContainerCover` och
+ * redigerarens breda ram frågar SAMMA funktion, så förhandsvisningen och
+ * ytorna inte kan glida isär. `:style` sitter på `<img>`-taggen, alltså den
+ * yta som faktiskt beskär bilden.
  */
-it('ritar bilden med fokuspunkten som object-position', function () {
+it('ritar bilden med fokuspunkt och zoom', function () {
+    $modul = File::get(resource_path('js/components/coverPresentation.js'));
     $vy = File::get(resource_path('js/components/ContainerCover.vue'));
 
     expect($vy)->toContain("from './coverPresentation.js'")
         ->and($vy)->toContain('coverUrl')
-        ->and($vy)->toContain('objectPosition')
-        ->and($vy)->toContain('cover?.focus');
+        ->and($vy)->toContain('coverStyle');
+
+    expect($modul)->toContain('export function coverStyle')
+        ->and($modul)->toContain('objectPosition')
+        ->and($modul)->toContain('transformOrigin')
+        ->and($modul)->toContain('scale(${zoom / 100})')
+        ->and($modul)->toContain('cover?.zoom')
+        ->and($modul)->toContain('focus === null && zoom === 100');
 
     // `<img>`-taggen bär stilen — den här filens enda bild.
     expect(bildvyTagg('js/components/ContainerCover.vue', 'img'))->toContain(':style');
 });
 
 /*
- * Klart när (issue 683): arket låter användaren välja fokuspunkten med ett
- * klick.
+ * Klart när (issue 433): arket använder den delade redigeraren, inte en egen
+ * klickväljare.
  *
- * Klicket räknas om till procent ur bildens ruta (`getBoundingClientRect`), och
- * en knapp som aktiveras med tangentbordet har inga koordinater — `event.detail
- * === 0` fångar den och lämnar punkten orörd (Beslut 4). Rutten jämförs mot
- * ruttabellen: `containers.cover.focus` är samma adress controllern svarar på.
+ * Samma komponent som profilbilden, med `shape="wide"` — den breda ramen i
+ * hjältens proportioner (ADR-0090 § 4). Save skickar punkt och zoom i SAMMA
+ * PATCH, och rutten jämförs mot ruttabellen: `containers.cover.focus` är
+ * samma adress controllern svarar på.
  */
-it('låter arket välja fokuspunkten med ett klick', function () {
+it('använder ImageCropEditor med bred form i arket', function () {
     $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
 
-    expect($ark)->toContain('v-if="container.cover"')
-        ->and($ark)->toContain('@click="chooseFocus"')
-        ->and($ark)->toContain('event.detail === 0')
-        ->and($ark)->toContain('getBoundingClientRect')
+    expect($ark)->toContain("import ImageCropEditor from './ImageCropEditor.vue'")
+        ->and($ark)->toContain('v-if="container.cover && open"')
+        ->and($ark)->toContain('<ImageCropEditor')
+        ->and($ark)->toContain('shape="wide"')
+        ->and($ark)->toContain('@save="saveCrop"')
         ->and($ark)->toContain('router.patch')
         ->and($ark)->toContain('`/containers/${props.container.ulid}/cover/focus`');
+
+    // Den gamla klickväljaren är borta.
+    expect($ark)->not->toContain('chooseFocus')
+        ->and($ark)->not->toContain('getBoundingClientRect');
 
     [, , $container] = bildvyKontext();
 
@@ -884,54 +899,59 @@ it('låter arket välja fokuspunkten med ett klick', function () {
 });
 
 /*
- * Klart när (issue 683): en egen knapp centrerar bilden.
+ * Klart när (issue 433): återställningen finns i den delade redigeraren.
  *
  * `{ x: 50, y: 50 }` är mitten, samma punkt servern tolkar som `null`, och
- * knappen bär sin egen text ur katalogen (Beslut 3).
+ * 100 % är zoomen som visar hela bilden. Reset skriver bara utkastet — Save
+ * är den enda vägen till servern.
  */
-it('centrerar bilden med en egen knapp', function () {
-    $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
+it('återställer utsnittet i den delade redigeraren', function () {
+    $redigerare = File::get(resource_path('js/components/ImageCropEditor.vue'));
 
-    expect($ark)->toContain("t('container.cover.focus_reset')")
-        ->and($ark)->toContain('{ x: 50, y: 50 }');
+    expect($redigerare)->toContain('draftFocus.value = { x: 50, y: 50 }')
+        ->and($redigerare)->toContain('draftZoom.value = 100')
+        ->and($redigerare)->toContain("t('crop.reset')");
 });
 
 /*
- * Klart när (issue 683): väljarens texter kommer ur översättningsfilen.
+ * Klart när (issue 433): redigerarens texter kommer ur översättningsfilen.
  *
- * Fyra nycklar under `container.cover` (Beslut 5), var och en både i katalogen
- * och använd i arket — en nyckel som bara finns i den ena är antingen död text
- * eller en rå sträng i vyn.
+ * Arket bär sin egen rubrik och hjälprad (`container.cover.crop_*`), och
+ * reglaget, knapparna och ytans namn är de delade `crop.*`-nycklarna — en
+ * nyckel som bara finns i den ena är antingen död text eller en rå sträng i
+ * vyn.
  */
-it('hämtar väljarens texter ur översättningsfilen', function () {
+it('hämtar redigerarens texter ur översättningsfilen', function () {
     $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
 
     foreach ([
-        'container.cover.focus_heading',
-        'container.cover.focus_help',
-        'container.cover.focus_label',
-        'container.cover.focus_reset',
+        'container.cover.crop_heading',
+        'container.cover.crop_help',
     ] as $nyckel) {
         expect(Lang::has("ui.{$nyckel}"))->toBeTrue("ui.{$nyckel} saknas i lang/en/ui.php");
         expect($ark)->toContain("t('{$nyckel}')");
     }
+
+    foreach (['label', 'zoom', 'save', 'reset', 'cancel'] as $nyckel) {
+        expect(Lang::has("ui.crop.{$nyckel}"))->toBeTrue("ui.crop.{$nyckel} saknas i lang/en/ui.php");
+    }
 });
 
 /*
- * Klart när (issue 683): fokuspunkten delas ända fram till vyn.
+ * Klart när (issue 683 och 433): utsnittet delas ända fram till vyn.
  *
- * Skrivningen går genom RUTTEN och läses tillbaka ur containerns vy och ur
- * dashboardens kort — samma `cover.focus` på båda, för formen kommer ur
- * App\Http\Resources\ContainerResource::cover() och kortet bär samma `cover`
- * som containerlistan (Beslut 3).
+ * Skrivningen går genom RUTTEN och läses tillbaka ur containerns vy, ur
+ * dashboardens kort och ur kartans mitt — samma `cover` på alla tre, för
+ * formen kommer ur App\Http\Resources\ContainerResource::cover() och både
+ * kortet och kartan bär samma `cover` som containerlistan.
  */
-it('delar fokuspunkten ända fram till vyn', function () {
+it('delar utsnittet ända fram till vyn', function () {
     [$konto, $anvandare, $container] = bildvyKontext();
 
     bildvySätt($anvandare, $container, $konto);
 
     actingAs($anvandare)
-        ->patch("/containers/{$container->ulid}/cover/focus", ['x' => 20, 'y' => 70])
+        ->patch("/containers/{$container->ulid}/cover/focus", ['x' => 20, 'y' => 70, 'zoom' => 180])
         ->assertRedirect();
 
     actingAs($anvandare)
@@ -940,6 +960,7 @@ it('delar fokuspunkten ända fram till vyn', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/Overview')
             ->where('container.cover.focus', ['x' => 20, 'y' => 70])
+            ->where('container.cover.zoom', 180)
         );
 
     actingAs($anvandare)
@@ -947,5 +968,58 @@ it('delar fokuspunkten ända fram till vyn', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('containerGroups.0.containers.0.cover.focus', ['x' => 20, 'y' => 70])
+            ->where('containerGroups.0.containers.0.cover.zoom', 180)
         );
+});
+
+/*
+ * Klart när (issue 433): kartans mitt ritar containerns bild med fokuspunkt
+ * och zoom.
+ *
+ * Mitten bär `cover` ur samma resursform som listan och korten
+ * (App\Actions\Item\ResolveItemMap), och `ItemMapNode` ritar den med
+ * `ContainerCover` — samma komponent som hjälten och korten — så utsnittet
+ * följer med. Utan bild ritas ikonen som förut.
+ */
+it('ritar containerns bild i kartans mitt med utsnittet', function () {
+    [$konto, $anvandare, $container] = bildvyKontext();
+
+    $bilaga = bildvySätt($anvandare, $container, $konto);
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/cover/focus", ['x' => 20, 'y' => 70, 'zoom' => 180])
+        ->assertRedirect();
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items?view=map")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Index')
+            ->where('map.center.kind', 'container')
+            ->where('map.center.cover.ulid', $bilaga->ulid)
+            ->where('map.center.cover.focus', ['x' => 20, 'y' => 70])
+            ->where('map.center.cover.zoom', 180)
+        );
+
+    $nod = File::get(resource_path('js/components/ItemMapNode.vue'));
+    $karta = File::get(base_path('app/Actions/Item/ResolveItemMap.php'));
+
+    expect($nod)->toContain("import ContainerCover from './ContainerCover.vue'")
+        ->and($nod)->toContain('<ContainerCover :cover="node.cover" />')
+        ->and($karta)->toContain('ContainerResource::cover($container)');
+});
+
+/*
+ * Klart när (issue 433): en bild utan utsnitt ritas som i dag.
+ *
+ * `coverStyle` svarar `null` när varken punkt eller zoom finns, så
+ * `ContainerCover` sätter ingen stil alls och `object-cover` centrerar precis
+ * som före den här issuen. Ett `{ x: 50, y: 50 }` där hade varit samma svar
+ * två gånger.
+ */
+it('ritar en bild utan utsnitt som förut', function () {
+    $modul = File::get(resource_path('js/components/coverPresentation.js'));
+
+    expect($modul)->toContain('focus === null && zoom === 100')
+        ->and($modul)->toContain('return null;');
 });

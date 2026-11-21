@@ -1,14 +1,14 @@
 <script setup>
-import { computed, ref, useId, watch } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import CurrencyField from '../../components/CurrencyField.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
+import ImageCropEditor from '../../components/ImageCropEditor.vue';
 import UiSheet from '../../components/UiSheet.vue';
 import UserAvatar from '../../components/UserAvatar.vue';
-import { avatarDragFocus, avatarFocusRange, avatarNudgeFocus } from '../../composables/useAvatarCrop.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -152,79 +152,40 @@ function removeAvatar() {
 }
 
 /*
- * Redigeraren för utsnittet, se [[ADR-0076 Profilbilden]] § 7.
+ * Redigeraren för utsnittet, se [[ADR-0076 Profilbilden]] § 7 och
+ * [[ADR-0090 Dashboardens hjälte]] § 4.
  *
- * **Samma ark som containerns bild** (resources/js/components/UiSheet.vue):
- * fokusfällan, Esc, trycket utanför och rubriken bor där. Här bor ytan,
- * reglaget och de tre vägarna ut.
- *
- * **Ytan är kvadratisk med en rund mask.** `UserAvatar` ritar utsnittet i en
- * fyrkant (`shape="square"`) med `?variant=medium` — samma räkning som
- * avataren, så det man ser i masken är exakt vad avataren visar — och masken
- * ovanpå mörklägger hörnen utanför cirkeln.
- *
- * **Punkten flyttas med pekaren och med piltangenterna.** Båda utgår från den
- * EFFEKTIVA punkten — den som faktiskt syns — och klamras till det intervall
- * som går att nå vid aktuell zoom (useAvatarCrop.js § avatarFocusRange). Utan
- * det hade ett sparat värde nära kanten först ätit upp ett dött område där
- * bilden står stilla medan talet rör sig, och nästa zoom hade hoppat till en
- * punkt personen aldrig såg. Dragningen mäts i bildpunkter mot bildens RITADE
- * bredd, inte mot rutan: vid zoom är bilden bredare än rutan, och en fast
- * procent per pixel hade gjort draget olika känsligt vid olika zoom.
- * Piltangenterna flyttar 2 procent, 10 med Shift; zoomen klamrar om punkten
- * när den ändras, så utkastet alltid är nåbart.
+ * **Redigeraren är `ImageCropEditor` sedan issue 433.** Ytan, masken,
+ * reglaget, tangentbordet och de tre vägarna ut bor i
+ * resources/js/components/ImageCropEditor.vue, tillsammans med containerns
+ * ark. Här bor bara arket (UiSheet: fokusfällan, Esc, trycket utanför och
+ * rubriken), adressen och sparningen — `shape="round"` ger profilbildens
+ * runda ram.
  *
  * **Allt är lokalt till dess att Save trycks.** Reset sätter mitten och
  * 100 %, Cancel stänger utan att skriva — arket öppnas alltid med de sparade
  * värdena, så en avbruten redigering lämnar ingenting efter sig.
  */
-const EDITOR_SIZE = 256;
-
-const uid = useId();
-const zoomId = `avatar-zoom-${uid}`;
-
 const editorOpen = ref(false);
 const editorTrigger = ref(null);
-const editorFocus = ref({ x: 50, y: 50 });
-const editorZoom = ref(100);
-const editorNatural = ref({ width: 0, height: 0 });
 const editorPending = ref(false);
 const editorError = ref(null);
 
-/* Personen som `UserAvatar` ritar i redigeraren: sparade värden + utkastet. */
-const editorUser = computed(() => ({
-    name: currentUser.value?.name ?? '',
-    avatar: avatar.value === null
-        ? null
-        : {
-            ...avatar.value,
-            focus: editorFocus.value,
-            zoom: editorZoom.value,
-        },
-}));
-
-/* Bilden har laddats: först då går det att dra i den. */
-const editorReady = computed(() => editorNatural.value.width > 0 && editorNatural.value.height > 0);
-
 /*
- * Maskens stil: en cirkel i mitten lämnas genomskinlig, resten av ytan bär
- * den mörka tonen — hörnen utanför avataren mörkläggs, och det som syns i
- * cirkeln är exakt vad avataren visar. `closest-side` ger cirkeln ytans halva
- * bredd, samma radie som avataren; utan storleksangivelse hade `circle` fått
- * `farthest-corner` och maskat en ring innanför avatarns kant. En mask och
- * ingen `box-shadow`: skuggan
- * är en roll (ADR-0057 § 6), och den här konturen är ingen skugga. Ingen SVG
- * heller — ikoner går genom `UiIcon` (ADR-0057 § 2), och masken är ingen ikon.
+ * Adressen redigeraren ritar. `?variant=medium` är skarp nog att beskåda på
+ * nära håll; en bild mindre än 1024 px har ingen sådan variant, och då tar
+ * miniatyren vid — samma väg tillbaka som `UserAvatar` tar.
  */
-const maskStyle = {
-    maskImage: 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)',
-    WebkitMaskImage: 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)',
-};
+const editorSrc = computed(() => (avatar.value === null
+    ? null
+    : `/files/${avatar.value.ulid}?variant=medium`));
+
+const editorFallbackSrc = computed(() => (avatar.value?.has_thumb
+    ? `/files/${avatar.value.ulid}?variant=thumb`
+    : null));
 
 function openEditor(event) {
     editorTrigger.value = event.currentTarget ?? null;
-    editorFocus.value = { ...(avatar.value?.focus ?? { x: 50, y: 50 }) };
-    editorZoom.value = avatar.value?.zoom ?? 100;
     editorError.value = null;
     editorOpen.value = true;
 }
@@ -233,138 +194,14 @@ function closeEditor() {
     editorOpen.value = false;
 }
 
-function onEditorImageLoad(matt) {
-    editorNatural.value = matt;
-}
-
 /*
- * Zoomen ändras: punkten klamras om till det intervall som går att nå vid
- * den nya zoomen. Utan det kunde utkastet peka på en punkt som bilden inte
- * längre kan visa, och nästa drag hade börjat i ett dött område. Steget är
- * noll — samma räkning som pilarna, bara utan rörelse.
+ * Anroparen sparar. Redigeraren sänder utkastet, och PATCH:en bor här — samma
+ * adress som före utbrytningen, med punkt och zoom ur utkastet.
  */
-watch(editorZoom, () => {
-    if (!editorReady.value) {
-        return;
-    }
-
-    editorFocus.value = avatarNudgeFocus({
-        imageWidth: editorNatural.value.width,
-        imageHeight: editorNatural.value.height,
-        box: EDITOR_SIZE,
-        focusX: editorFocus.value.x,
-        focusY: editorFocus.value.y,
-        zoom: editorZoom.value,
-    });
-});
-
-const dragging = ref(false);
-const dragStart = ref(null);
-
-function startDrag(event) {
-    if (!editorReady.value) {
-        return;
-    }
-
-    event.preventDefault();
-
-    // Utgångsläget är den punkt som SYNS, inte det sparade talet.
-    const bounds = avatarFocusRange({
-        imageWidth: editorNatural.value.width,
-        imageHeight: editorNatural.value.height,
-        box: EDITOR_SIZE,
-        focusX: editorFocus.value.x,
-        focusY: editorFocus.value.y,
-        zoom: editorZoom.value,
-    });
-
-    dragging.value = true;
-    dragStart.value = {
-        x: event.clientX,
-        y: event.clientY,
-        focusX: bounds.focusX,
-        focusY: bounds.focusY,
-    };
-
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-}
-
-function dragMove(event) {
-    if (!dragging.value || dragStart.value === null) {
-        return;
-    }
-
-    const start = dragStart.value;
-
-    editorFocus.value = avatarDragFocus({
-        imageWidth: editorNatural.value.width,
-        imageHeight: editorNatural.value.height,
-        box: EDITOR_SIZE,
-        focusX: start.focusX,
-        focusY: start.focusY,
-        zoom: editorZoom.value,
-        deltaX: event.clientX - start.x,
-        deltaY: event.clientY - start.y,
-    });
-}
-
-function endDrag(event) {
-    if (!dragging.value) {
-        return;
-    }
-
-    dragging.value = false;
-    dragStart.value = null;
-
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-}
-
-function onEditorKeydown(event) {
-    const step = event.shiftKey ? 10 : 2;
-    let stepX = 0;
-    let stepY = 0;
-
-    if (event.key === 'ArrowLeft') {
-        stepX = -step;
-    } else if (event.key === 'ArrowRight') {
-        stepX = step;
-    } else if (event.key === 'ArrowUp') {
-        stepY = -step;
-    } else if (event.key === 'ArrowDown') {
-        stepY = step;
-    } else {
-        return;
-    }
-
-    event.preventDefault();
-
-    editorFocus.value = avatarNudgeFocus({
-        imageWidth: editorNatural.value.width,
-        imageHeight: editorNatural.value.height,
-        box: EDITOR_SIZE,
-        focusX: editorFocus.value.x,
-        focusY: editorFocus.value.y,
-        zoom: editorZoom.value,
-        stepX,
-        stepY,
-    });
-}
-
-function resetCrop() {
-    editorFocus.value = { x: 50, y: 50 };
-    editorZoom.value = 100;
-}
-
-function saveCrop() {
+function saveCrop(crop) {
     editorError.value = null;
 
-    router.patch('/settings/profile/avatar/crop', {
-        x: editorFocus.value.x,
-        y: editorFocus.value.y,
-        zoom: editorZoom.value,
-    }, {
+    router.patch('/settings/profile/avatar/crop', crop, {
         preserveScroll: true,
         onStart: () => {
             editorPending.value = true;
@@ -618,12 +455,11 @@ function submit() {
     </section>
 
     <!--
-        Redigeraren, se [[ADR-0076 Profilbilden]] § 7. Arket är UiSheet, som
-        bär fokusfällan, Esc och trycket utanför. Ytan är kvadratisk med en
-        rund mask: `UserAvatar` ritar utsnittet i fyrkant (och ber om
-        `?variant=medium`), och masken mörklägger hörnen så att det som syns i
-        cirkeln är exakt vad avataren visar. Dra för att flytta punkten, pilarna
-        när ytan har fokus, reglaget för zoomen.
+        Redigeraren, se [[ADR-0076 Profilbilden]] § 7 och [[ADR-0090
+        Dashboardens hjälte]] § 4. Arket är UiSheet, som bär fokusfällan, Esc
+        och trycket utanför. Ytan och reglaget bor i `ImageCropEditor` med
+        `shape="round"` — samma komponent som containerns ark använder, så
+        drag, piltangenter, zoom och mask beter sig likadant på båda ytorna.
     -->
     <UiSheet
         :open="editorOpen"
@@ -631,87 +467,18 @@ function submit() {
         :trigger="editorTrigger"
         @close="closeEditor"
     >
-        <div class="mx-auto" :style="{ width: `${EDITOR_SIZE}px`, height: `${EDITOR_SIZE}px` }">
-            <div
-                tabindex="0"
-                role="application"
-                :aria-label="t('settings.profile.avatar.crop_label')"
-                class="relative touch-none overflow-hidden rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                :style="{ width: `${EDITOR_SIZE}px`, height: `${EDITOR_SIZE}px` }"
-                @pointerdown="startDrag"
-                @pointermove="dragMove"
-                @pointerup="endDrag"
-                @pointercancel="endDrag"
-                @keydown="onEditorKeydown"
-            >
-                <UserAvatar
-                    :user="editorUser"
-                    :size="EDITOR_SIZE"
-                    shape="square"
-                    @load="onEditorImageLoad"
-                />
-
-                <!-- Den runda masken: hörnen utanför cirkeln mörkläggs. -->
-                <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute inset-0 bg-ink opacity-50"
-                    :style="maskStyle"
-                ></span>
-
-                <span
-                    aria-hidden="true"
-                    class="pointer-events-none absolute inset-0 rounded-pill border-2 border-white"
-                ></span>
-            </div>
-        </div>
-
-        <div class="mt-3 flex flex-col gap-1">
-            <label :for="zoomId" class="text-sm font-medium text-ink">
-                {{ t('settings.profile.avatar.zoom') }}
-            </label>
-
-            <input
-                :id="zoomId"
-                v-model.number="editorZoom"
-                type="range"
-                min="100"
-                max="300"
-                step="10"
-                :disabled="editorPending"
-                class="min-h-11"
-            >
-        </div>
-
-        <div class="mt-1 flex flex-wrap gap-2">
-            <button
-                type="button"
-                :disabled="editorPending"
-                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                @click="saveCrop"
-            >
-                {{ t('settings.profile.avatar.save') }}
-            </button>
-
-            <button
-                type="button"
-                :disabled="editorPending"
-                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-                @click="resetCrop"
-            >
-                {{ t('settings.profile.avatar.reset') }}
-            </button>
-
-            <button
-                type="button"
-                :disabled="editorPending"
-                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-                @click="closeEditor"
-            >
-                {{ t('settings.profile.avatar.cancel') }}
-            </button>
-        </div>
-
-        <p v-if="editorError" role="alert" class="mt-1 text-sm text-danger">{{ editorError }}</p>
+        <ImageCropEditor
+            v-if="editorOpen"
+            :src="editorSrc"
+            :fallback-src="editorFallbackSrc"
+            :focus="avatar?.focus ?? null"
+            :zoom="avatar?.zoom ?? null"
+            shape="round"
+            :pending="editorPending"
+            :error="editorError"
+            @save="saveCrop"
+            @cancel="closeEditor"
+        />
     </UiSheet>
 
     <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />

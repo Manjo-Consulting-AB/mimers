@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import ItemIcon from './ItemIcon.vue';
 import UiIcon from './UiIcon.vue';
-import { coverUrl } from './coverPresentation.js';
+import { coverStyle, coverUrl } from './coverPresentation.js';
 
 /*
  * Containerns bild, se [[ADR-0047 Containerns bild]] § Beslut och
@@ -36,11 +36,16 @@ import { coverUrl } from './coverPresentation.js';
  * flyttade dit i issue 683 § Beslut 1, när väljaren i arket behövde samma
  * adress: två formuleringar av samma regel hade glidit isär.
  *
- * **Fokuspunkten ritas som `object-position`.** `cover.focus` är `{ x, y }` i
- * procent eller null för mitten (issue 682), och blir bildens `object-position`
- * — den del användaren pekat ut ligger kvar i rutan när `object-cover` beskär.
- * Punkten kommer med proppen, så varje yta som ritar komponenten får den utan
- * att en anropare ändras (issue 683 § Beslut 2).
+ * **Utsnittet ritas av `coverStyle` i `coverPresentation.js`.** `cover.focus`
+ * är `{ x, y }` i procent eller null för mitten (issue 682), och blir bildens
+ * `object-position` — den del användaren pekat ut ligger kvar i rutan när
+ * `object-cover` beskär. Sedan issue 433 · [[ADR-0090 Dashboardens hjälte]]
+ * § 5 bär `cover` också `zoom` (procent 100–300, null = 100), som ritas som
+ * en `transform: scale()` runt samma punkt: det som syns i rutan förstoras,
+ * utan att punkten flyttar sig. Utan värden blir stilen `null` och bilden
+ * ritas som förut. Punkten och zoomen kommer med proppen, så varje yta som
+ * ritar komponenten får dem utan att en anropare ändras (issue 683 § Beslut
+ * 2, issue 433 § Ritningen).
  *
  * **`medium` på de stora ytorna, `thumb` på de små** (fynd från testarna
  * 2026-10-03, issue 681): hjälten (`ContainerHero.vue`) och korten
@@ -76,17 +81,16 @@ const props = defineProps({
 const url = computed(() => coverUrl(props.cover, props.variant));
 
 /*
- * Punkten användaren pekat ut, eller null för mitten. `null` (och inte
- * `{ x: 50, y: 50 }`) när ingen punkt finns: `object-cover` centrerar redan av
- * sig själv, och en stil som säger "mitten" är samma svar två gånger.
+ * Utsnittet: fokuspunkten och zoomen, eller `null` när inget är valt — då
+ * ritas bilden som i dag. Regeln bor i `coverPresentation.js` och delas med
+ * redigerarens breda ram (resources/js/components/ImageCropEditor.vue), så
+ * det man ser i redigeraren är exakt vad ytorna visar.
  */
-const position = computed(() => (props.cover?.focus
-    ? { objectPosition: `${props.cover.focus.x}% ${props.cover.focus.y}%` }
-    : null));
+const style = computed(() => coverStyle(props.cover));
 </script>
 
 <template>
-    <img v-if="url" :src="url" :style="position" alt="" class="h-full w-full object-cover">
+    <img v-if="url" :src="url" :style="style" alt="" class="h-full w-full object-cover">
 
     <span
         v-else

@@ -45,6 +45,22 @@ return [
         'cancel' => 'Cancel',
     ],
 
+    /*
+     * The shared crop editor, see issue 433 · [[ADR-0090 Dashboardens hjälte]]
+     * § 4 · resources/js/components/ImageCropEditor.vue. One set of words for
+     * both surfaces — the profile picture's round frame and the container
+     * image's wide one — because it is one component: `label` names the
+     * surface for a screen reader and says what the arrow keys do, and the
+     * three buttons are the ways out of the draft.
+     */
+    'crop' => [
+        'label' => 'The image’s framing. Drag it or use the arrow keys.',
+        'zoom' => 'Zoom',
+        'save' => 'Save',
+        'reset' => 'Reset',
+        'cancel' => 'Cancel',
+    ],
+
     // The discard question of the collapsible create form, see issue 356 ·
     // [[ADR-0074 Registrering i vyn]] § 3 · resources/js/components/InlineCreate.vue.
     'inline_create' => [
@@ -1496,21 +1512,13 @@ return [
                 'uploading' => 'Uploading the picture…',
 
                 /*
-                 * Issue 382 · [[ADR-0076 Profilbilden]] § 7. The editor is
-                 * one sheet with three actions and one surface: Adjust opens
-                 * it, the surface moves the focus point, the slider zooms,
-                 * and Save, Reset and Cancel are the three ways out.
-                 * `crop_label` names the surface for a screen reader and says
-                 * what the arrow keys do — it is the only instruction the
-                 * keyboard user gets.
+                 * Issue 382 · [[ADR-0076 Profilbilden]] § 7. Adjust opens the
+                 * editor; since issue 433 the surface, the slider and the
+                 * three ways out live in the shared ImageCropEditor, whose
+                 * words are `crop.*` — one set for both surfaces.
                  */
                 'adjust' => 'Adjust',
                 'crop_heading' => 'Adjust the picture',
-                'crop_label' => 'The picture’s focus point. Drag it or use the arrow keys.',
-                'zoom' => 'Zoom',
-                'save' => 'Save',
-                'reset' => 'Reset',
-                'cancel' => 'Cancel',
             ],
 
             'locale' => 'Language',
@@ -2823,13 +2831,14 @@ return [
             'remove' => 'Remove the image',
             'description' => 'The image is the container\'s face. It is shown in the container list, on the dashboard and at the top of the container.',
 
-            // Issue 683 decision 5. Four keys and not one: the picker has a
-            // heading, a line of help, a name for the picture (the button is an
-            // image and carries no visible text), and the reset button's word.
-            'focus_heading' => 'What to show',
-            'focus_help' => 'Click the part of the image that should always be visible.',
-            'focus_label' => 'Choose the focus point',
-            'focus_reset' => 'Center the image',
+            // Issue 433 · [[ADR-0090 Dashboardens hjälte]] § 4–5. The
+            // container's own heading above the shared editor; the editor's
+            // slider and buttons come from `crop.*`, the same words the
+            // profile picture uses. The old click picker's four keys
+            // (`focus_heading`, `focus_help`, `focus_label`, `focus_reset`)
+            // went with it.
+            'crop_heading' => 'What to show',
+            'crop_help' => 'Drag the image, or use the arrow keys, and zoom until the right part is visible.',
         ],
 
         // The category tree, see issue 56a decisions 1, 2, 3 and 4.

@@ -4,19 +4,21 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
 
 /*
- * Issue 382 · Profilbildens utsnitt — ytan. Se [[ADR-0076 Profilbilden]] § 7
- * och [[M59 Profilbilden]] § 382.
+ * Issue 382 · Profilbildens utsnitt — ytan. Se [[ADR-0076 Profilbilden]] § 7,
+ * [[M59 Profilbilden]] § 382 och issue 433 · [[ADR-0090 Dashboardens hjälte]]
+ * § 4.
  *
  * **Källkodsprov, som GenomgangTest.** Utsnittet är klientsidans räkning och
- * markup: avataren är en ny komponent, redigeraren är ett ark i
- * Settings/Profile.vue, och texten bor i lang/en/ui.php. Det som går att
- * avgöra på serversidan är formen på källkoden — att skalet och profilsidan
- * ritar `UserAvatar`, att redigeraren PATCH:ar rätt adress, att reglaget har
+ * markup: avataren är en komponent, redigeraren är ett ark på profilsidan med
+ * ytan i `ImageCropEditor`, och texten bor i lang/en/ui.php. Det som går att
+ * avgöra på serversidan är formen på källkoden — att skalet ritar
+ * `UserAvatar`, att profilsidan använder `ImageCropEditor` med
+ * `shape="round"`, att redigeraren PATCH:ar rätt adress, att reglaget har
  * gränserna 100 och 300, och att katalogen har nycklarna.
  *
- * **Räkningen prövas på riktigt.** `avatarCrop`, `avatarFocusRange`,
- * `avatarDragFocus` och `avatarNudgeFocus` i
- * resources/js/composables/useAvatarCrop.js körs i node med kända fall, samma
+ * **Räkningen prövas på riktigt.** `imageCrop`, `imageFocusRange`,
+ * `imageDragFocus` och `imageNudgeFocus` i
+ * resources/js/composables/useImageCrop.js körs i node med kända fall, samma
  * grepp som DatumregelTest använder för useRelativeDate.js. En andra upplaga
  * av formeln i provet hade kunnat vara grön medan ytan ritade fel — och
  * redigerarens drag och piltangenter hade kunnat räkna på ett värde som
@@ -45,7 +47,7 @@ function utsnittvyKod(string $sokvag): string
 }
 
 /**
- * Kör ett uttryck mot `avatarCrop` i node och returnerar svaret som en array.
+ * Kör ett uttryck mot `imageCrop` i node och returnerar svaret som en array.
  *
  * @return array<string, mixed>
  */
@@ -54,7 +56,7 @@ function utsnittvyKör(string $anrop): array
     $kod = implode("\n", [
         "const { pathToFileURL } = await import('node:url');",
         'const m = await import(pathToFileURL('
-            .json_encode(resource_path('js/composables/useAvatarCrop.js'), JSON_UNESCAPED_SLASHES).').href);',
+            .json_encode(resource_path('js/composables/useImageCrop.js'), JSON_UNESCAPED_SLASHES).').href);',
         'process.stdout.write(JSON.stringify('.$anrop.'));',
     ]);
 
@@ -72,14 +74,15 @@ function utsnittvyKör(string $anrop): array
 }
 
 /*
- * Klart när: `AppLayout.vue` och `Profile.vue` ritar `UserAvatar`.
+ * Klart när: `AppLayout.vue` ritar `UserAvatar`, och profilsidan ritar
+ * förhandsvisningen med den och redigeraren med `ImageCropEditor`.
  *
  * Skalet ritar den lilla cirkeln i toppraden, profilsidan förhandsvisningen —
- * och redigerarens yta ritas av SAMMA komponent med `shape="square"` och
- * storleken som ger `?variant=medium`. En andra formulering av utsnittet hade
- * glidit isär från avatarens.
+ * och redigerarens yta är sedan issue 433 en delad komponent med
+ * `shape="round"`. Den runda formen ritar samma utsnitt som avataren, så en
+ * andra formulering av räkningen hade glidit isär.
  */
-it('ritar UserAvatar i skalet och på profilsidan', function () {
+it('ritar UserAvatar i skalet och ImageCropEditor på profilsidan', function () {
     $skal = utsnittvyKod('layouts/AppLayout.vue');
     $profil = utsnittvyKod('pages/Settings/Profile.vue');
 
@@ -88,8 +91,10 @@ it('ritar UserAvatar i skalet och på profilsidan', function () {
 
     expect($profil)->toContain("import UserAvatar from '../../components/UserAvatar.vue'")
         ->toContain('<UserAvatar :user="currentUser" :size="64" />')
-        ->toContain('shape="square"')
-        ->toContain('@load="onEditorImageLoad"');
+        ->toContain("import ImageCropEditor from '../../components/ImageCropEditor.vue'")
+        ->toContain('<ImageCropEditor')
+        ->toContain('shape="round"')
+        ->toContain('@save="saveCrop"');
 });
 
 /*
@@ -109,7 +114,7 @@ it('ritar rätt variant och faller tillbaka på initialerna', function () {
         ->toContain('has_thumb')
         ->toContain('@error')
         ->toContain('{{ initials }}')
-        ->toContain('avatarCrop');
+        ->toContain('imageCrop');
 
     preg_match('/<img\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?>/s', $avatar, $bild);
 
@@ -120,26 +125,33 @@ it('ritar rätt variant och faller tillbaka på initialerna', function () {
 });
 
 /*
- * Klart när: redigeraren postar till `/settings/profile/avatar/crop`.
+ * Klart när: redigeraren sparar utsnittet med en PATCH, och anroparen äger
+ * anropet.
  *
- * `router.patch` mot ruttens adress, med punkt och zoom ur utkastet, och
- * `onStart`/`onFinish` runt anropet (GenomgangTest § vänteläge). Ytan lyssnar
- * på pekaren och tangentbordet, och bär ett `aria-label` ur katalogen.
+ * `ImageCropEditor` sänder utkastet med `save`, och profilsidan PATCH:ar
+ * ruttens adress med det — `onStart`/`onFinish` runt anropet (GenomgangTest
+ * § vänteläge). Ytan lyssnar på pekaren och tangentbordet, och bär ett
+ * `aria-label` ur katalogen.
  */
 it('låter redigeraren spara utsnittet med en PATCH', function () {
     $profil = utsnittvyKod('pages/Settings/Profile.vue');
+    $redigerare = utsnittvyKod('components/ImageCropEditor.vue');
 
     expect($profil)->toContain("router.patch('/settings/profile/avatar/crop'")
-        ->toContain('x: editorFocus.value.x')
-        ->toContain('y: editorFocus.value.y')
-        ->toContain('zoom: editorZoom.value')
         ->toContain('onStart:')
         ->toContain('onFinish:')
+        ->toContain('@save="saveCrop"')
+        ->toContain('@cancel="closeEditor"');
+
+    expect($redigerare)->toContain('emit(\'save\'')
+        ->toContain('x: draftFocus.value.x')
+        ->toContain('y: draftFocus.value.y')
+        ->toContain('zoom: draftZoom.value')
         ->toContain('@pointerdown="startDrag"')
         ->toContain('@pointermove="dragMove"')
-        ->toContain('@keydown="onEditorKeydown"')
+        ->toContain('@keydown="onKeydown"')
         ->toContain('tabindex="0"')
-        ->toContain("t('settings.profile.avatar.crop_label')");
+        ->toContain("t('crop.label')");
 });
 
 /*
@@ -150,9 +162,9 @@ it('låter redigeraren spara utsnittet med en PATCH', function () {
  * `for`/`id`, som GenomgangTest kräver.
  */
 it('ger zoomreglaget gränserna 100 och 300', function () {
-    $profil = utsnittvyKod('pages/Settings/Profile.vue');
+    $redigerare = utsnittvyKod('components/ImageCropEditor.vue');
 
-    expect($profil)->toContain('type="range"')
+    expect($redigerare)->toContain('type="range"')
         ->toContain('min="100"')
         ->toContain('max="300"')
         ->toContain(':for="zoomId"')
@@ -160,44 +172,53 @@ it('ger zoomreglaget gränserna 100 och 300', function () {
 });
 
 /*
- * Klart när: redigeraren visar exakt vad avataren visar.
+ * Klart när: den runda formen visar exakt vad avataren visar.
  *
- * Maskens cirkel ska ha ytans radie — halva `EDITOR_SIZE` — så att den kant
- * som mörkläggs ligger på avatarens kant och inte innanför den. Ett `circle`
- * utan storleksangivelse får `farthest-corner`, som på en kvadratisk yta ger
- * radien `EDITOR_SIZE / √2` och en ring av maskad bild innanför cirkeln.
- * `closest-side` ger i stället halva sidan. Både `maskImage` och
- * `WebkitMaskImage` bär samma sträng, eftersom webbläsaren annars faller
- * tillbaka på den ena.
+ * Maskens cirkel ska ha ytans radie — halva sidan — så att den kant som
+ * mörkläggs ligger på avatarens kant och inte innanför den. Ett `circle` utan
+ * storleksangivelse får `farthest-corner`, som på en kvadratisk yta ger radien
+ * `sidan / √2` och en ring av maskad bild innanför cirkeln. `closest-side`
+ * ger i stället halva sidan. Både `maskImage` och `WebkitMaskImage` bär samma
+ * sträng, eftersom webbläsaren annars faller tillbaka på den ena. Masken ritas
+ * bara i den runda formen.
  */
 it('låter masken följa ytans kant så att den matchar avatarens cirkel', function () {
-    $profil = utsnittvyKod('pages/Settings/Profile.vue');
+    $redigerare = utsnittvyKod('components/ImageCropEditor.vue');
     $mask = 'radial-gradient(circle closest-side at center, transparent 99%, black 100%)';
 
-    expect($profil)->toContain("maskImage: '{$mask}'")
-        ->toContain("WebkitMaskImage: '{$mask}'");
+    expect($redigerare)->toContain("maskImage: '{$mask}'")
+        ->toContain("WebkitMaskImage: '{$mask}'")
+        ->toContain('v-if="isRound"');
 });
 
 /*
  * Klart när: katalogen har nycklarna.
  *
- * Redigerarens texter ligger under `settings.profile.avatar`, som resten av
- * avsnittet, och kvittensen `avatar-cropped` ligger bland de andra
- * flash-koderna — FlashMessage läser `flash.<kod>` och en kod utan nyckel
- * renderas rå.
+ * Avsnittets egna texter ligger under `settings.profile.avatar`, som resten av
+ * avsnittet. Sedan issue 433 är redigerarens ord delade och ligger under
+ * `crop` — ett ord för båda ytorna, eftersom det är en komponent — och
+ * kvittensen `avatar-cropped` ligger bland de andra flash-koderna:
+ * FlashMessage läser `flash.<kod>` och en kod utan nyckel renderas rå.
  */
 it('bär redigerarens texter i katalogen', function () {
     /** @var array<string, string> $avatar */
     $avatar = Lang::get('ui.settings.profile.avatar', [], 'en');
 
     expect($avatar)->toBeArray()
-        ->toHaveKeys([
-            'heading', 'upload', 'remove', 'uploading',
-            'adjust', 'crop_heading', 'crop_label', 'zoom', 'save', 'reset', 'cancel',
-        ]);
+        ->toHaveKeys(['heading', 'upload', 'remove', 'uploading', 'adjust', 'crop_heading']);
 
     foreach ($avatar as $nyckel => $varde) {
         expect(trim((string) $varde))->not->toBe('', "ui.settings.profile.avatar.{$nyckel} är tom");
+    }
+
+    /** @var array<string, string> $crop */
+    $crop = Lang::get('ui.crop', [], 'en');
+
+    expect($crop)->toBeArray()
+        ->toHaveKeys(['label', 'zoom', 'save', 'reset', 'cancel']);
+
+    foreach ($crop as $nyckel => $varde) {
+        expect(trim((string) $varde))->not->toBe('', "ui.crop.{$nyckel} är tom");
     }
 
     expect(Lang::get('ui.flash.avatar-cropped', [], 'en'))->not->toBe('ui.flash.avatar-cropped');
@@ -216,7 +237,7 @@ it('bär redigerarens texter i katalogen', function () {
  */
 it('räknar utsnittet med kända fall', function () {
     $mitten = utsnittvyKör(
-        'm.avatarCrop({ imageWidth: 100, imageHeight: 100, box: 100, focusX: 50, focusY: 50, zoom: 100 })',
+        'm.imageCrop({ imageWidth: 100, imageHeight: 100, box: 100, focusX: 50, focusY: 50, zoom: 100 })',
     );
 
     expect($mitten['offsetX'])->toBe(0)
@@ -225,7 +246,7 @@ it('räknar utsnittet med kända fall', function () {
         ->and($mitten['visibleY'])->toBe(1);
 
     $horn = utsnittvyKör(
-        'm.avatarCrop({ imageWidth: 200, imageHeight: 100, box: 100, focusX: 0, focusY: 0, zoom: 100 })',
+        'm.imageCrop({ imageWidth: 200, imageHeight: 100, box: 100, focusX: 0, focusY: 0, zoom: 100 })',
     );
 
     expect($horn['offsetX'])->toBe(50)
@@ -233,7 +254,7 @@ it('räknar utsnittet med kända fall', function () {
         ->and($horn['offsetY'])->toBe(0);
 
     $zoom = utsnittvyKör(
-        'm.avatarCrop({ imageWidth: 100, imageHeight: 100, box: 100, focusX: 50, focusY: 50, zoom: 200 })',
+        'm.imageCrop({ imageWidth: 100, imageHeight: 100, box: 100, focusX: 50, focusY: 50, zoom: 200 })',
     );
 
     expect($zoom['visibleX'])->toBe(0.5)
@@ -244,7 +265,7 @@ it('räknar utsnittet med kända fall', function () {
 /*
  * Klart när: redigeraren flyttar punkten med drag och piltangenter.
  *
- * `avatarFocusRange` ger den punkt som FAKTISKT syns och intervallet som går
+ * `imageFocusRange` ger den punkt som FAKTISKT syns och intervallet som går
  * att nå. Utan den började ett drag i det sparade talet, och en punkt nära
  * kanten hade först ätit upp ett dött område — bilden står stilla medan
  * talet rör sig, och nästa zoom hoppar till en punkt personen aldrig såg.
@@ -265,7 +286,7 @@ it('räknar utsnittet med kända fall', function () {
 it('räknar drag och piltangenter ur den effektiva punkten', function () {
     $bred = ['imageWidth' => 200, 'imageHeight' => 100, 'box' => 100, 'zoom' => 100];
 
-    $omrade = utsnittvyKör('m.avatarFocusRange('.json_encode(
+    $omrade = utsnittvyKör('m.imageFocusRange('.json_encode(
         $bred + ['focusX' => 0, 'focusY' => 0],
     ).')');
 
@@ -276,31 +297,31 @@ it('räknar drag och piltangenter ur den effektiva punkten', function () {
         ->and($omrade['minY'])->toBe(50)
         ->and($omrade['maxY'])->toBe(50);
 
-    $vanster = utsnittvyKör('m.avatarDragFocus('.json_encode(
+    $vanster = utsnittvyKör('m.imageDragFocus('.json_encode(
         $bred + ['focusX' => 0, 'focusY' => 0, 'deltaX' => -50],
     ).')');
 
     expect($vanster)->toBe(['x' => 50, 'y' => 50]);
 
-    $forlangt = utsnittvyKör('m.avatarDragFocus('.json_encode(
+    $forlangt = utsnittvyKör('m.imageDragFocus('.json_encode(
         $bred + ['focusX' => 0, 'focusY' => 0, 'deltaX' => 200],
     ).')');
 
     expect($forlangt)->toBe(['x' => 25, 'y' => 50]);
 
-    $steg = utsnittvyKör('m.avatarNudgeFocus('.json_encode(
+    $steg = utsnittvyKör('m.imageNudgeFocus('.json_encode(
         $bred + ['focusX' => 0, 'focusY' => 0, 'stepX' => 2],
     ).')');
 
     expect($steg)->toBe(['x' => 27, 'y' => 50]);
 
-    $bort = utsnittvyKör('m.avatarNudgeFocus('.json_encode(
+    $bort = utsnittvyKör('m.imageNudgeFocus('.json_encode(
         $bred + ['focusX' => 50, 'focusY' => 50, 'stepX' => 50],
     ).')');
 
     expect($bort)->toBe(['x' => 75, 'y' => 50]);
 
-    $kvadrat = utsnittvyKör('m.avatarDragFocus('.json_encode(
+    $kvadrat = utsnittvyKör('m.imageDragFocus('.json_encode(
         ['imageWidth' => 100, 'imageHeight' => 100, 'box' => 100, 'zoom' => 100,
             'focusX' => 0, 'focusY' => 0, 'deltaX' => 50, 'deltaY' => 50],
     ).')');
@@ -321,25 +342,21 @@ it('räknar drag och piltangenter ur den effektiva punkten', function () {
  * räknade på det sparade talet i stället för den effektiva punkten.
  */
 it('återställer utsnittet med Reset och stänger med Cancel utan att spara', function () {
+    $redigerare = utsnittvyKod('components/ImageCropEditor.vue');
     $profil = utsnittvyKod('pages/Settings/Profile.vue');
 
-    preg_match('/function resetCrop\(\)\s*\{(.*?)\n\}/s', $profil, $reset);
+    preg_match('/function reset\(\)\s*\{(.*?)\n\}/s', $redigerare, $reset);
 
-    expect($reset)->toHaveCount(2, 'resetCrop finns inte i Profile.vue');
+    expect($reset)->toHaveCount(2, 'reset finns inte i ImageCropEditor.vue');
 
-    expect($reset[1])->toContain('editorFocus.value = { x: 50, y: 50 }')
-        ->toContain('editorZoom.value = 100');
+    expect($reset[1])->toContain('draftFocus.value = { x: 50, y: 50 }')
+        ->toContain('draftZoom.value = 100');
 
-    preg_match(
-        '/@click="([^"]+)"[^>]*>\s*\{\{\s*t\(\'settings\.profile\.avatar\.cancel\'\)\s*\}\}/s',
-        $profil,
-        $cancel,
-    );
+    // Cancel stänger via anroparen — den sparar ingenting själv.
+    expect($redigerare)->toContain("emit('cancel')")
+        ->and($profil)->toContain('@cancel="closeEditor"');
 
-    expect($cancel)->toHaveCount(2, 'Cancel-knappen finns inte i Profile.vue');
-    expect($cancel[1])->toBe('closeEditor');
-
-    expect($profil)->toContain('avatarFocusRange(')
-        ->toContain('avatarDragFocus(')
-        ->toContain('avatarNudgeFocus(');
+    expect($redigerare)->toContain('imageFocusRange(')
+        ->toContain('imageDragFocus(')
+        ->toContain('imageNudgeFocus(');
 });

@@ -531,8 +531,10 @@ it('bär beskrivningen som en nullbar kolumn på containern', function () {
  * precis som `description` gör. Listan uppdaterades av samma skäl som regeln
  * ovan anger. `cover_focus_x`/`cover_focus_y` lades till av issue 682 —
  * fokuspunkten på samma bild, och samma skäl: den är ett faktum om containern.
- * `icon` och `icon_color` lades till av issue 314 ([[ADR-0064 Containerns
- * ikon]] § 2): containerns egna presentationsval, samma skäl igen.
+ * `cover_zoom` lades till av issue 433 ([[ADR-0090 Dashboardens hjälte]] § 5):
+ * zoomen hör till samma utsnitt och till samma bild. `icon` och `icon_color`
+ * lades till av issue 314 ([[ADR-0064 Containerns ikon]] § 2): containerns
+ * egna presentationsval, samma skäl igen.
  */
 it('har inte fått någon annan kolumn än description', function () {
     $kolumner = collect(Schema::getColumns('container'))->pluck('name')->sort()->values()->all();
@@ -545,6 +547,7 @@ it('har inte fått någon annan kolumn än description', function () {
         'cover_attachment_id',
         'cover_focus_x',
         'cover_focus_y',
+        'cover_zoom',
         'created_at',
         'currency',
         'deleted_at',

@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ContainerCover from './ContainerCover.vue';
 import ItemIcon from './ItemIcon.vue';
 import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -147,10 +148,23 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
                     ? ['w-56 flex-col justify-center gap-1 border-accent bg-accent-soft py-3 pl-8 pr-12 text-center', sizeClass.center]
                     : ['w-48 gap-3 border-border bg-surface py-2 pl-3 pr-10 text-left', sizeClass.card, sizeClass.gap]"
             >
-                <!-- Mitten: ikonen ovanför namnet, ordet under. -->
+                <!-- Mitten: bilden eller ikonen ovanför namnet, ordet under. -->
                 <template v-if="current">
+                    <!--
+                        Containerns bild när den finns (issue 433 · [[ADR-0090
+                        Dashboardens hjälte]] § 5): samma `ContainerCover` som
+                        hjälten och korten ritar, så fokuspunkt och zoom följer
+                        med ända in i kartans mitt. Utan bild ritas den valda
+                        ikonen eller lådan som förut.
+                    -->
+                    <span
+                        v-if="node.kind === 'container' && node.cover"
+                        class="h-10 w-10 shrink-0 overflow-hidden rounded-control"
+                    >
+                        <ContainerCover :cover="node.cover" />
+                    </span>
                     <ItemIcon
-                        v-if="node.kind === 'container'"
+                        v-else-if="node.kind === 'container'"
                         :name="node.icon"
                         :color="node.icon_color"
                         :size="24"

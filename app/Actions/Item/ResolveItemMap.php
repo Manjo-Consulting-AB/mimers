@@ -3,6 +3,7 @@
 namespace App\Actions\Item;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Http\Resources\ContainerResource;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
@@ -101,11 +102,20 @@ class ResolveItemMap
      * Ett värde som inte matchar något item i omfånget ignoreras: svaret blir
      * containern som mitt, utan en rad om varför.
      *
-     * `center` är `{kind, ulid, name, icon, icon_color, children, placements}`.
-     * `icon` och `icon_color` är mitten av det slag den är: itemets egna när
-     * mitten är ett item, containerns egna när mitten är containern. `children`
-     * och `placements` är `null` för containern, som inte förekommer i
-     * strukturen.
+     * `center` är `{kind, ulid, name, icon, icon_color, cover, children,
+     * placements}`. `icon` och `icon_color` är mitten av det slag den är:
+     * itemets egna när mitten är ett item, containerns egna när mitten är
+     * containern. `children` och `placements` är `null` för containern, som
+     * inte förekommer i strukturen.
+     *
+     * **`cover` kom med issue 433 · [[ADR-0090 Dashboardens hjälte]] § 5.**
+     * När mitten är containern bär den containerns bild i samma form som
+     * containerlistan och korten (App\Http\Resources\ContainerResource::
+     * cover()), så kartans mitt kan rita bilden med fokuspunkt och zoom.
+     * Formen är `null` för en container utan bild och för ett item, som inte
+     * har någon bild i den här meningen. Relationen är redan laddad av
+     * anroparen (App\Http\Controllers\ItemController::index/show), så ingen
+     * ny fråga ställs.
      *
      * `drawn` är modellerna för mitten (när den är ett item) och de ritade
      * noderna, nycklade på ULID. Den finns för att statusfrågan
@@ -118,7 +128,7 @@ class ResolveItemMap
      * (App\Support\Frontend\CreateTarget).
      *
      * @return array{
-     *     center: array{kind: string, ulid: string, name: string, icon: ?string, icon_color: ?string, children: ?int, placements: ?int},
+     *     center: array{kind: string, ulid: string, name: string, icon: ?string, icon_color: ?string, cover: array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null, zoom: int|null}|null, children: ?int, placements: ?int},
      *     path: list<array{ulid: string, name: string}>,
      *     parent: array{nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, children: int, placements: int, via: list<string>}>, total: int},
      *     child: array{nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, children: int, placements: int}>, total: int},
@@ -214,6 +224,10 @@ class ResolveItemMap
                 // som redan är hämtad, så frågan kostar ingenting extra.
                 'icon' => $container->icon,
                 'icon_color' => $container->icon_color,
+                // Containerns bild i samma form som listan och korten (issue
+                // 433 · [[ADR-0090 Dashboardens hjälte]] § 5), så kartans mitt
+                // ritar fokuspunkt och zoom. Relationen är redan laddad.
+                'cover' => ContainerResource::cover($container),
                 'children' => null,
                 'placements' => null,
             ];
@@ -231,6 +245,9 @@ class ResolveItemMap
                 'name' => $centerItem->name,
                 'icon' => $centerItem->icon,
                 'icon_color' => $centerItem->icon_color,
+                // Ett item har ingen containerbild; nyckeln står med som null
+                // så mitten har samma form oavsett slag.
+                'cover' => null,
                 'children' => count($childrenByParent[$centerId] ?? []),
                 'placements' => $placements[$centerId] ??= $this->countPlacements($centerId, $parentsByChild, $placements, [$centerId => true]),
             ];

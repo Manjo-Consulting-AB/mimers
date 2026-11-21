@@ -84,7 +84,13 @@ class Container extends Model
      * vidare orörda (App\Http\Resources\ContainerResource::cover()), och en
      * sträng där hade varit en tyst typglidning mot klienten.
      *
-     * De står UTANFÖR #[Fillable] och sätts bara av
+     * `cover_zoom` (issue 433 · [[ADR-0090 Dashboardens hjälte]] § 5) är hur
+     * mycket som skärs bort runt punkten, i procent 100–300 där `NULL` är
+     * 100. Den nollställs tillsammans med punkten när bilden byts eller tas
+     * bort, av samma skäl: ett utsnitt valt på en bild säger ingenting om
+     * nästa.
+     *
+     * Alla tre står UTANFÖR #[Fillable] och sätts bara av
      * App\Actions\Container\SetContainerCoverFocus — samma regel som
      * `cover_attachment_id`.
      *
@@ -95,6 +101,7 @@ class Container extends Model
         return [
             'cover_focus_x' => 'integer',
             'cover_focus_y' => 'integer',
+            'cover_zoom' => 'integer',
             'versioning_max_versions' => 'integer',
         ];
     }

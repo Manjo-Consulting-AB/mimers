@@ -28,7 +28,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * hade varje kontroller under layouten behövt lägga dit det, och en enda av
  * dem hade glömt — den sidans topprad hade tyst tappat bilden.
  *
- * Formen är `{ ulid, variants, focus }` eller `null`, aldrig utelämnad.
+ * Formen är `{ ulid, variants, focus, zoom }` eller `null`, aldrig utelämnad.
  * `focus` kom med issue 682 — den punkt på bilden som ska synas när ytan
  * beskär den, eller `null` för mitten (se `cover()`). `variants` är
  * samma sak som `variants`-proppen på itemets detaljvy (issue 61b § Beslut 1):
@@ -88,7 +88,13 @@ class ContainerResource extends JsonResource
      * samma form hade glidit isär — samma skäl som `Container::
      * scopeAccessibleBy()` bär för urvalet.
      *
-     * @return array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null}|null
+     * **`zoom` kom med issue 433 · [[ADR-0090 Dashboardens hjälte]] § 5.** Det
+     * är hur mycket som skärs bort runt fokuspunkten, i procent 100–300, eller
+     * `null` när inget utsnitt är valt (NULL betyder 100). Den läses ur
+     * `cover_zoom` på samma rad som `cover_attachment_id`, så ingen ny fråga
+     * ställs, och formen är densamma på alla ytor som bär `cover`.
+     *
+     * @return array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null, zoom: int|null}|null
      */
     public static function cover(Container $container): ?array
     {
@@ -115,6 +121,10 @@ class ContainerResource extends JsonResource
             'focus' => $container->cover_focus_x === null
                 ? null
                 : ['x' => $container->cover_focus_x, 'y' => $container->cover_focus_y],
+            // NULL betyder 100 %, samma utgångsläge som en bild utan valt
+            // utsnitt. Kolumnen castas till heltal av App\Models\Container,
+            // så en sträng aldrig glider vidare till klienten.
+            'zoom' => $container->cover_zoom,
         ];
     }
 
