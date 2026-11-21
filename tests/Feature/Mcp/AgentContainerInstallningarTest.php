@@ -96,12 +96,13 @@ it('har en agent avslagen i varje container tills användaren slår på den', fu
     [$anvandare, $agent, $container] = instEgen();
     actingAs($anvandare);
 
-    get("/containers/{$container->ulid}/edit")
+    get("/containers/{$container->ulid}/agents")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $sida) => $sida
-            ->where('agents.agents.0.ulid', $agent->ulid)
-            ->where('agents.agents.0.enabled', false)
-            ->where('agents.agents.0.all', false));
+            ->component('Containers/Agents')
+            ->where('section.agents.0.ulid', $agent->ulid)
+            ->where('section.agents.0.enabled', false)
+            ->where('section.agents.0.all', false));
 
     expect(instContainerRader($agent, $container))->toBe([])
         ->and(instNiva($agent, $container))->toBeNull();
@@ -120,8 +121,8 @@ it('sparar kontots nivåer som de är med switchen för allt, och följer inte e
 
     expect(instContainerRader($agent, $container))->toBe(['costs' => 'read', 'items' => 'write']);
 
-    get("/containers/{$container->ulid}/edit")
-        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('agents.agents.0.enabled', true));
+    get("/containers/{$container->ulid}/agents")
+        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('section.agents.0.enabled', true));
 });
 
 it('sparar en nivå per grupp direkt och kapar den till kontots nivå', function () {
@@ -145,15 +146,41 @@ it('slår av agenten med DELETE och tar bort raderna', function () {
     expect(instContainerRader($agent, $container))->toBe([]);
 });
 
+it('visar menyns agentrad bara när sidan finns', function () {
+    [$anvandare, , $container] = instEgen();
+    actingAs($anvandare);
+
+    get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('containerAgentsAvailable', true));
+
+    config(['mcp.enabled' => false]);
+
+    // Proppen styr raden i ContainerSettingsLayout; klienten räknar aldrig
+    // fram tillgången själv (issue 1483).
+    get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $sida) => $sida
+            ->where('containerAgentsAvailable', false)
+            ->missing('agents'));
+});
+
+it('svarar 404 på agenternas sida när MCP är avslaget', function () {
+    [$anvandare, , $container] = instEgen();
+    actingAs($anvandare);
+
+    config(['mcp.enabled' => false]);
+
+    get("/containers/{$container->ulid}/agents")->assertNotFound();
+});
+
 it('kapar i någon annans container till ägarens tak', function () {
     [$anvandare, $agent, $container] = instAnnans('read');
     actingAs($anvandare);
 
-    get("/containers/{$container->ulid}/edit")
+    get("/containers/{$container->ulid}/agents")
         ->assertInertia(fn (AssertableInertia $sida) => $sida
-            ->where('agents.own', false)
-            ->where('agents.ceiling', 'read')
-            ->where('agents.agents.0.limits.items', 'read'));
+            ->where('section.own', false)
+            ->where('section.ceiling', 'read')
+            ->where('section.agents.0.limits.items', 'read'));
 
     put("/containers/{$container->ulid}/agents/{$agent->ulid}", ['all' => true])->assertRedirect();
     expect(instContainerRader($agent, $container))->toBe(['costs' => 'read', 'items' => 'read']);
@@ -166,8 +193,8 @@ it('visar att ägaren inte tillåter agenter när taket är NULL, och sparar ing
     [$anvandare, $agent, $container] = instAnnans(null);
     actingAs($anvandare);
 
-    get("/containers/{$container->ulid}/edit")
-        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('agents.ownerAllows', false));
+    get("/containers/{$container->ulid}/agents")
+        ->assertInertia(fn (AssertableInertia $sida) => $sida->where('section.ownerAllows', false));
 
     put("/containers/{$container->ulid}/agents/{$agent->ulid}", ['all' => true])->assertSessionHasErrors('agent');
 
@@ -268,7 +295,10 @@ it('visar varken avsnitt eller fält när användaren har Gratis', function () {
     [$anvandare, $agent, $container] = instEgen('free');
     actingAs($anvandare);
 
-    get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $sida) => $sida->where('agents', null));
+    get("/containers/{$container->ulid}/agents")->assertNotFound();
+    get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $sida) => $sida
+        ->missing('agents')
+        ->where('containerAgentsAvailable', false));
     put("/containers/{$container->ulid}/agents/{$agent->ulid}", ['all' => true])->assertNotFound();
     get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $sida) => $sida->where('agentAccess', false));
     expect(instContainerRader($agent, $container))->toBe([]);
@@ -278,7 +308,10 @@ it('visar varken avsnitt eller fält när ägaren har Gratis, och agent_level f�
     [$anvandare, $agent, $container, $agare, $rad] = instAnnans('read', 'free');
 
     actingAs($anvandare);
-    get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $sida) => $sida->where('agents', null));
+    get("/containers/{$container->ulid}/agents")->assertNotFound();
+    get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $sida) => $sida
+        ->missing('agents')
+        ->where('containerAgentsAvailable', false));
     put("/containers/{$container->ulid}/agents/{$agent->ulid}", ['all' => true])->assertNotFound();
 
     actingAs($agare);

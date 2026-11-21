@@ -639,8 +639,8 @@ class ContainerController extends Controller
             // `currency` och betyder "ärver".
             'currency' => $container->currency,
             'accountCurrency' => $container->account->currency,
-            // Avsnittet *Agents* (issue 408); `null` ritar inget.
-            'agents' => ContainerAgentController::section($request->user(), $container),
+            // Avsnittet *Agents* har en egen sida sedan issue 1483
+            // (`containers.agents`), och skickas därför inte längre här.
             // Versionshistorikens tak (issue 411 · [[ADR-0088
             // Versionshistorik för items]] Riktning 1). `max` är containerns
             // EGET värde — `null` betyder *Follow account* — och

@@ -9,6 +9,7 @@ use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
 use App\Actions\Notification\CountUnreadInAppNotifications;
 use App\Actions\Schedule\ListTodo;
+use App\Http\Controllers\ContainerAgentController;
 use App\Http\Controllers\Settings\AgentController;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
@@ -284,6 +285,10 @@ class HandleInertiaRequests extends Middleware
             // Containerns två tal (issue 679) — se containerCounts() om varför
             // de är en delad prop och varför de är null utanför en container.
             'containerCounts' => fn (): ?array => $this->containerCounts($request),
+            // Ritar containerns inställningsmeny raden *Agents*? (issue 1483)
+            // Se containerAgentsAvailable() om varför den är en delad prop
+            // och varför den är false utanför en container.
+            'containerAgentsAvailable' => fn (): bool => $this->containerAgentsAvailable($request),
             'favorites' => fn (): array => $this->favorites($request),
             'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
                 + $this->pendingInvitationCount($request),
@@ -381,6 +386,38 @@ class HandleInertiaRequests extends Middleware
             'items' => $this->listItems->count($user, $container),
             'todos' => $this->listTodo->countForContainer($user, $container),
         ];
+    }
+
+    /**
+     * Ritar containerns inställningsmeny raden *Agents*? (issue 1483)
+     *
+     * **En delad prop och inte en flagga i varje kontroller**, av samma skäl
+     * som `containerCounts` ovan: raden ritas av `ContainerSettingsLayout` på
+     * varje containerinställningssida, och klienten får inte räkna fram
+     * tillgången en andra gång — Pro-kravet sitter i
+     * App\Http\Controllers\ContainerAgentController::available(), och den
+     * läses här och inte i Vue.
+     *
+     * **`false` utom när alla tre gäller**: `$request->user()` finns,
+     * `{container}`-parametern är en Container, och grinden `view` släpper in
+     * henne. Grinden är nödvändig av samma skäl som `containerCounts` anger:
+     * felsidan delar samma props, och en 403 på en främmande container får
+     * inte bära dess menyrader.
+     */
+    private function containerAgentsAvailable(Request $request): bool
+    {
+        $user = $request->user();
+        $container = $request->route('container');
+
+        if ($user === null || ! $container instanceof Container) {
+            return false;
+        }
+
+        if (! Gate::forUser($user)->allows('view', $container)) {
+            return false;
+        }
+
+        return ContainerAgentController::available($user, $container);
     }
 
     /**
