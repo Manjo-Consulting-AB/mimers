@@ -78,6 +78,7 @@ function kolumnTasBortFulltextkolumner(): array
     return $namn[1];
 }
 
+// vakt: kasten togs bort redan i #1471 (issue 425); provet låser att de inte kommer tillbaka.
 it('kastar inte de två datumkolumnerna på item', function () {
     $kast = (new Item)->getCasts();
 
