@@ -16,7 +16,7 @@
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
- * **Elva rader, och varken fler eller färre.** Listan är containerns sidor, och
+ * **Femton rader, och varken fler eller färre.** Listan är containerns sidor, och
  * issue 101 · [[ADR-0042 Designsystemet]] § Konsekvenser delar dem i två ytor:
  * flikraden (`containerTabs`) och inställningssidan
  * (`containerSettingsSections`). Ingen rad får försvinna — en yta ingen hittar
@@ -84,6 +84,13 @@
  * hör till flikraden (`TAB_KEYS` nedan): bilden ritar historiken jämte
  * översikten och items, och den som undrar vad som hänt letar där hon mötte
  * resten — inte på inställningssidan.
+ *
+ * `agents` kom med M69 · issue 1483 och ligger efter `sharing`: containerns
+ * agenter är, som kontots, en yta man ställer in och inte en man arbetar i.
+ * Raden bär `requires` — namnet på en delad prop som måste vara sann,
+ * `containerAgentsAvailable` (Pro hos både användaren och ägarkontot plus
+ * `mcp.enabled`) — och layouten döljer den annars; sidan svarar 404 av samma
+ * skäl. Samma konstruktion som `agents` i settingsSections.js (issue 407).
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
@@ -94,6 +101,12 @@ export const containerSections = [
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'fields', href: (ulid) => `/containers/${ulid}/fields` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
+    // Issue 1483: containerns egna agentsida, samma mönster som kontots
+    // `/settings/agents`. `requires` namnger den delade proppen som måste
+    // vara sann — Pro hos både användaren och ägarkontot plus `mcp.enabled` —
+    // och raden ritas bara när sidan finns. Tillgången räknas på servern
+    // (`ContainerAgentController::available()`), aldrig i klienten.
+    { key: 'agents', href: (ulid) => `/containers/${ulid}/agents`, requires: 'containerAgentsAvailable' },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
     { key: 'calendar', href: (ulid) => `/containers/${ulid}/calendar` },
     { key: 'export', href: (ulid) => `/containers/${ulid}/export` },
@@ -180,11 +193,11 @@ export const containerTabs = [
 /*
  * Inställningssidan, se issue 101 och issue 170.
  *
- * De åtta sektionerna som inte fick plats i flikraden: inställningssidan själv
- * och de sju den bär — kategorier, taggar, delning, kalender, export,
- * papperskorg och överlåtelse. Ordningen är i övrigt containerSections egen —
- * strukturen först, utgångarna efter, papperskorgen och ägarbytet sist — så en
- * rad flyttar aldrig i förhållande till sina grannar när ytorna delas.
+ * De nio sektionerna som inte fick plats i flikraden: inställningssidan själv
+ * och de åtta den bär — kategorier, taggar, fält, delning, agenter, kalender,
+ * export, papperskorg och överlåtelse. Ordningen är i övrigt containerSections
+ * egen — strukturen först, utgångarna efter, papperskorgen och ägarbytet sist
+ * — så en rad flyttar aldrig i förhållande till sina grannar när ytorna delas.
  *
  * **Inställningssidan ligger FÖRST sedan issue 170.** Den lämnade flikraden
  * då (ADR-0050 § 3) och är tillbaka där sedan issue 646, men kolumnen är

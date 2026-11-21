@@ -6,6 +6,7 @@ use App\Actions\Agent\DisableAgentInContainer;
 use App\Actions\Agent\EnableAgentInContainer;
 use App\Actions\Agent\ResolveAgentAccess;
 use App\Http\Controllers\Settings\AgentController;
+use App\Http\Resources\ContainerResource;
 use App\Models\Agent;
 use App\Models\Container;
 use App\Models\User;
@@ -17,6 +18,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Avsnittet *Agents* i containerns inställningar, se [[ADR-0087 MCP-server för
@@ -30,6 +33,14 @@ use Illuminate\Validation\ValidationException;
  * **Avsnittet finns bara med Pro eller Pro+ hos både användaren och
  * containerns ägarkonto, och med `mcp.enabled`** (`available()`). Annars
  * skickas ingen prop och skrivrutterna svarar 404.
+ *
+ * **Sidan kom med issue 1483.** Avsnittet låg först längst ned på
+ * `/containers/{container}/edit`, under *Settings*; nu har det en egen sida
+ * (`GET /containers/{container}/agents`) och en egen rad i containerns
+ * inställningsmeny, samma mönster som kontots `/settings/agents`
+ * (`settingsSections.js` och `mcpAvailable`). `index()` svarar 404 när
+ * `section()` svarar `null`, så en dold menyrad och en död adress är samma
+ * frånvaro.
  *
  * **Taket per grupp är det lägsta av kontots nivå och, i någon annans
  * container, ägarens `agent_level`.** Servern kapar (App\Actions\Agent\
@@ -110,6 +121,40 @@ class ContainerAgentController extends Controller
                 ];
             })->values()->all(),
         ];
+    }
+
+    /**
+     * GET /containers/{container}/agents — containerns egen agentsida
+     * (issue 1483).
+     *
+     * Sidan är samma sak som avsnittet var: `section()` svarar `null` när
+     * avsnittet inte ska ritas, och då svarar rutten 404 i stället för att
+     * rita en tom sida. Grinden är `view` på containern — samma grind som
+     * `edit()` ställer, och den `section()` redan förutsätter; Pro-kravet
+     * prövas i `available()` och inte som en egen regel här.
+     */
+    public function index(Request $request, Container $container): Response
+    {
+        Gate::authorize('view', $container);
+
+        // Ägarkontot och bilden, av samma skäl som ContainerController::edit():
+        // ContainerResource läser `account`, och skalets topprad ritar
+        // miniatyren ur `cover` (issue 159).
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $section = self::section($user, $container);
+
+        if ($section === null) {
+            abort(404);
+        }
+
+        return Inertia::render('Containers/Agents', [
+            'container' => ContainerResource::make($container)->resolve($request),
+            'section' => $section,
+        ]);
     }
 
     /**

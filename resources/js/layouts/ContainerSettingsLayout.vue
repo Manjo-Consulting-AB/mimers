@@ -81,6 +81,13 @@ function isActive(section) {
     return page.url === href || page.url.startsWith(`${href}/`);
 }
 
+/*
+ * Rader med `requires` ritas bara när den delade proppen är sann (issue 1483).
+ * Samma konstruktion som SettingsLayout använder för kontots `agents` (issue
+ * 407): tillgången räknas på servern, och klienten ritar bara svaret.
+ */
+const isVisible = (section) => section.requires === undefined || page.props[section.requires] === true;
+
 const sectionLabel = (section) => t(`container.nav.${section.key}`);
 </script>
 
@@ -104,16 +111,18 @@ const sectionLabel = (section) => t(`container.nav.${section.key}`);
                 class="flex-col gap-1 text-sm"
                 :class="sectionsOpen ? 'flex' : 'hidden md:flex'"
             >
-                <li v-for="section in containerSettingsSections" :key="section.key">
-                    <Link
-                        :href="section.href(container.ulid)"
-                        :aria-current="isActive(section) ? 'page' : undefined"
-                        class="flex min-h-11 items-center rounded px-3"
-                        :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
-                    >
-                        {{ sectionLabel(section) }}
-                    </Link>
-                </li>
+                <template v-for="section in containerSettingsSections" :key="section.key">
+                    <li v-if="isVisible(section)">
+                        <Link
+                            :href="section.href(container.ulid)"
+                            :aria-current="isActive(section) ? 'page' : undefined"
+                            class="flex min-h-11 items-center rounded px-3"
+                            :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
+                        >
+                            {{ sectionLabel(section) }}
+                        </Link>
+                    </li>
+                </template>
             </ul>
         </nav>
 

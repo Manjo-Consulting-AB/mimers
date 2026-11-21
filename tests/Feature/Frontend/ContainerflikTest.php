@@ -239,16 +239,21 @@ it('containern har en flikrad byggd av UiTabs', function () {
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
  * Nycklarna räknas upp ur modulen — en rad fler vore en ny sida någon byggt
  * utan att en issue bad om den, och en rad färre vore en yta ingen hittar —
- * och varje adress begärs som inloggad medlem. Fjorton sedan M68 · issue 419
+ * och varje adress begärs som inloggad medlem. Femton sedan M69 · issue 1483
  * (178 lade till dokumentfliken, 175 kostnadsfliken, 174 uppgiftsfliken, 116
  * historikfliken och 419 fältsidan).
+ *
+ * **En rad kan vara villkorad** (issue 1483): `agents` bär `requires` och
+ * ritas bara när avsnittet finns. Kontexten här är ett gratiskonto utan MCP,
+ * så raden finns i listan medan adressen svarar 404 — samma frånvaro som en
+ * dold menyrad, och det är vad loopen prövar.
  *
  * Den andra halvan är inställningssidan, som är den yta de sju sektionerna
  * flyttade TILL. Att adressen svarar 200 är inte samma sak som att den går att
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de fjorton sektionerna går att nå', function () {
+it('var och en av de femton sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
@@ -262,6 +267,7 @@ it('var och en av de fjorton sektionerna går att nå', function () {
         'tags',
         'fields',
         'sharing',
+        'agents',
         'settings',
         'calendar',
         'export',
@@ -270,13 +276,24 @@ it('var och en av de fjorton sektionerna går att nå', function () {
         'history',
     ]);
 
+    /** @var array<string, string> $villkorade */
+    $villkorade = containerflikKor(
+        'Object.fromEntries(containerSections.filter((post) => post.requires !== undefined).map((post) => [post.key, post.requires]))',
+    );
+
     foreach (containerflikLankar('containerSections', $container->ulid) as $nyckel => $adress) {
+        if (array_key_exists($nyckel, $villkorade)) {
+            actingAs($anvandare)->get($adress)->assertNotFound();
+
+            continue;
+        }
+
         actingAs($anvandare)->get($adress)->assertOk();
     }
 
-    // De åtta som kolumnen bär, ur samma modul: items och history stannar i
+    // De tio som kolumnen bär, ur samma modul: items och history stannar i
     // flikraden sedan issue 116, och *Inställningar* ligger FÖRST i kolumnen,
-    // som hubben de sju andra hänger under ([[ADR-0050 Desktopdesignen]] § 3) —
+    // som hubben de nio andra hänger under ([[ADR-0050 Desktopdesignen]] § 3) —
     // och sedan issue 646 är samma post även flikradens sista, utan att
     // kolumnens ordning rörs. Resten behåller sin inbördes ordning.
     expect(containerflikNycklar('containerSettingsSections'))->toBe([
@@ -285,6 +302,7 @@ it('var och en av de fjorton sektionerna går att nå', function () {
         'tags',
         'fields',
         'sharing',
+        'agents',
         'calendar',
         'export',
         'trash',

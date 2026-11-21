@@ -1834,6 +1834,14 @@ Route::middleware('auth')->group(function () {
 
     // Issue 408 · avsnittet *Agents* i containerns inställningar. Pro hos
     // både användaren och ägarkontot och `mcp.enabled` krävs, annars 404.
+    //
+    // Issue 1483 · avsnittet har en egen sida sedan dess, med en egen rad i
+    // containerns inställningsmeny — samma mönster som kontots
+    // `/settings/agents`. Sidan svarar 404 när `section()` är `null`, så en
+    // menyrad som inte ritas och en adress som inte finns säger samma sak.
+    Route::get('/containers/{container}/agents', [ContainerAgentController::class, 'index'])
+        ->name('containers.agents');
+
     Route::put('/containers/{container}/agents/{agent}', [ContainerAgentController::class, 'update'])
         ->name('containers.agents.update');
 

@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\File;
  */
 
 /**
- * De åtta sidorna som bär kolumnen.
+ * De tio sidorna som bär kolumnen.
  *
  * `Edit` först: den är inställningssidan och listans gamla hem.
  *
@@ -52,6 +52,7 @@ function containerinstallningskolumnSidor(): array
         'Tags',
         'Fields',
         'Sharing',
+        'Agents',
         'CalendarFeed',
         'Export',
         'Trash',
@@ -255,9 +256,9 @@ it('når alla sektioner från inställningskolumnen, inställningarna först', f
 });
 
 /*
- * Klart när: alla åtta inställningssidor har samma sidokolumn.
+ * Klart när: alla inställningssidor har samma sidokolumn.
  *
- * Provet är ett dataset över de åtta filerna och var och en möts av samma krav:
+ * Provet är ett dataset över sidfilerna och var och en möts av samma krav:
  * sidan importerar BÅDA layouterna i kedjan, deklarerar dem i sin ordning, och
  * ritar ingen layouttagg i mallen. Sedan issue 275 är det sista ledet som
  * håller kolumnen på plats — en sida som tappar `ContainerSettingsLayout` ur
@@ -317,6 +318,57 @@ it('lämnar flikarna utan sidokolumn', function () {
 
         expect($kod)->not->toContain('ContainerSettingsLayout');
     }
+});
+
+/*
+ * Klart när: menyn har posten *Agents* efter *Sharing* när sidan finns, och
+ * saknar den annars (issue 1483).
+ *
+ * Villkoret bor i modulen som `requires` — namnet på en delad prop — och
+ * layouten ritar raden bara när proppen är sann. Klienten räknar aldrig fram
+ * tillgången själv: Pro-kravet sitter på servern
+ * (ContainerAgentController::available()), och samma konstruktion används för
+ * kontots `agents` sedan issue 407.
+ */
+it('lägger agenternas sida efter delningen, villkorad av den delade proppen', function () {
+    $nycklar = containerinstallningskolumnNycklar('containerSections');
+    $delning = array_search('sharing', $nycklar, true);
+
+    expect($delning)->not->toBeFalse('sharing saknas i containerSections');
+
+    expect($nycklar[$delning + 1] ?? null)->toBe('agents');
+
+    $krav = containerinstallningskolumnKor(
+        'Object.fromEntries(containerSections.map((post) => [post.key, post.requires ?? null]))',
+    );
+
+    expect($krav['agents'])->toBe('containerAgentsAvailable');
+
+    // Radens ord: `t()` skriver nyckeln själv när uppslaget misslyckas, så en
+    // glömd `container.nav.agents` syns som den råa nyckeln i menyn.
+    expect(trans('ui.container.nav.agents', [], 'en'))->toBe('Agents');
+
+    $kod = containerinstallningskolumnKod('layouts/ContainerSettingsLayout.vue');
+
+    expect($kod)->toContain('requires === undefined')
+        ->toContain('page.props[section.requires] === true')
+        ->toContain('<li v-if="isVisible(section)">');
+});
+
+/*
+ * Klart när: `/containers/{ulid}/edit` inte längre ritar avsnittet *Agents*
+ * (issue 1483).
+ *
+ * Avsnittet flyttade till sin egen sida, och `Edit.vue` varken importerar
+ * komponenten eller bär proppen. Provet fäster båda, för en kvarglömd import
+ * bygger utan att något klagar och en kvarglömd rad ritar avsnittet två
+ * gånger.
+ */
+it('ritar inte agentavsnittet på inställningssidan', function () {
+    $kod = containerinstallningskolumnKod('pages/Containers/Edit.vue');
+
+    expect($kod)->not->toContain('ContainerAgentsSection');
+    expect($kod)->not->toContain('agents:');
 });
 
 /*

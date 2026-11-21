@@ -2542,6 +2542,11 @@ return [
             // word is the page's own (`container.fields.heading`).
             'fields' => 'Fields',
             'sharing' => 'Sharing',
+            // Issue 1483: the container's own agents page, after `sharing` in
+            // containerSections.js — the same word as the account's page
+            // (`agents.heading`), because it is the same thing in its
+            // container. The row is drawn only when the page exists.
+            'agents' => 'Agents',
             'settings' => 'Settings',
             // Issue 65b decision 1: the calendar link is a WAY OUT of the
             // product — the container's tasks subscribed to from someone else's
