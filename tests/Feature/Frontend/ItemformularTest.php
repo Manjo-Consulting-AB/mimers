@@ -983,3 +983,19 @@ it('har ingen anteckning i skapaformuläret och behåller redigeringens ordning'
         ->and(strpos($kod, "t('item.form.category')", $andra))->not->toBeFalse()
         ->and(strpos($kod, "t('item.form.tags')", $andra))->not->toBeFalse();
 });
+
+/*
+ * Klart när: redigeringen av ett item har ingen rubrik *Fields*, och *Add
+ * field* finns kvar (M69 fynd 2026-11-21). Utan egna fält hamnade rubriken
+ * direkt ovanför *Category* och *Tags* och läste som deras rubrik.
+ */
+it('har ingen rubrik Fields i redigeringen men behåller Add field', function () {
+    $kod = itemformKomponent();
+
+    expect($kod)->not->toContain("t('item.fields.heading')")
+        ->and($kod)->toContain("t('item.fields.add')");
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['item']['fields'])->not->toHaveKey('heading');
+});

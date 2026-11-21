@@ -1232,8 +1232,6 @@ function submit() {
             `preserveState`, så formulärets osparade inmatning står kvar.
         -->
         <section v-if="item !== null" class="flex flex-col gap-3 border-t border-border pt-4">
-            <p class="text-body font-medium text-ink">{{ t('item.fields.heading') }}</p>
-
             <template v-if="canAddField">
                 <div v-if="addFormOpen" class="flex flex-col gap-3">
                     <FormField

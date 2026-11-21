@@ -54,7 +54,7 @@ defineOptions({
  * tomtexten när trädet är tomt, användaren får skriva och hon inte redan tackat
  * nej i den här sessionen (`presetDismissed`, den enda prop servern skickar om
  * förslaget). Kortet är ett `<section>` och ingen modal — skapa-formuläret
- * nedanför fungerar oförändrat bredvid det.
+ * ovanför fungerar oförändrat bredvid det.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -98,6 +98,15 @@ const showsPreset = computed(
     <h1 class="text-2xl font-semibold">{{ t('container.categories.heading') }}</h1>
     <p class="mt-1 text-sm text-slate-600">{{ t('container.categories.description') }}</p>
 
+    <!-- Skapaformuläret står ovanför listan (M69 fynd 2026-11-21): den som
+         kommer hit för att lägga till en kategori ska inte behöva skrolla
+         förbi hela trädet först. -->
+    <section v-if="can.manage" class="mt-6">
+        <h2 class="text-lg font-semibold">{{ t('container.categories.create_heading') }}</h2>
+
+        <CategoryCreateForm class="mt-4" :container-ulid="container.ulid" :categories="categories" />
+    </section>
+
     <p
         v-if="deleteErrorUlid === null && page.props.errors.category"
         role="alert"
@@ -123,10 +132,4 @@ const showsPreset = computed(
     />
 
     <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>
-
-    <section v-if="can.manage" class="mt-10">
-        <h2 class="text-lg font-semibold">{{ t('container.categories.create_heading') }}</h2>
-
-        <CategoryCreateForm class="mt-4" :container-ulid="container.ulid" :categories="categories" />
-    </section>
 </template>

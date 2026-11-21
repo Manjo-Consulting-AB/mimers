@@ -1630,14 +1630,18 @@ return [
              * resources/js/components/UserDeletionForm.vue.
              *
              * **Ordet.** The account is `account` in the interface and is
-             * something other than the person: an account with other members
-             * is kept and only the membership goes (ADR-0045 § Beslut 3). The
-             * copy therefore never says *Delete account*. It says what is
-             * deleted — **you**, and the accounts where you are the only
-             * member. `intro` carries that in one sentence and the two lists
-             * below it carry it in names, so a user who reads only the
-             * heading and the button has still been told the truth about the
-             * accounts she shares.
+             * something other than the person. The copy therefore never says
+             * *Delete account*. It says what is deleted — **the account and
+             * everything stored in it** — and where the rest goes: what the
+             * person added to containers others share with her stays with
+             * them. `intro` carries that in one sentence, so a user who reads
+             * only the heading and the button has still been told the truth.
+             *
+             * **Kontolistorna är borta sedan M69 fynd 2026-11-21.** A person
+             * has exactly one account (Tony 2026-11-18, [[Konton och
+             * åtkomst]] § account), so listing accounts that are deleted and
+             * accounts that are kept said nothing. `accounts_deleted_heading`,
+             * `accounts_left_heading` and `accounts_none` are gone with them.
              *
              * **Ingen ångerfrist, och texten lovar ingen.** There is no undo
              * and no grace period; the two steps (the request, then the link
@@ -1678,11 +1682,7 @@ return [
             'deletion' => [
                 'heading' => 'Delete yourself',
 
-                'intro' => 'This deletes you, and every account where you are the only member. An account you share with others is kept, and only your membership in it is removed. We send you a link by email — nothing is deleted until you open it.',
-
-                'accounts_deleted_heading' => 'Accounts that are deleted',
-                'accounts_left_heading' => 'Accounts that are kept',
-                'accounts_none' => 'None.',
+                'intro' => 'This deletes your Mimers account and everything stored in it. What you added to containers others share with you stays with them. We\'ll send you a confirmation by email — nothing is deleted until you confirm.',
 
                 'blocked_heading' => 'Deletion isn\'t possible right now',
                 'blocked' => 'Something is in the way, so no request can be made right now.',
@@ -1720,8 +1720,8 @@ return [
              * **Sidan är den andra halvan av flödet och möts av en gäst.**
              * `heading` och `intro` är bekräftelsesidans egna — de säger att
              * det är NU det händer, till skillnad från formulärets inledning,
-             * som säger att ingenting hänt än. Listorna och spärrarnas egna
-             * meningar lånas ur `deletion` ovan: samma sak visas på båda
+             * som säger att ingenting hänt än. Spärrarnas och upplysningarnas
+             * egna meningar lånas ur `deletion` ovan: samma sak visas på båda
              * ställena, och UserDeletionSummary ritar dem åt båda.
              *
              * **`blocked` är sidans egen mening, och det är avsiktligt.**
@@ -1737,7 +1737,7 @@ return [
             'deletion_link' => [
                 'heading' => 'Confirm the deletion',
 
-                'intro' => 'This is the last step. The button below deletes you, and every account where you are the only member. An account you share with others is kept, and only your membership in it is removed.',
+                'intro' => 'This is the last step. The button below deletes your Mimers account and everything stored in it. What you added to containers others share with you stays with them.',
 
                 'blocked' => 'Something is in the way, so the deletion cannot be carried out right now. The link still works once it has been cleared.',
 
@@ -4278,10 +4278,15 @@ return [
          * [[ADR-0089 Egna fält på items]] § Riktning 2 and
          * resources/js/components/ItemForm.vue.
          *
-         * **`heading`, `label` and `type` are the form's own words, not the
-         * field's.** A field's heading is the user's text and never comes
-         * from here; these are the labels of the two inputs that CREATE one.
-         * The type's three values live under `field.type.*`.
+         * **`label` and `type` are the form's own words, not the field's.**
+         * A field's heading is the user's text and never comes from here;
+         * these are the labels of the two inputs that CREATE one. The type's
+         * three values live under `field.type.*`.
+         *
+         * `heading` — the section heading *Fields* — was removed in M69 fynd
+         * 2026-11-21: with no own fields it ended up directly above *Category*
+         * and *Tags* and read like their heading. The section and *Add field*
+         * stay.
          *
          * `remove` and the three dialog keys ask before an own field is
          * deleted: the field and its values go to the trash and can be
@@ -4294,7 +4299,6 @@ return [
          * (`field.limit_reached`).
          */
         'fields' => [
-            'heading' => 'Fields',
             'label' => 'Heading',
             'type' => 'Type',
             'add' => 'Add field',
@@ -5694,7 +5698,7 @@ return [
         'inbox' => [
             'title' => 'Ownership transfers to you',
             'heading' => 'Ownership transfers to you',
-            'intro' => 'Containers someone wants to hand over to you. You find them here when signed in, whether or not the email is still around.',
+            'intro' => 'Containers someone wants to hand over to you.',
             'empty' => 'No ownership transfers are waiting for you.',
         ],
 

@@ -53,6 +53,15 @@ const { t } = useTranslations();
     <h1 class="text-2xl font-semibold">{{ t('container.tags.heading') }}</h1>
     <p class="mt-1 text-sm text-slate-600">{{ t('container.tags.description') }}</p>
 
+    <!-- Skapaformuläret står ovanför listan (M69 fynd 2026-11-21): den som
+         kommer hit för att lägga till en tagg ska inte behöva skrolla förbi
+         hela listan först. -->
+    <section v-if="can.manage" class="mt-6">
+        <h2 class="text-lg font-semibold">{{ t('container.tags.create_heading') }}</h2>
+
+        <TagCreateForm class="mt-4" :container-ulid="container.ulid" />
+    </section>
+
     <ul v-if="tags.length > 0" class="mt-6 flex flex-col gap-3">
         <TagRow
             v-for="tag in tags"
@@ -64,10 +73,4 @@ const { t } = useTranslations();
     </ul>
 
     <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.tags.empty') }}</p>
-
-    <section v-if="can.manage" class="mt-10">
-        <h2 class="text-lg font-semibold">{{ t('container.tags.create_heading') }}</h2>
-
-        <TagCreateForm class="mt-4" :container-ulid="container.ulid" />
-    </section>
 </template>

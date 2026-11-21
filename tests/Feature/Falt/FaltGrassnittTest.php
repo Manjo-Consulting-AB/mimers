@@ -560,7 +560,9 @@ it('har texterna och felkoderna i lang', function () {
         expect($en['container']['fields'][$nyckel] ?? '')->not->toBe('');
     }
 
-    foreach (['heading', 'label', 'type', 'add', 'remove', 'limit_reached'] as $nyckel) {
+    // `heading` utgick med M69 fynd 2026-11-21: rubriken *Fields* lästes som
+    // kategorins och taggarnas när itemet inte hade några egna fält.
+    foreach (['label', 'type', 'add', 'remove', 'limit_reached'] as $nyckel) {
         expect($en['item']['fields'][$nyckel] ?? null)->not->toBeNull();
         expect($en['item']['fields'][$nyckel] ?? '')->not->toBe('');
     }
