@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import UiBadge from './UiBadge.vue';
 import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
 import { presentationFor } from './iconPresentation.js';
@@ -68,10 +69,12 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
 const props = defineProps({
     /*
      * En rad ur App\Actions\Audit\PresentAuditEvents:
-     * `{ ulid, action, created_at, user, item, container, changed }`.
+     * `{ ulid, action, created_at, user, agent, item, container, changed }`.
      *
      * `container` är `{ name }` när raden gäller en container och `null` när
-     * den inte gör det; `name` är `null` när containern gallrats.
+     * den inte gör det; `name` är `null` när containern gallrats. `agent` är
+     * `null` när personen handlade själv, `{ ulid, name }` när en agent gjorde
+     * det och `{ ulid: null, name: null }` när agenten tagits bort.
      */
     row: { type: Object, required: true },
     /*
@@ -96,13 +99,40 @@ const changed = computed(() =>
 );
 
 /*
+ * Avsändaren, och agenten när en handlade (issue 428 · [[ADR-0087 MCP-server
+ * för agenter]] Riktning 3 och 8). `agent` är `null` för en rad en person
+ * skrev själv, `{ulid, name}` för en agentrad och `{ulid: null, name: null}`
+ * när agenten tagits bort — det sista läget säger *via a removed agent* i
+ * stället för att påstå att personen handlade själv. Formen kommer färdig ur
+ * App\Actions\Audit\PresentAuditEvents; raden ritar den bara.
+ */
+const actor = computed(() => {
+    const user = props.row.user ?? t('audit.fallback.user');
+
+    if (props.row.agent === null || props.row.agent === undefined) {
+        return user;
+    }
+
+    return props.row.agent.name === null
+        ? t('history.row.actor_via_removed_agent', { user })
+        : t('history.row.actor_via_agent', { user, agent: props.row.agent.name });
+});
+
+/*
+ * Agentmärkningen ritas bredvid avsändaren. Den är en BRICKA och inte en
+ * ikon: `UiBadge` bär ordet, `UiIcon` bär rollen, och en skärmläsare hör
+ * *Agent* även om den inte ser nyansen (issue 68b § Beslut 7).
+ */
+const agent = computed(() => props.row.agent ?? null);
+
+/*
  * Meningen: handlingens ord, med den handlande och itemet isatta. Nyckeln
  * byggs ur handlingens EGET namn — `item.created` blir
  * `audit.action.item.created` — så en ny handling inte kan glömmas i en
  * översättningstabell här: den finns i katalogen eller så syns nyckeln.
  */
 const sentence = computed(() => t(`audit.action.${props.row.action}`, {
-    user: props.row.user ?? t('audit.fallback.user'),
+    user: actor.value,
     item: props.row.item ?? t('audit.fallback.item'),
     fields: changed.value.join(', '),
 }));
@@ -151,7 +181,18 @@ const container = computed(() => {
             <UiIcon :name="presentation.role" :tile="presentation.tone" />
         </template>
 
-        <template #title>{{ sentence }}</template>
+        <template #title>
+            {{ sentence }}
+            <!--
+                Agentmärkningen: ordet *Agent* med en ikon, bredvid avsändaren
+                (issue 428). Den ritas bara när raden bär en agent, och raden
+                utan agent ser därför exakt ut som i dag.
+            -->
+            <UiBadge v-if="agent !== null" class="ml-2 align-middle">
+                <UiIcon name="link" :size="16" class="mr-1 inline align-text-bottom" />
+                {{ t('history.row.agent_badge') }}
+            </UiBadge>
+        </template>
 
         <template v-if="container !== null" #subtitle>{{ container }}</template>
 

@@ -51,6 +51,16 @@ use Illuminate\Database\Eloquent\Collection;
  * och `account.deleted`, som jobbet skriver — bär inget `:user` alls och
  * möter därför aldrig ersättaren.
  *
+ * **`agent` har tre lägen, och skillnaden bor i `agent_id`** (issue 428 ·
+ * [[ADR-0087 MCP-server för agenter]] Riktning 3 och 8). `null` när en person
+ * gjorde det själv; `{ulid, name}` när agenten finns; och
+ * `{ulid: null, name: null}` när `agent_id` är satt men agenten tagits bort.
+ * Det sista läget går inte att läsa ur relationen — den svarar `null` både för
+ * "ingen agent" och "ingen rad" — så formen prövar `agent_id` först. Raden
+ * blir då *via a removed agent* i stället för att påstå att personen handlade
+ * själv. Relationen är eager-laddad av ListAuditEvents, så uppslaget kostar
+ * ingen fråga per rad.
+ *
  * **`changed` lyfts ur `meta` och resten lämnas kvar där.** Vyn behöver
  * fältnamnen för en ändring och ingenting annat ur `meta`; att skicka hela
  * arrayen hade gett klienten data ingen yta ritar, och `subject_id`,
@@ -79,7 +89,7 @@ class PresentAuditEvents
      * Raderna i ritad ordning — samma ordning ListAuditEvents gav dem.
      *
      * @param  Collection<int, AuditLog>  $logs
-     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, item: string|null, container: array{name: string|null}|null, changed: list<string>}>
+     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, agent: array{ulid: string|null, name: string|null}|null, item: string|null, container: array{name: string|null}|null, changed: list<string>}>
      */
     public function handle(Collection $logs): array
     {
@@ -92,6 +102,9 @@ class PresentAuditEvents
                 'action' => $log->action,
                 'created_at' => $log->created_at->toIso8601String(),
                 'user' => $log->user?->name,
+                'agent' => $log->agent_id === null
+                    ? null
+                    : ['ulid' => $log->agent?->ulid, 'name' => $log->agent?->name],
                 'item' => $log->item_id === null ? null : ($itemNames[$log->item_id] ?? null),
                 'container' => $log->container_id === null
                     ? null

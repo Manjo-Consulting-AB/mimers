@@ -538,6 +538,29 @@ return [
     'history' => [
         'title' => 'History',
         'heading' => 'History',
+
+        /*
+         * The actor line, when an agent acted for the person (issue 428 ·
+         * [[ADR-0087 MCP-server för agenter]] Riktning 3 och 8). The row's
+         * sentence opens with `:user`, and these two keys fill that slot with
+         * the person AND the agent: *Anna via Claude created the item*. A row
+         * without an agent keeps the plain name and never meets these keys.
+         *
+         * `actor_via_removed_agent` is the third state in
+         * App\Actions\Audit\PresentAuditEvents: the row carries an `agent_id`
+         * but the agent row is gone, so there is no name to print. Saying
+         * only *Anna* would claim she did it herself, which is exactly what
+         * the agent mark exists to prevent — hence a phrase and not a blank.
+         *
+         * `agent_badge` is the word on the mark beside the actor, and it is
+         * a NOUN and not a sentence: the badge names who acted, the sentence
+         * says what happened.
+         */
+        'row' => [
+            'actor_via_agent' => ':user via :agent',
+            'actor_via_removed_agent' => ':user via a removed agent',
+            'agent_badge' => 'Agent',
+        ],
     ],
 
     'auth' => [
@@ -3386,6 +3409,12 @@ return [
             'filter_account' => 'Account activity',
             'filter_type' => 'Type',
             'filter_user' => 'User',
+            // The agent select, beside *User* (issue 428): only agents that
+            // occur in the rows the reader may see, and each option names the
+            // agent and the person it acts for — two agents may share a name,
+            // and the owner is what tells them apart.
+            'filter_agent' => 'Agent',
+            'filter_agent_option' => ':agent (:owner)',
             'filter_item' => 'Item',
             'filter_from' => 'From',
             'filter_to' => 'To',

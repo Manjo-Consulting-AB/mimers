@@ -36,6 +36,12 @@ use Illuminate\Foundation\Http\FormRequest;
  * `to` ska inte kunna ligga före `from`. Regeln läggs bara när BÅDA finns:
  * utan `from` finns ingen undre gräns att jämföra mot, och en öppen gräns är
  * en giltig fråga (samma regel och samma skäl som CostReportRequest).
+ *
+ * **`agent` kom med issue 428** och är formmässigt ett `user`: ett ULID som
+ * pekar ut agenten som handlade för personens räkning. Regeln bor här och inte
+ * bara i HistoryFilterRequest, eftersom containerns flik ärver de fem
+ * gemensamma fälten från den här klassen och ett eget `agent` där hade lämnat
+ * flikens filter oprövat — och därmed tyst ignorerat.
  */
 class ContainerHistoryFilterRequest extends FormRequest
 {
@@ -60,6 +66,7 @@ class ContainerHistoryFilterRequest extends FormRequest
         $rules = [
             'type' => ['nullable', 'string', 'max:40', 'regex:/^[a-z][a-z_]*$/'],
             'user' => ['nullable', 'string', 'regex:'.self::ULID],
+            'agent' => ['nullable', 'string', 'regex:'.self::ULID],
             'item' => ['nullable', 'string', 'regex:'.self::ULID],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
