@@ -249,7 +249,14 @@ it('avvisar kostnads- och utlåningsverktygen med agent.forbidden utan nivån, o
 });
 
 // ─── kostnadsbeloppet: huvudenhet, inte minsta enhet (issue 1478) ────────────
+//
+// Skrivvägen var redan rätt på basen: CreateCostEntry och UpdateCostEntry
+// tolkar amount med MinorUnits::parse(), alltså huvudenhet. Det som var fel
+// var verktygsbeskrivningarna, och de prövas i LasverktygTest. Proven här är
+// därför regressionsvakter för kontraktet — de ska vara gröna även utan
+// PR:ens kod, och är vaktmarkerade för röd-på-basen-grinden.
 
+// vakt: skrivvägen tolkade redan "100" som 10000 på basen — beskrivningen var felet, inte koden.
 it('costs_create sparar "100" SEK som 10000', function () {
     [, $token, , , $item] = skrivMiljo();
 
@@ -261,6 +268,7 @@ it('costs_create sparar "100" SEK som 10000', function () {
     expect((int) CostEntry::query()->sole()->amount)->toBe(10000);
 });
 
+// vakt: parse() tog både punkt och komma redan på basen — vaktar att kontraktet består.
 it('costs_create tolkar både punkt och komma — "125.50" och "125,50" blir 12550', function () {
     [, $token, , , $item] = skrivMiljo();
 
@@ -275,6 +283,7 @@ it('costs_create tolkar både punkt och komma — "125.50" och "125,50" blir 125
         ->toBe([12550, 12550]);
 });
 
+// vakt: UpdateCostEntry tolkade redan "100" som 10000 på basen — beskrivningen var felet, inte koden.
 it('costs_update sparar amount "100" SEK som 10000', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
