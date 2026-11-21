@@ -95,6 +95,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0087 MCP-server för agenter]] | Fjärrserver med OAuth på `mimers.app/mcp`; grupperade verktyg över hela API:et; MCP kan stängas per container; agenten loggas som agent; endast Pro och Pro+; agenten börjar utan åtkomst och slås på per container och per agent; papperskorgen kan aldrig tömmas av en agent | Konton och åtkomst, API |
 | [[ADR-0088 Versionshistorik för items]] | Kontot sätter taket för antalet versioner (standard 3), containern kan sänka eller stänga av det; ägaren betalar; täta skrivningar blir en version; filer versioneras inte; ägarbyte rensar historiken | Items och organisation, Planer och kvoter |
 | [[ADR-0089 Egna fält på items]] | Användaren definierar typade fält (text, tal, datum) på containern och på enskilda items; de sex fasta fälten blir vanliga fält; typen låst när fältet har värden; borttaget fält i papperskorgen; 25 per container och 10 per item i config; mallar på kontot bär kategorier och fält och kopieras in; inget arv; agenter använder men sparar inte mallar | Items och organisation, API |
+| [[ADR-0090 Dashboardens hjälte]] | Dashboardens övre rad ritas i en hjälte med bild som containerns; personen har en egen hjältebild som följer profilbildens regler; utan egen bild en inbyggd standardbild; profilbildens redigerare med fokuspunkt och zoom delas av profilbilden, hjältebilden och containerns bild, och containerns bild får zoom; låg hjälte på mobilen | Konton och åtkomst, Filer och lagring |
 
 ## Om att ändra ett beslut
 
