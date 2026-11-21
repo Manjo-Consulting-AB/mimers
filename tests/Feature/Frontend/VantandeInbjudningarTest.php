@@ -515,8 +515,11 @@ it('visar en rad per väntande inbjudan i klockan, med länk till /invitations',
 
     $mottagare = User::factory()->create(['email' => 'ny@exempel.se']);
 
+    // Den andra är uttryckligen äldre. Listan är nyast först, och utan ett
+    // eget `created_at` avgjorde sekundgränsen mellan de två raderna vilken
+    // som hamnade överst — provet föll när de råkade få olika sekunder.
     vantandeInbjudan($container, $inbjudare, 'ny@exempel.se');
-    vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se');
+    vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se', ['created_at' => now()->subMinute()]);
     // De tre som inte väntar ska inte ge någon rad.
     vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se', ['expires_at' => now()->subDay()]);
     vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se', ['status' => 'accepted']);
@@ -532,6 +535,30 @@ it('visar en rad per väntande inbjudan i klockan, med länk till /invitations',
         ])
         // Ingen notisrad finns, så listan är tom medan inbjudningarna syns.
         ->and($props['notificationList'])->toBe([]);
+});
+
+/*
+ * Två inbjudningar från samma sekund har samma `created_at`, och utan en andra
+ * sorteringsnyckel lämnade databasen dem i godtycklig ordning. `id` avgör:
+ * den senast skapade står först, i klockan och på `/invitations`.
+ */
+it('ordnar inbjudningar med samma created_at efter den senast skapade', function () {
+    withoutVite();
+
+    $inbjudare = User::factory()->create();
+    $mottagare = User::factory()->create(['email' => 'ny@exempel.se']);
+    $samma = now()->startOfSecond();
+
+    [$forsta] = vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se', ['created_at' => $samma]);
+    [$andra] = vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se', ['created_at' => $samma]);
+
+    expect(Arr::pluck(vantandeKlockan($mottagare)['pendingInvitations'], 'ulid'))
+        ->toBe([$andra->ulid, $forsta->ulid]);
+
+    actingAs($mottagare)->get('/invitations')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('invitations.0.ulid', $andra->ulid)
+        ->where('invitations.1.ulid', $forsta->ulid)
+    );
 });
 
 /*
