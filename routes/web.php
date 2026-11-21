@@ -1851,6 +1851,8 @@ Route::middleware('auth')->group(function () {
      *
      * Fyra av de sex rutterna ligger i den här gruppen (Beslut 1): de två
      * skrivningarna mot containern, och mottagarens accept och avvisande.
+     * Issue 430 lade den tredje skrivningen mot containern här — ändringen av
+     * nivån på en väntande inbjudan.
      *
      * `{invitation}` nästlas under `{container}` med `->scopeBindings()`, av
      * exakt samma skäl som routes/api.php gör det (issue 9b § Beslut 1) — utan
@@ -1858,17 +1860,24 @@ Route::middleware('auth')->group(function () {
      * acceptensen är en behörighet. `{invitation}` binds på ULID via
      * `#[RouteKey('ulid')]` på App\Models\Invitation.
      *
-     * `manageAccess()` avgör båda, som i `/api` (issue 10a § Beslut 10): att
-     * bjuda in ÄR att hantera åtkomster, och en pending inbjudan är en åtkomst
-     * med fördröjning — regel 4:s undantag för återkallandet gäller en
+     * `manageAccess()` avgör alla tre, som i `/api` (issue 10a § Beslut 10):
+     * att bjuda in ÄR att hantera åtkomster, och en pending inbjudan är en
+     * åtkomst med fördröjning — regel 4:s undantag för återkallandet gäller en
      * BEFINTLIG relation och inte den här.
      *
-     * Båda svarar `back()` med en flash-kod (issue 51 § Beslut 5) och ett
+     * Alla svarar `back()` med en flash-kod (issue 51 § Beslut 5) och ett
      * domänfel som ett formulärfel, aldrig som en JSON-kropp — samma mönster
      * som 55a:s två skrivningar.
      */
     Route::post('/containers/{container}/invitations', [ContainerInvitationController::class, 'store'])
         ->name('containers.invitations.store');
+
+    // Issue 430 · nivån på en inbjudan som ännu inte besvarats. Samma grind
+    // (`manageAccess()`), samma nästling och samma svar som de två andra
+    // skrivningarna; adressen och omfånget går inte att ändra.
+    Route::patch('/containers/{container}/invitations/{invitation}', [ContainerInvitationController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.invitations.update');
 
     Route::delete('/containers/{container}/invitations/{invitation}', [ContainerInvitationController::class, 'destroy'])
         ->scopeBindings()

@@ -1491,6 +1491,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers.accesses.update',
         'containers.accesses.destroy',
         'containers.invitations.store',
+        'containers.invitations.update',
         'containers.invitations.destroy',
     ] as $namn) {
         expect($rutter->first(fn ($rutt) => $rutt->getName() === $namn))->not->toBeNull();

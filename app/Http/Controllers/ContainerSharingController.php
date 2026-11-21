@@ -158,6 +158,13 @@ class ContainerSharingController extends Controller
             'agentLevels' => (object) ($accesses !== null && ContainerAgentController::available($user, $container)
                 ? $accesses->pluck('agent_level', 'ulid')->all()
                 : []),
+            // Inbjudnings-ULID → inbjudans agenttak (issue 430). Samma form
+            // och samma grind som `agentLevels`: redigeringsraden behöver
+            // dagens värde för att kunna visa väljaren, och
+            // InvitationResource bär det inte — `/api` har inte bett om det.
+            'invitationAgentLevels' => (object) ($invitations !== null && ContainerAgentController::available($user, $container)
+                ? $invitations->pluck('agent_level', 'ulid')->all()
+                : []),
             'levels' => AccessLevel::LADDER,
             'can' => [
                 'manage' => Gate::forUser($user)->allows('manageAccess', $container),
@@ -167,11 +174,19 @@ class ContainerSharingController extends Controller
     }
 
     /**
-     * Containerns inbjudningar, hydrerade för App\Http\Resources\InvitationResource.
+     * Containerns obesvarade inbjudningar, hydrerade för
+     * App\Http\Resources\InvitationResource.
      *
-     * ALLA rader, oavsett status och i samma ordning som `/api`:s `index()`
-     * (issue 10a § Beslut 14): listan visar även tillbakadragna och utgångna,
-     * och statustexten kommer ur resursen — ingen status härleds här.
+     * **Bara rader som ännu väntar** (issue 430). En accepterad, avvisad
+     * eller återkallad inbjudan är avslutad: personen står redan bland dem
+     * som har åtkomst, och en rad till hade visat samma person två gånger —
+     * den ena utan kontroller. En utgången rad är fortfarande `pending` i
+     * kolumnen (issue 10a § Beslut 7) och följer därför med; resursen
+     * redovisar den som `expired`.
+     *
+     * Ordningen är `/api`:s `index()` (issue 10a § Beslut 14), nyast först.
+     * `/api` visar fortfarande alla rader; filtreringen gäller bara den här
+     * sidan.
      *
      * Hydreringen är den i App\Http\Controllers\Api\ContainerInvitationController
      * upprepad. Den borde ha brutits ut som App\Actions\Access\ListContainerAccesses
@@ -183,6 +198,7 @@ class ContainerSharingController extends Controller
     private function invitations(Container $container): Collection
     {
         $invitations = $container->invitations()
+            ->where('status', 'pending')
             ->orderByDesc('created_at')
             ->get();
 
