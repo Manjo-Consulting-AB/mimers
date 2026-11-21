@@ -515,3 +515,15 @@ it('Lang::has transfer_requested är sant för både sv och en', function () {
     expect(Lang::has('notiser.transfer_requested', 'sv'))->toBeTrue();
     expect(Lang::has('notiser.transfer_requested', 'en'))->toBeTrue();
 });
+
+/*
+ * Klart när: meningen om e-posten står inte längre på sidan för inkommande
+ * överlåtelser (M69 fynd 2026-11-21). Första meningen står kvar — sidan
+ * säger fortfarande vad listan är.
+ */
+it('säger inte längre att överlåtelserna hittas via e-posten', function () {
+    $en = require lang_path('en/ui.php');
+
+    expect($en['transfer']['inbox']['intro'])
+        ->toBe('Containers someone wants to hand over to you.');
+});

@@ -320,8 +320,10 @@ it('renderar bekräftelsemejlet med länken och vad som raderas', function () {
         // Löftet flödet vilar på: den som tror att formuläret redan raderat
         // stänger mejlet och undrar varför hon är kvar.
         ->and($innehåll)->toContain('Nothing is deleted until you open the link')
-        // Ordet: det är personen och de egna kontona, inte kontot hon delar.
-        ->and($innehåll)->toContain('every account where you are the only member')
+        // M69 fynd 2026-11-21: kontot och allt i det raderas, och det som
+        // lagts i andras containrar stannar hos dem.
+        ->and($innehåll)->toContain('your Mimers account and everything stored in it')
+        ->and($innehåll)->toContain('What you added to containers others share with you stays with them')
         ->and($ämne)->toBe(trans('notiser.user_deletion.confirm.subject', [], 'en'))
         ->and($ämne)->not->toBe('notiser.user_deletion.confirm.subject');
 });
@@ -490,17 +492,51 @@ it('ritar listan och spärrarna med UserDeletionSummary', function () {
         ->and($bekräftelse)->toContain('if (blocked.value || needsConfirmation.value) {')
         ->and($bekräftelse)->toContain('v-model="form.confirm_warnings"');
 
-    // Listorna står i sammanfattningen och ingen annanstans — en avskrift i
-    // någon av ytorna hade varit en andra sanning om vad raderingen gör.
-    // Spärren och upplysningen är TVÅ rutor, med var sin `v-if`: en spärr
-    // säger att raderingen inte går, en upplysning vad den får för följder.
-    expect($sammanfattning)->toContain('settings.security.deletion.accounts_deleted_heading')
-        ->and($sammanfattning)->toContain('settings.security.deletion.accounts_left_heading')
+    // Kontolistorna stod i sammanfattningen och är borta sedan M69 fynd
+    // 2026-11-21: en person har exakt ett konto, så uppräkningen sade
+    // ingenting. Kvar är spärren och upplysningen — TVÅ rutor, med var sin
+    // `v-if`: en spärr säger att raderingen inte går, en upplysning vad den
+    // får för följder.
+    expect($sammanfattning)->not->toContain('settings.security.deletion.accounts_deleted_heading')
+        ->and($sammanfattning)->not->toContain('settings.security.deletion.accounts_left_heading')
+        ->and($sammanfattning)->not->toContain('settings.security.deletion.accounts_none')
+        ->and($sammanfattning)->not->toContain('v-for="account in props.accounts')
         ->and($sammanfattning)->toContain('settings.security.deletion.warnings_heading')
         ->and($sammanfattning)->toContain('v-if="props.warnings.length > 0"')
         ->and($sammanfattning)->toContain('v-if="props.blockers.length > 0"')
         ->and($formulär)->not->toContain('accounts_deleted_heading')
         ->and($bekräftelse)->not->toContain('accounts_deleted_heading');
+});
+
+/*
+ * Klart när: *Delete yourself* visar den nya texten och inga rubriker eller
+ * listor över konton. Sista steget och mejlet säger samma sak — kontot och
+ * allt i det raderas, och det som lagts i andras containrar stannar där
+ * (M69 fynd 2026-11-21).
+ */
+it('säger vad som raderas i stället för att räkna upp konton', function () {
+    $en = require lang_path('en/ui.php');
+
+    expect($en['settings']['security']['deletion']['intro'])
+        ->toBe('This deletes your Mimers account and everything stored in it. What you added to containers others share with you stays with them. We\'ll send you a confirmation by email — nothing is deleted until you confirm.');
+
+    // Rubriknycklarna och den gemensamma tomtexten är borta ur katalogen —
+    // ingenting läser dem längre.
+    expect($en['settings']['security']['deletion'])->not->toHaveKey('accounts_deleted_heading')
+        ->and($en['settings']['security']['deletion'])->not->toHaveKey('accounts_left_heading')
+        ->and($en['settings']['security']['deletion'])->not->toHaveKey('accounts_none');
+
+    // Sista steget säger samma sak som formuläret.
+    expect($en['settings']['security']['deletion_link']['intro'])
+        ->toContain('deletes your Mimers account and everything stored in it')
+        ->toContain('What you added to containers others share with you stays with them');
+
+    // Och raden i mejlet, ur notiser.php.
+    $notiser = require lang_path('en/notiser.php');
+
+    expect($notiser['user_deletion']['confirm']['line'])
+        ->toContain('delete your Mimers account and everything stored in it')
+        ->toContain('What you added to containers others share with you stays with them');
 });
 
 // --- Raden ---------------------------------------------------------------

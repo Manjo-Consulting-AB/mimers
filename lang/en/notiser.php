@@ -247,10 +247,11 @@ return [
      * att den som begärde raderingen når brevlådan.
      *
      * **`line` säger vad som raderas, och `action` är det enda stället i
-     * produkten där ordet "Delete me" står.** Kontot heter *account* i
-     * gränssnittet och är något annat än personen: ett konto med andra
-     * medlemmar lämnas kvar. Texten säger därför inte "Delete account" — den
-     * säger vad som försvinner, och vad som står kvar.
+     * produkten där ordet "Delete me" står.** En person har exakt ett konto
+     * (Tony 2026-11-18, [[Konton och åtkomst]] § account), så texten säger
+     * *your Mimers account and everything stored in it* — inte en uppräkning
+     * av konton, som före M69 fynd 2026-11-21. Och den säger var det som
+     * lagts i andras containrar tar vägen: det stannar hos dem.
      *
      * **`expires` lovar en gång, och det är bokstavligt sant här.** Länken
      * förbrukas av App\Actions\User\ConfirmUserDeletion, och en ny begäran
@@ -266,7 +267,7 @@ return [
     'user_deletion' => [
         'confirm' => [
             'subject' => 'Confirm that you want to be deleted',
-            'line' => 'Click the link below to delete yourself, and every account where you are the only member. An account you share with others is kept. Nothing is deleted until you open the link.',
+            'line' => 'Click the link below to delete your Mimers account and everything stored in it. What you added to containers others share with you stays with them. Nothing is deleted until you open the link.',
             'action' => 'Delete me',
             'expires' => 'The link stops working in :minutes minutes and can only be used once.',
             'not_you' => 'If you did not ask for this, do not open the link — and change your password, because someone else has access to your account. Look through your recent logins under Settings → Security.',

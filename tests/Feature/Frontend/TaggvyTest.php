@@ -675,3 +675,19 @@ it('frågar i TagRow med träffräknaren, och bara när taggen sitter på något
     expect($en['container']['tags']['destroy_confirm'])->not->toBe('')
         ->toContain(':count');
 });
+
+/*
+ * Klart när: formuläret för en ny tagg står före listan (M69 fynd
+ * 2026-11-21). Jämförelsen görs på mallens egna taggar, inte på importrader
+ * eller kommentarer — därför klipps allt före `<template>` bort först.
+ */
+it('ställer skapaformuläret före tagglistan', function () {
+    $sida = File::get(resource_path('js/pages/Containers/Tags.vue'));
+    $mall = substr($sida, (int) strpos($sida, '<template>'));
+
+    $formulär = (int) strpos($mall, '<TagCreateForm');
+    $lista = (int) strpos($mall, '<TagRow');
+
+    expect($formulär)->toBeGreaterThan(0)
+        ->and($lista)->toBeGreaterThan($formulär);
+});

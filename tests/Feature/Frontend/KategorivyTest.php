@@ -891,3 +891,19 @@ it('räknar raderingstalen med ett konstant antal frågor, oavsett antal kategor
 
     Carbon::setTestNow();
 });
+
+/*
+ * Klart när: formuläret för en ny kategori står före trädet (M69 fynd
+ * 2026-11-21). Jämförelsen görs på mallens egna taggar, inte på importrader
+ * eller kommentarer — därför klipps allt före `<template>` bort först.
+ */
+it('ställer skapaformuläret före kategoriträdet', function () {
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+    $mall = substr($sida, (int) strpos($sida, '<template>'));
+
+    $formulär = (int) strpos($mall, '<CategoryCreateForm');
+    $lista = (int) strpos($mall, '<CategoryTree');
+
+    expect($formulär)->toBeGreaterThan(0)
+        ->and($lista)->toBeGreaterThan($formulär);
+});
