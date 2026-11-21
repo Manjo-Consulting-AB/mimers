@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
-import { parentOptions } from './categoryTree.js';
+import { canDropOn, parentOptions } from './categoryTree.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -15,11 +15,20 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * på en rad färgar annars alla andra röda, och ett `form.processing` hade låst
  * varje spara-knapp i trädet.
  *
- * **En flytt är två fält, inte drag-and-drop** (Beslut 3). Att ändra förälder
- * är en väljare över containerns övriga kategorier, position ett heltalsfält.
- * Inget dragbibliotek: det vore ett nytt beroende (AGENTS.md § Nya beroenden),
- * det kräver tangentbordsstöd som issue 68 annars får städa, och det löser ett
- * problem trädet inte har vid fem nivåer.
+ * **En flytt görs med ett drag eller med väljaren** (Beslut 3, issue 1484).
+ * Raden bär ett draghandtag över `md:` — webbläsarens HTML5-drag, samma grep
+ * som Containers/Fields.vue och OverviewPanelFrame.vue, inget nytt paket — och
+ * väljaren och positionsfältet står kvar som vägen för tangentbordet och för
+ * skärmar där man inte kan dra. Handtaget är `aria-hidden`: det går inte att nå
+ * med tabb, och en knapp utan handling hade varit ett tabbsteg som inte gör
+ * något.
+ *
+ * **Ett släpp på raden gör den till förälder** och lägger den dragna kategorin
+ * sist bland barnen. Sidan äger draget — raden vet inte vilka grannar den har
+ * — och räknar ut förälder och position med movePayload() i categoryTree.js.
+ * Raden markerar sig som mål bara när canDropOn() säger ja, och ett fel ur
+ * servern (`category.cycle`, `category.max_depth_exceeded`) ritas här, på den
+ * rad som drogs.
  *
  * **`parent` skickas ALLTID**, också när den är `null` — se
  * App\Http\Controllers\CategoryController::update() och Beslut 5. Väljaren har
@@ -66,9 +75,15 @@ const props = defineProps({
     counts: { type: Object, required: true },
     /* ULID:n för den rad vars radering senast skickades, eller null. */
     deleteErrorUlid: { type: String, default: null },
+    /* ULID:n för den rad som dras just nu, eller null — sidan äger draget. */
+    draggingUlid: { type: String, default: null },
+    /* ULID:n för den rad vars flytt senast nekades av servern, eller null. */
+    moveErrorUlid: { type: String, default: null },
+    /* Sant medan en flytt skrivs: radens egna knappar vilar då. */
+    disabled: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete']);
+const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop']);
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -78,7 +93,13 @@ const deleteFailed = computed(() => props.deleteErrorUlid === props.category.uli
 
 /* ULID:n för den nod vars radering väntar på svar, annars null — knappen
    stängs medan den väntar, så samma nod inte kan skickas två gånger. */
-const pending = ref(null);
+const deleting = ref(null);
+
+/* Raden är ett giltigt mål för det pågående draget. */
+const isDropTarget = computed(
+    () => props.draggingUlid !== null
+        && canDropOn(props.categories, props.draggingUlid, props.category.ulid),
+);
 
 /* Talen för DEN HÄR raden. Saknas raden i uppslaget finns inget att varna för. */
 const tally = computed(() => props.counts[props.category.ulid] ?? { subcategories: 0, items: 0 });
@@ -126,15 +147,69 @@ function destroy() {
 
     router.delete(`/containers/${props.containerUlid}/categories/${props.category.ulid}`, {
         preserveScroll: true,
-        onStart: () => { pending.value = props.category.ulid; },
-        onFinish: () => { pending.value = null; },
+        onStart: () => { deleting.value = props.category.ulid; },
+        onFinish: () => { deleting.value = null; },
     });
+}
+
+/*
+ * Draget: handtaget sätter radens ULID i dataTransfer (webbläsaren kräver ett
+ * dataobjekt för att starta det) och säger `dragstart`; sidan håller redan
+ * reda på vilken rad det gäller. `dragover` släpps bara igenom på ett giltigt
+ * mål, så markören säger samma sak som markeringen.
+ */
+function onDragStart(event) {
+    event.dataTransfer?.setData('text/plain', props.category.ulid);
+
+    if (event.dataTransfer !== null) {
+        event.dataTransfer.effectAllowed = 'move';
+    }
+
+    emit('dragstart', props.category.ulid);
+}
+
+function onDragOver(event) {
+    if (! isDropTarget.value) {
+        return;
+    }
+
+    event.preventDefault();
+
+    if (event.dataTransfer !== null) {
+        event.dataTransfer.dropEffect = 'move';
+    }
+}
+
+function onDrop(event) {
+    if (! isDropTarget.value) {
+        return;
+    }
+
+    event.preventDefault();
+    emit('drop', props.category.ulid);
 }
 </script>
 
 <template>
-    <div class="flex flex-col gap-3 rounded border border-slate-300 bg-white p-4">
+    <div
+        class="flex flex-col gap-3 rounded border border-slate-300 bg-white p-4"
+        :class="{ 'ring-2 ring-blue-600': isDropTarget }"
+        @dragover="onDragOver"
+        @drop="onDrop"
+    >
         <form class="flex flex-wrap items-end gap-3" @submit.prevent="submit">
+            <!-- Handtaget: draget börjar här och inte på hela raden, så att
+                 fälten i raden går att markera som vanligt. Under md: ritas
+                 det inte — väljaren är vägen där. -->
+            <span
+                draggable="true"
+                aria-hidden="true"
+                class="hidden min-h-11 cursor-grab items-center px-1 text-slate-400 md:flex"
+                :title="t('container.categories.drag')"
+                @dragstart="onDragStart"
+                @dragend="emit('dragend')"
+            >⠿</span>
+
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('container.categories.name')"
@@ -190,7 +265,7 @@ function destroy() {
 
             <button
                 type="submit"
-                :disabled="form.processing"
+                :disabled="form.processing || disabled"
                 class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
                 {{ form.processing ? t('common.pending.default') : t('container.categories.save') }}
@@ -199,12 +274,23 @@ function destroy() {
 
         <button
             type="button"
-            :disabled="pending !== null"
+            :disabled="deleting !== null || disabled"
             class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline disabled:opacity-50"
             @click="destroy"
         >
             {{ t('container.categories.destroy') }}
         </button>
+
+        <!-- Ett fel ur serverns flyttprövning — cykeln eller djupet — ritas
+             här, på raden som drogs. Felpåsen kan inte säga vilken rad det
+             gäller, så sidan minns ULID:n för den senaste dragna raden. -->
+        <p
+            v-if="moveErrorUlid === category.ulid && page.props.errors.parent"
+            role="alert"
+            class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+            {{ page.props.errors.parent }}
+        </p>
 
         <p
             v-if="deleteFailed && page.props.errors.category"

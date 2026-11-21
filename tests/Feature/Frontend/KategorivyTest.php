@@ -143,6 +143,34 @@ function kategorivyTrad(array $kategorier): array
     return json_decode(implode("\n", $rader), true) ?? [];
 }
 
+/**
+ * Kör movePayload() ur resources/js/components/categoryTree.js i node, med
+ * samma mönster som kategorivyTrad(). `$mal === null` är ytan *Top level*.
+ *
+ * @param  list<array<string, mixed>>  $kategorier
+ * @return array{parent: string|null, position: int}|null
+ */
+function kategorivyFlytt(array $kategorier, ?string $drag, ?string $mal): ?array
+{
+    $skript = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const { movePayload } = await import(pathToFileURL('
+            .json_encode(resource_path('js/components/categoryTree.js'), JSON_UNESCAPED_SLASHES).').href);',
+        'const flat = '.json_encode($kategorier, JSON_UNESCAPED_UNICODE).';',
+        'process.stdout.write(JSON.stringify(movePayload(flat, '
+            .json_encode($drag).', '.json_encode($mal).') ?? null));',
+    ]);
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    return json_decode(implode("\n", $rader), true);
+}
+
 /*
  * Beslut 1: åtta rutter, alla bakom `auth`. En utloggad besökare skickas till
  * inloggningen och når aldrig en kontrollermetod.
@@ -906,4 +934,130 @@ it('ställer skapaformuläret före kategoriträdet', function () {
 
     expect($formulär)->toBeGreaterThan(0)
         ->and($lista)->toBeGreaterThan($formulär);
+});
+
+/*
+ * Issue 1484 · Kategorier dras in under en annan.
+ *
+ * Klart när: ett släpp på en annan kategori skickar PATCH med den som
+ * `parent` och en `position` efter dess sista barn.
+ *
+ * Föräldern och positionen räknas ut av movePayload() i den rena modulen, och
+ * prövas där — samma väg som trädet prövas i kategorivyTrad().
+ */
+it('räknar ut förälder och position när en kategori släpps på en annan', function () {
+    $platt = [
+        ['ulid' => 'baten', 'parent' => null, 'position' => 1],
+        ['ulid' => 'riggen', 'parent' => 'baten', 'position' => 1],
+        ['ulid' => 'seglet', 'parent' => 'baten', 'position' => 4],
+        ['ulid' => 'dokument', 'parent' => null, 'position' => 2],
+    ];
+
+    // Sist bland målets barn: högsta positionen (4) plus ett.
+    expect(kategorivyFlytt($platt, 'dokument', 'baten'))
+        ->toBe(['parent' => 'baten', 'position' => 5]);
+
+    // Ett mål utan barn ger position 0.
+    expect(kategorivyFlytt($platt, 'riggen', 'dokument'))
+        ->toBe(['parent' => 'dokument', 'position' => 0]);
+});
+
+/*
+ * Klart när: ett släpp på ytan *Top level* skickar `parent: null` och lägger
+ * kategorin sist bland rotkategorierna.
+ */
+it('räknar ut parent null och sista platsen för ett släpp på Top level', function () {
+    $platt = [
+        ['ulid' => 'baten', 'parent' => null, 'position' => 1],
+        ['ulid' => 'riggen', 'parent' => 'baten', 'position' => 1],
+        ['ulid' => 'dokument', 'parent' => null, 'position' => 3],
+    ];
+
+    expect(kategorivyFlytt($platt, 'riggen', null))
+        ->toBe(['parent' => null, 'position' => 4]);
+});
+
+/*
+ * Klart när: ett släpp på sig själv, sin nuvarande förälder eller en egen
+ * ättling skickar ingenting. Sidan skickar bara när movePayload() svarar med
+ * en kropp, och raden markerar sig bara som mål när canDropOn() säger ja —
+ * samma två funktioner.
+ */
+it('skickar ingenting för ett släpp på sig själv, sin förälder eller en ättling', function () {
+    $platt = [
+        ['ulid' => 'baten', 'parent' => null, 'position' => 1],
+        ['ulid' => 'riggen', 'parent' => 'baten', 'position' => 1],
+        ['ulid' => 'seglet', 'parent' => 'riggen', 'position' => 1],
+        ['ulid' => 'dokument', 'parent' => null, 'position' => 2],
+    ];
+
+    expect(kategorivyFlytt($platt, 'baten', 'baten'))->toBeNull();    // sig själv
+    expect(kategorivyFlytt($platt, 'riggen', 'baten'))->toBeNull();   // nuvarande förälder
+    expect(kategorivyFlytt($platt, 'baten', 'riggen'))->toBeNull();   // eget barn
+    expect(kategorivyFlytt($platt, 'baten', 'seglet'))->toBeNull();   // egen ättling
+    expect(kategorivyFlytt($platt, 'okand', 'baten'))->toBeNull();    // ingen rad
+    expect(kategorivyFlytt($platt, 'baten', 'okand'))->toBeNull();    // inget mål
+});
+
+/*
+ * Klart när: kategorisidan ritar ett draghandtag per rad över `md:` och inget
+ * under, släppet går genom samma PATCH som väljaren, och ett fel ur serverns
+ * flyttprövning ritas på raden som drogs.
+ *
+ * Formen är källkodsprov, som resten av filen: markupen och kopplingen går att
+ * avgöra på serversidan, själva draget kräver en webbläsare och står i
+ * PR-kroppen.
+ */
+it('ritar draghandtaget över md: och kopplar släppet till radens PATCH', function () {
+    $rad = File::get(resource_path('js/components/CategoryRow.vue'));
+    $träd = File::get(resource_path('js/components/CategoryTree.vue'));
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+
+    // Ett enda draghandtag i raden, dolt under md: och osynligt för
+    // skärmläsaren — väljaren är tangentbordets väg.
+    expect(substr_count($rad, 'draggable='))->toBe(1);
+
+    $fanns = preg_match(
+        '/<span\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*\bdraggable="true"(?:"[^"]*"|\'[^\']*\'|[^>"\'])*>/s',
+        $rad,
+        $handtag,
+    );
+
+    expect($fanns)->toBe(1);
+    expect($handtag[0])->toContain('hidden')
+        ->toContain('md:flex')
+        ->toContain('aria-hidden="true"')
+        ->toContain("t('container.categories.drag')");
+
+    // Raden markerar bara giltiga mål, och säger dragstart och drop till sidan.
+    expect($rad)->toContain('canDropOn')
+        ->toContain("emit('dragstart'")
+        ->toContain("emit('drop'");
+    expect($träd)->toContain('emit(\'dragstart\', $event)')
+        ->toContain('emit(\'drop\', $event)')
+        ->toContain(':disabled="disabled"');
+
+    // Sidan skickar samma PATCH som väljaren, med förälder och position.
+    expect($sida)->toContain('movePayload')
+        ->toContain('router.patch(`/containers/${props.container.ulid}/categories/${draggedUlid}`')
+        ->toContain('preserveScroll: true')
+        ->toContain('onStart:')
+        ->toContain('onFinish:')
+        ->toContain('onError:');
+
+    // Ytan Top level ritas bara under ett drag och skickar parent: null.
+    expect($sida)->toContain('v-if="draggingUlid !== null"')
+        ->toContain('dropTopLevel')
+        ->toContain('movePayload(props.categories, dragged, null)')
+        ->toContain("t('container.categories.drop_top_level')");
+
+    // Väljaren för förälder står kvar som vägen för tangentbordet.
+    expect($rad)->toContain('<select')
+        ->toContain('parentOptions(props.categories, props.category.ulid)')
+        ->toContain("t('container.categories.parent_root')");
+
+    // Flyttfelet ritas på den dragna raden, som radens egna fel.
+    expect($rad)->toContain('moveErrorUlid === category.ulid')
+        ->toContain('page.props.errors.parent')
+        ->toContain('role="alert"');
 });
