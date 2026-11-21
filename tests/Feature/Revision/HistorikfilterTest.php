@@ -231,6 +231,7 @@ it('filtren på användare, item och datum kan kombineras', function () {
         ->and($proppar['filter'])->toBe([
             'type' => null,
             'user' => $ägare->ulid,
+            'agent' => null,
             'item' => $motorn->ulid,
             'from' => '2026-05-10',
             'to' => '2026-05-10',
@@ -371,6 +372,10 @@ it('ett ogiltigt filter är ett formulärfel', function () {
 
     actingAs($ägare)->get(historikfilterUrl($pärm, ['user' => 'inte-en-ulid']))
         ->assertSessionHasErrors('user');
+
+    // Agenten prövas som användaren (issue 428): ett ULID, ingen existens.
+    actingAs($ägare)->get(historikfilterUrl($pärm, ['agent' => 'inte-en-ulid']))
+        ->assertSessionHasErrors('agent');
 
     actingAs($ägare)->get(historikfilterUrl($pärm, ['item' => 'inte-en-ulid']))
         ->assertSessionHasErrors('item');

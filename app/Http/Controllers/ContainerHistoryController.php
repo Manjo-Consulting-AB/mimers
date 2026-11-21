@@ -7,6 +7,7 @@ use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Http\Requests\Audit\ContainerHistoryFilterRequest;
 use App\Http\Resources\ContainerResource;
+use App\Models\Agent;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
@@ -125,6 +126,7 @@ class ContainerHistoryController extends Controller
             'filter' => [
                 'type' => $filters['type'] ?? null,
                 'user' => $filters['user'] ?? null,
+                'agent' => $filters['agent'] ?? null,
                 'item' => $filters['item'] ?? null,
                 'from' => $filters['from'] ?? null,
                 'to' => $filters['to'] ?? null,
@@ -133,6 +135,14 @@ class ContainerHistoryController extends Controller
                 'types' => $facets['types'],
                 'users' => $facets['users']
                     ->map(static fn (User $actor): array => ['ulid' => (string) $actor->ulid, 'name' => (string) $actor->name])
+                    ->values()
+                    ->all(),
+                'agents' => $facets['agents']
+                    ->map(static fn (Agent $agent): array => [
+                        'ulid' => (string) $agent->ulid,
+                        'name' => (string) $agent->name,
+                        'owner' => (string) $agent->user?->name,
+                    ])
                     ->values()
                     ->all(),
                 'items' => $this->itemOptions($user, $container),

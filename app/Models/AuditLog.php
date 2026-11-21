@@ -380,6 +380,25 @@ class AuditLog extends Model
     }
 
     /**
+     * Agenten som handlade för användarens räkning, när en gjorde det
+     * ([[ADR-0087 MCP-server för agenter]] Riktning 3 och 8, issue 428).
+     * Null när personen gjorde det själv.
+     *
+     * **Kolonnen har ingen främmande nyckel, och relationen gör det inte
+     * heller.** En agent som tagits bort lämnar sin siffra i `agent_id` —
+     * loggen överlever det den handlar om, som för `user_id` — och då svarar
+     * relationen null. PresentAuditEvents skiljer de två fallen på
+     * `agent_id`, inte på relationen: null där är både "ingen agent" och
+     * "agenten finns inte längre".
+     *
+     * @return BelongsTo<Agent, $this>
+     */
+    public function agent(): BelongsTo
+    {
+        return $this->belongsTo(Agent::class);
+    }
+
+    /**
      * Containern händelsen gäller, när den gäller en — null för
      * kontonivåhändelser.
      *

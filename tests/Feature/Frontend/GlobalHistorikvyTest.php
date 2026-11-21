@@ -268,9 +268,11 @@ it('sidan svarar med History/Index', function () {
             ->has('stats.perType')
             ->has('stats.topItems')
             ->has('filter.container')
+            ->has('filter.agent')
             ->has('options.containers')
             ->has('options.types')
             ->has('options.users')
+            ->has('options.agents')
             ->has('options.items')
         );
 });

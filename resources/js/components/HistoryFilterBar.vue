@@ -70,13 +70,13 @@ const props = defineProps({
     url: { type: String, default: null },
     /*
      * Filtret så som servern tillämpade det:
-     * `{ container, type, user, item, from, to }`.
+     * `{ container, type, user, agent, item, from, to }`.
      */
     filter: { type: Object, required: true },
     /*
-     * Alternativen: `{ containers, types, users, items }`, alla redan
+     * Alternativen: `{ containers, types, users, agents, items }`, alla redan
      * filtrerade av servern. `containers` finns bara på den globala
-     * historiken.
+     * historiken; `agents` är de agenter som förekommer i läsbara rader.
      */
     options: { type: Object, required: true },
 });
@@ -91,9 +91,18 @@ const types = computed(() => props.options.types.map((value) => ({
 /* Containervalets lista; tom på fliken, där servern inte skickar någon. */
 const containers = computed(() => props.options.containers ?? []);
 
+/*
+ * Agentvalet (issue 428). Listan är redan filtrerad av servern — bara de
+ * agenter som förekommer i rader läsaren får se — och etiketten bär både
+ * agentens namn och personen den handlar för, så två agenter med samma namn
+ * går att skilja.
+ */
+const agents = computed(() => props.options.agents ?? []);
+
 const container = ref('');
 const type = ref('');
 const user = ref('');
+const agent = ref('');
 const item = ref('');
 const from = ref('');
 const to = ref('');
@@ -112,6 +121,7 @@ watch(
         container.value = filter.container ?? '';
         type.value = filter.type ?? '';
         user.value = filter.user ?? '';
+        agent.value = filter.agent ?? '';
         item.value = filter.item ?? '';
         from.value = filter.from ?? '';
         to.value = filter.to ?? '';
@@ -143,6 +153,10 @@ function apply() {
         params.user = user.value;
     }
 
+    if (agent.value !== '') {
+        params.agent = agent.value;
+    }
+
     if (item.value !== '') {
         params.item = item.value;
     }
@@ -171,6 +185,7 @@ function clear() {
     container.value = '';
     type.value = '';
     user.value = '';
+    agent.value = '';
     item.value = '';
     from.value = '';
     to.value = '';
@@ -255,6 +270,32 @@ function clear() {
                 <option value="">{{ t('audit.history.filter_all') }}</option>
                 <option v-for="actor in options.users" :key="actor.ulid" :value="actor.ulid">
                     {{ actor.name }}
+                </option>
+            </select>
+        </label>
+
+        <!--
+            Agentvalet bredvid *User* (issue 428): bara de agenter som
+            förekommer i rader läsaren får se, med personen de handlar för i
+            parentesen. Väljaren ritas inte alls när listan är tom — en meny
+            med bara *Alla* är brus.
+        -->
+        <label
+            v-if="agents.length > 0"
+            for="history-filter-agent"
+            class="flex flex-col gap-1 text-meta font-medium text-ink"
+        >
+            {{ t('audit.history.filter_agent') }}
+            <select
+                id="history-filter-agent"
+                v-model="agent"
+                name="agent"
+                :disabled="pending"
+                class="min-h-11 rounded-control border border-border bg-surface px-3 font-normal text-ink"
+            >
+                <option value="">{{ t('audit.history.filter_all') }}</option>
+                <option v-for="choice in agents" :key="choice.ulid" :value="choice.ulid">
+                    {{ t('audit.history.filter_agent_option', { agent: choice.name, owner: choice.owner }) }}
                 </option>
             </select>
         </label>
