@@ -49,9 +49,15 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | avatar_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten |
 | avatar_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten |
 | avatar_zoom | SMALLINT UNSIGNED NULL | Zoomen runt fokuspunkten, i procent (100–300). `NULL` = 100 |
+| hero_attachment_id | FK → attachment NULL, `RESTRICT` | Dashboardens hjältebild, en av personens **egna** bilagor, med samma regler som `avatar_attachment_id`. `NULL` ritar den inbyggda standardbilden. Se [[ADR-0090 Dashboardens hjälte]] |
+| hero_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på hjältebilden, x i procent (0–100). `NULL` = mitten |
+| hero_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på hjältebilden, y i procent (0–100). `NULL` = mitten |
+| hero_zoom | SMALLINT UNSIGNED NULL | Zoomen runt fokuspunkten, i procent (100–300). `NULL` = 100 |
 | created_at, updated_at | | |
 
 `avatar_focus_x`/`avatar_focus_y` sätts alltid TILLSAMMANS (ett CHECK-villkor för paret, i samma form som `container_cover_focus_pair`; en halv punkt finns inte). Beskärningen är icke-destruktiv: originalet lagras orört och utsnittet ritas med CSS, så ändringen skapar ingen ny fil och påverkar inte kvoten. Alla tre kolumnerna nollställs när bilden byts eller tas bort, och `DeleteUser` rensar bilden. Se [[ADR-0076 Profilbilden]].
+
+`hero_*` följer samma regler som `avatar_*`: paret sätts tillsammans (ett eget CHECK-villkor), de tre värdena nollställs när bilden byts eller tas bort, och `DeleteUser` rensar bilden. Se [[ADR-0090 Dashboardens hjälte]].
 
 ### account_user
 
@@ -250,6 +256,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | cover_attachment_id | FK → attachment NULL | Containerns bild, se [[ADR-0047 Containerns bild]] och [[Filer och lagring]] § attachment |
 | cover_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
 | cover_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
+| cover_zoom | SMALLINT UNSIGNED NULL | Zoomen runt fokuspunkten, i procent (100–300). `NULL` = 100. Nollställs med fokuspunkten. Se [[ADR-0090 Dashboardens hjälte]] § 5 |
 | icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case, som `item.icon`. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0064 Containerns ikon]] |
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | versioning_max_versions | TINYINT UNSIGNED NULL | `NULL` följer kontot, 0 stänger av versionshistoriken i containern, och ett tal får inte överstiga kontots. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
@@ -261,7 +268,7 @@ Index: `(account_id, deleted_at)`.
 
 Nyckeln är `ON DELETE SET NULL`, en medveten avvikelse från husets RESTRICT och samma som `item.cover_attachment_id`: en preferens får aldrig hindra papperskorgens gallring. Gallringen rensar bilden först och nollställer pekaren själv.
 
-`cover_focus_x`/`cover_focus_y` är fokuspunkten — den del av bilden som ska synas när en yta beskär den (`object-position: x% y%`) — och de två kolumnerna sätts alltid TILLSAMMANS (CHECK-villkoret `container_cover_focus_pair`; en halv punkt finns inte), med `NULL` som mitten. De nollställs när bilden byts eller tas bort: en punkt vald på en bild säger ingenting om nästa.
+`cover_focus_x`/`cover_focus_y` är fokuspunkten — den del av bilden som ska synas när en yta beskär den (`object-position: x% y%`) — och de två kolumnerna sätts alltid TILLSAMMANS (CHECK-villkoret `container_cover_focus_pair`; en halv punkt finns inte), med `NULL` som mitten. De nollställs, tillsammans med `cover_zoom`, när bilden byts eller tas bort: en punkt vald på en bild säger ingenting om nästa.
 
 `inbox_user_id` är det **enda** som gör containern till en inbox: en pekare till personen som äger den, med ett unikt index. Är den satt är containern en personlig inkorg och ingenting annat — den nås av `inbox_user_id` och av ingen annan, den syns aldrig i en lista över containrar, och den kan inte döpas om, raderas, delas eller överlåtas. Den räknas inte mot planens containertak ([[ADR-0054 Inboxen]] § 3), och dess item är den plats där uppgifter och bilagor som saknar hemvist fångas. Container och item skapas första gången de behövs, av `ResolveInbox`, och det unika indexet är skyddet mot två samtidiga skapanden. En container utan pekaren är en vanlig container, och `NULL` är värdet för varje container som fanns före inboxen. Raden raderas med personen, även när ägarkontot står kvar ([[ADR-0054 Inboxen]] § 9).
 
