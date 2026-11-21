@@ -455,6 +455,42 @@ it('listar relationer, kategorier, taggar, scheman, förekomster, kostnader, lå
     expect($handelser)->toHaveKeys(['events', 'next_cursor']);
 });
 
+// ─── kostnadsbeloppet: huvudenhet, inte minsta enhet (issue 1478) ────────────
+
+it('costs_list svarar med beloppet i huvudenhet, med valutans decimaler', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    [$container, $i] = mcpTrad($agent);
+    $item = $i['batan'];
+
+    CostEntry::factory()->create([
+        'item_id' => $item->id, 'container_id' => $container->id,
+        'amount' => 10000, 'currency' => 'SEK',
+    ]);
+    CostEntry::factory()->create([
+        'item_id' => $item->id, 'container_id' => $container->id,
+        'amount' => 100, 'currency' => 'JPY',
+    ]);
+
+    $kostnader = collect(mcpResultat(mcpVerktyg($token, 'costs_list', ['item' => $item->ulid]))['costs'])
+        ->keyBy('currency');
+
+    expect($kostnader['SEK']['amount'])->toBe('100.00')
+        ->and($kostnader['JPY']['amount'])->toBe('100');
+});
+
+it('beskriver kostnadsbeloppet i huvudenhet — ordet "minor" finns inte kvar', function () {
+    [, $token] = mcpAgentMedToken();
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->keyBy('name');
+
+    foreach (['costs_create', 'costs_update', 'costs_list'] as $namn) {
+        expect($verktyg)->toHaveKey($namn);
+
+        $beskrivning = json_encode($verktyg[$namn]);
+        expect($beskrivning)->toContain('main unit');
+        expect($beskrivning)->not->toContain('minor');
+    }
+});
+
 it('lämnar aldrig en hemlighet eller en annan persons e-postadress i något läsverktyg', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
     [$container, $i] = mcpTrad($agent);

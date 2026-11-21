@@ -25,6 +25,10 @@ use App\Exceptions\Api\ApiException;
  * `validation.<regel>` med tom data för egna regelobjekt och klienten skulle
  * inte få veta VILKEN gräns som slog i (§ Beslut 5). Samma val som
  * `loan.already_open` (issue 76 § Beslut 4).
+ *
+ * `format()` går motsatt väg: heltalet i minsta enhet skrivs tillbaka som en
+ * decimalsträng i huvudenhet, med valutans decimaler. Den finns för att
+ * MCP-verktygen ska tala samma format som appen i BÅDA riktningarna.
  */
 final class MinorUnits
 {
@@ -80,6 +84,41 @@ final class MinorUnits
         $value = (int) $combined;
 
         return $negative ? -$value : $value;
+    }
+
+    /**
+     * Skriver heltalet i minsta enhet som en sträng i HUVUDENHET — inversen
+     * till parse(). 10000 SEK blir "100.00", 100 JPY blir "100" och -350 SEK
+     * blir "-3.50".
+     *
+     * Decimaltecknet är alltid punkt, aldrig komma, och tusentalsavskiljare
+     * skrivs aldrig: strängen ska kunna skickas rakt tillbaka till parse(),
+     * som tar både punkt och komma men inget annat. Antalet decimaler är
+     * valutans eget — samma config som parse() läser — så ett belopp i JPY
+     * får inga decimaler alls.
+     *
+     * Tecknet läses ur strängen och inte genom att negera talet: `(string)`
+     * av PHP_INT_MIN klarar sig där en negation svämmar över, och beloppet
+     * är aldrig mer än en BIGINT.
+     */
+    public static function format(int $minor, string $currency): string
+    {
+        $decimals = self::minorUnits($currency);
+
+        $negative = $minor < 0;
+        $digits = ltrim((string) $minor, '-');
+
+        if ($decimals === 0) {
+            return ($negative ? '-' : '').$digits;
+        }
+
+        // Minst en siffra före decimaltecknet: 5 öre ska bli "0.05", inte
+        // ".05", som parse() skulle avvisa.
+        $digits = str_pad($digits, $decimals + 1, '0', STR_PAD_LEFT);
+
+        return ($negative ? '-' : '')
+            .substr($digits, 0, -$decimals)
+            .'.'.substr($digits, -$decimals);
     }
 
     private static function minorUnits(string $currency): int

@@ -202,7 +202,7 @@ it('avvisar kostnads- och utlåningsverktygen med agent.forbidden utan nivån, o
             'grupp' => 'costs', 'niva' => 'create',
             'args' => fn (): array => [
                 'item' => $item->ulid, 'incurred_on' => '2026-03-01',
-                'amount' => '125000', 'currency' => 'SEK', 'description' => 'Impeller',
+                'amount' => '1250', 'currency' => 'SEK', 'description' => 'Impeller',
             ],
         ],
         'costs_update' => [
@@ -246,6 +246,48 @@ it('avvisar kostnads- och utlåningsverktygen med agent.forbidden utan nivån, o
         expect(AuditLog::query()->where('id', '>', $saldo)->where('agent_id', $agent->id)->exists())
             ->toBeTrue("$namn skrev ingen historikrad med agenten");
     }
+});
+
+// ─── kostnadsbeloppet: huvudenhet, inte minsta enhet (issue 1478) ────────────
+
+it('costs_create sparar "100" SEK som 10000', function () {
+    [, $token, , , $item] = skrivMiljo();
+
+    mcpResultat(mcpVerktyg($token, 'costs_create', [
+        'item' => $item->ulid, 'incurred_on' => '2026-03-01',
+        'amount' => '100', 'currency' => 'SEK', 'description' => 'Varmkorv',
+    ]));
+
+    expect((int) CostEntry::query()->sole()->amount)->toBe(10000);
+});
+
+it('costs_create tolkar både punkt och komma — "125.50" och "125,50" blir 12550', function () {
+    [, $token, , , $item] = skrivMiljo();
+
+    foreach (['125.50', '125,50'] as $belopp) {
+        mcpResultat(mcpVerktyg($token, 'costs_create', [
+            'item' => $item->ulid, 'incurred_on' => '2026-03-01',
+            'amount' => $belopp, 'currency' => 'SEK', 'description' => 'Packning',
+        ]));
+    }
+
+    expect(CostEntry::query()->orderBy('id')->pluck('amount')->map(fn ($a): int => (int) $a)->all())
+        ->toBe([12550, 12550]);
+});
+
+it('costs_update sparar amount "100" SEK som 10000', function () {
+    [, $token, , $container, $item] = skrivMiljo();
+
+    $kostnad = CostEntry::factory()->create([
+        'item_id' => $item->id, 'container_id' => $container->id,
+        'amount' => 99900, 'currency' => 'SEK',
+    ]);
+
+    mcpResultat(mcpVerktyg($token, 'costs_update', [
+        'cost' => $kostnad->ulid, 'amount' => '100', 'currency' => 'SEK',
+    ]));
+
+    expect((int) $kostnad->refresh()->amount)->toBe(10000);
 });
 
 it('avvisar containers_update med agent.forbidden utan nivån, och lyckas med den', function () {
