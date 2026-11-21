@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { canDropOn, parentOptions } from './categoryTree.js';
@@ -128,6 +128,35 @@ const form = useForm({
     position: props.category.position,
     parent: props.category.parent,
 });
+
+/*
+ * `useForm` läser propparna EN gång, men en flytt kan ändra dem under raden:
+ * en kategori som byter förälder monteras om (den hamnar under en annan
+ * `<li>` och får ett färskt formulär), men en rotkategori som släpps på
+ * *Top level* stannar i samma `<li>` — servern räknar om `position` och raden
+ * behåller sitt gamla värde. En senare Save skickade då tillbaka den gamla
+ * siffran och ångrade flytten utan att något syntes. Därför synkas de två
+ * fält som flytten rör när propparna ändras, och `defaults()` följer med så
+ * att formuläret inte ser sig som ändrat.
+ *
+ * Namnet rörs aldrig: det kan vara osparat när sidan ritar om efter en annan
+ * rads PATCH. Jämförelsen mot förra proppvärdet gör att en osparad
+ * position/förälder inte heller skrivs över av en omladdning som inte ändrade
+ * något.
+ */
+watch(
+    () => ({ position: props.category.position, parent: props.category.parent }),
+    (nu, forra) => {
+        if (nu.position === forra.position && nu.parent === forra.parent) {
+            return;
+        }
+
+        form.position = nu.position;
+        form.parent = nu.parent;
+
+        form.defaults({ position: nu.position, parent: nu.parent });
+    },
+);
 
 function submit() {
     /* Sidan äger `moveErrorUlid`, och ett fel ur ett tidigare drag hör inte

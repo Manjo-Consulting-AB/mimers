@@ -1097,3 +1097,34 @@ it('nollställer flyttfelet när en rad sparas med väljaren', function () {
         ->toContain('function clearMoveError()')
         ->toContain('moveErrorUlid.value = null;');
 });
+
+/*
+ * M69 fynd 2026-11-21, varv 2: ett släpp på *Top level* kunde ångras av en
+ * senare Save.
+ *
+ * `useForm` läser propparna en gång. En kategori som byter förälder hamnar
+ * under en annan `<li>` och monteras om med ett färskt formulär, men en
+ * rotkategori som släpps på Top level stannar i samma `<li>`: servern räknar
+ * om `position` och raden behöll sin gamla siffra. Nästa Save skickade
+ * tillbaka den och ångrade flytten utan att något syntes. Raden synkar därför
+ * position och förälder när propparna ändras — men aldrig namnet, som kan
+ * vara osparat.
+ */
+it('synkar position och förälder till formuläret när propparna ändras, men aldrig namnet', function () {
+    $rad = File::get(resource_path('js/components/CategoryRow.vue'));
+
+    // Vakten läser de två fält som flytten rör.
+    expect($rad)->toContain('watch(')
+        ->toContain('() => ({ position: props.category.position, parent: props.category.parent })')
+        ->toContain('form.position = nu.position')
+        ->toContain('form.parent = nu.parent');
+
+    // Formulärets standardvärden följer med, så raden inte ser sig som ändrad.
+    expect($rad)->toContain('form.defaults({ position: nu.position, parent: nu.parent })');
+
+    // Namnet skrivs aldrig över: det kan vara osparat när sidan ritar om.
+    expect($rad)->not->toContain('form.name =');
+
+    // En omladdning som inte ändrade något rör inte heller ett osparat fält.
+    expect($rad)->toContain('nu.position === forra.position && nu.parent === forra.parent');
+});
