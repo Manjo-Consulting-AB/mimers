@@ -1,10 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
-import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
-
-defineOptions({ layout: AppLayout });
 
 /*
  * Issue 400 · godkännandet av en MCP-klient, se [[ADR-0087 MCP-server för
@@ -20,6 +17,14 @@ defineOptions({ layout: AppLayout });
  * Samma klient igen ser att agenten redan finns — anslutningen återanvänder
  * raden. En ny klient väljer mellan en ny agent och att ersätta en befintlig;
  * har kontot redan taket är bara ersättningen kvar.
+ *
+ * **Sidan ritas utan appens skal.** Skalets sidolista och klocka hämtar sina
+ * valfria proppar med `router.reload({ only: [...] })`, och en omladdning är
+ * en GET mot sidans egen URL — här `/oauth/authorize?…`. Passport kör då
+ * godkännandet en gång till och lägger en ny `authToken` i sessionen, medan
+ * formuläret bär kvar den första: knappen gav 403 (`InvalidAuthTokenException`)
+ * och felsidan därefter Inertias JSON-fel. Ingen layout betyder inga
+ * omladdningar, så sessionens token och formulärets förblir samma.
  *
  * **Texten kommer ur `lang/en/ui.php` under `mcp.authorize`.** Ingenting här
  * är en användarvänd sträng ([[ADR-0021 Frontendteknik]] § Beslut).
@@ -57,7 +62,7 @@ const canApprove = computed(
 <template>
     <Head :title="t('mcp.authorize.title')" />
 
-    <div class="mx-auto max-w-xl">
+    <main class="mx-auto max-w-xl px-4 py-10">
         <h1 class="text-2xl font-semibold">{{ t('mcp.authorize.heading', { client: props.client.name }) }}</h1>
 
         <p v-if="props.requiresPro" class="mt-4 text-slate-700">{{ t('mcp.authorize.pro_body', { client: props.client.name }) }}</p>
@@ -159,5 +164,5 @@ const canApprove = computed(
                 {{ submitting ? t('common.pending.default') : t('mcp.authorize.deny') }}
             </button>
         </form>
-    </div>
+    </main>
 </template>
