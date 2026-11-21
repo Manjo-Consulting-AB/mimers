@@ -77,7 +77,8 @@
         "test": [
             "@php .github/scripts/testforutsattningar.php",
             "@php artisan config:clear --ansi @no_additional_args",
-            "@php artisan test"
+            "@php artisan test --shard=1/2",
+            "@php artisan test --shard=2/2"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
