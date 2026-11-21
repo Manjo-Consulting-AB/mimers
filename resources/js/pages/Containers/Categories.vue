@@ -56,6 +56,10 @@ defineOptions({
  * categoryTree.js och skickar SAMMA `PATCH` som radens väljare. Ytan *Top
  * level* ovanför trädet syns bara under ett pågående drag och skickar
  * `parent: null`. Ett fel ur serverns flyttprövning ritas på raden som drogs.
+ * Sparar en rad med väljaren nollställs `moveErrorUlid` — felet hörde till
+ * dragets begäran, och felpåsen kan inte säga vilken rad `errors.parent`
+ * tillhör — så en gammal ruta aldrig står kvar på fel rad när nästa sparning
+ * nekas.
  *
  * **Förslaget på en tom container** kom med issue 56b § Beslut 4:
  * resources/js/components/CategoryPresetCard.vue ritas i stället för
@@ -104,6 +108,13 @@ function dragStart(ulid) {
 
 function dragEnd() {
     draggingUlid.value = null;
+}
+
+/* En rad som sparas med väljaren gör dragets fel inaktuellt: felpåsen bär
+   `errors.parent` utan radidentitet, så en kvarglömd ULID hade ritat den nya
+   begäranens fel på den gamla raden. Raden säger `submit` före sin PATCH. */
+function clearMoveError() {
+    moveErrorUlid.value = null;
 }
 
 /* Ett släpp på en rad: raden blir förälder, eller ingenting om movePayload()
@@ -199,6 +210,7 @@ const showsPreset = computed(
             @dragstart="dragStart"
             @dragend="dragEnd"
             @drop="drop"
+            @submit="clearMoveError"
         />
     </ul>
 

@@ -83,7 +83,7 @@ const props = defineProps({
     disabled: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop']);
+const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit']);
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -130,6 +130,11 @@ const form = useForm({
 });
 
 function submit() {
+    /* Sidan äger `moveErrorUlid`, och ett fel ur ett tidigare drag hör inte
+       till den här begäran. Säg till innan PATCH:en går, så den gamla rutan
+       inte står kvar på fel rad om servern nekar också den här sparningen. */
+    emit('submit', props.category.ulid);
+
     form.patch(`/containers/${props.containerUlid}/categories/${props.category.ulid}`, {
         preserveScroll: true,
         onError: focusFirstError,

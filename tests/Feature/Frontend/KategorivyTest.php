@@ -1061,3 +1061,39 @@ it('ritar draghandtaget över md: och kopplar släppet till radens PATCH', funct
         ->toContain('page.props.errors.parent')
         ->toContain('role="alert"');
 });
+
+/*
+ * M69 fynd 2026-11-21: ett kvarglömt flyttfel fick inte ritas på fel rad.
+ *
+ * Ett nekat drag sätter `moveErrorUlid`. Sparar sedan en ANNAN rad med
+ * väljaren och servern nekar också den, bär felpåsen samma `errors.parent` —
+ * och rutan på den dragna raden visade den nya begäranens fel. Raden säger
+ * därför `submit` före sin PATCH, och sidan nollställer ULID:n. Mönstret är
+ * Fields.vue:s `@submit="errorTarget = field.ulid"`; här spegelvänt, för det
+ * är det gamla felet som ska bort.
+ */
+it('nollställer flyttfelet när en rad sparas med väljaren', function () {
+    $rad = File::get(resource_path('js/components/CategoryRow.vue'));
+    $träd = File::get(resource_path('js/components/CategoryTree.vue'));
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+
+    // Raden och trädet deklarerar händelsen, annars faller den igenom som ett
+    // DOM-attribut i stället för att nå sidan.
+    expect($rad)->toContain("defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit'])");
+    expect($träd)->toContain("defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit'])");
+
+    // Raden säger till INNAN sin egen PATCH — annars hann svaret sätta felet.
+    $sägTill = (int) strpos($rad, "emit('submit', props.category.ulid)");
+    $patcha = (int) strpos($rad, 'form.patch(`/containers/${props.containerUlid}/categories/');
+
+    expect($sägTill)->toBeGreaterThan(0)
+        ->and($patcha)->toBeGreaterThan($sägTill);
+
+    // Trädet skickar vidare från både raden och den rekursiva trädnoden.
+    expect(substr_count($träd, '@submit="emit(\'submit\', $event)"'))->toBe(2);
+
+    // Sidan nollställer ULID:n — det är det som tar bort den gamla rutan.
+    expect($sida)->toContain('@submit="clearMoveError"')
+        ->toContain('function clearMoveError()')
+        ->toContain('moveErrorUlid.value = null;');
+});

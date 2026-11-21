@@ -42,7 +42,7 @@ defineProps({
     disabled: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop']);
+const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit']);
 </script>
 
 <template>
@@ -61,6 +61,7 @@ const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop']);
                 @dragstart="emit('dragstart', $event)"
                 @dragend="emit('dragend')"
                 @drop="emit('drop', $event)"
+                @submit="emit('submit', $event)"
             />
 
             <CategoryTree
@@ -78,6 +79,7 @@ const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop']);
                 @dragstart="emit('dragstart', $event)"
                 @dragend="emit('dragend')"
                 @drop="emit('drop', $event)"
+                @submit="emit('submit', $event)"
             />
         </li>
     </ul>
