@@ -156,6 +156,25 @@ it('avvisar containers_delete på någon annans container', function () {
     expect($annan->refresh()->trashed())->toBeFalse();
 });
 
+it('säger i beskrivningen att innehållet följer med till papperskorgen och ber agenten bekräfta först', function () {
+    [, $token] = mcpAgentMedToken();
+
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))
+        ->firstWhere('name', 'containers_delete');
+
+    $beskrivning = $verktyg['description'];
+
+    expect($beskrivning)->toBeString();
+    expect($beskrivning)->not->toContain('not deleted');
+
+    expect($beskrivning)
+        ->toContain('everything in it')
+        ->toContain('The container and its content go to the trash and can be restored together')
+        ->toContain('Confirm with the user before deleting')
+        ->toContain('in the trash and can be restored')
+        ->toContain('do not list its content');
+});
+
 it('delar tillfälle inom 15 minuter och börjar ett nytt efteråt', function () {
     [, $token, , $container] = raderingsMiljo();
 
