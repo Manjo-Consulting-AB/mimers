@@ -81,7 +81,7 @@ class ListContainerSummaries
      *             name: string,
      *             items: int,
      *             todos: int,
-     *             cover: array{ulid: string, variants: list<string>}|null,
+     *             cover: array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null, zoom: int|null}|null,
      *             icon: string|null,
      *             icon_color: string|null
      *         }>
@@ -95,11 +95,11 @@ class ListContainerSummaries
         // `cover_attachment_id` MÅSTE stå i urvalet: `ContainerResource::
         // cover()` läser pekaren, och en kolumn som inte hämtats är null —
         // korten hade tyst tappat sina bilder. Samma sak gäller
-        // `cover_focus_x`/`cover_focus_y`: `cover()` skickar `focus` ur dem,
-        // och är de inte hämtade svarar korten `focus: null` även när en punkt
-        // är satt — inte "ingen punkt vald" utan FEL data (arkitektsvaret på
-        // issue 210). De två står på samma rad som redan hämtas, så ingen ny
-        // fråga ställs. Bilden och dess derivat eager-loadas av samma skäl som
+        // `cover_focus_x`/`cover_focus_y`/`cover_zoom`: `cover()` skickar
+        // utsnittet ur dem, och är de inte hämtade svarar korten `focus: null`
+        // och `zoom: null` även när ett utsnitt är satt — inte "inget utsnitt
+        // valt" utan FEL data (arkitektsvaret på issue 210). De tre står på
+        // samma rad som redan hämtas, så ingen ny fråga ställs. Bilden och dess derivat eager-loadas av samma skäl som
         // ägarkontot i API:et: utan det blir dashboarden N+1, och kravet är ett
         // KONSTANT antal frågor oavsett antal containrar (issue 159 § Klart
         // när, issue 70 § Beslut 2).
@@ -123,6 +123,7 @@ class ListContainerSummaries
                 'cover_attachment_id',
                 'cover_focus_x',
                 'cover_focus_y',
+                'cover_zoom',
             ]);
 
         $itemCounts = $this->itemCounts(
@@ -256,7 +257,7 @@ class ListContainerSummaries
      *         name: string,
      *         items: int,
      *         todos: int,
-     *         cover: array{ulid: string, variants: list<string>}|null,
+     *         cover: array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null, zoom: int|null}|null,
      *         icon: string|null,
      *         icon_color: string|null
      *     }>
@@ -271,7 +272,7 @@ class ListContainerSummaries
          *         name: string,
          *         items: int,
          *         todos: int,
-         *         cover: array{ulid: string, variants: list<string>}|null,
+         *         cover: array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null, zoom: int|null}|null,
          *         icon: string|null,
          *         icon_color: string|null
          *     }>

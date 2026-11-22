@@ -212,6 +212,9 @@ it('ritar containern som mitt utan focus', function () {
         'name' => $container->name,
         'icon' => null,
         'icon_color' => null,
+        // Containerns bild (issue 433 · [[ADR-0090 Dashboardens hjälte]] § 5);
+        // null utan bild, som i fixturen.
+        'cover' => null,
         'children' => null,
         'placements' => null,
     ])
@@ -241,6 +244,8 @@ it('ritar itemet som mitt med focus', function () {
         'name' => 'Motorn',
         'icon' => null,
         'icon_color' => null,
+        // Ett item har ingen containerbild; nyckeln står med som null.
+        'cover' => null,
         'children' => 1,
         'placements' => 1,
     ])

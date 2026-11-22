@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, useId } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
+import ImageCropEditor from './ImageCropEditor.vue';
 import UiSheet from './UiSheet.vue';
 import UiIcon from './UiIcon.vue';
 import { coverUrl } from './coverPresentation.js';
@@ -54,14 +55,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  * inget val någon gör här, och raden syns därför inte. Servern prövar
  * medlemskapet och nekar ett konto användaren inte är medlem i.
  *
- * **Väljaren för fokuspunkten ligger i arket** (issue 683 § Beslut 3), efter
- * *Ta bort bilden* och bara när det finns en bild: klicket sätter den del av
- * bilden som ska synas när en yta beskär den, och arket är den enda ytan som
- * har bilden i sin helhet framför sig. Ett klick och inte en dragbar markör —
- * markören ritas där klicket landade och flyttar sig när propparna laddas om.
+ * **Redigeraren för utsnittet ligger i arket** (issue 683 § Beslut 3 och
+ * issue 433 · [[ADR-0090 Dashboardens hjälte]] § 4–5), efter *Ta bort bilden*
+ * och bara när det finns en bild. Sedan issue 433 är det SAMMA komponent som
+ * profilbilden använder — `ImageCropEditor` med `shape="wide"` i hjältens
+ * proportioner — i stället för den egna klickväljaren: dra för att placera,
+ * reglage för zoom, och Save PATCH:ar punkt och zoom till
+ * `/containers/{container}/cover/focus`. Arket är den enda ytan som har
+ * bilden i sin helhet framför sig.
  *
- * Ingen sträng står i filen ([[ADR-0013 Språk och i18n]]): varje text kommer
- * ur `t()` med en nyckel under `container.cover.*`.
+ * **Arket stängs inte när utsnittet sparas.** Användaren ser bilden byta
+ * utsnitt när propparna laddas om och kan justera igen (issue 683 § Beslut 4).
+ *
+ * Ingen sträng står i filen ([[ADR-0013 Språk och i18n]]): arkets egen text
+ * kommer ur `t()` med en nyckel under `container.cover.*`, och redigerarens
+ * ord ur de delade `crop.*`-nycklarna.
  */
 const props = defineProps({
     /* Containern ur ContainerResource — `ulid` och `cover` läses här. */
@@ -109,11 +117,8 @@ const deviceInput = ref(null);
 const pending = ref(false);
 const error = ref(null);
 
-/*
- * Punkten väljaren ritar markören på. Utan en sparad punkt står markören i
- * mitten, som är samma sak som `null` betyder på servern.
- */
-const focus = computed(() => props.container.cover?.focus ?? { x: 50, y: 50 });
+/* Redigerarens fel, skilt från uppladdningens: båda ritas i arket. */
+const cropError = ref(null);
 
 function show(event) {
     trigger.value = event.currentTarget ?? null;
@@ -195,42 +200,28 @@ function remove() {
 }
 
 /*
- * Ett klick i bilden sätter fokuspunkten, i procent av bildens ruta.
+ * Redigeraren sänder utkastet; arket sparar det. Punkt och zoom går i samma
+ * PATCH sedan issue 433 — utelämnad zoom betyder 100 på servern, men här
+ * skickas alltid det värde reglaget visar.
  *
- * `event.detail === 0` är tangentbordet: en knapp som aktiveras med Enter har
- * inga koordinater, och `clientX`/`clientY` är då 0 — ett klick i övre vänstra
- * hörnet hade varit svaret på en tangenttryckning.
+ * **Arket stängs inte** (issue 683 § Beslut 4): användaren ser bilden byta
+ * utsnitt när propparna laddas om och kan justera igen. Vänteläget är
+ * uppladdningens, så en knapptryckning under ett anrop inte blir två
+ * skrivningar i rad.
  */
-function chooseFocus(event) {
-    if (event.detail === 0) {
-        return;
-    }
+function saveCrop(crop) {
+    cropError.value = null;
 
-    const rect = event.currentTarget.getBoundingClientRect();
-
-    const x = Math.round((event.clientX - rect.left) / rect.width * 100);
-    const y = Math.round((event.clientY - rect.top) / rect.height * 100);
-
-    setFocus({
-        x: Math.min(100, Math.max(0, x)),
-        y: Math.min(100, Math.max(0, y)),
-    });
-}
-
-/*
- * Skriver punkten. **Arket stängs inte** (issue 683 § Beslut 4): användaren ser
- * markören flytta när propparna laddas om och kan klicka igen. Vänteläget är
- * uppladdningens, så en knapptryckning under ett anrop inte blir två skrivningar
- * i rad.
- */
-function setFocus(point) {
-    router.patch(`/containers/${props.container.ulid}/cover/focus`, point, {
+    router.patch(`/containers/${props.container.ulid}/cover/focus`, crop, {
         preserveScroll: true,
         onStart: () => {
             pending.value = true;
         },
         onFinish: () => {
             pending.value = false;
+        },
+        onError: (errors) => {
+            cropError.value = errors.x ?? errors.y ?? errors.zoom ?? null;
         },
     });
 }
@@ -298,39 +289,27 @@ function setFocus(point) {
         </button>
 
         <!--
-            Fokuspunkten (issue 683 § Beslut 3): hela bilden, ingen beskärning,
-            och ett klick sätter den del som ska synas. Markören ritas där
-            punkten står. Bara när det finns en bild — en punkt på en bild som
-            inte finns är ingenting att välja.
+            Utsnittet (issue 683 § Beslut 3 och issue 433 · [[ADR-0090
+            Dashboardens hjälte]] § 4–5): samma redigerare som profilbilden,
+            med formen `wide`. Bara när det finns en bild — ett utsnitt på en
+            bild som inte finns är ingenting att välja. `v-if="open"` gör att
+            utkastet börjar om från de sparade värdena varje gång arket öppnas.
         -->
-        <template v-if="container.cover">
-            <p class="mt-4 text-sm font-medium text-ink">{{ t('container.cover.focus_heading') }}</p>
-            <p class="text-sm text-ink-subtle">{{ t('container.cover.focus_help') }}</p>
+        <template v-if="container.cover && open">
+            <p class="mt-4 text-sm font-medium text-ink">{{ t('container.cover.crop_heading') }}</p>
+            <p class="text-sm text-ink-subtle">{{ t('container.cover.crop_help') }}</p>
 
-            <button
-                type="button"
-                class="relative mt-2 block w-full overflow-hidden rounded-control"
-                :aria-label="t('container.cover.focus_label')"
-                :disabled="pending"
-                @click="chooseFocus"
-            >
-                <img :src="coverUrl(container.cover, 'medium')" alt="" class="block h-auto w-full">
-
-                <span
-                    aria-hidden="true"
-                    class="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent shadow"
-                    :style="{ left: `${focus.x}%`, top: `${focus.y}%` }"
-                ></span>
-            </button>
-
-            <button
-                type="button"
-                class="inline-flex min-h-11 items-center gap-2 rounded-control px-2 text-left text-ink hover:bg-surface-muted"
-                :disabled="pending"
-                @click="setFocus({ x: 50, y: 50 })"
-            >
-                {{ t('container.cover.focus_reset') }}
-            </button>
+            <ImageCropEditor
+                class="mt-2"
+                :src="coverUrl(container.cover, 'medium')"
+                :focus="container.cover.focus ?? null"
+                :zoom="container.cover.zoom ?? null"
+                shape="wide"
+                :pending="pending"
+                :error="cropError"
+                @save="saveCrop"
+                @cancel="close"
+            />
         </template>
 
         <!--

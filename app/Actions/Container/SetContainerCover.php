@@ -95,11 +95,13 @@ class SetContainerCover
 
             $rad->cover_attachment_id = $bilaga->id;
 
-            // Fokuspunkten nollställs när bilden byts (issue 682): en punkt
-            // vald på den förra bilden säger ingenting om den nya. Nollställd
-            // betyder mitten, samma utgångsläge som en bild utan vald punkt.
+            // Fokuspunkten och zoomen nollställs när bilden byts (issue 682
+            // och 433): ett utsnitt valt på den förra bilden säger ingenting
+            // om den nya. Nollställda betyder mitten och 100 %, samma
+            // utgångsläge som en bild utan valt utsnitt.
             $rad->cover_focus_x = null;
             $rad->cover_focus_y = null;
+            $rad->cover_zoom = null;
 
             $rad->save();
 

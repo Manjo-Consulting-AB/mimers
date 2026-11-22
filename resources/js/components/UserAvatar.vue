@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { avatarCrop } from '../composables/useAvatarCrop.js';
+import { imageCrop } from '../composables/useImageCrop.js';
 
 /*
  * Profilbilden i en rund (eller kvadratisk) ruta, se [[ADR-0076
@@ -18,8 +18,8 @@ import { avatarCrop } from '../composables/useAvatarCrop.js';
  * finns svarar 404, och då faller komponenten tillbaka på miniatyren innan
  * initialerna tar över — en bild mindre än 1024 px har inget `medium`.
  *
- * **Utsnittet ritas med `avatarCrop`** ur
- * resources/js/composables/useAvatarCrop.js: fokuspunkten står i rutans mitt
+ * **Utsnittet ritas med `imageCrop`** ur
+ * resources/js/composables/useImageCrop.js: fokuspunkten står i rutans mitt
  * så långt bilden räcker, zoomen förstoras runt den, och ingen tom kant
  * uppstår. Originalet lagras orört — ingen ny fil skapas och kvoten rörs
  * inte (ADR-0076 § 7).
@@ -113,7 +113,7 @@ const zoom = computed(() => avatar.value?.zoom ?? 100);
  * Utsnittet: måtten och placeringen ur den delade funktionen. Innan bilden
  * laddats är `natural` noll och funktionen svarar en neutral fyllning.
  */
-const crop = computed(() => avatarCrop({
+const crop = computed(() => imageCrop({
     imageWidth: natural.value.width,
     imageHeight: natural.value.height,
     box: props.size,

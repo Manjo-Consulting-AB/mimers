@@ -1,6 +1,6 @@
 /*
- * Räkningen bakom profilbildens utsnitt, se [[ADR-0076 Profilbilden]] § 7 och
- * [[M59 Profilbilden]] § 382.
+ * Räkningen bakom det RUNDA utsnittet, se [[ADR-0076 Profilbilden]] § 7,
+ * [[M59 Profilbilden]] § 382 och [[ADR-0090 Dashboardens hjälte]] § 4.
  *
  * **En ren funktion, delad av ytan och provet.** Avataren ritas i en ruta av
  * en given storlek, och utsnittet är en FOKUSPUNKT (procent av originalet)
@@ -21,16 +21,23 @@
  *
  * **Därför finns den effektiva punkten.** Klamringen gör att flera olika
  * fokusvärden ritas likadant: en 200×100-bild vid 100 % ser likadan ut för
- * varje x ≤ 25. `avatarFocusRange` översätter det klamrade läget tillbaka
+ * varje x ≤ 25. `imageFocusRange` översätter det klamrade läget tillbaka
  * till den punkt som faktiskt syns, plus det intervall som går att nå vid
  * aktuell zoom. Redigeraren utgår från dem — inte från det sparade talet —
  * så ett drag och ett piltryck rör bilden direkt i stället för att först
- * beta av ett dött område. `avatarDragFocus` och `avatarNudgeFocus` är
+ * beta av ett dött område. `imageDragFocus` och `imageNudgeFocus` är
  * samma räkning för de två handgreppen, så ytan och provet delar den.
  *
  * Måtten är bildpunkter. `imageWidth`/`imageHeight` är originalets
  * naturliga mått; saknas de (bilden har inte laddats än) returneras en
  * neutral fyllning så att komponenten kan ritas utan att gissa.
+ *
+ * **Filnamnet är delat sedan issue 433.** Redigeraren
+ * (resources/js/components/ImageCropEditor.vue) använder de här funktionerna
+ * för den runda formen och `coverPresentation.js` för den breda. Den breda
+ * formen ritar containerns bild, vars fokuspunkt är en `object-position`
+ * ([[ADR-0047 Containerns bild]]) och alltså inte klamras mot rutans mitt på
+ * samma sätt — se `coverStyle()` där.
  */
 
 /**
@@ -66,7 +73,7 @@ function clamp(value, min, max) {
  *   visibleY: number,
  * }}
  */
-export function avatarCrop({
+export function imageCrop({
     imageWidth,
     imageHeight,
     box,
@@ -130,7 +137,7 @@ export function avatarCrop({
 /**
  * Den punkt som faktiskt syns, och intervallet som går att nå.
  *
- * `avatarCrop` klamrar förskjutningen till bildens överflöd, så ett
+ * `imageCrop` klamrar förskjutningen till bildens överflöd, så ett
  * fokusvärde nära kanten ritas som ett läge längre in. Här översätts det
  * klamrade läget tillbaka till procent — `50 - offset/width*100` — och
  * intervallet räknas ur samma överflöd. Vid zoom 100 på en kvadratisk bild
@@ -153,7 +160,7 @@ export function avatarCrop({
  *   maxY: number,
  * }}
  */
-export function avatarFocusRange({
+export function imageFocusRange({
     imageWidth,
     imageHeight,
     box,
@@ -162,7 +169,7 @@ export function avatarFocusRange({
     zoom = 100,
 }) {
     return focusBounds(
-        avatarCrop({ imageWidth, imageHeight, box, focusX, focusY, zoom }),
+        imageCrop({ imageWidth, imageHeight, box, focusX, focusY, zoom }),
         box,
     );
 }
@@ -176,7 +183,7 @@ export function avatarFocusRange({
  * @returns {{ focusX: number, focusY: number, minX: number, maxX: number, minY: number, maxY: number }}
  */
 function focusBounds(crop, box) {
-    // Bilden har inte laddats: samma neutrala svar som `avatarCrop` ger.
+    // Bilden har inte laddats: samma neutrala svar som `imageCrop` ger.
     if (!(crop.width > 0) || !(crop.height > 0) || !(box > 0)) {
         return { focusX: 50, focusY: 50, minX: 50, maxX: 50, minY: 50, maxY: 50 };
     }
@@ -232,7 +239,7 @@ function clampFocus(value, min, max) {
  * @param {number} [options.deltaY]
  * @returns {{ x: number, y: number }}
  */
-export function avatarDragFocus({
+export function imageDragFocus({
     imageWidth,
     imageHeight,
     box,
@@ -242,7 +249,7 @@ export function avatarDragFocus({
     deltaX = 0,
     deltaY = 0,
 }) {
-    const crop = avatarCrop({ imageWidth, imageHeight, box, focusX, focusY, zoom });
+    const crop = imageCrop({ imageWidth, imageHeight, box, focusX, focusY, zoom });
 
     if (!(crop.width > 0) || !(crop.height > 0)) {
         return { x: 50, y: 50 };
@@ -282,7 +289,7 @@ export function avatarDragFocus({
  * @param {number} [options.stepY]
  * @returns {{ x: number, y: number }}
  */
-export function avatarNudgeFocus({
+export function imageNudgeFocus({
     imageWidth,
     imageHeight,
     box,
@@ -292,7 +299,7 @@ export function avatarNudgeFocus({
     stepX = 0,
     stepY = 0,
 }) {
-    const bounds = avatarFocusRange({ imageWidth, imageHeight, box, focusX, focusY, zoom });
+    const bounds = imageFocusRange({ imageWidth, imageHeight, box, focusX, focusY, zoom });
 
     return {
         x: clampFocus(bounds.focusX + stepX, bounds.minX, bounds.maxX),

@@ -172,7 +172,14 @@ class ContainerCoverController extends Controller
         Container $container,
         SetContainerCoverFocus $setContainerCoverFocus,
     ): RedirectResponse {
-        if (! $setContainerCoverFocus->handle($container, $request->integer('x'), $request->integer('y'))) {
+        // Utelämnad zoom betyder 100, samma utgångsläge som en bild utan valt
+        // utsnitt (issue 433 · [[ADR-0090 Dashboardens hjälte]] § 5).
+        if (! $setContainerCoverFocus->handle(
+            $container,
+            $request->integer('x'),
+            $request->integer('y'),
+            $request->integer('zoom', 100),
+        )) {
             abort(404);
         }
 
