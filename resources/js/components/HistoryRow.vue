@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import UiBadge from './UiBadge.vue';
 import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
@@ -17,12 +18,19 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * meningen är `audit.action.<handling>` ur `lang/en/ui.php`, med en nyckel per
  * handling, och raden vet bara VILKEN handling den ritar.
  *
- * **Ingen åtgärd och ingen länk.** Historiken är läsning: en rad man kan
- * klicka på vore en väg tillbaka in i något som kanske inte finns — itemet är
- * ofta just det som gallrats — och en rad som ser klickbar ut utan att leda
- * någonstans är värre än en rad som inte gör det. Därför bär raden ingen
- * `<Link>` och ingen knapp; träffytan i `UiListRow` räcker för att raden ska
- * gå att markera och läsa.
+ * **Raden är ingen länk, men containernamnet är det** (M71 · issue 1500).
+ * Historiken är läsning, och en rad man kan klicka på vore en väg tillbaka in
+ * i något som kanske inte finns — itemet är ofta just det som gallrats, och en
+ * rad som ser klickbar ut utan att leda någonstans är värre än en rad som inte
+ * gör det. Därför bär raden ingen `<Link>` runt meningen och ingen knapp;
+ * träffytan i `UiListRow` räcker för att raden ska gå att markera och läsa.
+ * Platsen under meningen är undantaget: containern FINNS när namnet ritas, och
+ * den som läser en rad om den vill kunna gå till dess översikt. Namnet är
+ * därför en länk till `/containers/{ulid}` — samma stil som containerlänken i
+ * `TodoRow.vue` — men bara när `container.ulid` finns. Ersättarna *a deleted
+ * container* och *Account* är text och ingenting annat: den ena pekar på en
+ * container som inte längre finns, den andra på en plats som inte är en
+ * container.
  *
  * **Tre namn kan saknas, och alla har en ersättare.** `user`, `item` och
  * containerns namn kommer ur App\Actions\Audit\PresentAuditEvents och är
@@ -39,7 +47,8 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * över alla användarens konton, där står raden utanför sin container och måste
  * säga vilken den gäller. `showContainer` är anroparens val, och namnet ritas
  * under meningen ur `audit.fallback.container` när containern inte längre
- * finns. `container` är `null` när raden inte gäller någon container alls
+ * finns. Finns den är namnet en länk till dess översikt (M71 · issue 1500).
+ * `container` är `null` när raden inte gäller någon container alls
  * (kontoraderna): då står platsen *Account* i stället (M30 · issue 272 ·
  * Beslut 3) — raden hör till kontot, och en tom plats där containernamnet
  * annars står hade lästs som ett ritfel. Dashboardens händelsepanel ritar
@@ -71,8 +80,9 @@ const props = defineProps({
      * En rad ur App\Actions\Audit\PresentAuditEvents:
      * `{ ulid, action, created_at, user, agent, item, container, changed }`.
      *
-     * `container` är `{ name }` när raden gäller en container och `null` när
-     * den inte gör det; `name` är `null` när containern gallrats. `agent` är
+     * `container` är `{ ulid, name }` när raden gäller en container och `null`
+     * när den inte gör det; båda fälten är `null` när containern gallrats
+     * eller ligger i papperskorgen. `agent` är
      * `null` när personen handlade själv, `{ ulid, name }` när en agent gjorde
      * det och `{ ulid: null, name: null }` när agenten tagits bort.
      */
@@ -152,10 +162,16 @@ const domain = computed(() => props.row.action.split('.')[0]);
 const presentation = computed(() => presentationFor(domain.value));
 
 /*
- * Platsen raden gäller, som ord — containerns namn, ersättaren för en gallrad
- * container, eller *Account* för en kontorad. `null` betyder att raden inte
- * ska säga någon plats alls: anroparen bad inte om den (flikarna), och där är
- * containern given av sidan man står på.
+ * Platsen raden gäller — containerns namn, ersättaren för en gallrad
+ * container, eller *Account* för en kontorad — med länken dit den leder.
+ *
+ * `null` betyder att raden inte ska säga någon plats alls: anroparen bad inte
+ * om den (flikarna), och där är containern given av sidan man står på.
+ *
+ * `href` är `null` när platsen inte går att besöka: en gallrad eller
+ * papperskorgad container har inget ULID i svaret, och *Account* är ingen
+ * container alls. De två ritas då som text, som förut — en länk till en sida
+ * som svarar 404 är värre än ingen länk (M71 · issue 1500).
  */
 const container = computed(() => {
     if (!props.showContainer) {
@@ -168,10 +184,13 @@ const container = computed(() => {
      * containern är inte gallrad, den har aldrig funnits.
      */
     if (props.row.container === null) {
-        return t('audit.history.account_place');
+        return { href: null, text: t('audit.history.account_place') };
     }
 
-    return props.row.container.name ?? t('audit.fallback.container');
+    return {
+        href: props.row.container.ulid ? `/containers/${props.row.container.ulid}` : null,
+        text: props.row.container.name ?? t('audit.fallback.container'),
+    };
 });
 </script>
 
@@ -194,7 +213,17 @@ const container = computed(() => {
             </UiBadge>
         </template>
 
-        <template v-if="container !== null" #subtitle>{{ container }}</template>
+        <template v-if="container !== null" #subtitle>
+            <!-- Platsen: en länk till containerns översikt när den finns
+                 (M71 · issue 1500), annars text — ersättaren för en gallrad
+                 container och *Account* leder ingenstans. -->
+            <Link
+                v-if="container.href !== null"
+                :href="container.href"
+                class="inline-flex min-h-11 items-center text-accent hover:underline"
+            >{{ container.text }}</Link>
+            <span v-else>{{ container.text }}</span>
+        </template>
 
         <template #meta>
             <time :datetime="row.created_at">{{ date.text }}</time>
