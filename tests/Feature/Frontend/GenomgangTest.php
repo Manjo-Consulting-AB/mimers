@@ -698,12 +698,31 @@ it('ger varje sida exakt en h1', function () {
     // Beslut 5. `<h1>` är den som säger var man är, och två av dem säger
     // ingenting. Att rubriknivåerna inte hoppar över kontrolleras för hand i
     // PR:en — det kräver att komponenterna räknas in i sidan de ritas i.
+    //
+    // Dashboarden flyttade sin `<h1>` till hjälten i issue 435
+    // ([[ADR-0090 Dashboardens hjälte]] § 1), så sidan ritar den inte själv.
+    // Undantaget är namngivet och räknar komponentens rubrik MED sidans, så
+    // att en förlorad rubrik fortfarande fälls.
+    $rubrikenIDeladKomponent = [
+        'pages/Dashboard.vue' => 'components/DashboardHero.vue',
+    ];
+
     $sidor = genomgangSidor();
 
     expect($sidor)->not->toBeEmpty();
 
     foreach ($sidor as $sokvag => $kod) {
-        expect(preg_match_all('/<h1\b/', $kod))->toBe(1, "{$sokvag} har inte exakt en <h1>");
+        $antal = preg_match_all('/<h1\b/', $kod);
+
+        if (isset($rubrikenIDeladKomponent[$sokvag])) {
+            $komponent = genomgangKod()[$rubrikenIDeladKomponent[$sokvag]] ?? null;
+
+            expect($komponent)->not->toBeNull("{$rubrikenIDeladKomponent[$sokvag]} saknas");
+
+            $antal += preg_match_all('/<h1\b/', $komponent);
+        }
+
+        expect($antal)->toBe(1, "{$sokvag} har inte exakt en <h1>");
     }
 });
 

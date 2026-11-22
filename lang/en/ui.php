@@ -5139,6 +5139,15 @@ return [
         'title' => 'Dashboard',
         'heading' => 'Dashboard',
 
+        // The hero, see issue 435 · [[ADR-0090 Dashboardens hjälte]] § 1.
+        // The greeting carries the person's first name — the first word of
+        // `user.name`, never a name of its own — and the subtitle is the
+        // mockup's one sentence for the whole top row.
+        'hero' => [
+            'greeting' => 'Welcome back, :name',
+            'subtitle' => 'Your containers, tasks and costs at a glance.',
+        ],
+
         // The panel's own words, see issue 122.
         'tasks' => [
             'heading' => 'Upcoming tasks',

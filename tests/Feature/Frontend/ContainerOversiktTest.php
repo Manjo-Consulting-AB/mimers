@@ -509,8 +509,12 @@ it('ritar legendlänken som en itemrad utan att ändra legendens storlek', funct
     expect($donut)->toContain("'aria-label': t('container.overview.costs_open')");
     expect($donut)->not->toContain('Open costs');
 
-    // Länken: hovring som i ItemRow, fokusring, luft i sidled utan att flytta texten.
-    expect($donut)->toContain("props.sliceHref && '-mx-1 rounded px-1 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2'")
+    // Länken: hovring som i ItemRow, fokusring, luft i sidled utan att flytta
+    // texten. Hovringsfärgen är formens egen sedan issue 435 — ytan i
+    // standardformen, glaset i hjälten (`on-image`) — så provet fäster båda
+    // leden: klasslistan på länken och ytans färg i `tones`.
+    expect($donut)->toContain("props.sliceHref && '-mx-1 rounded px-1 outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2'")
+        ->toContain("slice: 'hover:bg-surface-sunken'")
         ->toContain('hover:opacity-80')
         ->toContain('rounded-pill outline-none');
 

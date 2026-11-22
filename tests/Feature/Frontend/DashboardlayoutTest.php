@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\File;
  * Sidan är monteringspunkten (issue 122) och uppställningen är dess egen:
  * propparna, panelerna och talen står still — bara var sakerna hamnar prövas
  * här. Ordningen under `lg:` och den oberoende kolumnen prövas formellt i
- * issue 252 § Beslut 2 och 3.
+ * issue 252 § Beslut 2 och 3. Sedan issue 435 · [[ADR-0090 Dashboardens
+ * hjälte]] § 1 och 6 är den översta raden en hjälte, och brickorna och donuten
+ * står inne i den över `md:` men under bandet på en telefon.
  *
  * Hjälparna har prefixet `dashboardlayout` — Pest lägger alla testfiler i
  * samma namnrymd när hela sviten körs.
@@ -81,23 +83,26 @@ function dashboardlayoutPosition(string $markup, string $nål): int
 // --- den översta raden -----------------------------------------------------
 
 /*
- * Klart när: "donuten står i översta raden" — `<CostDonut` står före
- * containergrupperna.
+ * Klart när (issue 435): hjälten är sidans översta rad, och brickorna och
+ * donuten står inne i den över `md:`.
  *
- * Den översta raden (Beslut 1) är ramen som spänner alla tre kolumnerna
- * (`lg:col-span-3`), och den ritas först. Att donuten ligger efter radens
- * öppning men före containergrupperna bevisar att den står INUTI raden:
- * containergrupperna ligger i vänsterkolumnen, som öppnas efter raden.
+ * Den översta raden ritas av `DashboardHero` sedan [[ADR-0090 Dashboardens
+ * hjälte]] § 1, och den ritas före containergrupperna. Inne i hjälten står
+ * brickorna före donuten, precis som i den gamla raden.
  */
-it('ställer kostnadsdonuten i den översta raden före containergrupperna', function () {
+it('ställer hjälten överst och donuten inne i den före containergrupperna', function () {
     $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
 
-    $överstaRaden = dashboardlayoutPosition($sida, 'lg:col-span-3');
-    $donuten = dashboardlayoutPosition($sida, '<CostDonut');
+    $hjalte = dashboardlayoutPosition($sida, '<DashboardHero');
     $containrarna = dashboardlayoutPosition($sida, 'props.containerGroups');
 
-    expect($donuten)->toBeGreaterThan($överstaRaden)
-        ->and($donuten)->toBeLessThan($containrarna);
+    expect($hjalte)->toBeLessThan($containrarna);
+
+    // Hjälten ritar brickorna och donuten i samma ordning som den gamla
+    // raden: brickorna först, donuten efter dem.
+    expect(dashboardlayoutPosition($hjalten, '<DashboardStats'))
+        ->toBeLessThan(dashboardlayoutPosition($hjalten, '<CostDonut'));
 });
 
 /*
@@ -131,11 +136,45 @@ it('lägger containrarna och panelerna i var sin kolumn', function () {
     expect((string) $uppgifter)->not->toContain('lg:grid lg:grid-cols-3');
 });
 
+// --- hjälten under md ------------------------------------------------------
+
+/*
+ * Klart när (ADR-0090 § 6): under `md:` är hjälten ett lågt band med
+ * hälsningen och rubriken, och brickorna och donuten står under det.
+ *
+ * Ramen bär båda höjderna — `min-h-32` under `md:` och `min-h-56` över — och
+ * sifferraden är `hidden … md:flex`: den ritas bara i den breda formen.
+ * `Dashboard.vue` ritar därför en andra kopia under bandet i ett block som är
+ * `md:hidden`.
+ */
+it('gör hjälten till ett lågt band under md med siffrorna under', function () {
+    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+    $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+
+    $ramen = dashboardlayoutKlasser($hjalten, 'HeroFrame');
+    expect($ramen)->not->toBeNull('hjälten ritar ingen HeroFrame')
+        ->and((string) $ramen)->toContain('min-h-32')
+        ->and((string) $ramen)->toContain('md:min-h-56');
+
+    $sifferraden = dashboardlayoutRamKlasser($hjalten, 'DashboardStats');
+    expect($sifferraden)->not->toBeNull('brickorna står inte i en egen rad')
+        ->and((string) $sifferraden)->toContain('hidden')
+        ->and((string) $sifferraden)->toContain('md:flex');
+
+    // Och sidan ritar brickorna och donuten under bandet, bara under md.
+    $mobilraden = dashboardlayoutRamKlasser($sida, 'DashboardStats');
+    expect($mobilraden)->not->toBeNull('sidan ritar inga brickor under hjälten')
+        ->and((string) $mobilraden)->toContain('md:hidden');
+
+    expect(dashboardlayoutPosition($sida, '<DashboardHero'))
+        ->toBeLessThan(dashboardlayoutPosition($sida, '<DashboardStats'));
+});
+
 // --- kostnadskortet --------------------------------------------------------
 
 /*
  * Klart när: "utan kostnader ritas inget kostnadskort" — villkoret på
- * `costs.totals.length` står kvar.
+ * `costs.totals.length` står kvar, i både hjälten och mobilraden.
  *
  * Kortet ritas bara när månaden har någon kostnadsrad, och donuten ligger
  * inuti grenen: en tom ring under en rubrik är en yta som påstår att det finns
@@ -143,12 +182,17 @@ it('lägger containrarna och panelerna i var sin kolumn', function () {
  * att det gäller den.
  */
 it('ritar inget kostnadskort utan kostnader', function () {
-    $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+    foreach ([
+        'js/components/DashboardHero.vue',
+        'js/pages/Dashboard.vue',
+    ] as $fil) {
+        $kod = dashboardlayoutUtanKommentarer(File::get(resource_path($fil)));
 
-    expect($sida)->toContain('v-if="props.costs.totals.length"');
+        expect($kod)->toContain('v-if="props.costs.totals.length"');
 
-    expect(dashboardlayoutPosition($sida, 'v-if="props.costs.totals.length"'))
-        ->toBeLessThan(dashboardlayoutPosition($sida, '<CostDonut'));
+        expect(dashboardlayoutPosition($kod, 'v-if="props.costs.totals.length"'))
+            ->toBeLessThan(dashboardlayoutPosition($kod, '<CostDonut'));
+    }
 });
 
 // --- mobilordningen --------------------------------------------------------

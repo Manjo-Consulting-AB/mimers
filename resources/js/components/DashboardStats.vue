@@ -49,6 +49,14 @@ const props = defineProps({
     stats: { type: Object, required: true },
     /* Månadens summa per valuta: `[{currency, amount, count}]`. */
     costs: { type: Array, required: true },
+    /*
+     * `on-image` när brickorna står i hjälten ovanpå en bild (issue 435 ·
+     * [[ADR-0090 Dashboardens hjälte]] § 1). Formen skickas vidare till
+     * `UiStat`, som äger glaset och den vita texten; den här komponenten
+     * behöver bara veta att månadsraden också ska vara vit. Utan värde ritas
+     * brickorna som förut, på ytan.
+     */
+    tone: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -60,7 +68,11 @@ const { t } = useTranslations();
             href="/containers"
             class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
-            <UiStat :value="props.stats.containers" :label="t('dashboard.stats.containers')" />
+            <UiStat
+                :value="props.stats.containers"
+                :label="t('dashboard.stats.containers')"
+                :tone="props.tone"
+            />
         </Link>
 
         <div class="flex flex-col gap-1">
@@ -68,7 +80,11 @@ const { t } = useTranslations();
                 href="/tasks"
                 class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
-                <UiStat :value="props.stats.tasks" :label="t('dashboard.stats.tasks')" />
+                <UiStat
+                    :value="props.stats.tasks"
+                    :label="t('dashboard.stats.tasks')"
+                    :tone="props.tone"
+                />
             </Link>
 
             <p class="text-meta text-danger">
@@ -85,9 +101,15 @@ const { t } = useTranslations();
             <UiStat
                 :value="formatAmount(cost.amount, cost.currency)"
                 :label="t('dashboard.stats.costs')"
+                :tone="props.tone"
             />
 
-            <p class="text-meta text-ink-subtle">{{ t('dashboard.costs.month') }}</p>
+            <p
+                class="text-meta"
+                :class="props.tone === 'on-image' ? 'text-ink-on-accent' : 'text-ink-subtle'"
+            >
+                {{ t('dashboard.costs.month') }}
+            </p>
         </div>
     </div>
 </template>

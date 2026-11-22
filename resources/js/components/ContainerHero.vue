@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import ContainerCover from './ContainerCover.vue';
+import HeroFrame from './HeroFrame.vue';
 import UiStat from './UiStat.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -15,12 +15,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Är den tom utelämnas undertiteln helt — en tom rad vore ett påstående om att
  * något saknas, samma regel som översiktens huvud.
  *
- * **Bilden är `ContainerCover` och ingenting annat.** Komponenten väljer inte
- * sin egen storlek — den fyller rutan anroparen ställer den i — och väljer
- * bild, containerns ikon eller den neutrala ytan med containertecknet
+ * **Bilden, toningen och textens placering bor i `HeroFrame`.** Sedan issue
+ * 435 delar hjälten ram med dashboardens hjälte ([[ADR-0090 Dashboardens
+ * hjälte]] § 1): `HeroFrame` ritar bilden, toningen ur
+ * [[ADR-0057 Ikoner och typsnitt]] § 6 och den vita textspalten, och den här
+ * komponenten lägger sitt innehåll i ramens slot. Bilden är alltså
+ * `ContainerCover` och ingenting annat, som förut: ramen väljer bild,
+ * containerns ikon eller den neutrala ytan med containertecknet
  * (ADR-0047 § Beslut, [[ADR-0064 Containerns ikon]] § 5). Hjälten lägger den
- * som ett lager UNDER texten i stället för att
- * bygga en andra väg till samma bild.
+ * som ett lager UNDER texten i stället för att bygga en andra väg till samma
+ * bild.
  *
  * **Texten står alltid på den täta delen av toningen.** Lagret ovanpå bilden
  * är en toning från `--color-shell` till genomskinnligt, vänster till höger
@@ -89,97 +93,73 @@ const { t } = useTranslations();
 
 <template>
     <!--
-        `overflow-hidden` sitter på bild- och toningslagren och inte på
-        sektionen: bilden ska ha hjältens rundning, och sektionens egen
-        bakgrund klipps av `rounded-card` ändå.
+        Rammen äger bilden, toningen och textspalten; höjden kommer med
+        `class` (ADR-0050 § 2: `min-h-56` på översikten, `min-h-32` på de
+        andra flikarna) och faller igenom till ramens `<section>`.
     -->
-    <section
-        class="relative rounded-card bg-shell"
+    <HeroFrame
+        :cover="container.cover"
+        :icon="container.icon"
+        :color="container.icon_color"
+        variant="medium"
         :class="hero === 'large' ? 'min-h-56' : 'min-h-32'"
     >
         <!--
-            Bilden, som ett lager under texten. `aria-hidden` för att ytan är
-            pynt: containerns namn står intill, och `ContainerCover` bär redan
-            `alt=""` av samma skäl (issue 68a § Beslut 8).
+            Textspalten är kapad: namn, art och beskrivning ska stå på den
+            täta delen av toningen och aldrig växa in i den glesa.
         -->
-        <span class="absolute inset-0 overflow-hidden rounded-card" aria-hidden="true">
-            <ContainerCover
-                :cover="container.cover"
-                :icon="container.icon"
-                :color="container.icon_color"
-                variant="medium"
-            />
-        </span>
+        <div class="min-w-0 max-w-lg">
+            <!-- Arten är ett fritt textfält och skrivs ordagrant. -->
+            <p v-if="container.kind" class="text-meta">{{ container.kind }}</p>
+
+            <!--
+                Namnet är sidans `<h1>`: över `md:` är hjälten containerns
+                huvud, och de sidor som ritar den döljer sitt eget.
+            -->
+            <h1 class="text-heading font-semibold">{{ container.name }}</h1>
+
+            <!--
+                Hela beskrivningen, radbrytningarna bevarade och inget
+                avkortande: `whitespace-pre-line` är samma form som
+                översiktens huvud bar (issue 88).
+            -->
+            <p
+                v-if="container.description"
+                class="mt-1 whitespace-pre-line text-body"
+            >
+                {{ container.description }}
+            </p>
+        </div>
 
         <!--
-            Toningen ur [[ADR-0057 Ikoner och typsnitt]] § 6: tät till vänster
-            där texten står, genomskinlig till höger där bilden syns. Den
-            håller full täthet en bit in i stället för att jämnt mörklägga
-            hela ytan.
+            Talen, i båda formerna, bara när den delade proppen finns. Varje taltuta är en länk — samma grepp
+            som dashboardens brickor (issue 654): *Items* till itemlistan,
+            *Open tasks* till uppgiftsfliken.
         -->
-        <span
-            class="absolute inset-0 rounded-card bg-linear-to-r from-shell from-20% via-shell/90 via-30% to-transparent"
-            aria-hidden="true"
-        ></span>
+        <div v-if="counts" class="mt-2 flex flex-wrap gap-4">
+            <Link
+                :href="`/containers/${container.ulid}/items`"
+                class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <UiStat
+                    :value="counts.items"
+                    :label="t('container.overview.items')"
+                    icon="item"
+                    tone="on-image"
+                />
+            </Link>
 
-        <div class="relative flex flex-col gap-4 p-6 text-ink-on-accent">
-            <!--
-                Textspalten är kapad: namn, art och beskrivning ska stå på den
-                täta delen av toningen och aldrig växa in i den glesa.
-            -->
-            <div class="min-w-0 max-w-lg">
-                <!-- Arten är ett fritt textfält och skrivs ordagrant. -->
-                <p v-if="container.kind" class="text-meta">{{ container.kind }}</p>
-
-                <!--
-                    Namnet är sidans `<h1>`: över `md:` är hjälten containerns
-                    huvud, och de sidor som ritar den döljer sitt eget.
-                -->
-                <h1 class="text-heading font-semibold">{{ container.name }}</h1>
-
-                <!--
-                    Hela beskrivningen, radbrytningarna bevarade och inget
-                    avkortande: `whitespace-pre-line` är samma form som
-                    översiktens huvud bar (issue 88).
-                -->
-                <p
-                    v-if="container.description"
-                    class="mt-1 whitespace-pre-line text-body"
-                >
-                    {{ container.description }}
-                </p>
-            </div>
-
-            <!--
-                Talen, i båda formerna, bara när den delade proppen finns. Varje taltuta är en länk — samma grepp
-                som dashboardens brickor (issue 654): *Items* till itemlistan,
-                *Open tasks* till uppgiftsfliken.
-            -->
-            <div v-if="counts" class="mt-2 flex flex-wrap gap-4">
-                <Link
-                    :href="`/containers/${container.ulid}/items`"
-                    class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    <UiStat
-                        :value="counts.items"
-                        :label="t('container.overview.items')"
-                        icon="item"
-                        tone="on-image"
-                    />
-                </Link>
-
-                <Link
-                    :href="`/containers/${container.ulid}/tasks`"
-                    class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    <UiStat
-                        :value="counts.todos"
-                        :label="t('container.overview.todos')"
-                        icon="task"
-                        tone="on-image"
-                    />
-                </Link>
-            </div>
+            <Link
+                :href="`/containers/${container.ulid}/tasks`"
+                class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <UiStat
+                    :value="counts.todos"
+                    :label="t('container.overview.todos')"
+                    icon="task"
+                    tone="on-image"
+                />
+            </Link>
         </div>
-    </section>
+    </HeroFrame>
 </template>
