@@ -24,11 +24,17 @@ const props = defineProps({
     /* Items med bilagor: [{ ulid, name, attachments: [{ ulid, filename }] }]. */
     items: { type: Array, required: true },
 
+    /*
+     * Itemets ULID (issue 447): sätts formuläret för ett enda item, och
+     * beställningen går till `/containers/{ulid}/items/{ulid}/binders`.
+     */
+    itemUlid: { type: String, default: null },
+
     /* Stänger knappen medan en annan export packas. */
     disabled: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['finished']);
+const emit = defineEmits(['finished', 'created']);
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -58,8 +64,13 @@ const attachmentsError = computed(() => Object.keys(form.errors).some((key) => k
 const hasItems = computed(() => props.items.length > 0);
 
 function submit() {
-    form.post(`/containers/${props.containerUlid}/binders`, {
+    const url = props.itemUlid === null
+        ? `/containers/${props.containerUlid}/binders`
+        : `/containers/${props.containerUlid}/items/${props.itemUlid}/binders`;
+
+    form.post(url, {
         preserveScroll: true,
+        onSuccess: () => emit('created'),
         onError: focusFirstError,
         onFinish: () => emit('finished'),
     });

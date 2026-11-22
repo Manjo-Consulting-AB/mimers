@@ -39,11 +39,13 @@ defineProps({
     canDelete: { type: Boolean, default: false },
     /* Sant med `can.update`: raden *Move*. */
     canMove: { type: Boolean, default: false },
+    /* Sant för en Pro-container (issue 447): raden *Create PDF binder*. */
+    canBinder: { type: Boolean, default: false },
     /* Adressen raden *New item under this one* leder till. */
     createHref: { type: String, required: true },
 });
 
-const emit = defineEmits(['trash', 'move']);
+const emit = defineEmits(['trash', 'move', 'binder']);
 
 const { t } = useTranslations();
 
@@ -122,12 +124,19 @@ function move() {
     emit('move', trigger);
 }
 
+function binder() {
+    const trigger = toggle.value;
+
+    close(false);
+    emit('binder', trigger);
+}
+
 onMounted(() => document.addEventListener('click', onOutside));
 onBeforeUnmount(() => document.removeEventListener('click', onOutside));
 </script>
 
 <template>
-    <div v-if="canCreate || canMove || canDelete" ref="root" class="relative" @keydown="onKeydown">
+    <div v-if="canCreate || canMove || canDelete || canBinder" ref="root" class="relative" @keydown="onKeydown">
         <button
             ref="toggle"
             type="button"
@@ -165,6 +174,16 @@ onBeforeUnmount(() => document.removeEventListener('click', onOutside));
                 @click="move"
             >
                 {{ t('item.menu.move') }}
+            </button>
+
+            <button
+                v-if="canBinder"
+                type="button"
+                role="menuitem"
+                class="flex min-h-11 items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus"
+                @click="binder"
+            >
+                {{ t('item.menu.pdf_binder') }}
             </button>
 
             <button

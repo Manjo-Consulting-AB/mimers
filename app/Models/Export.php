@@ -100,6 +100,18 @@ class Export extends Model
     }
 
     /**
+     * Itemet en pärm gäller (issue 447), eller null för en container-export.
+     * Även ett mjukraderat item: raden är historik över en beställning och
+     * listan ska kunna säga vad den gällde.
+     *
+     * @return BelongsTo<Item, $this>
+     */
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class)->withTrashed();
+    }
+
+    /**
      * Användaren som beställde exporten — exakt en. Vyns språk (index.html)
      * väljs ur hens locale (Beslut 11).
      *

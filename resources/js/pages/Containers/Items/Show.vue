@@ -7,6 +7,7 @@ import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemCostSection from '../../../components/ItemCostSection.vue';
+import BinderItemDialog from '../../../components/BinderItemDialog.vue';
 import ItemActionMenu from '../../../components/ItemActionMenu.vue';
 import ItemFieldGrid from '../../../components/ItemFieldGrid.vue';
 import ItemIcon from '../../../components/ItemIcon.vue';
@@ -180,6 +181,8 @@ defineOptions({
 const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
+    /* Sant när containerns plan har PDF-pärmen (issue 447): menyraden syns bara då. */
+    binderAvailable: { type: Boolean, default: false },
     /*
      * Anteckningen ritad som HTML, ur App\Actions\Item\RenderItemNotes
      * (M42 · issue 324 · [[ADR-0066 Itemets anteckning]] § 2 och 3), eller
@@ -816,6 +819,24 @@ const movePending = ref(false);
 
 const itemParents = computed(() => props.links.parent.map((link) => link.item));
 
+/*
+ * PDF-pärmen om det här itemet (issue 447). Menyraden öppnar dialogen, och
+ * ⋯-knappen är dialogens `trigger`.
+ */
+const binderOpen = ref(false);
+const binderTrigger = ref(null);
+
+function askBinder(trigger) {
+    binderTrigger.value = trigger;
+    binderOpen.value = true;
+}
+
+const binderItem = computed(() => ({
+    ulid: props.item.ulid,
+    name: props.item.name,
+    attachments: props.attachments.map((a) => ({ ulid: a.ulid, filename: a.filename })),
+}));
+
 function askMove(trigger) {
     moveTrigger.value = trigger;
     moveError.value = null;
@@ -1114,9 +1135,11 @@ function toggleFavorite() {
                         :can-create="can.create"
                         :can-delete="can.delete"
                         :can-move="can.update"
+                        :can-binder="binderAvailable"
                         :create-href="createChildUrl"
                         @trash="askDestroy"
                         @move="askMove"
+                        @binder="askBinder"
                     />
                 </div>
             </div>
@@ -1141,6 +1164,15 @@ function toggleFavorite() {
                 :check="checkMoveAudience"
                 @choose="move"
                 @close="moveOpen = false"
+            />
+
+            <BinderItemDialog
+                v-if="binderAvailable"
+                :open="binderOpen"
+                :container-ulid="container.ulid"
+                :item="binderItem"
+                :trigger="binderTrigger"
+                @close="binderOpen = false"
             />
 
             <UiConfirmDialog

@@ -1543,6 +1543,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/transfer',
         'containers/{container}/export',
         'containers/{container}/binders',
+        'containers/{container}/items/{item}/binders',
         'containers/{container}/categories',
         'containers/{container}/categories/preset',
         'containers/{container}/tags',

@@ -26,6 +26,9 @@ class ExportResource extends JsonResource
         return [
             'ulid' => $this->ulid,
             'kind' => $this->kind,
+            // Issue 447: pärmen om ett item bär itemets namn, för listans
+            // etikett. Bara när relationen är laddad — `/api` ändras inte.
+            'item' => $this->whenLoaded('item', fn () => $this->item === null ? null : ['ulid' => $this->item->ulid, 'name' => $this->item->name]),
             'status' => $this->status,
             'byte_size' => $this->byte_size,
             'expires_at' => $this->expires_at?->toIso8601String(),

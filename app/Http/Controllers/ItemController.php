@@ -1437,6 +1437,11 @@ class ItemController extends Controller
             // raden står `isFavorite` på sin standard och stjärnan kan märka
             // men aldrig avmarkera — vyn kan inte sluta sig till tillståndet
             // själv, och `ItemResource` får det inte bära.
+            // Issue 447: menyraden *Create PDF binder* ritas bara för en
+            // Pro-container. Flaggan är presentation — POST-rutten prövar
+            // planen ändå och nekar med `plan.feature_unavailable`.
+            'binderAvailable' => $container->account->planLimit('pdf_binder') !== false,
+
             'isFavorite' => $item->favoritedBy()->where('user_id', $user->id)->exists(),
 
             'can' => [

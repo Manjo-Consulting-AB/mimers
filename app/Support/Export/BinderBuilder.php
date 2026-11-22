@@ -6,6 +6,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Item\RenderItemNotes;
+use App\Actions\Item\ResolveItemCover;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Export;
@@ -77,6 +78,13 @@ use Throwable;
  * i arbetarens 96 MB och inte. **Pärmen har bara WinAnsi-tecken** (windows-1252):
  * svenska och västeuropeiska tecken fungerar, andra tecken ersätts av
  * typsnittet och fäller inte bygget. Unicode är en öppen fråga för 446.
+ *
+ * **En pärm för ett enda item** (issue 447 · ADR-0091): har exporten `item_id`
+ * byggs samma sidor för just det itemet. Försättsbladet bär itemets namn,
+ * bild och containerns namn, det finns ingen innehållsförteckning (ett item
+ * behöver ingen) och sidnumren är som vanligt. Itemets barn tas inte med, och
+ * ligger itemet utanför beställarens omfång blir pärmen ett försättsblad utan
+ * avsnitt, som för en nollställd beställare.
  *
  * Ingen extern process och ingen webbläsare (ADR-0070): dompdf och FPDI är
  * ren PHP. Fjärrresurser är avstängda, dompdfs `chroot` är den egna
@@ -180,14 +188,20 @@ class BinderBuilder
 
         // Trädet byggs av itemraderna utan relationer — de laddas ett item i
         // taget i renderingen nedan.
-        $items = $container->items()->inScope($scope)->orderBy('name')->orderBy('id')->get()->keyBy('id');
+        $items = $container->items()->inScope($scope)
+            ->when($export->item_id !== null, fn ($q) => $q->whereKey($export->item_id))
+            ->orderBy('name')->orderBy('id')->get()->keyBy('id');
+
+        $single = $export->item_id !== null ? $items->first() : null;
 
         [$ordered, $relatedLinks] = $this->order($items);
 
         // Rubrikerna behöver bara id, namn och djup — resten hör till delen.
         $parts = [];
 
-        $parts['cover'] = $this->renderCover($container, $disk, $tmp, $export);
+        $parts['cover'] = $export->item_id !== null
+            ? $this->renderItemCover($container, $single, $disk, $tmp)
+            : $this->renderCover($container, $disk, $tmp, $export);
 
         $entries = [];
 
@@ -217,6 +231,14 @@ class BinderBuilder
                 $item->unsetRelations();
                 gc_collect_cycles();
             }
+        }
+
+        // Ett item behöver ingen innehållsförteckning: försättsbladet och
+        // avsnitten sätts ihop direkt, och `merge()` stämplar sidnumren.
+        if ($export->item_id !== null) {
+            $this->merge($disk, [$parts['cover'], ...array_merge(...array_column($entries, 'paths'))], $partial, $tmp);
+
+            return;
         }
 
         $coverPages = $this->pageCount($disk, $parts['cover']);
@@ -327,19 +349,36 @@ class BinderBuilder
         return $this->renderPart($disk, $tmp.'/cover.pdf', 'export.binder.cover', [
             'container' => $container,
             'owner' => $container->account->name,
-            'image' => $this->coverImage($container, $disk),
+            'image' => $this->coverImage($container->coverAttachment, $disk),
             'date' => now()->toDateString(),
             'fields' => $container->fields,
         ]);
     }
 
     /**
-     * Containerns bild som data-URI, ur `medium`-varianten — aldrig
-     * originalet. Saknas varianten eller bytena ritas ingen bild.
+     * Försättsbladet för en pärm om ett enda item: itemets namn och bild, och
+     * containerns namn. Saknas itemet (utanför omfånget) står bara containern.
      */
-    private function coverImage(Container $container, FilesystemAdapter $disk): ?string
+    private function renderItemCover(Container $container, ?Item $item, FilesystemAdapter $disk, string $tmp): string
     {
-        $stored = $container->coverAttachment?->storedFile;
+        $cover = $item === null ? null : app(ResolveItemCover::class)->handle($item);
+
+        return $this->renderPart($disk, $tmp.'/cover.pdf', 'export.binder.item_cover', [
+            'container' => $container,
+            'title' => $item === null ? $container->name : $item->name,
+            'owner' => $container->account->name,
+            'image' => $this->coverImage($cover, $disk),
+            'date' => now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * Omslagsbilden som data-URI, ur `medium`-varianten — aldrig originalet.
+     * Saknas varianten eller bytena ritas ingen bild.
+     */
+    private function coverImage(?Attachment $cover, FilesystemAdapter $disk): ?string
+    {
+        $stored = $cover?->storedFile;
 
         $derivative = $stored?->derivatives()->where('variant', 'medium')->first();
 

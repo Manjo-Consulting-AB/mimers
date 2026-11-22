@@ -4447,6 +4447,8 @@ return [
         'menu' => [
             'label' => 'More actions',
             'move' => 'Move',
+            // Issue 447: only on a Pro account; it opens the order dialog.
+            'pdf_binder' => 'Create PDF binder',
             'trash' => 'Move to trash',
         ],
 
@@ -5493,7 +5495,17 @@ return [
         'kind' => [
             'zip' => 'ZIP export',
             'pdf_binder' => 'PDF binder',
+            // Issue 447: the one-item variant carries the item's name.
+            'pdf_binder_item' => 'PDF binder · :item',
         ],
+
+        // The dialog on the item page (issue 447).
+        'pdf_binder_item_heading' => 'Create PDF binder',
+        'pdf_binder_item_intro' => 'This item as a PDF document with a cover and page numbers. Choose what goes in.',
+        'pdf_binder_item_created' => 'Your binder is being created',
+        'pdf_binder_item_where' => 'You find it, and a link to download it, on the export page.',
+        'pdf_binder_item_link' => 'Go to the export page',
+        'pdf_binder_item_close' => 'Close',
 
         // The section under the export. The user-facing word sits on lines whose
         // key says `pdf_binder` (SprakTest).

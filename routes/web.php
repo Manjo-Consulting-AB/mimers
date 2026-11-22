@@ -2062,6 +2062,15 @@ Route::middleware('auth')->group(function () {
         ->name('containers.binders.store');
 
     /*
+     * Issue 447 · pärmen om ett enda item, beställd från itemets meny.
+     * Grinden är `view` på itemet plus planens `pdf_binder`.
+     * `scopeBindings()` av samma skäl som övriga `{item}`-rutter.
+     */
+    Route::post('/containers/{container}/items/{item}/binders', [BinderController::class, 'storeForItem'])
+        ->scopeBindings()
+        ->name('containers.items.binders.store');
+
+    /*
      * Issue 56a · Kategoriträdet och tagglistan — den fria strukturen, se
      * App\Http\Controllers\CategoryController och
      * App\Http\Controllers\TagController.
