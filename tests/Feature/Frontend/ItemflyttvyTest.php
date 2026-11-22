@@ -128,7 +128,7 @@ it('visar Move i ⋯-menyn med can.update och inte utan', function () {
 
     expect($rad[0] ?? '')->toContain('role="menuitem"')
         ->toContain('@click="move"');
-    expect($meny)->toContain('<div v-if="canCreate || canMove || canDelete"')
+    expect($meny)->toContain('<div v-if="canCreate || canMove || canDelete || canBinder"')
         ->toContain("emit('move', trigger)");
     expect(strpos($meny, "t('item.menu.move')"))->toBeLessThan(strpos($meny, "t('item.menu.trash')"));
 

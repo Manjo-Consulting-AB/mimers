@@ -93,6 +93,7 @@ class ExportController extends Controller
         $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $exports = $container->exports()
+            ->with('item')
             ->where('requested_by_user_id', $request->user()->id)
             ->orderByDesc('created_at')
             ->get();
@@ -188,9 +189,9 @@ class ExportController extends Controller
      *
      * @throws ApiException
      */
-    public function createExport(Request $request, Container $container, string $kind = Export::KIND_ZIP, ?array $options = null): Export
+    public function createExport(Request $request, Container $container, string $kind = Export::KIND_ZIP, ?array $options = null, ?Item $item = null): Export
     {
-        return DB::transaction(function () use ($request, $container, $kind, $options): Export {
+        return DB::transaction(function () use ($request, $container, $kind, $options, $item): Export {
             Container::whereKey($container->id)->lockForUpdate()->first();
 
             $existing = $container->exports()
@@ -207,6 +208,7 @@ class ExportController extends Controller
             $export->status = Export::STATUS_PENDING;
             $export->kind = $kind;
             $export->options = $options;
+            $export->item_id = $item?->id;
             $export->save();
 
             return $export;
