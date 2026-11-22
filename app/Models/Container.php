@@ -103,7 +103,20 @@ class Container extends Model
             'cover_focus_y' => 'integer',
             'cover_zoom' => 'integer',
             'versioning_max_versions' => 'integer',
+            'require_two_factor' => 'boolean',
         ];
+    }
+
+    /**
+     * Kräver containern tvåfaktor av den som når den? Containerns egen flagga
+     * ELLER ägarkontots — se [[ADR-0092 Tvåfaktor som krav för delade
+     * containrar]]. Den enda formuleringen i PHP; scopeAccessibleBy() och
+     * ResolveItemScope uttrycker samma villkor i SQL och ska läsas ihop med
+     * den här.
+     */
+    public function requiresTwoFactor(): bool
+    {
+        return (bool) $this->require_two_factor || (bool) $this->account->require_two_factor;
     }
 
     /**
@@ -503,18 +516,33 @@ class Container extends Model
      * @param  list<int>  $accountIds
      * @return Builder<Container>
      */
-    public function scopeAccessibleBy(Builder $query, User $user, array $accountIds): Builder
+    public function scopeAccessibleBy(Builder $query, User $user, array $accountIds, bool $includeLocked = false): Builder
     {
+        // Tvåfaktorkravet (ADR-0092): en grant ger ingenting i en container
+        // som kräver tvåfaktor när $user saknar den. Ägarkontots medlemmar
+        // berörs inte — de når containern genom `account.users` ovan.
+        // `$includeLocked` är för listorna som visar den låsta containerns
+        // namn och märke (issue 449) och ska inte användas av något annat.
+        $lockGrants = ! $includeLocked && ! $user->hasConfirmedTwoFactor();
+        $column = $query->getModel()->qualifyColumn('require_two_factor');
+
         return $query
             ->where(function (Builder $query) use ($user) {
                 $query->whereNull('inbox_user_id')->orWhere('inbox_user_id', $user->id);
             })
-            ->where(function (Builder $query) use ($user, $accountIds) {
+            ->where(function (Builder $query) use ($user, $accountIds, $lockGrants, $column) {
                 $query->whereHas('account.users', function (Builder $query) use ($user) {
                     $query->whereKey($user->id);
-                })->orWhereHas('accesses', function (Builder $query) use ($user, $accountIds) {
-                    /** @var Builder<ContainerAccess> $query */
-                    $query->validFor($user, $accountIds);
+                })->orWhere(function (Builder $query) use ($user, $accountIds, $lockGrants, $column) {
+                    $query->whereHas('accesses', function (Builder $query) use ($user, $accountIds) {
+                        /** @var Builder<ContainerAccess> $query */
+                        $query->validFor($user, $accountIds);
+                    });
+
+                    if ($lockGrants) {
+                        $query->where($column, false)
+                            ->whereHas('account', fn (Builder $query) => $query->where('require_two_factor', false));
+                    }
                 });
             });
     }

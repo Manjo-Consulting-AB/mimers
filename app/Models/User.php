@@ -129,6 +129,17 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     ];
 
     /**
+     * Har användaren en BEKRÄFTAD tvåfaktor? `totp_confirmed_at` är satt först
+     * när koden verifierats (TotpBroker); en påbörjad men obekräftad
+     * uppsättning räknas inte. Underlag för tvåfaktorkravet, se [[ADR-0092
+     * Tvåfaktor som krav för delade containrar]].
+     */
+    public function hasConfirmedTwoFactor(): bool
+    {
+        return $this->totp_confirmed_at !== null;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

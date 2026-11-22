@@ -559,6 +559,8 @@ it('har inte fått någon annan kolumn än description', function () {
         'inbox_user_id',
         'kind',
         'name',
+        // Issue 1520 · ADR-0092: containern kan kräva tvåfaktor av den som når den.
+        'require_two_factor',
         'template_source_id',
         'ulid',
         'updated_at',
