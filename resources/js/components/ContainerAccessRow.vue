@@ -195,6 +195,15 @@ const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(pr
 const agentError = ref(null);
 const agentSaved = ref(false);
 
+/*
+ * Öppningsläget beräknas en gång vid monteringen, inte ur det levande värdet
+ * (issue 439). Ett satt värde fälls ut från början, men sedan äger
+ * webbläsaren tillståndet: bundet till propen skulle ytan fällas ihop mitt
+ * under en ändring — och ta med sig `agentSaved` och `agentError`, som ligger
+ * inuti den.
+ */
+const agentOpen = props.agentLevel !== null;
+
 /* Sparas direkt, som nivån (issue 1250). Tomt värde är `null`: inga agenter. */
 function saveAgentLevel(value) {
     agentError.value = null;
@@ -330,7 +339,7 @@ function remove() {
         -->
         <details
             v-if="agentAccess"
-            :open="agentLevel !== null"
+            :open="agentOpen"
             class="rounded-control border border-border bg-surface"
         >
             <summary class="flex min-h-11 cursor-pointer items-center px-3 text-body font-medium text-ink">

@@ -930,8 +930,14 @@ it('hopfäller agentfältet i inbjudan och fäller ut ett satt värde', function
     // Formuläret är alltid hopfällt från början — en ny inbjudan har inget tak.
     expect($formular)->toContain('<details v-if="agentAccess"');
 
-    // Raden fäller ut ytan när inbjudan redan har en agentnivå.
-    expect($rad)->toContain(':open="agentLevel !== \'\'"');
+    // Raden fäller ut ytan när inbjudan redan har en agentnivå — läget
+    // beräknas en gång, så att ett val av *No agent access* inte stänger
+    // ytan mitt under användarens hand.
+    expect($rad)->toContain('const agentOpen = (props.agentLevel ?? \'\') !== \'\'')
+        ->toContain(':open="agentOpen"');
+
+    // `:open` får inte bindas till den levande agentnivån.
+    expect($rad)->not->toContain(':open="agentLevel');
 
     // Taket och värdena är oförändrade.
     expect($formular)->toContain('props.levels.slice(0, props.levels.indexOf(form.level) + 1)')

@@ -649,11 +649,18 @@ it('hopfäller agentfältet och skiljer Remove access från nivåvalet', functio
 
     expect($rad)->toContain('<details')
         ->toContain("t('agents.access_field.summary')")
-        ->toContain(':open="agentLevel !== null"')
+        // Öppningsläget beräknas en gång vid monteringen. Bundet till det
+        // levande värdet skulle ytan fällas ihop mitt under en ändring — och
+        // ta med sig `agentSaved` och `agentError`, som ligger inuti.
+        ->toContain('const agentOpen = props.agentLevel !== null')
+        ->toContain(':open="agentOpen"')
         // Väljaren och taket är oförändrade.
         ->toContain('v-for="level in agentLevels"')
         ->toContain("t('agents.access_field.none')")
         ->toContain('props.levels.slice(0, props.levels.indexOf(props.access.level) + 1)');
+
+    // `:open` får inte bindas till den levande agentnivån.
+    expect($rad)->not->toContain(':open="agentLevel');
 
     // Agentytan står EFTER nivåvalet.
     expect(strpos($rad, '<AccessLevelField'))->toBeLessThan(strpos($rad, '<details'));

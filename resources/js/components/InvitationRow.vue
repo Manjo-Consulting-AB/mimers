@@ -66,6 +66,15 @@ const pending = ref(false);
 const levelError = ref(null);
 const agentError = ref(null);
 
+/*
+ * Öppningsläget beräknas en gång vid monteringen, inte ur det levande värdet
+ * (issue 439). Ett satt värde fälls ut från början, men sedan äger
+ * webbläsaren tillståndet: bundet till `agentLevel` skulle ytan stängas mitt
+ * under en ändring, så snart användaren valde *No agent access*.
+ * Propen är `null` när ingen nivå är satt.
+ */
+const agentOpen = (props.agentLevel ?? '') !== '';
+
 /* Nivåerna upp till inbjudans valda nivå — taket är aldrig högre. */
 const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(level.value) + 1));
 
@@ -172,7 +181,7 @@ function save() {
             -->
             <details
                 v-if="agentAccess"
-                :open="agentLevel !== ''"
+                :open="agentOpen"
                 class="rounded-control border border-border bg-surface"
             >
                 <summary class="flex min-h-11 cursor-pointer items-center px-3 text-body font-medium text-ink">
