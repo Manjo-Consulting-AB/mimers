@@ -99,10 +99,10 @@ En beställd export av en container: ZIP med metadata och filer, eller en PDF-p�
 |---|---|---|
 | id, ulid | | `ulid` är identifieraren utåt |
 | container_id | FK | RESTRICT |
-| requested_by_user_id | FK | RESTRICT, nollställs vid radering av personen ([[Konton och åtkomst]]) |
+| requested_by_user_id | FK | RESTRICT |
 | kind | VARCHAR(20) | `zip` \| `binder`, förval `zip`. CHECK på mysql |
 | item_id | FK NULL | RESTRICT. Satt bara för en pärm över ett enda item |
-| options | JSON NULL | Bara för `binder`: `sections` (`items`, `relations`, `schedules`, `history`, `costs`), `costs` (bool, förval falskt), `attachments` (bilage-ULID:er, förval tom) och `attachment_mode` (`merge` \| `link`, förval `link`) |
+| options | JSON NULL | Bara för `binder`: nycklarna `sections`, `costs`, `attachments` och `attachment_mode`. Värdena fastställs i issue 443 |
 | status | VARCHAR(20) | `pending`, `running`, `ready`, `failed`, `expired` |
 | storage_path, byte_size, failure_reason, expires_at | | NULL tills bygget är klart eller har misslyckats |
 
