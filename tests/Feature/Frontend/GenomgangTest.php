@@ -700,11 +700,23 @@ it('ger varje sida exakt en h1', function () {
     // PR:en — det kräver att komponenterna räknas in i sidan de ritas i.
     //
     // Dashboarden flyttade sin `<h1>` till hjälten i issue 435
-    // ([[ADR-0090 Dashboardens hjälte]] § 1), så sidan ritar den inte själv.
-    // Undantaget är namngivet och räknar komponentens rubrik MED sidans, så
-    // att en förlorad rubrik fortfarande fälls.
+    // ([[ADR-0090 Dashboardens hjälte]] § 1), och sedan issue 437 ritar
+    // `AppHero` rubriken åt dashboarden och de elva toppnivåsidorna. Sidorna
+    // ritar den inte själva. Undantagen är namngivna och räknar komponentens
+    // rubrik MED sidans, så att en förlorad rubrik fortfarande fälls.
     $rubrikenIDeladKomponent = [
-        'pages/Dashboard.vue' => 'components/DashboardHero.vue',
+        'pages/Dashboard.vue' => 'components/AppHero.vue',
+        'pages/Containers/Index.vue' => 'components/AppHero.vue',
+        'pages/Containers/Create.vue' => 'components/AppHero.vue',
+        'pages/Inbox/Index.vue' => 'components/AppHero.vue',
+        'pages/Tasks/Index.vue' => 'components/AppHero.vue',
+        'pages/Tasks/Create.vue' => 'components/AppHero.vue',
+        'pages/Documents/Index.vue' => 'components/AppHero.vue',
+        'pages/History/Index.vue' => 'components/AppHero.vue',
+        'pages/Search.vue' => 'components/AppHero.vue',
+        'pages/Trash/Index.vue' => 'components/AppHero.vue',
+        'pages/Notifications/Index.vue' => 'components/AppHero.vue',
+        'pages/Transfers/Index.vue' => 'components/AppHero.vue',
     ];
 
     $sidor = genomgangSidor();

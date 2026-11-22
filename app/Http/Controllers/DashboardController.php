@@ -2,18 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Access\ResolveItemScope;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Container\ListContainerSummaries;
+use App\Actions\Dashboard\HeroFigures;
 use App\Actions\Schedule\ListTodo;
-use App\Models\Container;
-use App\Models\User;
-use App\Support\Cost\CostReport;
 use App\Support\Frontend\CreateTarget;
 use App\Support\Tips;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -123,10 +119,10 @@ class DashboardController extends Controller
      */
     public function index(
         Request $request,
-        CostReport $report,
         ListAuditEvents $listAuditEvents,
         PresentAuditEvents $presentAuditEvents,
         CreateTarget $createTarget,
+        HeroFigures $heroFigures,
     ): Response {
         $user = $request->user();
 
@@ -137,9 +133,15 @@ class DashboardController extends Controller
         // växeln hade varit frestande och fel: "öppna uppgifter" är ett mått på
         // vad som är aktuellt nu, inte på vad hon valt att se, och ett tal som
         // krympte när hon fällde ihop listan vore ett annat tal än i går.
+        //
+        // Sedan issue 437 räknas brickorna och kostnaderna av
+        // App\Actions\Dashboard\HeroFigures, som också de andra sidorna hämtar
+        // sina tal ur. Sammanfattningen skickas in — korten behöver den — så
+        // att frågan ställs en gång, precis som före flytten.
         $todo = app(ListTodo::class)->handle($user, $request);
         $counted = app(ListTodo::class)->handle($user, $request, onlyCurrent: true);
         $summaries = app(ListContainerSummaries::class)->handle($user, $counted);
+        $figures = $heroFigures->handle($user, $request, $summaries);
 
         return Inertia::render('Dashboard', [
             'tasks' => array_slice($todo['rows'], 0, self::TASK_LIMIT),
@@ -147,9 +149,9 @@ class DashboardController extends Controller
             // Växelns läge, så att panelen kan rita sitt eget tillstånd
             // (issue 134) — samma propp och samma komponent som `/tasks`.
             'showUpcomingTasks' => $user->show_upcoming_tasks,
-            'stats' => $summaries['stats'],
+            'stats' => $figures['stats'],
             'containerGroups' => $summaries['groups'],
-            'costs' => $this->monthCosts($user, $report),
+            'costs' => $figures['costs'],
             // Läsregeln, med panelens gräns: de fem senaste av det användaren
             // får läsa. ListAuditEvents svarar på vilka rader det är och
             // PresentAuditEvents på hur de ser ut — kontrollern gör inget av
@@ -166,63 +168,5 @@ class DashboardController extends Controller
             // kontrollern vidarebefordrar bara svaret.
             'create' => $createTarget->forContainers($user),
         ]);
-    }
-
-    /**
-     * Månadens kostnader över användarens containrar, som `{totals,
-     * breakdown}` — underlaget för den tredje brickan och donuten.
-     *
-     * **Containrarna är samma urval som containerlistan**, `Container::
-     * scopeAccessibleBy()`, formulerat på ett ställe och använt här — en
-     * mottagare av en itemgrant ska se sin containers månad och ingenting
-     * annat. Månaden räknas ur användarens tidszon (se `currentMonth()`), och
-     * servern är den enda som vet vad "innevarande" betyder: klientens klocka
-     * får aldrig flytta en månadsgräns.
-     *
-     * **Omfånget löses upp på en FÄRSK instans, i ETT anrop.** Samma grepp
-     * och samma skäl som i CostSummaryController: memon på den
-     * `scoped`-bundna instansen finns för ItemPolicy, som frågar en gång per
-     * rad i en listning, och för en summering skulle den bara göra
-     * frågekostnaden beroende av vad samma PHP-process råkade ha löst upp
-     * tidigare. `forContainers()` och inte en upplösning per container: en
-     * fråga per container vore den N+1 som issue 70 § Beslut 2 stänger.
-     *
-     * Ingen plangrind: en fast summering är fri (ADR-0038).
-     *
-     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
-     */
-    private function monthCosts(User $user, CostReport $report): array
-    {
-        $accountIds = $user->accounts->pluck('id')->all();
-
-        $containerIds = Container::query()
-            ->accessibleBy($user, $accountIds)
-            ->listable()
-            ->pluck('id')
-            ->all();
-
-        $scopes = app()->build(ResolveItemScope::class)
-            ->forContainers($user, $containerIds);
-
-        return $report->monthForContainers($scopes, $this->currentMonth($user));
-    }
-
-    /**
-     * Innevarande kalendermånad i användarens tidszon, som 'YYYY-MM'.
-     *
-     * `Carbon::now($timezone)` och inte `today()`: det är ögonblicket i
-     * användarens tid som avgör vilken månad hon är i, och en användare i
-     * Europe/Stockholm är i oktober redan när servern i UTC ännu är i
-     * september.
-     *
-     * Tidszonen kommer ur `User::preferredTimezone()` och inte ur en privat
-     * kopia här (issue 135): regeln *användarens tidszon, annars kontots,
-     * annars appens* bodde tidigare på två ställen — här och i
-     * App\Support\Notification\QuietHours — och två kopior av samma regel är
-     * förr eller senare två svar på samma fråga.
-     */
-    private function currentMonth(User $user): string
-    {
-        return Carbon::now($user->preferredTimezone())->format('Y-m');
     }
 }

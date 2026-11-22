@@ -238,8 +238,9 @@ it('har Load more, Mark all as read och markeringen av visade rader på sidan', 
         // Markeringen: visade rader postas, och alla rader har sin egen rutt.
         ->and($sida)->toContain("router.post('/notifications/read', { ulids }")
         ->and($sida)->toContain("router.post('/notifications/read-all'")
-        // En h1 och en sidtitel, som varje sida under pages/.
-        ->and($sida)->toContain('<h1')
+        // En rubrik och en sidtitel, som varje sida under pages/. Rubriken
+        // ritas av AppHero sedan issue 437, och `<h1>` bor där.
+        ->and($sida)->toContain('<AppHero')
         ->and($sida)->toContain('<Head :title=');
 });
 

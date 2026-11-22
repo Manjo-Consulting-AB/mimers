@@ -569,27 +569,34 @@ it('har samma proppar som före rutnätet', function () {
  * Klart när ([[ADR-0090 Dashboardens hjälte]] § 1 och 3): den översta raden
  * ritas i personens hjältebild, eller i standardbilden om hon inte har någon.
  *
- * Vue-komponenten ritas i webbläsaren och går inte att rendera här, så provet
- * läser formen ur filen: hjälten läser `hero` ur den delade proppen (issue
- * 434), ger ramen standardbildens adress som fallback, och ritar hälsningen,
- * rubriken, undertiteln, brickorna och donuten i ramens slot. Förnamnet är
- * första ordet i `user.name`, inte en egen sträng.
+ * Formen bor i `AppHero` sedan issue 437, och `DashboardHero` är ett tunt
+ * omslag som formulerar hälsningen, rubriken och undertiteln och skickar in
+ * dashboardens egna tal. Provet läser båda: att hjälten läser `hero` ur den
+ * delade proppen (issue 434), ger ramen standardbildens adress som fallback
+ * och ritar brickorna och donuten i ramens slot — och att dashboardens omslag
+ * skickar sina proppar vidare så att hjälten inte gör en egen begäran.
  */
 it('ritar översta raden i personens hjälte eller i standardbilden', function () {
-    $hjalten = panelvyUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+    $hjalten = panelvyUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
 
     expect($hjalten)->toContain('page.props.auth?.user?.hero')
         ->toContain('src="/images/dashboard-hero.jpg"')
         ->toContain('<HeroFrame')
-        ->toContain("t('dashboard.hero.greeting', { name: firstName })")
-        ->toContain("t('dashboard.hero.subtitle')")
-        ->toContain("t('dashboard.heading')")
         ->toContain('<DashboardStats')
         ->toContain('<CostDonut');
 
+    $omslaget = panelvyUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+
+    expect($omslaget)->toContain("t('dashboard.hero.greeting', { name: firstName })")
+        ->toContain("t('dashboard.hero.subtitle')")
+        ->toContain("t('dashboard.heading')")
+        ->toContain('<AppHero')
+        ->toContain(':stats="props.stats"')
+        ->toContain(':costs="props.costs"');
+
     // Förnamnet är första ordet i namnet — ingen gissning ur e-postadressen
     // och ingen ny propp från DashboardController.
-    expect($hjalten)->toContain('split(/\s+/)');
+    expect($omslaget)->toContain('split(/\s+/)');
 });
 
 /*

@@ -29,6 +29,30 @@ return [
         ],
     ],
 
+    /*
+     * The shared hero's subtitles, se issue 437 · [[ADR-0090 Dashboardens
+     * hjälte]] § Tillägg 2026-11-22. Every top-level page without a hero of
+     * its own draws AppHero, and only the heading and the subtitle differ: the
+     * heading keeps the page's existing key (`container.index.heading` and so
+     * on), and the subtitle lives here so that one file lists the whole row of
+     * pages. The dashboard keeps `dashboard.hero.subtitle`.
+     */
+    'hero' => [
+        'subtitle' => [
+            'containers' => 'All your containers in one place.',
+            'containers_create' => 'Set up a new container for your things.',
+            'inbox' => 'Capture first, sort later.',
+            'tasks' => 'Everything you need to do, across your containers.',
+            'tasks_create' => 'Add a task to one of your containers.',
+            'documents' => 'Every file, across your containers.',
+            'history' => 'What has happened, across your containers.',
+            'search' => 'Find anything across your containers.',
+            'trash' => 'Deleted things, waiting to be restored or removed for good.',
+            'notifications' => 'What has happened that concerns you.',
+            'transfers' => 'Ownership transfers waiting for your answer.',
+        ],
+    ],
+
     // The currency field's own words, see issue 1253 · [[ADR-0078 Valutor ur
     // ISO 4217]] § 2 · resources/js/components/CurrencyField.vue. `inherit` is
     // the empty choice a container offers — an empty box is the answer

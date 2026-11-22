@@ -698,8 +698,10 @@ it('hämtar dashboardens strängar ur ui.php', function () {
 
     foreach ([
         'js/pages/Dashboard.vue',
-        // Hjälten (issue 435) äger hälsningen, undertiteln och rubriken.
+        // Hjälten (issue 435) äger hälsningen, undertiteln och rubriken, och
+        // den delade formen (issue 437) äger kostnadsrubriken.
         'js/components/DashboardHero.vue',
+        'js/components/AppHero.vue',
         'js/components/DashboardStats.vue',
         'js/components/ContainerCard.vue',
         'js/components/CostDonut.vue',

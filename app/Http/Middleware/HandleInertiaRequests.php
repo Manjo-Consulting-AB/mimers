@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Container\ListShellContainers;
+use App\Actions\Dashboard\HeroFigures;
 use App\Actions\Item\ListCreatableItems;
 use App\Actions\Item\ListFavorites;
 use App\Actions\Item\ListItems;
@@ -41,7 +42,7 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Nitton nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Tjugo nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -171,6 +172,14 @@ use Inertia\Middleware;
  * formulären som använder fältet ritas på sidor där få fält öppnas, och
  * `ResourceBundle`-uppslaget per kod är inte gratis.
  *
+ * **`heroFigures` kom med M71 · issue 437** — hjältens siffror, se
+ * App\Actions\Dashboard\HeroFigures och [[ADR-0090 Dashboardens hjälte]]
+ * § Tillägg 2026-11-22. Proppen är den SJUNDE optionala och följer de sex
+ * andras mönster: brickorna och donuten ritas bara på en sida som ritar
+ * hjälten, och sidan hämtar dem med en partiell omladdning av just den här
+ * nyckeln. En vanlig sidladdning bär dem aldrig, så talen räknas bara när de
+ * visas.
+ *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
  * `web`-gruppen, så `App::getLocale()` är redan rätt när `share()` körs.
@@ -233,6 +242,7 @@ class HandleInertiaRequests extends Middleware
     public function __construct(
         private readonly ActiveContainer $activeContainer,
         private readonly CountUnreadInAppNotifications $countUnreadInAppNotifications,
+        private readonly HeroFigures $heroFigures,
         private readonly ListCreatableItems $listCreatableItems,
         private readonly ListFavorites $listFavorites,
         private readonly ListItems $listItems,
@@ -331,6 +341,12 @@ class HandleInertiaRequests extends Middleware
             // valutalistan behövs bara när ett valutafält får fokus, och en
             // vanlig sidladdning ska inte bära den — se klassens docblock.
             'currencies' => Inertia::optional(fn (): array => Currencies::options(App::getLocale())),
+            // Den sjunde optionala proppen, av samma skäl som de sex andra:
+            // hjältens brickor och donut behövs bara på en sida som ritar
+            // hjälten, och en vanlig sidladdning ska inte räkna dem — se
+            // heroFigures() och [[ADR-0090 Dashboardens hjälte]] § Tillägg
+            // 2026-11-22.
+            'heroFigures' => Inertia::optional(fn (): array => $this->heroFigures($request)),
             'locale' => fn (): string => App::getLocale(),
             // Webbläsarens Sentry (issue 388): DSN, miljö och release kommer
             // från servern, inte från bygget, eftersom samma artefakt rullas
@@ -599,6 +615,42 @@ class HandleInertiaRequests extends Middleware
         }
 
         return $this->listCreatableItems->handle($user);
+    }
+
+    /**
+     * Hjältens siffror — `{stats, costs}` — eller en tom form för en gäst, se
+     * [[ADR-0090 Dashboardens hjälte]] § Tillägg 2026-11-22.
+     *
+     * **OPTIONAL, som listorna ovan och av samma skäl.** Beräkningen —
+     * App\Actions\Dashboard\HeroFigures — frågar samma urval som `/tasks` och
+     * summerar månadens kostnader, och den behövs bara på en sida som ritar
+     * hjälten: `AppHero.vue` hämtar den genom en partiell omladdning av just
+     * den här nyckeln när proppen saknas. En vanlig sidladdning bär den
+     * aldrig, och en sida utan hjälte frågar aldrig efter den.
+     *
+     * **Dashboarden frågar aldrig**, trots att den ritar hjälten: sidan får
+     * `stats` och `costs` som egna proppar och skickar dem till hjälten, så
+     * talen räknas en gång och inte två.
+     *
+     * Ett tidigt tomt svar för en gäst och inte ett anrop ur actionen: en gäst
+     * har ingen att räkna för, och formen är densamma som för en inloggad utan
+     * containrar — samma regel som `favorites()`, `recentVisits()` och
+     * `itemTargets()` ovan.
+     *
+     * @return array{stats: array{containers: int, tasks: int, overdue: int}, costs: array{totals: list<array<string, mixed>>, breakdown: list<array<string, mixed>>}}
+     */
+    private function heroFigures(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [
+                'stats' => ['containers' => 0, 'tasks' => 0, 'overdue' => 0],
+                'costs' => ['totals' => [], 'breakdown' => []],
+            ];
+        }
+
+        return $this->heroFigures->handle($user, $request);
     }
 
     /**

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import ScheduleForm from '../../components/ScheduleForm.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -101,7 +102,10 @@ function onTargetChosen(item) {
 <template>
     <Head :title="t('todo.create.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('todo.new') }}</h1>
+    <AppHero
+        :heading="t('todo.new')"
+        :subtitle="t('hero.subtitle.tasks_create')"
+    />
 
     <div class="mt-8 max-w-lg">
         <!--

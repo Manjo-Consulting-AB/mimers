@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
+import AppHero from '../components/AppHero.vue';
 import SearchField from '../components/SearchField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -68,7 +69,10 @@ const { t } = useTranslations();
 <template>
     <Head :title="t('search.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('search.heading') }}</h1>
+    <AppHero
+        :heading="t('search.heading')"
+        :subtitle="t('hero.subtitle.search')"
+    />
 
     <template v-if="q === null">
         <p class="mt-4 text-slate-700">{{ t('search.intro') }}</p>

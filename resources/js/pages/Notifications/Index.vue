@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import NotificationRow from '../../components/NotificationRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -143,7 +144,10 @@ function markAll() {
     <Head :title="t('notifications.list.title')" />
 
     <div class="flex w-full flex-col gap-6">
-        <h1 class="text-title font-semibold text-ink">{{ t('notifications.list.heading') }}</h1>
+        <AppHero
+            :heading="t('notifications.list.heading')"
+            :subtitle="t('hero.subtitle.notifications')"
+        />
 
         <!--
             Inbjudningarna först (issue 131): de väntar på ett svar, och

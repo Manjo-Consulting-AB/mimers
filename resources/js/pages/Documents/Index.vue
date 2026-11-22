@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import DocumentScopeFilterColumn from '../../components/DocumentScopeFilterColumn.vue';
 import UiBadge from '../../components/UiBadge.vue';
 import UiIcon from '../../components/UiIcon.vue';
@@ -153,29 +154,31 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
     <Head :title="t('documents.title')" />
 
     <!--
-        Rubrikraden bär sorteringen (issue 269 § Beslut 3). `sort` är en
-        fråga om LISTAN och inte ett filter på den, och den stod förut i en
-        egen rad ovanför tabellen — den sköt ned kortet så att det och
-        filterkolumnen inte började på samma linje. Etiketten är `sr-only`:
-        väljarens värde säger redan vad den gör.
+        Hjälten (issue 437 · [[ADR-0090 Dashboardens hjälte]] § Tillägg
+        2026-11-22) bär rubriken. Sorteringen (issue 269 § Beslut 3) stod
+        tidigare i rubrikraden; `sort` är en fråga om LISTAN och inte ett
+        filter på den, och den står kvar ovanför kortet som förut, nu under
+        bandet. Etiketten är `sr-only`: väljarens värde säger redan vad den
+        gör.
     -->
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-heading font-semibold">{{ t('documents.heading') }}</h1>
+    <AppHero
+        :heading="t('documents.heading')"
+        :subtitle="t('hero.subtitle.documents')"
+    />
 
-        <div class="flex flex-wrap items-center gap-2">
-            <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
+    <div class="mt-4 flex flex-wrap items-center justify-end gap-3">
+        <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
 
-            <UiSelect
-                id="documents-sort"
-                :model-value="filter.sort"
-                :disabled="sortPending"
-                @update:model-value="changeSort"
-            >
-                <option v-for="value in sorts" :key="value" :value="value">
-                    {{ t(`documents.sort_${value}`) }}
-                </option>
-            </UiSelect>
-        </div>
+        <UiSelect
+            id="documents-sort"
+            :model-value="filter.sort"
+            :disabled="sortPending"
+            @update:model-value="changeSort"
+        >
+            <option v-for="value in sorts" :key="value" :value="value">
+                {{ t(`documents.sort_${value}`) }}
+            </option>
+        </UiSelect>
     </div>
 
     <!--

@@ -92,7 +92,7 @@ function dashboardlayoutPosition(string $markup, string $nål): int
  */
 it('ställer hjälten överst och donuten inne i den före containergrupperna', function () {
     $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
-    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
 
     $hjalte = dashboardlayoutPosition($sida, '<DashboardHero');
     $containrarna = dashboardlayoutPosition($sida, 'props.containerGroups');
@@ -148,7 +148,7 @@ it('lägger containrarna och panelerna i var sin kolumn', function () {
  * `md:hidden`.
  */
 it('gör hjälten till ett lågt band under md med siffrorna under', function () {
-    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+    $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
     $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
 
     $ramen = dashboardlayoutKlasser($hjalten, 'HeroFrame');
@@ -183,14 +183,16 @@ it('gör hjälten till ett lågt band under md med siffrorna under', function ()
  */
 it('ritar inget kostnadskort utan kostnader', function () {
     foreach ([
-        'js/components/DashboardHero.vue',
-        'js/pages/Dashboard.vue',
-    ] as $fil) {
+        // Hjälten ritar kortet när talen är hämtade och månaden har rader.
+        'js/components/AppHero.vue' => 'v-if="loaded && heroCosts.totals.length"',
+        // Sidans mobilrad har talen som proppar och ritar som förut.
+        'js/pages/Dashboard.vue' => 'v-if="props.costs.totals.length"',
+    ] as $fil => $villkor) {
         $kod = dashboardlayoutUtanKommentarer(File::get(resource_path($fil)));
 
-        expect($kod)->toContain('v-if="props.costs.totals.length"');
+        expect($kod)->toContain($villkor);
 
-        expect(dashboardlayoutPosition($kod, 'v-if="props.costs.totals.length"'))
+        expect(dashboardlayoutPosition($kod, $villkor))
             ->toBeLessThan(dashboardlayoutPosition($kod, '<CostDonut'));
     }
 });

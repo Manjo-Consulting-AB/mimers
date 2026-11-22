@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import FormField from '../../components/FormField.vue';
 import TemplatePreview from '../../components/templates/TemplatePreview.vue';
 import { presetsFor, presetContent } from '../../data/categoryPresets.js';
@@ -153,7 +154,10 @@ function submit() {
 <template>
     <Head :title="t('container.create.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('container.create.heading') }}</h1>
+    <AppHero
+        :heading="t('container.create.heading')"
+        :subtitle="t('hero.subtitle.containers_create')"
+    />
 
     <p
         v-if="form.errors.quota"
