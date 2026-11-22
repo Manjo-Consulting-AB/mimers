@@ -226,7 +226,7 @@ it('menyerna stängs vid navigering', function () {
 
 /*
  * Klart när: `inställningarnas sidor deklarerar kedjan` — var och en av de
- * sju sidorna innehåller `layout: [AppLayout, SettingsLayout]` (Beslut 2).
+ * sju sidorna deklarerar `AppLayout` utanför `SettingsLayout` (Beslut 2).
  *
  * Listan räknas och inte bara läsas: en sida som tappas ur rutan ska falla
  * här, och antalet är issuens eget — sju.
@@ -237,9 +237,13 @@ it('inställningarnas sidor deklarerar kedjan', function () {
     expect($sidor)->toHaveCount(7);
 
     foreach ($sidor as $sida) {
+        // Transfers ritar sin egen hjälte och stänger av layoutens i paret
+        // (granskningsfynd 2026-11-22); de övriga deklarerar komponenten
+        // direkt. Båda formerna är samma kedja: AppLayout utanför
+        // SettingsLayout.
         expect(bestaendeSkalKod("js/pages/{$sida}"))
             ->toContain('defineOptions(')
-            ->toContain('layout: [AppLayout, SettingsLayout]');
+            ->toMatch('/layout: \[AppLayout, \[?SettingsLayout\b/');
     }
 });
 

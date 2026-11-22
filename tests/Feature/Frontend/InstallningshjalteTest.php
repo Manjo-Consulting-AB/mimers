@@ -22,6 +22,10 @@ use Illuminate\Support\Facades\Lang;
  * 4. Bekräftelsesidorna för radering använder inte layouten och ändras inte:
  *    de behåller sin egen `<h1>`.
  *
+ * Filen bevisar dessutom granskningsfyndet 2026-11-22: `/transfers` ligger i
+ * layouten bara för sidomenyn (issue 248) och ritar sin egen hjälte (issue
+ * 437). Utan `hero: false` fick sidan två hjältar och två `<h1>`.
+ *
  * Varför källkodsprov: hjälten är en form, inte en ny rutt eller propp, och
  * `AppHjalteTest` prövar den på samma sätt. Kommentarer rensas bort före varje
  * kontroll, så att en mening i ett docblock inte kan nöja ett prov.
@@ -170,6 +174,48 @@ it('behåller sidomenyn och innehållet under hjälten', function () {
         ->toContain('<slot />')
         ->toContain('md:flex-row')
         ->toContain('min-w-0 flex-1');
+});
+
+// --- en sida med egen hjälte -----------------------------------------------
+
+/*
+ * Klart när: "exakt en `<h1>`" — också på en sida som ligger i layouten men
+ * ritar sin egen hjälte.
+ *
+ * Granskningsfynd 2026-11-22: `/transfers` ritar `AppHero` själv (issue 437)
+ * och ligger i `SettingsLayout` bara för sidomenyn (issue 248). Layouten ritar
+ * därför hjälten bara när sidan inte har stängt av den, och en sida som ritar
+ * en egen `AppHero` måste skicka `hero: false` i layoutparet — annars fälls
+ * den här. En sida som inte ritar någon egen hjälte får inte stänga av
+ * layoutens: då står sidan utan `<h1>`. Provet läser alla sidor, inte bara de
+ * nio, så att nästa sida som läggs i layouten prövas på samma gång.
+ */
+it('stänger av layoutens hjälte på den sida som ritar en egen', function () {
+    expect(insthjalteLayout())
+        ->toContain('hero: { type: Boolean, default: true }')
+        ->toContain('v-if="hero"');
+
+    $sidor = 0;
+
+    foreach (File::allFiles(resource_path('js/pages')) as $fil) {
+        $kod = insthjalteUtanKommentarer(File::get($fil->getPathname()));
+
+        // `\b` skiljer `SettingsLayout` från `ContainerSettingsLayout`, som
+        // containerns egna sidor deklarerar.
+        if (preg_match('/\bSettingsLayout\b/', $kod) !== 1) {
+            continue;
+        }
+
+        $sidor++;
+
+        if (str_contains($kod, '<AppHero')) {
+            expect($kod)->toContain('[SettingsLayout, { hero: false }]');
+        } else {
+            expect($kod)->not->toContain('hero: false');
+        }
+    }
+
+    expect($sidor)->toBe(10, 'Provet hittade inte de tio sidorna i SettingsLayout');
 });
 
 /*

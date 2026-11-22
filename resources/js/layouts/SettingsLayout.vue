@@ -22,6 +22,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rubrik är därför en `<h2>`. Bekräftelsesidorna för radering använder inte
  * den här layouten och ritar sin egen `<h1>`.
  *
+ * **En sida som ritar en egen hjälte stänger av den här** (granskningsfynd
+ * 2026-11-22). `/transfers` ligger i layouten bara för sidomenyn (M28 ·
+ * issue 248) och ritar sin egen `AppHero` med rubriken *Transfers* (issue
+ * 437). Utan avstängningen fick sidan två hjältar och två `<h1>`.
+ * `hero`-proppen är därför sidans svar, som `ContainerLayout`s: en sida som
+ * ritar en egen hjälte skickar `hero: false` i layoutparet —
+ * `[AppLayout, [SettingsLayout, { hero: false }]]` — och de nio
+ * inställningssidorna deklarerar kedjan som förut. `InstallningshjalteTest`
+ * fäller en sida som ritar en egen `AppHero` utan att stänga av den.
+ *
  * Navigationen renderas ur settingsSections med v-for, inte som hårdkodade
  * <Link> — en post till kräver ingen ändring här, bara en rad i listan.
  * Den här issuen har en post (Säkerhet); issue 53c lägger till Profil och
@@ -47,6 +57,14 @@ import { useTranslations } from '../composables/useTranslations.js';
 const { t } = useTranslations();
 const page = usePage();
 const sectionsOpen = ref(false);
+
+/*
+ * Hjälten ritas som standard. Bara en sida som ritar en egen skickar
+ * `hero: false` i layoutparet, se docblocket ovanför.
+ */
+defineProps({
+    hero: { type: Boolean, default: true },
+});
 
 watch(() => page.url, () => {
     sectionsOpen.value = false;
@@ -75,9 +93,11 @@ const sectionLabel = (section) => t(section.label ?? `settings.nav.${section.key
             2026-11-22) står ovanför både menyn och innehållet och bär sidans
             enda `<h1>`. Rubriken är inställningarnas egen — sidans rubrik
             ritas som `<h2>` i innehållet — och talen hämtas av `AppHero` när
-            de saknas, precis som på toppnivåsidorna.
+            de saknas, precis som på toppnivåsidorna. En sida med egen hjälte
+            stänger av den här med `hero: false`.
         -->
         <AppHero
+            v-if="hero"
             :heading="t('hero.heading.settings')"
             :subtitle="t('hero.subtitle.settings')"
         />
