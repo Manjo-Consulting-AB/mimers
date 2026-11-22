@@ -86,7 +86,7 @@ class ExportController extends Controller
      * `$container->account`, och `ContainerPolicy::view()` läser samma
      * relation — utan den hade den kostat ett uppslag.
      */
-    public function index(Request $request, Container $container): Response
+    public function index(Request $request, Container $container, ResolveItemScope $scope): Response
     {
         Gate::authorize('view', $container);
 
@@ -106,7 +106,7 @@ class ExportController extends Controller
             'exports' => ExportResource::collection($exports)->resolve($request),
             'binder' => [
                 'available' => $canBinder,
-                'items' => $canBinder ? $this->itemsWithAttachments($request, $container) : [],
+                'items' => $canBinder ? $this->itemsWithAttachments($scope, $request, $container) : [],
             ],
         ]);
     }
@@ -221,9 +221,9 @@ class ExportController extends Controller
      *
      * @return list<array{ulid: string, name: string, attachments: list<array{ulid: string, filename: string}>}>
      */
-    private function itemsWithAttachments(Request $request, Container $container): array
+    private function itemsWithAttachments(ResolveItemScope $scope, Request $request, Container $container): array
     {
-        $ids = app(ResolveItemScope::class)->handle($request->user(), $container)->itemIds();
+        $ids = $scope->handle($request->user(), $container)->itemIds();
 
         return Item::query()
             ->where('container_id', $container->id)

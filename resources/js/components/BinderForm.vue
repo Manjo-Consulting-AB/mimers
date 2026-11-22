@@ -52,6 +52,9 @@ function toggleAll(item, checked) {
     form.attachments = checked ? [...rest, ...own] : rest;
 }
 
+/* Laravel nyckelar elementfel som `attachments.3`; ta med dem också. */
+const attachmentsError = computed(() => Object.keys(form.errors).some((key) => key === 'attachments' || key.startsWith('attachments.')));
+
 const hasItems = computed(() => props.items.length > 0);
 
 function submit() {
@@ -113,6 +116,10 @@ function submit() {
                 </fieldset>
             </div>
         </fieldset>
+
+        <p v-if="form.errors.sections" id="sections-error" tabindex="-1" role="alert" class="text-sm text-red-700">{{ t('export.pdf_binder_error_sections') }}</p>
+        <p v-if="form.errors.attachment_mode" id="attachment_mode-error" tabindex="-1" role="alert" class="text-sm text-red-700">{{ t('export.pdf_binder_error_mode') }}</p>
+        <p v-if="attachmentsError" id="attachments-error" tabindex="-1" role="alert" class="text-sm text-red-700">{{ t('export.pdf_binder_error_attachments') }}</p>
 
         <div>
             <button

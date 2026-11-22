@@ -5509,6 +5509,9 @@ return [
         'pdf_binder_pick' => 'Choose attachments per item',
         'pdf_binder_none' => 'No item has attachments.',
         'pdf_binder_select_all' => 'Select all',
+        'pdf_binder_error_attachments' => 'Too many attachments chosen. Choose at most 1000 and try again.',
+        'pdf_binder_error_sections' => 'Choose at least the sections the binder should contain.',
+        'pdf_binder_error_mode' => 'Choose how the attachments are added.',
         'pdf_binder_select_all_for' => 'Select all attachments on :item',
         'section' => [
             'items' => 'Items',

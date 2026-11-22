@@ -196,3 +196,17 @@ it('listar ZIP och pärm med etikett och laddar ner båda', function () {
             ->and($svar->headers->get('Content-Disposition'))->toContain($ändelse);
     }
 });
+
+it('ritar valideringsfelen på sections, attachment_mode och attachments i formuläret', function () {
+    $form = file_get_contents(resource_path('js/components/BinderForm.vue'));
+
+    expect($form)
+        ->toContain('form.errors.sections')
+        ->toContain('form.errors.attachment_mode')
+        ->toContain('attachmentsError')
+        ->toContain('id="attachments-error"');
+
+    foreach (['error_attachments', 'error_sections', 'error_mode'] as $key) {
+        expect(trans("ui.export.pdf_binder_{$key}", [], 'en'))->not->toBe("ui.export.pdf_binder_{$key}");
+    }
+});
