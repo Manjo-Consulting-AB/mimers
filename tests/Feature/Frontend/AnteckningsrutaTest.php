@@ -341,3 +341,15 @@ it('hämtar anteckningsrutans ord ur ui.php', function () {
             ->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 });
+
+/*
+ * Klart när: anteckningsfältet öppnas tre rader högt och krymper aldrig under
+ * det — `rows="3"` och en minsta höjd på tre rader.
+ */
+it('ritar anteckningsfältet tre rader högt med minsta höjd', function () {
+    $komponent = anteckningsrutaKod('components/ItemNotes.vue');
+
+    expect($komponent)->toContain('rows="3"')
+        ->and($komponent)->not->toContain('rows="1"')
+        ->and($komponent)->toContain('min-h-[calc(3lh+1rem+2px)]');
+});
