@@ -10,6 +10,7 @@ use App\Models\SecurityLog;
 use App\Support\Auth\TotpAlreadyConfirmedException;
 use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
+use App\Support\Auth\TwoFactorRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -58,8 +59,12 @@ class TotpController extends Controller
 
     public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): Response
     {
+        // Issue 450: `two_factor.required_by_sharing` medan ett krav gäller.
         try {
-            TotpBroker::disable($request->user(), $request->string('code')->toString());
+            TwoFactorRequirement::disableGuarded(
+                $request->user(),
+                fn () => TotpBroker::disable($request->user(), $request->string('code')->toString()),
+            );
         } catch (TotpInvalidException) {
             throw ApiException::make('auth.totp_invalid');
         }

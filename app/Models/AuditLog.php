@@ -308,6 +308,19 @@ class AuditLog extends Model
     public const ACTION_AGENT_DISABLED_IN_CONTAINER = 'agent.disabled_in_container';
 
     /**
+     * Tvåfaktorkravet slogs på eller av (issue 450, [[ADR-0092 Tvåfaktor som
+     * krav för delade containrar]]). `container.*` bär containern, `account.*`
+     * kontot. Mottagarnas namn följer aldrig med i `meta`.
+     */
+    public const ACTION_CONTAINER_TWO_FACTOR_REQUIRED = 'container.two_factor_required';
+
+    public const ACTION_CONTAINER_TWO_FACTOR_RELEASED = 'container.two_factor_released';
+
+    public const ACTION_ACCOUNT_TWO_FACTOR_REQUIRED = 'account.two_factor_required';
+
+    public const ACTION_ACCOUNT_TWO_FACTOR_RELEASED = 'account.two_factor_released';
+
+    /**
      * Inbjudan skickades. `item_id` är satt när inbjudan gäller ett enskilt
      * item.
      */

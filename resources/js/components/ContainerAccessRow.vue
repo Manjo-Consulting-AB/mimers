@@ -89,6 +89,8 @@ const props = defineProps({
     /* Fältet *Agent access* (issue 408), ägarens tak för medlemmens agenter. */
     agentAccess: { type: Boolean, default: false },
     agentLevel: { type: String, default: null },
+    /* Kravet gäller och mottagaren saknar tvåfaktor (issue 450). */
+    lacksTwoFactor: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -320,6 +322,7 @@ function remove() {
              är meningen — det är två olika omfång, inte två personer. -->
         <div class="flex flex-col gap-1">
             <span class="text-body font-medium text-ink">{{ granteeLabel(t, granteeNames, access) }}</span>
+            <span v-if="lacksTwoFactor" class="text-meta font-medium text-warning">{{ t('sharing.two_factor.lacking') }}</span>
             <span class="text-meta text-ink-muted">{{ accessScopeLabel(t, itemNames, access) }}</span>
         </div>
 

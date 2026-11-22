@@ -1,10 +1,11 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
 import PasswordForm from '../../components/PasswordForm.vue';
+import TwoFactorRequirementToggle from '../../components/TwoFactorRequirementToggle.vue';
 import TotpQrCode from '../../components/TotpQrCode.vue';
 import UiListRow from '../../components/UiListRow.vue';
 import UserDeletionForm from '../../components/UserDeletionForm.vue';
@@ -74,9 +75,12 @@ const props = defineProps({
     recoveryCodes: { type: Array, default: null },
     logins: { type: Array, required: true },
     deletion: { type: Object, required: true },
+    /* Tvåfaktorkravet på kontot (issue 450, ADR-0092); null utan eget konto. */
+    sharing: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
+const page = usePage();
 const { eventDate } = useRelativeDate();
 const { focusFirstError } = useErrorFocus();
 
@@ -276,6 +280,10 @@ function outcomeLabel(login) {
                      gamla koderna tillbaka. -->
                 <p class="text-sm text-amber-800">{{ t('settings.security.totp.disable_warning') }}</p>
 
+                <p v-if="props.sharing && (props.sharing.blocking.account || props.sharing.blocking.containers > 0)" class="text-sm text-amber-800">
+                    {{ t('settings.security.totp.locked_by_sharing', { containers: props.sharing.blocking.containers }) }}
+                </p>
+
                 <form class="flex flex-col gap-4" @submit.prevent="disableTotp">
                     <FormField
                         v-slot="{ describedBy }"
@@ -305,6 +313,21 @@ function outcomeLabel(login) {
                 </form>
             </div>
         </template>
+    </section>
+
+    <!-- Tvåfaktorkravet för dem kontot delar med (issue 450, ADR-0092). -->
+    <section v-if="props.sharing" class="mt-8 flex max-w-lg flex-col gap-2">
+        <TwoFactorRequirementToggle
+            id="account-require-two-factor"
+            :label="t('sharing.two_factor.account_label')"
+            url="/settings/security/require-two-factor"
+            :data="{ account: props.sharing.account }"
+            :checked="props.sharing.require"
+            :needs-own="!props.totpEnabled && !props.sharing.require"
+            :needs-own-note="t('sharing.two_factor.account_needs_own')"
+            :lacking="props.sharing.lacking"
+            :error="page.props.errors.require_two_factor ?? null"
+        />
     </section>
 
     <!--

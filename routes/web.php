@@ -598,6 +598,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/security', SecurityController::class)
         ->name('settings.security');
 
+    // Issue 450 · tvåfaktorkravet på kontot, sparat direkt (ADR-0092).
+    Route::patch('/settings/security/require-two-factor', [SecurityController::class, 'updateRequireTwoFactor'])
+        ->name('settings.security.require-two-factor');
+
     /*
      * Issue 129 · Lösenordsbytet, se App\Http\Controllers\Settings\
      * PasswordController och [[M20 Kontot]] § 129.
@@ -1847,6 +1851,10 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/containers/{container}/sharing', [ContainerSharingController::class, 'show'])
         ->name('containers.sharing');
+
+    // Issue 450 · tvåfaktorkravet på containern, sparat direkt (ADR-0092).
+    Route::patch('/containers/{container}/sharing/require-two-factor', [ContainerSharingController::class, 'updateRequireTwoFactor'])
+        ->name('containers.sharing.require-two-factor');
 
     Route::patch('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'update'])
         ->scopeBindings()

@@ -1280,6 +1280,12 @@ return [
             'already_running' => 'An export is already being packed. It is in the list below — wait until it is done.',
         ],
 
+        // Issue 450 · [[ADR-0092 Tvåfaktor som krav för delade containrar]].
+        'two_factor' => [
+            'owner_not_enrolled' => 'Set up two-factor authentication yourself before you require it from others.',
+            'required_by_sharing' => 'Two-factor authentication is required for the people you share with, so you cannot turn it off. Remove the requirement first.',
+        ],
+
         // The ownership transfer's domain errors on the web, see issue 67b
         // decisions 3, 4, 6 and 9.
         //
@@ -1662,6 +1668,7 @@ return [
                 'disable_heading' => 'Turn off two-factor authentication',
                 'disable_warning' => 'Turning it off deletes the recovery codes. Turning it on again gives you a new sheet.',
                 'disable_submit' => 'Turn off two-factor',
+                'locked_by_sharing' => 'You cannot turn off two-factor while it is required for the people you share with (:containers containers). Remove the requirement first.',
             ],
 
             /*
@@ -3604,6 +3611,8 @@ return [
         'action' => [
             'account' => [
                 'deleted' => 'The account and its content were permanently deleted',
+                'two_factor_required' => ':user required two-factor authentication for everyone the account shares with',
+                'two_factor_released' => ':user stopped requiring two-factor authentication for the account',
             ],
 
             'access' => [
@@ -3652,6 +3661,8 @@ return [
 
             'container' => [
                 'created' => ':user created the container',
+                'two_factor_required' => ':user required two-factor authentication to open the container',
+                'two_factor_released' => ':user stopped requiring two-factor authentication to open the container',
                 'updated' => ':user changed :fields on the container',
                 // Issue 1254 · [[ADR-0078 Valutor ur ISO 4217]] § 4. Its own
                 // action and not a field on `container.updated`: the currency
@@ -5714,6 +5725,20 @@ return [
                 'description' => 'Can also delete existing information and restore deleted content.',
             ],
             'recommended' => 'Recommended',
+        ],
+
+        // Issue 450 · [[ADR-0092 Tvåfaktor som krav för delade containrar]].
+        'two_factor' => [
+            'account_label' => 'Require two-factor authentication for everyone I share with',
+            'account_needs_own' => 'Turn on two-factor authentication for yourself first — then you can require it from the people you share with.',
+            'container_label' => 'Require two-factor authentication to open this container',
+            'container_needs_own' => 'Turn on two-factor authentication for yourself first (Settings → Security).',
+            'required_for_all' => 'Required for all your containers',
+            'confirm_heading' => 'Require two-factor authentication?',
+            'confirm_body' => 'These people have no two-factor authentication and lose access right away:',
+            'confirm_action' => 'Require two-factor',
+            'lacking' => 'No two-factor — can\'t open',
+            'invite_note' => 'The person you invite needs two-factor authentication to open this container.',
         ],
 
         'frozen' => 'The account is frozen and cannot change levels. Revoking an access still works.',

@@ -2,16 +2,23 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Actions\Account\SetAccountRequireTwoFactor;
 use App\Actions\User\DeleteUser;
+use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Settings\UpdateRequireTwoFactorRequest;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\SecurityLog;
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
+use App\Support\Auth\TwoFactorRequirement;
+use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\User\DeletionBlocker;
 use App\Support\User\DeletionWarning;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -105,8 +112,22 @@ class SecurityController extends Controller
     public function __invoke(Request $request, DeleteUser $deleteUser): Response
     {
         $user = $request->user();
+        $owned = self::ownedAccount($user);
 
         return Inertia::render('Settings/Security', [
+            // Issue 450 · tvåfaktorkravet för delade containrar (ADR-0092).
+            // `sharing` är null för den som inte äger något konto; kryssrutan
+            // ritas då inte alls.
+            'sharing' => $owned === null ? null : [
+                'account' => $owned->ulid,
+                'require' => (bool) $owned->require_two_factor,
+                'lacking' => TwoFactorRequirement::lackingInAccount($owned)
+                    ->map(fn (User $lacking): array => ['ulid' => $lacking->ulid, 'name' => $lacking->name])
+                    ->values()
+                    ->all(),
+                'blocking' => TwoFactorRequirement::requirementsOf($user),
+            ],
+
             // Lösenordsformulärets andra läge, se issue 129: en användare
             // som bara använt magic link har `password_hash` NULL och ska
             // mötas av "sätt ett lösenord" i stället för ett fält för ett
@@ -134,6 +155,44 @@ class SecurityController extends Controller
 
             'deletion' => self::deletionSummary($user, $deleteUser),
         ]);
+    }
+
+    /**
+     * Slår kontots tvåfaktorkrav på eller av. Behörigheten prövas i
+     * actionen; "ägaren saknar tvåfaktor" blir ett formulärfel på
+     * `require_two_factor`, aldrig en rå felkod.
+     */
+    public function updateRequireTwoFactor(
+        UpdateRequireTwoFactorRequest $request,
+        SetAccountRequireTwoFactor $action,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $account = self::ownedAccount($user, $request->input('account'));
+
+        abort_if($account === null, 403);
+
+        try {
+            $action->handle($account, $user, $request->boolean('require_two_factor'));
+        } catch (ApiException $exception) {
+            throw ValidationException::withMessages([
+                'require_two_factor' => $translator->message($exception),
+            ]);
+        }
+
+        return back();
+    }
+
+    /**
+     * Kontot kryssrutan gäller: ett konto användaren äger eller administrerar.
+     */
+    private static function ownedAccount(User $user, mixed $ulid = null): ?Account
+    {
+        return $user->accounts()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->when(is_string($ulid), fn ($query) => $query->where('account.ulid', $ulid))
+            ->orderBy('account.id')
+            ->first();
     }
 
     /**
