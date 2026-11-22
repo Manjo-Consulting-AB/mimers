@@ -127,6 +127,17 @@ class Notification extends Model
     public const TYPE_ACCOUNT_DOWNGRADE_WARNING = 'account.downgrade_warning';
 
     /**
+     * PDF-pärmen är klar, se [[ADR-0091 PDF-pärmen]] och issue 1518. Skapas av
+     * App\Jobs\BuildContainerExport när en `binder`-rad blir `ready`, till
+     * beställaren. `payload` bär `container`, `item` (bara för en
+     * itempärm, annars `null`) och `export` (exportens ulid). **Bara i
+     * appen** — typen är ingen mejltyp och har ingen inställning (se
+     * App\Support\Notification\NotificationPreferences). Ingen
+     * `binder.failed`: en misslyckad pärm syns på exportsidan.
+     */
+    public const TYPE_BINDER_READY = 'binder.ready';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

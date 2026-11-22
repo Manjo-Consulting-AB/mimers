@@ -68,6 +68,7 @@ const ICONS = {
     'agent.deleted': 'trash',
     'agent.access_lost': 'warning',
     'account.downgrade_warning': 'warning',
+    'binder.ready': 'export',
 };
 
 const icon = computed(() => ICONS[props.notification.type] ?? 'notifications');
@@ -145,6 +146,16 @@ const message = computed(() => {
             : '';
 
         return [base, mcp].filter(Boolean).join(' ');
+    }
+
+    /*
+     * Issue 1518: pärmen är klar. En itempärm nämner itemet, en containerpärm
+     * containern.
+     */
+    if (row.type === 'binder.ready') {
+        return payload.item
+            ? t('notifications.list.type.binder.ready_item', { item: payload.item })
+            : t('notifications.list.type.binder.ready', { container: payload.container });
     }
 
     const key = `notifications.list.type.${row.type}`;

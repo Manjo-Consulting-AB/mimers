@@ -124,6 +124,11 @@ export function notificationMessage(t, notification, formatDate) {
                 { agent: payload.agent, total: payload.total },
             );
 
+        case 'binder.ready':
+            return payload.item
+                ? t('inbox.binder.ready_item', { item: payload.item })
+                : t('inbox.binder.ready', { container: payload.container });
+
         case 'container.deleted':
             return t('inbox.container.deleted', { container: payload.container });
 

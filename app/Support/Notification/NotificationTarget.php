@@ -56,8 +56,24 @@ final class NotificationTarget
             // vad som händer i steg 4, och planvyn är ytan där kontot kan
             // uppgradera eller se fristen.
             Notification::TYPE_ACCOUNT_DOWNGRADE_WARNING => route('settings.plan', [], false),
+            // Issue 1518 · [[ADR-0091 PDF-pärmen]]: pärmen hämtas på
+            // containerns exportsida, där raden också visar status.
+            Notification::TYPE_BINDER_READY => $this->binderTarget($notification),
             default => null,
         };
+    }
+
+    /**
+     * Pärmen till containerns exportsida, eller `null` när containern inte
+     * längre finns (mjukraderad faller bort genom SoftDeletes).
+     */
+    private function binderTarget(Notification $notification): ?string
+    {
+        $container = $notification->container;
+
+        return $container === null
+            ? null
+            : route('containers.export', [$container], false);
     }
 
     /**
