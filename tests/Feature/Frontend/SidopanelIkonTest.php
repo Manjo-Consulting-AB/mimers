@@ -157,7 +157,8 @@ it('ritar varje container med sin ikon och container som fallback, oavsett art',
 it('ritar containerikonen utan ruta i radens textfärg', function () {
     $lista = sidopanelIkonKod('components/ShellContainerList.vue');
 
-    $start = (int) strpos($lista, 'v-for="container in group.containers"');
+    // Den låsta grenen (issue 449) står först; provet gäller länkraden.
+    $start = (int) strpos($lista, 'v-else', (int) strpos($lista, 'v-for="container in group.containers"'));
     $namn = (int) strpos($lista, '{{ container.name }}', $start);
     $raden = substr($lista, $start, $namn - $start);
 

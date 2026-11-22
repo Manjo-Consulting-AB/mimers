@@ -2562,6 +2562,15 @@ return [
     ],
 
     'container' => [
+        // A container that requires two-factor, seen by a member without it
+        // (ADR-0092, issue 449): the name, a lock and these two lines.
+        'locked' => [
+            'requires' => 'Requires two-factor authentication',
+            'turn_on' => 'Turn on two-factor',
+            'title' => 'Locked container',
+            'aria' => ':name — requires two-factor authentication',
+        ],
+
         // Ingen `kind`-etikett sedan issue 84 · [[ADR-0036 Containerns art]]:
         // arten är ett fritt textfält, och vyn skriver ut strängen användaren
         // matat in. `t()` returnerar nyckeln själv när uppslaget misslyckas, så

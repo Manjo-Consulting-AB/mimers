@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Container;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -71,6 +72,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class ContainerResource extends JsonResource
 {
+    /**
+     * Är containern LÅST för användaren — den kräver tvåfaktor, hon saknar
+     * den och hon når containern bara genom en grant (ADR-0092, issue 449)?
+     * Ägarkontots medlemmar är aldrig låsta. Anropas bara på rader ur
+     * `accessibleBy(..., includeLocked: true)`.
+     *
+     * @param  list<int>  $accountIds  användarens kontons löpnummer
+     */
+    public static function isLocked(Container $container, User $user, array $accountIds): bool
+    {
+        return ! $user->hasConfirmedTwoFactor()
+            && $container->requiresTwoFactor()
+            && ! in_array($container->account_id, $accountIds, true);
+    }
+
     /**
      * Containerns bild i det format vyerna ritar ur, eller null när ingen är
      * satt — se klassens docblock.

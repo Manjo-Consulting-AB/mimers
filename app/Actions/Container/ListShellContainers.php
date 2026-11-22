@@ -2,6 +2,7 @@
 
 namespace App\Actions\Container;
 
+use App\Http\Resources\ContainerResource;
 use App\Models\Container;
 use App\Models\User;
 
@@ -44,27 +45,37 @@ use App\Models\User;
 final class ListShellContainers
 {
     /**
-     * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}>
+     * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon?: string|null, icon_color?: string|null, locked: bool}>}>
      */
     public function handle(User $user): array
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containers = Container::query()
-            ->accessibleBy($user, $accountIds)
+            ->accessibleBy($user, $accountIds, includeLocked: true)
             ->listable()
             ->orderBy('name')
-            ->get(['ulid', 'name', 'kind', 'icon', 'icon_color']);
+            ->with('account:id,require_two_factor')
+            ->get(['ulid', 'name', 'kind', 'icon', 'icon_color', 'account_id', 'require_two_factor']);
 
-        /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}> $grupper */
+        /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon?: string|null, icon_color?: string|null, locked: bool}>}> $grupper */
         $grupper = ContainerKindGroups::byKind(
             $containers,
-            fn (Container $container): array => [
-                'ulid' => $container->ulid,
-                'name' => $container->name,
-                'icon' => $container->icon,
-                'icon_color' => $container->icon_color,
-            ],
+            function (Container $container) use ($user, $accountIds): array {
+                // En låst container bär ulid, namn och `locked` — ingen ikon
+                // (ADR-0092, issue 449).
+                if (ContainerResource::isLocked($container, $user, $accountIds)) {
+                    return ['ulid' => $container->ulid, 'name' => $container->name, 'locked' => true];
+                }
+
+                return [
+                    'ulid' => $container->ulid,
+                    'name' => $container->name,
+                    'icon' => $container->icon,
+                    'icon_color' => $container->icon_color,
+                    'locked' => false,
+                ];
+            },
         );
 
         return $grupper;
