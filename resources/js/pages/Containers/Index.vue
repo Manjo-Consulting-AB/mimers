@@ -6,6 +6,7 @@ import AppHero from '../../components/AppHero.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
@@ -125,10 +126,12 @@ const isShared = (container) => accountName(container) === null;
             <UiCard v-if="container.locked" class="h-full">
                 <template #heading>
                     <span class="inline-flex min-h-11 items-center gap-2 font-medium text-ink">
-                        <span aria-hidden="true" class="shrink-0">🔒</span>
+                        <UiIcon name="lock" class="shrink-0" />
                         {{ container.name }}
                     </span>
                 </template>
+
+                <p v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</p>
 
                 <p class="text-sm text-slate-600">{{ t('container.locked.requires') }}</p>
 
