@@ -4,6 +4,7 @@ import AppLayout from '../layouts/AppLayout.vue';
 import ContainerCard from '../components/ContainerCard.vue';
 import CostDonut from '../components/CostDonut.vue';
 import DashboardActivityPanel from '../components/DashboardActivityPanel.vue';
+import DashboardHero from '../components/DashboardHero.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import InfoPanel from '../components/InfoPanel.vue';
@@ -80,6 +81,15 @@ defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
  * containrarna, händelserna och sist informationsytan. Utan `contents` hade
  * uppgifterna och containrarna följts åt i källordningen, och Beslut 3 hade
  * inte gått att uppfylla utan att bryta Beslut 2.
+ *
+ * **Översta raden ritas i en hjälte sedan issue 435** ([[ADR-0090
+ * Dashboardens hjälte]] § 1 och 6): `<h1>` och den gamla raden med brickorna
+ * och kostnadskortet är ersatta av `DashboardHero`, som ritar hälsningen,
+ * rubriken, undertiteln, brickorna och donuten inne i personens hjältebild
+ * eller standardbilden. Sidan ritar därför brickorna och donuten EN gång till
+ * under bandet, i ett block som bara syns under `md:` — det är dit ADR-0090
+ * § 6 flyttar dem på en telefon. Propparna och talen är desamma som förut;
+ * hjälten får `stats` och `costs` och räknar ingenting själv.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -113,14 +123,20 @@ const { t } = useTranslations();
 <template>
     <Head :title="t('dashboard.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
+    <!--
+        Den översta raden (ADR-0090 § 1): hälsningen, rubriken, undertiteln,
+        brickorna och donuten ritas inne i personens hjältebild eller i
+        standardbilden. Under `md:` är hjälten ett lågt band (ADR-0090 § 6),
+        och då ritar sidan brickorna och donuten under den — se blocket nedan.
+    -->
+    <DashboardHero :stats="props.stats" :costs="props.costs" />
 
     <!--
         Uppställningen (issue 252). Över `lg:` är behållaren ett rutnät om
-        tre kolumner: den översta raden spänner alla tre, och under den
-        står två kolumner som var och en är en egen `flex flex-col`.
-        Kolumnerna delar ingen radhöjd — det var det som lämnade tomrummet
-        när uppgiftspanelen växte (Beslut 2).
+        tre kolumner. Den översta raden står utanför sedan issue 435 — den är
+        hjälten — och under den står två kolumner som var och en är en egen
+        `flex flex-col`. Kolumnerna delar ingen radhöjd — det var det som
+        lämnade tomrummet när uppgiftspanelen växte (Beslut 2).
 
         Under `lg:` är behållaren en flexkolumn och de två kolumnerna ritar
         ingen egen box (`contents`), så deras barn blir syskon här och kan
@@ -129,17 +145,15 @@ const { t } = useTranslations();
     -->
     <div class="flex flex-col lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
         <!--
-            Den översta raden (Beslut 1): brickorna till vänster och
-            kostnadskortet med donuten till höger om dem, i samma rad över
-            `lg:`. Finns inga kostnader ritas inget kort, och brickorna tar
-            raden — de är då radens enda barn och fyller den. Under `lg:`
-            är raden ett vanligt block och står först av sig själv, utan
-            `order` (Beslut 3).
+            Under `md:` står brickorna och donuten under hjältebandet
+            (ADR-0090 § 6). Blocket är dolt över `md:`, för där ritar
+            `DashboardHero` samma saker inne i bilden. Source-ordningen gör
+            att det står först i flexkolumnen, utan `order` (Beslut 3).
         -->
-        <div class="mt-8 lg:col-span-3 lg:flex lg:items-start lg:gap-8">
-            <DashboardStats class="lg:flex-1" :stats="props.stats" :costs="props.costs.totals" />
+        <div class="mt-8 md:hidden">
+            <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
 
-            <section v-if="props.costs.totals.length" class="mt-8 lg:mt-0 lg:flex-1">
+            <section v-if="props.costs.totals.length" class="mt-8">
                 <h2 class="text-title font-semibold text-ink">
                     {{ t('dashboard.costs.heading') }}
                 </h2>

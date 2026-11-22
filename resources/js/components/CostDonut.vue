@@ -107,9 +107,39 @@ const props = defineProps({
     sliceHref: { type: Function, default: null },
     /* Ringens mål, eller null för en ring som inte är klickbar. */
     href: { type: String, default: null },
+    /*
+     * `on-image` när donuten står i dashboardens hjälte (issue 435 ·
+     * [[ADR-0090 Dashboardens hjälte]] § 1). Talet, bildtexten och legenden
+     * ritas då i vitt mot toningen, och legendens träffyta får glaset i
+     * stället för den ljusa ytan. Utan värde ritas donuten som förut.
+     */
+    tone: { type: String, default: null },
 });
 
 const { t } = useTranslations();
+
+/*
+ * Textens roller per form. Donuten äger bara sin egen text; ringen och
+ * bitarnas färger är desamma i båda formerna, för de är data och inte yta.
+ */
+const TONES = {
+    surface: {
+        total: 'text-ink',
+        label: 'text-ink-subtle',
+        name: 'text-ink',
+        amount: 'text-ink-subtle',
+        slice: 'hover:bg-surface-sunken',
+    },
+    'on-image': {
+        total: 'text-ink-on-accent',
+        label: 'text-ink-on-accent',
+        name: 'text-ink-on-accent',
+        amount: 'text-ink-on-accent',
+        slice: 'hover:bg-glass',
+    },
+};
+
+const toneClasses = computed(() => TONES[props.tone] ?? TONES.surface);
 
 /** De åtta färgstegen, i den ordning bitarna får dem. */
 const SLICE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
@@ -212,8 +242,8 @@ const donuts = computed(() => props.totals.map((total) => {
                 </svg>
 
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
-                    <span class="text-title font-semibold text-ink">{{ donut.total }}</span>
-                    <span class="text-meta text-ink-subtle">{{ props.label ?? t('dashboard.costs.month') }}</span>
+                    <span class="text-title font-semibold" :class="toneClasses.total">{{ donut.total }}</span>
+                    <span class="text-meta" :class="toneClasses.label">{{ props.label ?? t('dashboard.costs.month') }}</span>
                 </div>
             </component>
 
@@ -224,15 +254,16 @@ const donuts = computed(() => props.totals.map((total) => {
                         v-bind="props.sliceHref ? { href: props.sliceHref(arc.ulid) } : {}"
                         :class="[
                             'flex items-center gap-2',
-                            props.sliceHref && '-mx-1 rounded px-1 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2',
+                            props.sliceHref && '-mx-1 rounded px-1 outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2',
+                            props.sliceHref && toneClasses.slice,
                         ]"
                     >
                         <span
                             class="h-2.5 w-2.5 shrink-0 rounded-pill"
                             :style="{ backgroundColor: arc.color }"
                         />
-                        <span class="text-meta text-ink">{{ arc.name }}</span>
-                        <span class="text-meta text-ink-subtle">{{ arc.text }}</span>
+                        <span class="text-meta" :class="toneClasses.name">{{ arc.name }}</span>
+                        <span class="text-meta" :class="toneClasses.amount">{{ arc.text }}</span>
                     </component>
                 </li>
             </ul>

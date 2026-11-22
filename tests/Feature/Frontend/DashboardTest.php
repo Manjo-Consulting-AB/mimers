@@ -562,3 +562,52 @@ it('har samma proppar som före rutnätet', function () {
         'create',
     ]);
 });
+
+// --- hjälten (issue 435) ---------------------------------------------------
+
+/*
+ * Klart när ([[ADR-0090 Dashboardens hjälte]] § 1 och 3): den översta raden
+ * ritas i personens hjältebild, eller i standardbilden om hon inte har någon.
+ *
+ * Vue-komponenten ritas i webbläsaren och går inte att rendera här, så provet
+ * läser formen ur filen: hjälten läser `hero` ur den delade proppen (issue
+ * 434), ger ramen standardbildens adress som fallback, och ritar hälsningen,
+ * rubriken, undertiteln, brickorna och donuten i ramens slot. Förnamnet är
+ * första ordet i `user.name`, inte en egen sträng.
+ */
+it('ritar översta raden i personens hjälte eller i standardbilden', function () {
+    $hjalten = panelvyUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
+
+    expect($hjalten)->toContain('page.props.auth?.user?.hero')
+        ->toContain('src="/images/dashboard-hero.jpg"')
+        ->toContain('<HeroFrame')
+        ->toContain("t('dashboard.hero.greeting', { name: firstName })")
+        ->toContain("t('dashboard.hero.subtitle')")
+        ->toContain("t('dashboard.heading')")
+        ->toContain('<DashboardStats')
+        ->toContain('<CostDonut');
+
+    // Förnamnet är första ordet i namnet — ingen gissning ur e-postadressen
+    // och ingen ny propp från DashboardController.
+    expect($hjalten)->toContain('split(/\s+/)');
+});
+
+/*
+ * Klart när: en person utan hjältebild ser standardbilden.
+ *
+ * Standardbilden är ingen bilaga (ADR-0090 § 3), så den ligger under
+ * `public/images/` och följer med varje bygge. Provet fäster båda leden —
+ * att filen finns och att den håller måtten ur ADR-0090 § Konsekvenser:
+ * högst 2400 px bred och högst 400 kB.
+ */
+it('levererar standardbilden inom ADR-0090 § Konsekvenser', function () {
+    $fil = public_path('images/dashboard-hero.jpg');
+
+    expect(file_exists($fil))->toBeTrue('public/images/dashboard-hero.jpg saknas');
+
+    $matt = getimagesize($fil);
+
+    expect($matt)->not->toBeFalse()
+        ->and($matt[0])->toBeLessThanOrEqual(2400)
+        ->and(filesize($fil))->toBeLessThanOrEqual(400 * 1024);
+});

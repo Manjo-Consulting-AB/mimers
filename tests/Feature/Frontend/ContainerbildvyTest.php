@@ -273,12 +273,16 @@ it('väljer den begärda varianten och annars originalet', function () {
  */
 it('ritar medium i hjälten och på korten men thumb i toppraden', function () {
     foreach ([
-        'js/components/ContainerHero.vue',
         'js/components/ContainerCard.vue',
         'js/pages/Containers/Index.vue',
     ] as $fil) {
         expect(bildvyTagg($fil))->toContain('variant="medium"');
     }
+
+    // Hjälten ber om `medium` genom ramen sedan issue 435: ramen skickar
+    // vidare varianten till `ContainerCover`.
+    expect(bildvyTagg('js/components/ContainerHero.vue', 'HeroFrame'))->toContain('variant="medium"')
+        ->and(bildvyTagg('js/components/HeroFrame.vue'))->toContain(':variant="variant"');
 
     // De små fyrkanterna: förvalet `thumb`, alltså ingen propp alls.
     // Toppradens fyrkant ritas av `ContainerLayout` och teleporteras in i
@@ -409,7 +413,6 @@ it('ritar bilden före ikonen och lådan när containern har båda', function ()
 it('skickar containerns ikon och färg från alla som ritar rutan', function () {
     foreach ([
         'js/components/ContainerCard.vue',
-        'js/components/ContainerHero.vue',
         'js/layouts/ContainerLayout.vue',
         'js/pages/Containers/Index.vue',
         'js/pages/Containers/Edit.vue',
@@ -417,6 +420,14 @@ it('skickar containerns ikon och färg från alla som ritar rutan', function () 
         expect(bildvyTagg($fil))->toContain(':icon=')
             ->and(bildvyTagg($fil))->toContain(':color=');
     }
+
+    // Hjälten ritar rutan genom ramen sedan issue 435: hjälten skickar
+    // containerns ikon och färg till `HeroFrame`, som skickar dem vidare
+    // till `ContainerCover`.
+    expect(bildvyTagg('js/components/ContainerHero.vue', 'HeroFrame'))->toContain(':icon="container.icon"')
+        ->and(bildvyTagg('js/components/ContainerHero.vue', 'HeroFrame'))->toContain(':color="container.icon_color"')
+        ->and(bildvyTagg('js/components/HeroFrame.vue'))->toContain(':icon="icon"')
+        ->and(bildvyTagg('js/components/HeroFrame.vue'))->toContain(':color="color"');
 });
 
 /*
@@ -440,7 +451,7 @@ it('behåller rutans mått och beskärning på alla ställen', function () {
     expect(File::get(resource_path('js/pages/Containers/Index.vue')))
         ->toContain('class="aspect-video w-full"');
 
-    expect(File::get(resource_path('js/components/ContainerHero.vue')))
+    expect(File::get(resource_path('js/components/HeroFrame.vue')))
         ->toContain('class="absolute inset-0 overflow-hidden rounded-card"');
 
     expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))

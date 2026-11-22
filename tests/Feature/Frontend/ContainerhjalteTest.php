@@ -205,11 +205,12 @@ it('har toningen och talen i den låga hjälten', function () {
         expect($vy)->toContain("[ContainerLayout, { hero: 'compact'");
     }
 
-    // Toningen och talen ritas i båda formerna: villkoret nämner inte
-    // formen, och det finns ingen taltuta utanför brickraden.
+    // Toningen sitter i ramen sedan issue 435, och talen i hjälten: villkoret
+    // nämner inte formen, och det finns ingen taltuta utanför brickraden.
     $hjalte = hjalteHjalten();
+    $ramen = hjalteKod('components/HeroFrame.vue');
 
-    expect($hjalte)->toContain('bg-linear-to-r')
+    expect($ramen)->toContain('bg-linear-to-r')
         ->and($hjalte)->toContain('v-if="counts"')
         ->and($hjalte)->not->toContain("hero === 'large'\"")
         ->and(substr_count($hjalte, '<UiStat'))
@@ -461,29 +462,37 @@ it('utelämnar undertiteln när beskrivningen saknas', function () {
  */
 it('ersätter mörkläggningen med en toning och behåller den neutrala ytan', function () {
     $hjalte = hjalteHjalten();
+    $ramen = hjalteKod('components/HeroFrame.vue');
 
     expect($hjalte)->not->toContain('bg-shell/70');
 
-    expect($hjalte)->toContain('bg-linear-to-r')
-        ->and($hjalte)->toContain('from-shell')
-        ->and($hjalte)->toContain('via-shell/90')
-        ->and($hjalte)->toContain('to-transparent');
+    // Toningen bor i ramen sedan issue 435 · [[ADR-0090 Dashboardens hjälte]]
+    // § 1: containerns hjälte och dashboardens delar samma lager.
+    expect($ramen)->toContain('bg-linear-to-r')
+        ->and($ramen)->toContain('from-shell')
+        ->and($ramen)->toContain('via-shell/90')
+        ->and($ramen)->toContain('to-transparent');
 
     // Texten står i den täta delen: toningen håller full täthet en bit in, och
     // spalten är kapad så att den aldrig växer in i den glesa delen.
-    expect($hjalte)->toContain('from-20%')
-        ->and($hjalte)->toContain('via-30%')
+    expect($ramen)->toContain('from-20%')
+        ->and($ramen)->toContain('via-30%')
         ->and($hjalte)->toContain('max-w-lg');
 
     // Bilden — eller den neutrala ytan — ritas utan villkor under toningen.
-    // Sedan issue 317 bär taggen också containerns ikon och färg, så att
-    // `ContainerCover` kan välja bild, ikon eller låda.
-    expect($hjalte)->toContain(':cover="container.cover"')
-        ->and($hjalte)->toContain(':icon="container.icon"')
-        ->and($hjalte)->toContain(':color="container.icon_color"')
-        ->and($hjalte)->toContain('variant="medium"');
+    // Hjälten skickar containerns bild, ikon och färg till ramen, som skickar
+    // dem vidare till `ContainerCover`.
+    expect(hjalteTagg($hjalte, 'HeroFrame'))->toContain(':cover="container.cover"')
+        ->and(hjalteTagg($hjalte, 'HeroFrame'))->toContain(':icon="container.icon"')
+        ->and(hjalteTagg($hjalte, 'HeroFrame'))->toContain(':color="container.icon_color"')
+        ->and(hjalteTagg($hjalte, 'HeroFrame'))->toContain('variant="medium"');
 
-    expect($hjalte)->not->toMatch('#<ContainerCover\b[^>]*v-if#s');
+    expect(hjalteTagg($ramen, 'ContainerCover'))->toContain(':cover="cover"')
+        ->and(hjalteTagg($ramen, 'ContainerCover'))->toContain(':icon="icon"')
+        ->and(hjalteTagg($ramen, 'ContainerCover'))->toContain(':color="color"')
+        ->and(hjalteTagg($ramen, 'ContainerCover'))->toContain(':variant="variant"');
+
+    expect($ramen)->not->toMatch('#<ContainerCover\b[^>]*v-if#s');
 });
 
 /*
@@ -582,12 +591,22 @@ it('skickar containerns ikon till hjälten och toppraden', function () {
             ->where('container.icon_color', 'teal')
         );
 
-    foreach (['components/ContainerHero.vue', 'layouts/ContainerLayout.vue'] as $fil) {
-        expect(hjalteTagg(hjalteKod($fil), 'ContainerCover'))
-            ->toContain(':icon="container.icon"')
-            ->and(hjalteTagg(hjalteKod($fil), 'ContainerCover'))
-            ->toContain(':color="container.icon_color"');
-    }
+    // Hjälten ritar bilden genom `HeroFrame` sedan issue 435, och ramen
+    // skickar ikonen och färgen vidare till `ContainerCover`.
+    expect(hjalteTagg(hjalteKod('components/ContainerHero.vue'), 'HeroFrame'))
+        ->toContain(':icon="container.icon"')
+        ->and(hjalteTagg(hjalteKod('components/ContainerHero.vue'), 'HeroFrame'))
+        ->toContain(':color="container.icon_color"');
+
+    expect(hjalteTagg(hjalteKod('components/HeroFrame.vue'), 'ContainerCover'))
+        ->toContain(':icon="icon"')
+        ->and(hjalteTagg(hjalteKod('components/HeroFrame.vue'), 'ContainerCover'))
+        ->toContain(':color="color"');
+
+    expect(hjalteTagg(hjalteKod('layouts/ContainerLayout.vue'), 'ContainerCover'))
+        ->toContain(':icon="container.icon"')
+        ->and(hjalteTagg(hjalteKod('layouts/ContainerLayout.vue'), 'ContainerCover'))
+        ->toContain(':color="container.icon_color"');
 });
 
 /*
