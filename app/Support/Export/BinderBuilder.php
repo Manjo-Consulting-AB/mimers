@@ -66,18 +66,20 @@ use Throwable;
  * i arbetarens 96 MB och inte; tecken utanför windows-1252 ritas inte.
  *
  * Ingen extern process och ingen webbläsare (ADR-0070): dompdf och FPDI är
- * ren PHP. Fjärrresurser är avstängda och dompdfs `chroot` är disken, så en
- * bildlänk i en anteckning kan inte läsa något utanför `files`.
+ * ren PHP. Fjärrresurser är avstängda, dompdfs `chroot` är den egna
+ * temporärmappen (inte disken) och `<img>` tas bort ur anteckningarna, så en
+ * bildlänk i en anteckning kan inte läsa en fil från disken. Omslagsbilden
+ * går som data-URI och behöver ingen filåtkomst.
  *
  * Klassen är inte final — testsviten byter ut build() genom en anonym
  * underklass för att öva jobbets felhantering.
  */
 class BinderBuilder
 {
-    /** Sektionerna `options.sections` kan slå på; förvalet är allt utom kostnader. */
     /** Delar per omgång vid hopsättningen — ett filhandtag per del. */
     private const MERGE_CHUNK = 50;
 
+    /** Sektionerna `options.sections` kan slå på; förvalet är allt utom kostnader. */
     public const SECTIONS = ['items', 'relations', 'schedules', 'history', 'costs'];
 
     public function build(Export $export): string
@@ -382,7 +384,7 @@ class BinderBuilder
             'item' => $item,
             'level' => min($depth + 1, 6),
             'sections' => $sections,
-            'notesHtml' => app(RenderItemNotes::class)->handle($item->notes),
+            'notesHtml' => preg_replace('/<img\b[^>]*>/i', '', (string) app(RenderItemNotes::class)->handle($item->notes)),
             'fields' => app(ContainerExportBuilder::class)->fieldEntries($item, $container),
             'relations' => $relations,
             'history' => $history,
@@ -403,7 +405,7 @@ class BinderBuilder
         $options->set('isRemoteEnabled', false);
         $options->set('isPhpEnabled', false);
         $options->set('defaultFont', 'Helvetica');
-        $options->set('chroot', [$disk->path('')]);
+        $options->set('chroot', [dirname($disk->path($path))]);
 
         $dompdf = new Dompdf($options);
         $dompdf->setPaper('A4');
@@ -465,6 +467,7 @@ class BinderBuilder
 
             $pdf->Output('F', $disk->path($partial));
         }
+
         if (! $disk->exists($partial)) {
             throw new RuntimeException("Pärmen kunde inte skrivas ({$partial}).");
         }

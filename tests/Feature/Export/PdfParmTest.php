@@ -427,3 +427,20 @@ it('ett fel i pärmbyggaren lämnar raden failed och tar bort .part och temporä
         ->and($disk->exists($base.'.pdf.part'))->toBeFalse()
         ->and($disk->exists($base.'.parts'))->toBeFalse();
 });
+
+it('en markdown-bild i en anteckning ger inga bildbytes i pärmen', function () {
+    [$account, $user, $container] = parmKontext();
+    $disk = Storage::disk('files');
+    $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+    $disk->put('annat-konto/hemlig.png', $png);
+    $sokvag = $disk->path('annat-konto/hemlig.png');
+    parmItem($container, $account, $user, 'Motorn', ['notes' => "Se ![x]({$sokvag})"]);
+
+    $spion = parmSpion();
+    $export = parmKör(parmRad($container, $user));
+    $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
+
+    expect($data['notesHtml'])->not->toContain('<img')
+        ->and($export->status)->toBe(Export::STATUS_READY)
+        ->and(parmText($disk->get($export->storage_path)))->not->toContain('/Subtype /Image');
+});
