@@ -400,6 +400,13 @@ class ContainerPolicy
         bool $excludeFrozenGranteeAccounts = false,
         bool $containerWideOnly = false,
     ): bool {
+        // Tvåfaktorkravet (ADR-0092): en grant ger ingenting i en container
+        // som kräver tvåfaktor när mottagaren saknar den. Ägarkontots
+        // medlemmar tar inte den här vägen och berörs inte.
+        if (! $user->hasConfirmedTwoFactor() && $container->requiresTwoFactor()) {
+            return false;
+        }
+
         $accounts = $user->accounts;
 
         if ($excludeFrozenGranteeAccounts) {

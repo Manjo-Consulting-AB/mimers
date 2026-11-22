@@ -20,6 +20,10 @@ use Illuminate\Support\Facades\DB;
  * 0. En INBOX räknas som ägd bara av sin `inbox_user_id`.
  * 1. Ägarkontots medlemmar når hela containern.
  * 2. En container-bred, giltig grant ger hela containern på sin nivå.
+ * Tvåfaktorregeln (ADR-0092): kräver containern tvåfaktor räknas en grant-
+ * mottagare utan bekräftad tvåfaktor inte till publiken. Ägarkontots
+ * medlemmar berörs inte.
+ *
  * 3. En itemgrant når sitt item och dess ättlingar — alltså når en grant på
  *    itemets FÖRFÄDER itemet, medan en grant på ett syskon eller ett barn
  *    aldrig gör det (arv går nedåt, aldrig uppåt).
@@ -71,7 +75,7 @@ final class ItemAudience
             return [(int) $container->inbox_user_id];
         }
 
-        $accountIds = [(int) $container->account_id];
+        $accountIds = [];
         $userIds = [];
 
         foreach ($this->validRows($container) as $row) {
@@ -80,7 +84,7 @@ final class ItemAudience
             }
         }
 
-        return $this->usersOf($accountIds, $userIds);
+        return $this->usersOf($container, $accountIds, $userIds);
     }
 
     /**
@@ -147,7 +151,7 @@ final class ItemAudience
         $parentsByChild ??= $this->parentsByChild((int) $container->id);
         $ancestors = $this->selfAndAncestors($itemId, $parentsByChild);
 
-        $accountIds = [(int) $container->account_id];
+        $accountIds = [];
         $userIds = [];
 
         foreach ($this->validRows($container) as $row) {
@@ -156,7 +160,7 @@ final class ItemAudience
             }
         }
 
-        return $this->usersOf($accountIds, $userIds);
+        return $this->usersOf($container, $accountIds, $userIds);
     }
 
     /**
@@ -189,19 +193,40 @@ final class ItemAudience
     }
 
     /**
-     * @param  list<int>  $accountIds
-     * @param  list<int>  $userIds
+     * Ägarkontots medlemmar plus grantmottagarna. Kräver containern
+     * tvåfaktor filtreras mottagarna på bekräftad tvåfaktor; ägarkontots
+     * medlemmar filtreras aldrig.
+     *
+     * @param  list<int>  $accountIds  konton vars medlemmar är mottagare
+     * @param  list<int>  $userIds  enskilda mottagare
      * @return list<int>
      */
-    private function usersOf(array $accountIds, array $userIds): array
+    private function usersOf(Container $container, array $accountIds, array $userIds): array
     {
-        $fromAccounts = DB::table('account_user')
+        $owners = DB::table('account_user')
+            ->where('account_id', $container->account_id)
+            ->pluck('user_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+
+        $fromAccounts = $accountIds === [] ? [] : DB::table('account_user')
             ->whereIn('account_id', array_values(array_unique($accountIds)))
             ->pluck('user_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
 
-        $all = array_values(array_unique(array_merge($userIds, $fromAccounts)));
+        $grantees = array_values(array_unique(array_merge($userIds, $fromAccounts)));
+
+        if ($grantees !== [] && $container->requiresTwoFactor()) {
+            $grantees = DB::table('user')
+                ->whereIn('id', $grantees)
+                ->whereNotNull('totp_confirmed_at')
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+        }
+
+        $all = array_values(array_unique(array_merge($owners, $grantees)));
 
         sort($all);
 

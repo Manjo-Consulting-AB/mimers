@@ -2,6 +2,7 @@
 
 namespace App\Actions\Access;
 
+use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
@@ -30,6 +31,11 @@ use Illuminate\Support\Facades\DB;
  *    `parent`. Aldrig uppåt, och `related` bär ingen behörighet alls.
  * 4. Når flera grants samma item vinner den högsta nivån, via
  *    AccessLevel::max().
+ *
+ * Tvåfaktorregeln (ADR-0092) sitter EFTER regel 1: en container som kräver
+ * tvåfaktor — egen flagga eller ägarkontots — ger en användare utan
+ * bekräftad tvåfaktor ingenting via grants. Ägarkontots medlemmar berörs inte
+ * (regel 1 vinner), och inboxen berörs inte (regel 0).
  *
  * Slutningen görs i PHP på EN fråga, inte som en rekursiv CTE — samma
  * teknik och samma skäl som App\Actions\Item\LinkItems och
@@ -191,13 +197,25 @@ class ResolveItemScope
         // (se klassens docblock).
         $containers = Container::query()
             ->whereIn('id', $containerIds)
-            ->get(['id', 'account_id', 'inbox_user_id']);
+            ->select(['id', 'account_id', 'inbox_user_id', 'require_two_factor'])
+            ->addSelect([
+                // Kontots flagga som en delfråga: ingen extra rundtur, så
+                // frågekostnaden ovan står sig.
+                'account_require_two_factor' => Account::query()
+                    ->select('require_two_factor')
+                    ->whereColumn('account.id', 'container.account_id'),
+            ])
+            ->get();
 
         /** @var array<int, int> container_id → inbox_user_id */
         $inboxOwner = [];
 
         /** @var array<int, true> container_id */
         $owned = [];
+
+        /** @var array<int, true> container_id: kräver tvåfaktor som $user saknar */
+        $locked = [];
+        $lacksTwoFactor = ! $user->hasConfirmedTwoFactor();
 
         foreach ($containers as $container) {
             // Regel 0: en inbox räknas som ägd bara av sin egen
@@ -212,6 +230,8 @@ class ResolveItemScope
 
             if (in_array((int) $container->account_id, $accountIds, true)) {
                 $owned[$container->id] = true;
+            } elseif ($lacksTwoFactor && ((bool) $container->require_two_factor || (bool) $container->getAttribute('account_require_two_factor'))) {
+                $locked[$container->id] = true;
             }
         }
 
@@ -219,7 +239,7 @@ class ResolveItemScope
         // ContainerAccess::scopeValidFor(), och två formuleringar av
         // "giltig access" glider isär (issue 9a § Beslut 8).
         $rows = ContainerAccess::query()
-            ->whereIn('container_id', $containerIds)
+            ->whereIn('container_id', array_values(array_diff($containerIds, array_keys($locked))))
             ->validFor($user, $accountIds)
             ->get(['container_id', 'item_id', 'level']);
 
@@ -255,6 +275,13 @@ class ResolveItemScope
 
             if (isset($owned[$containerId])) {
                 $scopes[$containerId] = ItemScope::unrestricted(AccessLevel::DELETE);
+
+                continue;
+            }
+
+            // Tvåfaktorregeln: grants mot en låst container ignoreras.
+            if (isset($locked[$containerId])) {
+                $scopes[$containerId] = ItemScope::restricted([]);
 
                 continue;
             }
