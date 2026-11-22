@@ -72,10 +72,8 @@
         <table>
             @foreach ($history as $row)
                 <tr>
-                    <td style="width: 80pt;">{{ substr($row['created_at'], 0, 10) }}</td>
-                    <td>{{ $row['action'] }}</td>
-                    <td>{{ $row['user'] ?? ($row['agent']['name'] ?? '') }}</td>
-                    <td class="muted">{{ implode(', ', $row['changed']) }}</td>
+                    <td style="width: 80pt;">{{ $row['date'] }}</td>
+                    <td>{{ $row['sentence'] }}</td>
                 </tr>
             @endforeach
         </table>
@@ -91,11 +89,10 @@
                     <td style="text-align: right;">{{ $row['amount'] }}</td>
                 </tr>
             @endforeach
-            <tr><th colspan="2">{{ __('export.costs_total') }}</th><th style="text-align: right;">{{ $costs['total'] }}</th></tr>
+            @foreach ($costs['totals'] as $total)
+                <tr><th colspan="2">{{ __('export.costs_total') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['amount'] }}</th></tr>
+            @endforeach
         </table>
-        @if ($costs['foreign'])
-            <p class="muted">{{ __('export.costs_other_currencies') }}</p>
-        @endif
     @endif
 </body>
 </html>

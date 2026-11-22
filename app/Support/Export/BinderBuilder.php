@@ -44,7 +44,16 @@ use Throwable;
  * förälder (eller vars förälder ligger utanför omfånget) hamnar överst,
  * syskon efter namn. Har ett item flera föräldrar placeras det under den med
  * lägst id och dyker inte upp en gång till; en cykel bryts av den besökta
- * mängden.
+ * mängden, och items som bara nås via en cykel hamnar på översta nivån.
+ * Regeln är deterministisk och stabil.
+ *
+ * **Kostnader** summeras per valuta, aldrig omräknade ([[Items och
+ * organisation]] § cost): containerns huvudvaluta står först, övriga i
+ * bokstavsordning, och ingen rad lämnas utanför summan. Avrundningen sker vid
+ * presentationen, inte per rad.
+ *
+ * **Historiken** ritas som meningen ur `ui.audit.action.{åtgärd}` (issue 116),
+ * aldrig som den råa åtgärdskoden.
  *
  * **Sidnummer.** Varje del renderas för sig med dompdf så att dess sidantal
  * är känt; förteckningen renderas SIST (den behöver alla andra delars
@@ -63,7 +72,9 @@ use Throwable;
  * **Typsnittet är Helvetica**, en av PDF:ens inbyggda kärnfonter (windows-1252:
  * svenska och västeuropeiska tecken). Ett inbäddat Unicode-typsnitt (DejaVu)
  * kostar runt 35 MB mer per rendering, och det är skillnaden mellan att rymmas
- * i arbetarens 96 MB och inte; tecken utanför windows-1252 ritas inte.
+ * i arbetarens 96 MB och inte. **Pärmen har bara WinAnsi-tecken** (windows-1252):
+ * svenska och västeuropeiska tecken fungerar, andra tecken ersätts av
+ * typsnittet och fäller inte bygget. Unicode är en öppen fråga för 446.
  *
  * Ingen extern process och ingen webbläsare (ADR-0070): dompdf och FPDI är
  * ren PHP. Fjärrresurser är avstängda, dompdfs `chroot` är den egna
@@ -350,22 +361,28 @@ class BinderBuilder
         $history = [];
 
         if (in_array('history', $sections, true) && $requester !== null) {
-            $history = app(PresentAuditEvents::class)->handle(app(ListAuditEvents::class)->forItem($requester, $item));
+            $history = array_map(fn (array $row): array => [
+                'date' => substr($row['created_at'], 0, 10),
+                'sentence' => $this->sentence($row),
+            ], app(PresentAuditEvents::class)->handle(app(ListAuditEvents::class)->forItem($requester, $item)));
         }
 
-        $currency = $container->effectiveCurrency();
         $costs = null;
 
         if (in_array('costs', $sections, true)) {
-            $sum = 0;
-            $foreign = false;
+            $main = $container->effectiveCurrency();
+            $sums = [];
 
             foreach ($item->costs as $cost) {
-                if ($cost->currency === $currency) {
-                    $sum += (int) $cost->amount;
-                } else {
-                    $foreign = true;
-                }
+                $sums[$cost->currency] = ($sums[$cost->currency] ?? 0) + (int) $cost->amount;
+            }
+
+            uksort($sums, fn (string $x, string $y): int => [$x !== $main, $x] <=> [$y !== $main, $y]);
+
+            $totals = [];
+
+            foreach ($sums as $code => $sum) {
+                $totals[] = ['currency' => $code, 'amount' => MinorUnits::format($sum, $code).' '.$code];
             }
 
             $costs = [
@@ -375,8 +392,7 @@ class BinderBuilder
                     'supplier' => $c->supplier,
                     'amount' => MinorUnits::format((int) $c->amount, $c->currency).' '.$c->currency,
                 ])->all(),
-                'total' => MinorUnits::format($sum, $currency).' '.$currency,
-                'foreign' => $foreign,
+                'totals' => $totals,
             ];
         }
 
@@ -389,6 +405,29 @@ class BinderBuilder
             'relations' => $relations,
             'history' => $history,
             'costs' => $costs,
+        ]);
+    }
+
+    /**
+     * Historikradens mening ur `ui.audit.action.*`, med samma platshållare och
+     * ersättare som historikfliken.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function sentence(array $row): string
+    {
+        $user = $row['user'] ?? __('ui.audit.fallback.user');
+
+        if ($row['agent'] !== null) {
+            $user = $row['agent']['name'] === null
+                ? __('ui.history.row.actor_via_removed_agent', ['user' => $user])
+                : __('ui.history.row.actor_via_agent', ['user' => $user, 'agent' => $row['agent']['name']]);
+        }
+
+        return __('ui.audit.action.'.$row['action'], [
+            'user' => $user,
+            'item' => $row['item'] ?? __('ui.audit.fallback.item'),
+            'fields' => implode(', ', array_map(fn (string $f): string => __('ui.audit.field.'.$f), $row['changed'])),
         ]);
     }
 

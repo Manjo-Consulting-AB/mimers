@@ -36,6 +36,5 @@ return [
     'history' => 'History',
     'costs' => 'Costs',
     'costs_total' => 'Total',
-    'costs_other_currencies' => 'Costs in other currencies are listed but not included in the total.',
     'page_of' => 'Page :page of :total',
 ];

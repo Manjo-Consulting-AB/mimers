@@ -4,6 +4,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Jobs\BuildContainerExport;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Export;
@@ -312,7 +313,7 @@ it('options.sections styr vad som tas med och kostnader är av som förval', fun
     $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item' && $r[1]['item']->id === $item->id)[1];
     expect($data['sections'])->toContain('costs')
         ->and($data['costs']['rows'])->toHaveCount(1)
-        ->and($data['costs']['total'])->toContain('123');
+        ->and($data['costs']['totals'][0]['amount'])->toContain('123');
 
     // sections väljer: utan relations syns ingen relation, utan items inga items.
     $spion = parmSpion();
@@ -443,4 +444,36 @@ it('en markdown-bild i en anteckning ger inga bildbytes i pärmen', function () 
     expect($data['notesHtml'])->not->toContain('<img')
         ->and($export->status)->toBe(Export::STATUS_READY)
         ->and(parmText($disk->get($export->storage_path)))->not->toContain('/Subtype /Image');
+});
+
+it('kostnader summeras per valuta med huvudvalutan först och ingen rad utelämnas', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $main = $container->effectiveCurrency();
+    $andra = $main === 'EUR' ? 'USD' : 'EUR';
+
+    foreach ([[$andra, 500], [$main, 1000], [$main, 250]] as [$valuta, $belopp]) {
+        CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'amount' => $belopp, 'currency' => $valuta, 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    }
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
+    $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
+
+    expect(array_column($data['costs']['totals'], 'currency'))->toBe([$main, $andra]);
+});
+
+it('pärmens historik har den översatta meningen och inte åtgärdskoden', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    AuditLog::factory()->create(['action' => 'item.created', 'item_id' => $item->id, 'container_id' => $container->id, 'account_id' => $account->id, 'user_id' => $user->id]);
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user));
+    $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
+    $meningar = array_column($data['history'], 'sentence');
+
+    expect($meningar)->not->toBeEmpty()
+        ->and(implode(' ', $meningar))->toContain(__('ui.audit.action.item.created', ['user' => $user->name, 'item' => 'Prylen']))
+        ->and(implode(' ', $meningar))->not->toContain('item.created');
 });
