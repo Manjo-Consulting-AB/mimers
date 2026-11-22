@@ -166,6 +166,11 @@ function retry() {
     saveNow();
 }
 
+/*
+ * Fältet börjar tre rader högt (`rows="3"` och `min-h-[calc(3lh+…)]` i mallen)
+ * och växer med texten. Minsta höjden gör att `height = 'auto'` följt av
+ * `scrollHeight` aldrig krymper det under tre rader när text raderas.
+ */
 function fit() {
     const element = field.value;
 
@@ -341,10 +346,10 @@ onBeforeUnmount(() => {
                 id="item-notes"
                 ref="field"
                 :value="draft"
-                rows="1"
+                rows="3"
                 :placeholder="t('item.notes.placeholder')"
                 :aria-label="t('item.show.notes')"
-                class="block w-full resize-none overflow-hidden rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="block min-h-[calc(3lh+1rem+2px)] w-full resize-none overflow-hidden rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 @input="onInput"
                 @blur="onBlur"
                 @keydown="onFieldKeydown"
