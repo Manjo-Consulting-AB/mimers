@@ -824,7 +824,8 @@ it('redovisar en inbjudan till ett mjukraderat item med sitt namn', function () 
 /*
  * Beslut 5: formuläret är delningssidans inbjudningssektion, med samma grind
  * som åtkomsterna, och det ritas bara för den som får skriva. Nivåfältet är
- * 55a:s AccessLevelField, oförändrat — fyra nivåer, två synliga.
+ * 55a:s AccessLevelField — sedan issue 439 fyra likvärdiga val, och fältet
+ * självt prövas i DelningsvyTest.
  *
  * Sedan issue 1250 står sektionen direkt efter den enda listan, *People with
  * access*, och historiken ligger sist i ett hopfällt avsnitt. Det som prövas
@@ -873,6 +874,74 @@ it('ger varje inbjudan Edit och Revoke för den som får hantera', function () {
         // Kroppen bär nivån och, när fältet finns, agentnivån — aldrig
         // adressen eller omfånget.
         ->toContain('router.patch(url, body');
+});
+
+/*
+ * Klart när (issue 439): inbjudan frågar i ordningen e-post, *What can this
+ * person access?*, *What can this person do?*, AI-agenter — och hjälptexten
+ * under omfångsväljaren följer valet.
+ */
+it('ställer inbjudans frågor i ordning och följer omfånget med en hjälptext', function () {
+    $formular = File::get(resource_path('js/components/InvitationForm.vue'));
+    $en = require lang_path('en/ui.php');
+
+    $email = strpos($formular, 'id="invitation-email"');
+    $omfang = strpos($formular, 'id="invitation-item"');
+    $niva = strpos($formular, '<AccessLevelField');
+    $agent = strpos($formular, '<details');
+    $skicka = strpos($formular, 'type="submit"');
+
+    foreach (['e-post' => $email, 'omfång' => $omfang, 'nivå' => $niva, 'agent' => $agent, 'skicka' => $skicka] as $namn => $position) {
+        expect($position)->not->toBeFalse("{$namn} saknas i inbjudningsformuläret");
+    }
+
+    expect($email)->toBeLessThan($omfang)
+        ->and($omfang)->toBeLessThan($niva)
+        ->and($niva)->toBeLessThan($agent)
+        ->and($agent)->toBeLessThan($skicka);
+
+    // Hjälptexten följer valet: hela containern eller ett enskilt item.
+    expect($formular)->toContain("form.item === ''")
+        ->toContain("t('sharing.invitations.item_container_hint')")
+        ->toContain("t('sharing.invitations.item_hint')");
+
+    expect($en['sharing']['invitations']['item'])->toBe('What can this person access?')
+        ->and($en['sharing']['invitations']['item_container_hint'])->toBe('All items and information in this container.')
+        ->and($en['sharing']['invitations']['item_hint'])->toBe('The item and everything under it.');
+});
+
+/*
+ * Klart när (issue 439): agentfältet är hopfällt bakom *AI agent
+ * permissions* i både formuläret och inbjudningsraden, och fälls ut när ett
+ * agenttak redan är satt. Värdena och taket är oförändrade (issue 408).
+ */
+it('hopfäller agentfältet i inbjudan och fäller ut ett satt värde', function () {
+    $formular = File::get(resource_path('js/components/InvitationForm.vue'));
+    $rad = File::get(resource_path('js/components/InvitationRow.vue'));
+
+    foreach ([$formular, $rad] as $fil) {
+        expect($fil)->toContain("t('agents.access_field.summary')")
+            ->toContain("t('agents.access_field.label')")
+            ->toContain("t('agents.access_field.none')")
+            ->toContain("t('agents.access_field.hint')")
+            ->toContain('border-t border-border');
+    }
+
+    // Formuläret är alltid hopfällt från början — en ny inbjudan har inget tak.
+    expect($formular)->toContain('<details v-if="agentAccess"');
+
+    // Raden fäller ut ytan när inbjudan redan har en agentnivå — läget
+    // beräknas en gång, så att ett val av *No agent access* inte stänger
+    // ytan mitt under användarens hand.
+    expect($rad)->toContain('const agentOpen = (props.agentLevel ?? \'\') !== \'\'')
+        ->toContain(':open="agentOpen"');
+
+    // `:open` får inte bindas till den levande agentnivån.
+    expect($rad)->not->toContain(':open="agentLevel');
+
+    // Taket och värdena är oförändrade.
+    expect($formular)->toContain('props.levels.slice(0, props.levels.indexOf(form.level) + 1)')
+        ->and($rad)->toContain('props.levels.slice(0, props.levels.indexOf(level.value) + 1)');
 });
 
 /*

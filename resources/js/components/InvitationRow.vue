@@ -28,7 +28,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Agentnivån ritas bara när fältet finns** (issue 408): väljarens tak är
  * inbjudans egen nivå, och den följer med i PATCH-kroppen endast då. Utan
- * fältet är värdet alltid `null` på servern.
+ * fältet är värdet alltid `null` på servern. Sedan issue 439 står fältet
+ * hopfällt bakom *AI agent permissions* och efter nivåvalet, och fälls ut från
+ * början när inbjudan redan har en agentnivå.
  *
  * **Knapparna ritas bara med `can.manage`.** Det är presentation; grinden är
  * `manageAccess()` i ContainerInvitationController, och ett fryst ägarkonto
@@ -63,6 +65,15 @@ const agentLevel = ref(props.agentLevel ?? '');
 const pending = ref(false);
 const levelError = ref(null);
 const agentError = ref(null);
+
+/*
+ * Öppningsläget beräknas en gång vid monteringen, inte ur det levande värdet
+ * (issue 439). Ett satt värde fälls ut från början, men sedan äger
+ * webbläsaren tillståndet: bundet till `agentLevel` skulle ytan stängas mitt
+ * under en ändring, så snart användaren valde *No agent access*.
+ * Propen är `null` när ingen nivå är satt.
+ */
+const agentOpen = (props.agentLevel ?? '') !== '';
 
 /* Nivåerna upp till inbjudans valda nivå — taket är aldrig högre. */
 const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(level.value) + 1));
@@ -163,27 +174,42 @@ function save() {
                 :disabled="pending"
             />
 
-            <div v-if="agentAccess" class="flex flex-col gap-1">
-                <label :for="field('agent_level')" class="text-meta font-medium text-ink">
-                    {{ t('agents.access_field.label') }}
-                </label>
+            <!--
+                Agenttaket står hopfällt (issue 439), efter nivåvalet. Har
+                inbjudan redan en agentnivå fälls ytan ut från början, så att
+                ett satt värde inte göms.
+            -->
+            <details
+                v-if="agentAccess"
+                :open="agentOpen"
+                class="rounded-control border border-border bg-surface"
+            >
+                <summary class="flex min-h-11 cursor-pointer items-center px-3 text-body font-medium text-ink">
+                    {{ t('agents.access_field.summary') }}
+                </summary>
 
-                <UiSelect
-                    :id="field('agent_level')"
-                    v-model="agentLevel"
-                    :disabled="pending"
-                    class="self-start"
-                >
-                    <option value="">{{ t('agents.access_field.none') }}</option>
-                    <option v-for="niva in agentLevels" :key="niva" :value="niva">
-                        {{ t(`sharing.level.${niva}.label`) }}
-                    </option>
-                </UiSelect>
+                <div class="flex flex-col gap-1 border-t border-border p-3">
+                    <label :for="field('agent_level')" class="text-meta font-medium text-ink">
+                        {{ t('agents.access_field.label') }}
+                    </label>
 
-                <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
+                    <UiSelect
+                        :id="field('agent_level')"
+                        v-model="agentLevel"
+                        :disabled="pending"
+                        class="self-start"
+                    >
+                        <option value="">{{ t('agents.access_field.none') }}</option>
+                        <option v-for="niva in agentLevels" :key="niva" :value="niva">
+                            {{ t(`sharing.level.${niva}.label`) }}
+                        </option>
+                    </UiSelect>
 
-                <p v-if="agentError" role="alert" class="text-body text-danger">{{ agentError }}</p>
-            </div>
+                    <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
+
+                    <p v-if="agentError" role="alert" class="text-body text-danger">{{ agentError }}</p>
+                </div>
+            </details>
 
             <div class="flex flex-wrap items-center gap-3">
                 <UiButton type="submit" :pending="pending">

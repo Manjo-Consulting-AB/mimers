@@ -11,12 +11,15 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * Inbjudningsformuläret, se issue 55b § Beslut 5, 6 och 8.
  *
- * **Tre fält och inget fjärde.** `email` är en adress och ingenting mer: ingen
- * kontroll av om den redan har ett konto, och ingen ledtråd åt något håll —
- * svaret ska vara detsamma oavsett. Det är hela skälet till att webben bjuder
- * in i stället för att bevilja direkt (55a § Beslut 2). `level` är
- * AccessLevelField från 55a, oförändrad. `item` är omfånget: hela containern
- * (förvalt) eller ett enskilt item ur listan kontrollern skickar.
+ * **Tre frågor i läsordning** (issue 439): `email` är en adress och ingenting
+ * mer — ingen kontroll av om den redan har ett konto, och ingen ledtråd åt
+ * något håll, för svaret ska vara detsamma oavsett. Det är hela skälet till
+ * att webben bjuder in i stället för att bevilja direkt (55a § Beslut 2).
+ * Sedan följer omfånget (`item`: hela containern, förvalt, eller ett enskilt
+ * item ur listan kontrollern skickar), nivån (AccessLevelField) och sist
+ * agenttaket hopfällt bakom *AI agent permissions*. Frågan om VAD personen
+ * når ställs före frågan om VAD hon får göra; den som väljer item först ser
+ * då att nivån gäller det itemet.
  *
  * **`item` skickas som `null` när hela containern valts.** Den delade
  * StoreInvitationRequest är `nullable` på fältet, och en tom sträng är
@@ -52,6 +55,11 @@ const form = useForm({
 
 /* Nivåerna upp till inbjudans egen — aldrig högre (issue 408). */
 const agentLevels = computed(() => props.levels.slice(0, props.levels.indexOf(form.level) + 1));
+
+/* Hjälptexten under omfångsväljaren följer valet (issue 439). */
+const scopeHint = computed(() => form.item === ''
+    ? t('sharing.invitations.item_container_hint')
+    : t('sharing.invitations.item_hint'));
 
 watch(() => form.level, () => {
     if (form.agent_level !== '' && ! agentLevels.value.includes(form.agent_level)) {
@@ -107,13 +115,6 @@ function submit() {
             />
         </FormField>
 
-        <AccessLevelField
-            v-model="form.level"
-            id="invitation-level"
-            :levels="levels"
-            :error="form.errors.level"
-        />
-
         <FormField
             v-slot="{ describedBy }"
             :label="t('sharing.invitations.item')"
@@ -130,27 +131,42 @@ function submit() {
                 <option value="">{{ t('sharing.invitations.item_container') }}</option>
                 <option v-for="item in items" :key="item.ulid" :value="item.ulid">{{ item.name }}</option>
             </UiSelect>
+            <p class="text-meta text-ink-muted">{{ scopeHint }}</p>
         </FormField>
 
-        <FormField
-            v-if="agentAccess"
-            v-slot="{ describedBy }"
-            :label="t('agents.access_field.label')"
-            id="invitation-agent-level"
-            :error="form.errors.agent_level"
-        >
-            <UiSelect
-                id="invitation-agent-level"
-                v-model="form.agent_level"
-                :described-by="describedBy"
-                name="agent_level"
-                class="self-start"
-            >
-                <option value="">{{ t('agents.access_field.none') }}</option>
-                <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
-            </UiSelect>
-            <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
-        </FormField>
+        <AccessLevelField
+            v-model="form.level"
+            id="invitation-level"
+            :levels="levels"
+            :error="form.errors.level"
+        />
+
+        <details v-if="agentAccess" class="rounded-control border border-border bg-surface">
+            <summary class="flex min-h-11 cursor-pointer items-center px-3 text-body font-medium text-ink">
+                {{ t('agents.access_field.summary') }}
+            </summary>
+
+            <div class="border-t border-border p-3">
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('agents.access_field.label')"
+                    id="invitation-agent-level"
+                    :error="form.errors.agent_level"
+                >
+                    <UiSelect
+                        id="invitation-agent-level"
+                        v-model="form.agent_level"
+                        :described-by="describedBy"
+                        name="agent_level"
+                        class="self-start"
+                    >
+                        <option value="">{{ t('agents.access_field.none') }}</option>
+                        <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
+                    </UiSelect>
+                    <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
+                </FormField>
+            </div>
+        </details>
 
         <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ form.processing ? t('common.pending.default') : t('sharing.invitations.submit') }}
