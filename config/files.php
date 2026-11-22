@@ -142,4 +142,19 @@ return [
 
     'export_retention_days' => (int) env('EXPORT_RETENTION_DAYS', 7),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pärmens tak för sammanslagna bilagor
+    |--------------------------------------------------------------------------
+    |
+    | Tillsammans högst så många byte bilagor som slås ihop i en PDF-pärm
+    | (`options.attachment_mode = merge`, [[ADR-0091 PDF-pärmen]]). Bilagor
+    | över taket står som länkar med en rad om det; pärmen misslyckas aldrig
+    | för att taket nåddes. Pärmen byggs i arbetaren, och 50 MB är vad den
+    | rymmer med minnet i ADR-0031.
+    |
+    */
+
+    'binder_merge_bytes' => (int) env('FILES_BINDER_MERGE_BYTES', 50 * 1024 * 1024),
+
 ];

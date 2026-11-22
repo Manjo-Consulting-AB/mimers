@@ -36,5 +36,8 @@ return [
     'history' => 'History',
     'costs' => 'Costs',
     'costs_total' => 'Total',
+    'attachment_link_access' => 'The links open in Mimers and need access to the container.',
+    'attachment_unmerged' => 'Could not be merged — opened from Mimers',
+    'attachment_over_cap' => 'Not merged — the size limit for merged attachments was reached; opened from Mimers',
     'page_of' => 'Page :page of :total',
 ];

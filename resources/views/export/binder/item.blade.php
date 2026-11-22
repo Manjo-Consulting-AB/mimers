@@ -94,5 +94,19 @@
             @endforeach
         </table>
     @endif
+
+    @if (count($attachments) > 0)
+        <h2 class="sub">{{ __('export.attachments') }}</h2>
+        <table>
+            @foreach ($attachments as $attachment)
+                <tr>
+                    <td><a href="{{ $attachment['url'] }}">{{ $attachment['filename'] }}</a>@if ($attachment['note'] !== null)<br><span class="muted">{{ $attachment['note'] }}</span>@endif</td>
+                    <td style="width: 90pt;">{{ $attachment['type'] }}</td>
+                    <td style="width: 50pt; text-align: right;">{{ $attachment['size'] }}</td>
+                </tr>
+            @endforeach
+        </table>
+        <p class="muted">{{ __('export.attachment_link_access') }}</p>
+    @endif
 </body>
 </html>
