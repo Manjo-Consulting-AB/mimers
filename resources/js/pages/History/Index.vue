@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import ActiveItemsPanel from '../../components/ActiveItemsPanel.vue';
 import ActivityTimeChart from '../../components/ActivityTimeChart.vue';
 import ActivityTypeChart from '../../components/ActivityTypeChart.vue';
@@ -22,9 +23,16 @@ defineOptions({ layout: AppLayout });
  * Desktopdesignen]] § 17), och ritas därför som
  * resources/js/pages/Containers/History.vue — samma rubrik, samma filterfält,
  * samma dagar och samma tre diagram. Skillnaden är ramen: fliken ligger i
- * ContainerLayout och bär containerhjälten, den här sidan ligger i AppLayout
- * och har ingen hjälte (Beslut 2). Historiken är ingen container, och en hjälte
- * hade påstått att den var det.
+ * ContainerLayout och bär containerhjälten, den här sidan ligger i AppLayout.
+ *
+ * **Sidan bär dashboardens hjälte sedan 2026-11-22** ([[ADR-0090
+ * Dashboardens hjälte]] § Tillägg 2026-11-22): samma band, bild, brickor och
+ * donut som på de andra toppnivåsidorna, med *History* som rubrik. Det
+ * tidigare beslutet att den globala historiken inte skulle ha någon hjälte
+ * (issue 272 · Beslut 2) gäller inte längre, och inte heller motiveringen
+ * bakom det — att en hjälte hade påstått att historiken var en container.
+ * Hjälten är dashboardens, inte containerns, och rubriken säger vilken sida
+ * man står på.
  *
  * **Dagarna kommer färdiga och vyn räknar aldrig om en tidpunkt till en dag**
  * (issue 179 § Beslut 3). Proppen `days` är `[{date, rows}]`, och `date` är
@@ -172,7 +180,10 @@ function dayLabel(date) {
 <template>
     <Head :title="t('history.title')" />
 
-    <h1 class="text-heading font-semibold text-ink">{{ t('history.heading') }}</h1>
+    <AppHero
+        :heading="t('history.heading')"
+        :subtitle="t('hero.subtitle.history')"
+    />
 
     <!--
         Sidans egen adress i `url` (Beslut 4): den globala historiken har

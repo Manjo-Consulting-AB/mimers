@@ -93,32 +93,36 @@ it('beroendefelet nämner ingen container', function () {
  * Klart när: `sorteringen står i rubrikraden på documents` (Beslut 3).
  *
  * Sorteringen stod i en egen rad ovanför tabellen och sköt ned kortet, så att
- * det och filterkolumnen inte började på samma linje över `lg:`. Nu står den i
- * rubrikraden: `id="documents-sort"` kommer FÖRE filterkolumnen i mallen, och
- * etiketten följde med flytten.
+ * det och filterkolumnen inte började på samma linje över `lg:`. Sedan issue
+ * 437 ritas rubriken av `AppHero`, så rubrikraden finns inte längre; väljaren
+ * står i en rad under bandet men fortfarande FÖRE filterkolumnen, alltså
+ * ovanför kortet, och etiketten följde med.
  */
-it('sorteringen står i rubrikraden på documents', function () {
+it('sorteringen står under hjälten och före filterkolumnen på documents', function () {
     $sida = treSmåRättelserKod('pages/Documents/Index.vue');
 
+    $hjalte = (int) strpos($sida, '<AppHero');
     $sortering = (int) strpos($sida, 'id="documents-sort"');
     $kolumn = (int) strpos($sida, '<DocumentScopeFilterColumn');
 
-    expect($sortering)->toBeGreaterThan(0);
-    expect($kolumn)->toBeGreaterThan(0);
-    expect($sortering)->toBeLessThan($kolumn);
+    expect($hjalte)->toBeGreaterThan(0);
+    expect($sortering)->toBeGreaterThan($hjalte);
+    expect($kolumn)->toBeGreaterThan($sortering);
 
-    // Väljaren har fortfarande sitt namn: etiketten är `sr-only` och rubriken
-    // och sorteringen delar rad, kontrollen till höger.
+    // Väljaren har fortfarande sitt namn: etiketten är `sr-only` och står i
+    // samma rad som väljaren.
     expect($sida)->toContain('<label for="documents-sort"');
-    expect($sida)->toContain('justify-between');
 });
 
 /*
- * Andra halvan av samma punkt: verktygsraden ovanför tabellen är borta.
+ * Andra halvan av samma punkt: sorteringen står kvar ovanför listan.
  *
- * `justify-end` hörde till raden som sköt ned kortet; finns den kvar står
- * sorteringen kvar där, hur mallen än ser ut i övrigt.
+ * Raden den delade med `<h1>` är borta, men väljaren får inte ha flyttat ned
+ * under kortet — då hade den skjutit ned listan i stället.
  */
-it('sorteringen står inte kvar i en egen rad', function () {
-    expect(treSmåRättelserKod('pages/Documents/Index.vue'))->not->toContain('justify-end');
+it('sorteringen står kvar ovanför listan', function () {
+    $sida = treSmåRättelserKod('pages/Documents/Index.vue');
+
+    expect((int) strpos($sida, 'id="documents-sort"'))
+        ->toBeLessThan((int) strpos($sida, 'attachments.data.length'));
 });

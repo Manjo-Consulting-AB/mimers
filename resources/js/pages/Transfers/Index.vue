@@ -1,6 +1,7 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import IncomingTransferCard from '../../components/IncomingTransferCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -51,8 +52,10 @@ const page = usePage();
 <template>
     <Head :title="t('transfer.inbox.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('transfer.inbox.heading') }}</h1>
-    <p class="mt-2 text-sm text-slate-700">{{ t('transfer.inbox.intro') }}</p>
+    <AppHero
+        :heading="t('transfer.inbox.heading')"
+        :subtitle="t('hero.subtitle.transfers')"
+    />
 
     <!--
         Meningen formulerades på servern ur `lang/` av

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
@@ -97,9 +98,18 @@ const isShared = (container) => accountName(container) === null;
 <template>
     <Head :title="t('container.index.title')" />
 
-    <div class="flex items-center justify-between gap-4">
-        <h1 class="text-2xl font-semibold">{{ t('container.index.heading') }}</h1>
+    <!--
+        Hjälten (issue 437 · [[ADR-0090 Dashboardens hjälte]] § Tillägg
+        2026-11-22) bär rubriken. *Add container* stod tidigare bredvid `<h1>`;
+        den står kvar som sidans handling, nu under bandet, eftersom hjälten
+        är en hel bredd och inte en rad i en rubrikrad.
+    -->
+    <AppHero
+        :heading="t('container.index.heading')"
+        :subtitle="t('hero.subtitle.containers')"
+    />
 
+    <div class="mt-4 flex justify-end">
         <Link href="/containers/create" class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 text-sm font-medium text-white">
             {{ t('container.index.create') }}
         </Link>

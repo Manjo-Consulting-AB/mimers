@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import FormField from '../../components/FormField.vue';
 import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import UiButton from '../../components/UiButton.vue';
@@ -452,8 +453,10 @@ function destroySelected() {
 <template>
     <Head :title="t('inbox.page.title')" />
 
-    <h1 class="text-2xl font-semibold text-ink">{{ t('inbox.page.heading') }}</h1>
-    <p class="mt-1 text-body text-ink-muted">{{ t('inbox.page.tagline') }}</p>
+    <AppHero
+        :heading="t('inbox.page.heading')"
+        :subtitle="t('hero.subtitle.inbox')"
+    />
 
     <!--
         Fångstkortet (Beslut 2): två halvor, åtskilda av en lodrät linje

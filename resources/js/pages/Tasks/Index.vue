@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskFilterBar from '../../components/TaskFilterBar.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
@@ -230,26 +231,30 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
 <template>
     <Head :title="t('todo.title')" />
 
-    <!-- Rubrikraden bär växeln (issue 134) och *New task* (M27 · issue
-         246): frågan "vilka uppgifter ska listan visa?" ställs där listan
-         står, och svaret gäller både den här sidan och dashboardens panel.
-         Knappen ritas alltid — inboxen är alltid ett möjligt mål (Beslut
-         2). -->
-    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
+    <!--
+        Hjälten (issue 437 · [[ADR-0090 Dashboardens hjälte]] § Tillägg
+        2026-11-22) bär rubriken. Växeln (issue 134) och *New task* (M27 ·
+        issue 246) stod tidigare bredvid `<h1>`; frågan "vilka uppgifter ska
+        listan visa?" ställs fortfarande där listan står, nu under bandet, och
+        svaret gäller både den här sidan och dashboardens panel. Knappen ritas
+        alltid — inboxen är alltid ett möjligt mål (Beslut 2).
+    -->
+    <AppHero
+        :heading="t('todo.heading')"
+        :subtitle="t('hero.subtitle.tasks')"
+    />
 
-        <div class="flex flex-wrap items-center gap-2">
-            <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+    <div class="mt-4 flex flex-wrap items-center justify-end gap-2">
+        <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
 
-            <Link
-                :href="createUrl"
-                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            >
-                <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
+        <Link
+            :href="createUrl"
+            class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        >
+            <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
 
-                {{ t('todo.new') }}
-            </Link>
-        </div>
+            {{ t('todo.new') }}
+        </Link>
     </div>
 
     <!--

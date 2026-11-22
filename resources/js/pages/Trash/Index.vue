@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import AppHero from '../../components/AppHero.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
@@ -398,7 +399,10 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="t('trash.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
+    <AppHero
+        :heading="t('trash.heading')"
+        :subtitle="t('hero.subtitle.trash')"
+    />
     <p class="mt-1 text-sm text-ink-muted">{{ t('trash.overview.description') }}</p>
 
     <p

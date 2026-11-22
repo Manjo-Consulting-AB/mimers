@@ -518,12 +518,14 @@ it('Lang::has transfer_requested är sant för både sv och en', function () {
 
 /*
  * Klart när: meningen om e-posten står inte längre på sidan för inkommande
- * överlåtelser (M69 fynd 2026-11-21). Första meningen står kvar — sidan
- * säger fortfarande vad listan är.
+ * överlåtelser (M69 fynd 2026-11-21). Enligt ADR-0090 tillägget 2026-11-22
+ * bär hjälten sidans enda beskrivande mening, så den gamla introraden finns
+ * inte kvar alls.
  */
 it('säger inte längre att överlåtelserna hittas via e-posten', function () {
     $en = require lang_path('en/ui.php');
 
-    expect($en['transfer']['inbox']['intro'])
-        ->toBe('Containers someone wants to hand over to you.');
+    expect($en['hero']['subtitle']['transfers'])
+        ->toBe('Ownership transfers waiting for your answer.');
+    expect($en['transfer']['inbox'])->not->toHaveKey('intro');
 });
