@@ -198,11 +198,13 @@ it('ritar ramen, textspalten och sifferraden som dashboarden gjorde', function (
 /*
  * Klart när: "hämtar den med en partiell omladdning (`only: ['heroFigures']`)
  * när den monteras och proppen saknas" — och att raden tar samma plats medan
- * den hämtas.
+ * den hämtas, också för ett konto utan kostnader.
  *
  * Dashboarden skickar `stats` och `costs` som proppar, så hjälten har talen
  * redan och frågar aldrig. Skelettet ritar tre taltutor och en ring på 160 px,
- * alltså samma mått som den fyllda raden.
+ * alltså samma mått som den fyllda raden. Golvet på raden är kortets egen
+ * höjd, så att en fylld rad utan kostnadskort inte är lägre än skelettet:
+ * annars krympte ramen när talen kom (granskningsfynd 2026-11-22).
  */
 it('hämtar siffrorna bara när de saknas och reserverar radens plats', function () {
     $hjalten = apphjalteUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
@@ -211,6 +213,19 @@ it('hämtar siffrorna bara när de saknas och reserverar radens plats', function
         ->toContain('if (! loaded.value)')
         ->toContain('v-if="!loaded"')
         ->toContain('h-40 w-40');
+
+    // Omladdningen sker i `onMounted`, alltså på montering — inte på varje
+    // rendering. Kroppen läses ut för sig så att en sträng någon annanstans i
+    // filen inte kan nöja provet.
+    preg_match('/onMounted\(\(\) => \{(.*?)\n\}\);/s', $hjalten, $montering);
+
+    expect($montering)->toHaveCount(2, 'AppHero hämtar inte siffrorna i onMounted');
+    expect($montering[1])->toContain("router.reload({ only: ['heroFigures'] })")
+        ->toContain('if (! loaded.value)');
+
+    // Raden har kortets höjd som golv — både fylld och tom — så att hjälten
+    // står stilla också när kontot saknar kostnadsrader.
+    expect($hjalten)->toContain('md:min-h-[194.5px]');
 
     // Hjälten tar sidans egna tal först — dashboarden gör därför ingen
     // begäran.

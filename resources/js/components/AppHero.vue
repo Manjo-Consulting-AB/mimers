@@ -32,6 +32,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Medan svaret är på väg ritas ett skelett med samma mått som den fyllda
  * raden, så att hjälten inte ändrar höjd.
  *
+ * **Sifferraden har ett fast golv: kostnadskortets höjd.** Ett konto utan
+ * kostnadsrader ritar inget kort, och då består raden bara av brickorna.
+ * Utan ett golv hade ramen krympt när `heroFigures` kom — skelettet
+ * reserverar donuten, men den fyllda raden hade inte gjort det. Klassen
+ * `md:min-h-[194.5px]` är kortets egen höjd: rubriken (15 px × 1,5 =
+ * 22,5 px) + `mt-3` (12 px) + ringen (`h-40`, 160 px). Raden är därför lika
+ * hög fylld som tom, och en dashboard utan kostnader ritar samma hjälte som
+ * en med. Ändras `text-title` eller ringens mått ändras talet med dem — det
+ * är priset för att höjden ska stå stilla.
+ *
  * **Under `md:` är hjälten det låga bandet** (ADR-0090 § 6): hälsningen och
  * rubriken står kvar inne i bilden, undertiteln och sifferraden är dolda. Bara
  * `Dashboard.vue` ritar brickorna och donuten under bandet; de andra sidorna
@@ -115,8 +125,10 @@ onMounted(() => {
             Sifferraden: brickorna till vänster och kostnadskortet med donuten
             till höger, som på dashboarden. Finns inga kostnader ritas inget
             kort, och brickorna fyller raden — de är då radens enda barn.
+            `md:min-h-[194.5px]` håller raden på kostnadskortets höjd också
+            när kortet saknas, så att ramen inte krymper när talen kommer.
         -->
-        <div class="mt-2 hidden flex-wrap items-start gap-8 md:flex">
+        <div class="mt-2 hidden flex-wrap items-start gap-8 md:min-h-[194.5px] md:flex">
             <DashboardStats
                 v-if="loaded"
                 class="md:flex-1"
