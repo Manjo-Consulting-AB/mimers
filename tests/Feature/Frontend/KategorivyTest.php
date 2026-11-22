@@ -1128,3 +1128,36 @@ it('synkar position och förälder till formuläret när propparna ändras, men 
     // En omladdning som inte ändrade något rör inte heller ett osparat fält.
     expect($rad)->toContain('nu.position === forra.position && nu.parent === forra.parent');
 });
+
+/*
+ * Issue 1510: ringen kräver hover-läget och dragbilden är hela raden.
+ */
+it('ritar ringen bara över raden under markören och drar hela raden', function () {
+    $rad = file_get_contents(base_path('resources/js/components/CategoryRow.vue'));
+    $sida = file_get_contents(base_path('resources/js/pages/Containers/Categories.vue'));
+
+    // Ringen kräver både giltigt mål och hover.
+    expect($rad)->toContain('isDropTarget.value && hovered.value')
+        ->toContain("'ring-2 ring-blue-600': showRing")
+        ->toContain('@dragenter="onDragEnter"')
+        ->toContain('@dragleave="onDragLeave"')
+        ->toContain("'opacity-50': isDragged");
+
+    // Dragbilden är radens rot-div.
+    expect($rad)->toContain('ref="rowElement"')
+        ->toContain('setDragImage(')
+        ->toContain('rowElement.value,')
+        ->toContain('event.clientX - box.left')
+        ->toContain('event.clientY - box.top')
+        ->toContain('setTimeout(() => emit(\'dragstart\'')
+        ->toContain('hoverDepth.value = Math.max(0, hoverDepth.value - 1)')
+        ->toContain('watch(() => props.draggingUlid')
+        ->toContain('@dragend="onDragEnd"');
+    expect(substr_count($rad, 'hoverDepth.value = 0;'))->toBeGreaterThanOrEqual(3);
+
+    // Top level: ring bara vid hover.
+    expect($sida)->toContain("'ring-2 ring-blue-600': topLevelDepth > 0")
+        ->toContain('@dragenter="topLevelDepth += 1"')
+        ->toContain('@dragleave="topLevelDepth = Math.max(0, topLevelDepth - 1)"');
+    expect(substr_count($sida, 'topLevelDepth.value = 0;'))->toBe(2);
+});

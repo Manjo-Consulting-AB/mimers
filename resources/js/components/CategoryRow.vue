@@ -85,6 +85,15 @@ const props = defineProps({
 
 const emit = defineEmits(['delete', 'dragstart', 'dragend', 'drop', 'submit']);
 
+/* Radens rot-`div`: dragbilden är hela raden, inte bara handtaget. */
+const rowElement = ref(null);
+
+/* Antalet dragenter utan motsvarande dragleave. Enter/leave avfyras också när
+   markören går in i och ut ur radens barnelement, så en räknare — inte en
+   boolean — säger om markören fortfarande är över raden. */
+const hoverDepth = ref(0);
+const hovered = computed(() => hoverDepth.value > 0);
+
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 const page = usePage();
@@ -100,6 +109,19 @@ const isDropTarget = computed(
     () => props.draggingUlid !== null
         && canDropOn(props.categories, props.draggingUlid, props.category.ulid),
 );
+
+/* Ringen ritas bara på raden under markören, inte på alla giltiga mål. */
+const showRing = computed(() => isDropTarget.value && hovered.value);
+
+/* Raden som dras dämpas på sin plats. */
+const isDragged = computed(() => props.draggingUlid === props.category.ulid);
+
+/* Ett drag som tar slut — var det än släpptes — nollställer hover-läget. */
+watch(() => props.draggingUlid, (ulid) => {
+    if (ulid === null) {
+        hoverDepth.value = 0;
+    }
+});
 
 /* Talen för DEN HÄR raden. Saknas raden i uppslaget finns inget att varna för. */
 const tally = computed(() => props.counts[props.category.ulid] ?? { subcategories: 0, items: 0 });
@@ -199,7 +221,33 @@ function onDragStart(event) {
         event.dataTransfer.effectAllowed = 'move';
     }
 
-    emit('dragstart', props.category.ulid);
+    /* Hela raden följer markören; x/y är markörens läge inom raden. */
+    if (event.dataTransfer !== null && rowElement.value !== null) {
+        const box = rowElement.value.getBoundingClientRect();
+
+        event.dataTransfer.setDragImage(
+            rowElement.value,
+            event.clientX - box.left,
+            event.clientY - box.top,
+        );
+    }
+
+    /* Efter att webbläsaren tagit dragbilden: sätts dämpningen synkront ritar
+       Vue om före bilden och den hade blivit genomskinlig. */
+    setTimeout(() => emit('dragstart', props.category.ulid), 0);
+}
+
+function onDragEnd() {
+    hoverDepth.value = 0;
+    emit('dragend');
+}
+
+function onDragEnter() {
+    hoverDepth.value += 1;
+}
+
+function onDragLeave() {
+    hoverDepth.value = Math.max(0, hoverDepth.value - 1);
 }
 
 function onDragOver(event) {
@@ -215,6 +263,8 @@ function onDragOver(event) {
 }
 
 function onDrop(event) {
+    hoverDepth.value = 0;
+
     if (! isDropTarget.value) {
         return;
     }
@@ -226,8 +276,11 @@ function onDrop(event) {
 
 <template>
     <div
+        ref="rowElement"
         class="flex flex-col gap-3 rounded border border-slate-300 bg-white p-4"
-        :class="{ 'ring-2 ring-blue-600': isDropTarget }"
+        :class="{ 'ring-2 ring-blue-600': showRing, 'opacity-50': isDragged }"
+        @dragenter="onDragEnter"
+        @dragleave="onDragLeave"
         @dragover="onDragOver"
         @drop="onDrop"
     >
@@ -241,7 +294,7 @@ function onDrop(event) {
                 class="hidden min-h-11 cursor-grab items-center px-1 text-slate-400 md:flex"
                 :title="t('container.categories.drag')"
                 @dragstart="onDragStart"
-                @dragend="emit('dragend')"
+                @dragend="onDragEnd"
             >⠿</span>
 
             <FormField
