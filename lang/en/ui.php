@@ -30,14 +30,19 @@ return [
     ],
 
     /*
-     * The shared hero's subtitles, se issue 437 · [[ADR-0090 Dashboardens
-     * hjälte]] § Tillägg 2026-11-22. Every top-level page without a hero of
-     * its own draws AppHero, and only the heading and the subtitle differ: the
-     * heading keeps the page's existing key (`container.index.heading` and so
-     * on), and the subtitle lives here so that one file lists the whole row of
-     * pages. The dashboard keeps `dashboard.hero.subtitle`.
+     * The shared hero's headings and subtitles, se issue 437 och 438 ·
+     * [[ADR-0090 Dashboardens hjälte]] § Tillägg 2026-11-22. Every top-level
+     * page without a hero of its own draws AppHero, and only the heading and
+     * the subtitle differ: a page keeps its existing heading key
+     * (`container.index.heading` and so on), except the settings pages, which
+     * share the layout's *Settings*. The subtitle lives here so that one file
+     * lists the whole row of pages. The dashboard keeps
+     * `dashboard.hero.subtitle`.
      */
     'hero' => [
+        'heading' => [
+            'settings' => 'Settings',
+        ],
         'subtitle' => [
             'containers' => 'All your containers in one place.',
             'containers_create' => 'Set up a new container for your things.',
@@ -50,6 +55,7 @@ return [
             'trash' => 'Deleted things, waiting to be restored or removed for good.',
             'notifications' => 'What has happened that concerns you.',
             'transfers' => 'Ownership transfers waiting for your answer.',
+            'settings' => 'Your profile, plan and preferences.',
         ],
     ],
 

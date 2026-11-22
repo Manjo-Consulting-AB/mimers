@@ -28,7 +28,7 @@ const { eventDate } = useRelativeDate();
 <template>
     <Head :title="t('agents.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('agents.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('agents.heading') }}</h2>
     <p class="mt-2 text-sm text-slate-700">{{ t('agents.intro') }}</p>
 
     <section v-if="agents.length === 0" class="mt-6 rounded border border-slate-300 p-4 text-sm">

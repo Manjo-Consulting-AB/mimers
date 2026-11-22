@@ -97,7 +97,7 @@ function selectAccount(event) {
 <template>
     <Head :title="t('webhook.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('webhook.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('webhook.heading') }}</h2>
     <p class="mt-2 text-sm text-slate-700">{{ t('webhook.intro') }}</p>
 
     <!-- Väljaren ritas bara när det finns något att välja mellan: ett
@@ -135,7 +135,7 @@ function selectAccount(event) {
     />
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('webhook.create_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('webhook.create_heading') }}</h3>
 
         <WebhookEndpointForm
             class="mt-2"
@@ -145,7 +145,7 @@ function selectAccount(event) {
     </section>
 
     <section class="mt-10">
-        <h2 class="text-lg font-semibold">{{ t('webhook.list_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('webhook.list_heading') }}</h3>
 
         <p v-if="props.endpoints.length === 0" class="mt-2 text-sm text-slate-700">
             {{ t('webhook.empty') }}

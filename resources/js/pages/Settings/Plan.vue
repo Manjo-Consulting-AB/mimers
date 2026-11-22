@@ -103,7 +103,7 @@ function graceLabel(days) {
 <template>
     <Head :title="t('plan.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('plan.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('plan.heading') }}</h2>
     <p class="mt-2 text-sm text-slate-700">{{ t('plan.intro') }}</p>
 
     <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
@@ -136,7 +136,7 @@ function graceLabel(days) {
     </section>
 
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
-        <h2 class="text-lg font-semibold">{{ t('plan.current_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('plan.current_heading') }}</h3>
 
         <dl class="mt-4 flex flex-col gap-1 text-sm">
             <div class="flex flex-col gap-1 md:flex-row md:gap-2">
@@ -155,7 +155,7 @@ function graceLabel(days) {
     </section>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('plan.usage_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('plan.usage_heading') }}</h3>
 
         <dl class="mt-4 flex flex-col gap-4 text-sm">
             <div>
@@ -212,7 +212,7 @@ function graceLabel(days) {
     </section>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('plan.features_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('plan.features_heading') }}</h3>
 
         <dl class="mt-4 flex flex-col gap-2 text-sm">
             <div
@@ -232,7 +232,7 @@ function graceLabel(days) {
          och brödtexten efter sig; sista steget har bara en titel. Ingen nyckel
          bär markup: `<strong>` är titelns plats i mallen. -->
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
-        <h2 class="text-lg font-semibold">{{ t('plan.downgrade.heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('plan.downgrade.heading') }}</h3>
         <p class="mt-3 text-base font-semibold text-slate-900">{{ t('plan.downgrade.lead') }}</p>
         <p class="mt-2 text-sm text-slate-700">{{ t('plan.downgrade.intro') }}</p>
 

@@ -702,8 +702,12 @@ it('ger varje sida exakt en h1', function () {
     // Dashboarden flyttade sin `<h1>` till hjälten i issue 435
     // ([[ADR-0090 Dashboardens hjälte]] § 1), och sedan issue 437 ritar
     // `AppHero` rubriken åt dashboarden och de elva toppnivåsidorna. Sidorna
-    // ritar den inte själva. Undantagen är namngivna och räknar komponentens
-    // rubrik MED sidans, så att en förlorad rubrik fortfarande fälls.
+    // ritar den inte själva. Sedan issue 438 ritar `SettingsLayout` hjälten
+    // åt de nio inställningssidorna, och där bor `<h1>` i sin tur i `AppHero`
+    // — att layouten verkligen ritar den prövas i InstallningshjalteTest.
+    // Sidornas egen rubrik är en `<h2>`. Undantagen är namngivna och räknar
+    // komponentens rubrik MED sidans, så att en förlorad rubrik fortfarande
+    // fälls.
     $rubrikenIDeladKomponent = [
         'pages/Dashboard.vue' => 'components/AppHero.vue',
         'pages/Containers/Index.vue' => 'components/AppHero.vue',
@@ -717,6 +721,15 @@ it('ger varje sida exakt en h1', function () {
         'pages/Trash/Index.vue' => 'components/AppHero.vue',
         'pages/Notifications/Index.vue' => 'components/AppHero.vue',
         'pages/Transfers/Index.vue' => 'components/AppHero.vue',
+        'pages/Settings/Profile.vue' => 'components/AppHero.vue',
+        'pages/Settings/Security.vue' => 'components/AppHero.vue',
+        'pages/Settings/Plan.vue' => 'components/AppHero.vue',
+        'pages/Settings/Storage.vue' => 'components/AppHero.vue',
+        'pages/Settings/Notifications.vue' => 'components/AppHero.vue',
+        'pages/Settings/Agents.vue' => 'components/AppHero.vue',
+        'pages/Settings/AgentShow.vue' => 'components/AppHero.vue',
+        'pages/Settings/Webhooks.vue' => 'components/AppHero.vue',
+        'pages/Settings/Templates.vue' => 'components/AppHero.vue',
     ];
 
     $sidor = genomgangSidor();

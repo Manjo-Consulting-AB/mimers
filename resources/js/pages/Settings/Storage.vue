@@ -161,7 +161,7 @@ function saveVersioning(value) {
 <template>
     <Head :title="t('storage.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('storage.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('storage.heading') }}</h2>
     <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
     <p v-if="props.usage.textBytes > 0" class="mt-1 text-sm text-slate-700">{{ t('storage.text_note') }}</p>
 
@@ -200,7 +200,7 @@ function saveVersioning(value) {
     </section>
 
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
-        <h2 class="text-lg font-semibold">{{ t('storage.usage_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('storage.usage_heading') }}</h3>
 
         <dl class="mt-4 flex flex-col gap-1 text-sm">
             <div class="flex flex-col gap-1 md:flex-row md:gap-2">
@@ -230,7 +230,7 @@ function saveVersioning(value) {
         de containrar som följer kontot tas bort (issue 414).
     -->
     <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
-        <h2 class="text-lg font-semibold">{{ t('storage.versioning.heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('storage.versioning.heading') }}</h3>
 
         <p class="mt-2 text-sm text-slate-700">{{ t('storage.versioning.description') }}</p>
 

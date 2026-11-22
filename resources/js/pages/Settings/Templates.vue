@@ -47,7 +47,7 @@ const showsAccount = computed(() => accounts.value.length > 1);
 <template>
     <Head :title="t('settings.templates.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('settings.templates.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('settings.templates.heading') }}</h2>
     <p class="mt-2 max-w-2xl text-sm text-slate-700">{{ t('settings.templates.description') }}</p>
 
     <p v-if="templates.length === 0" class="mt-6 text-sm text-slate-600">

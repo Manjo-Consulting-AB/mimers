@@ -152,12 +152,12 @@ function outcomeLabel(login) {
 <template>
     <Head :title="t('settings.security.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h2>
 
     <PasswordForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 
     <section class="mt-8 flex max-w-lg flex-col gap-4">
-        <h2 class="text-lg font-semibold">{{ t('settings.security.totp.heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('settings.security.totp.heading') }}</h3>
 
         <!-- Läge 1 · ingen TOTP. -->
         <template v-if="!props.totpEnabled && !showsSetup">
@@ -238,7 +238,7 @@ function outcomeLabel(login) {
             </p>
 
             <div class="flex flex-col gap-2 rounded border border-slate-200 bg-white p-4">
-                <h3 class="font-medium">{{ t('settings.security.totp.recovery_heading') }}</h3>
+                <h4 class="font-medium">{{ t('settings.security.totp.recovery_heading') }}</h4>
                 <p class="text-sm text-slate-700">
                     {{ t('settings.security.totp.recovery_remaining', { count: props.recoveryCodesRemaining }) }}
                 </p>
@@ -269,7 +269,7 @@ function outcomeLabel(login) {
             </div>
 
             <div class="flex flex-col gap-4 rounded border border-slate-200 bg-white p-4">
-                <h3 class="font-medium">{{ t('settings.security.totp.disable_heading') }}</h3>
+                <h4 class="font-medium">{{ t('settings.security.totp.disable_heading') }}</h4>
 
                 <!-- RecoveryCodeBroker § Beslut 5: disable() anropar
                      purge(). Ett nytt ark vid en ny aktivering, aldrig de
@@ -315,7 +315,7 @@ function outcomeLabel(login) {
         att leda någonstans är värre än en rad som inte gör det.
     -->
     <section class="mt-8 flex max-w-lg flex-col gap-4">
-        <h2 class="text-lg font-semibold">{{ t('settings.security.logins.heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('settings.security.logins.heading') }}</h3>
 
         <p v-if="props.logins.length === 0" class="text-sm text-slate-700">
             {{ t('settings.security.logins.empty') }}

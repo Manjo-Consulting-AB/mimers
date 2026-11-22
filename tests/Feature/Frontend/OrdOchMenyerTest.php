@@ -123,7 +123,9 @@ it('har ägarbyten sist i inställningsmenyn', function () {
 /*
  * Klart när: sidan transfers ritas i inställningslayouten — `Transfers/Index.vue`
  * deklarerar `[AppLayout, SettingsLayout]` som sin layout (Beslut 3, omgjort i
- * issue 274).
+ * issue 274). Sedan granskningsfyndet 2026-11-22 står `SettingsLayout` som ett
+ * par med `hero: false`, eftersom sidan ritar sin egen hjälte (issue 437) och
+ * layouten annars ritade en andra.
  *
  * Rutten `/transfers` är oförändrad, så provet gäller bara skalet sidan ritas
  * i: sedan issue 274 deklarerar sidan hela kedjan, och `AppLayout` är därför
@@ -134,5 +136,5 @@ it('ritar transferssidan i inställningslayouten', function () {
     $sida = ordOchMenyerKod('pages/Transfers/Index.vue');
 
     expect($sida)->toContain("import SettingsLayout from '../../layouts/SettingsLayout.vue'")
-        ->toContain('layout: [AppLayout, SettingsLayout]');
+        ->toMatch('/layout: \[AppLayout, \[?SettingsLayout\b/');
 });

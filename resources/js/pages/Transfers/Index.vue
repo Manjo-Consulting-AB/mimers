@@ -6,7 +6,7 @@ import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import IncomingTransferCard from '../../components/IncomingTransferCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
-defineOptions({ layout: [AppLayout, SettingsLayout] });
+defineOptions({ layout: [AppLayout, [SettingsLayout, { hero: false }]] });
 
 /*
  * Mottagarens inkorg, se issue 67b § Beslut 1, 5 och 6.
@@ -21,6 +21,12 @@ defineOptions({ layout: [AppLayout, SettingsLayout] });
  * står här. Sidan deklarerar `[AppLayout, SettingsLayout]` som sin layout, så
  * skalet — header, flash och footer — är detsamma som förut; det är bara
  * sidomenyn bredvid innehållet som tillkommer.
+ *
+ * **Hjälten är sidans egen** (issue 67b · issue 437): rubriken är *Transfers*,
+ * inte inställningarnas *Settings*. Layouten ritar därför ingen hjälte här —
+ * sidan skickar `hero: false` i layoutparet (granskningsfynd 2026-11-22 ·
+ * [[ADR-0090 Dashboardens hjälte]] § Tillägg 2026-11-22). Utan det fick sidan
+ * två `AppHero` och två `<h1>`.
  *
  * **Här hittar hon sin begäran på identitet, aldrig på en länk** (Beslut 5).
  * Ingen token finns i någon URL, ingen session bär något mellan två anrop, och
