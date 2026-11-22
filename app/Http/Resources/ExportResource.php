@@ -7,7 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Resursformatet för en export-rad, se issue 41 § Beslut 5. Klienten pollar
+ * Resursformatet för en export-rad, se issue 41 § Beslut 5. `kind` (`zip` | `binder`) är slaget, för listans etikett (issue 446).
+ * Klienten pollar
  * show() tills `status` är `ready` eller `failed`. `storage_path` och
  * `failure_reason` exponeras medvetet INTE: nedladdningen (41b) slår upp
  * bytena på egen hand, och en sökväg eller ett undantagsmeddelande på disken
@@ -24,6 +25,7 @@ class ExportResource extends JsonResource
     {
         return [
             'ulid' => $this->ulid,
+            'kind' => $this->kind,
             'status' => $this->status,
             'byte_size' => $this->byte_size,
             'expires_at' => $this->expires_at?->toIso8601String(),

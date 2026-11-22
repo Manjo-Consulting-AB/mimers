@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
+import BinderForm from '../../components/BinderForm.vue';
 import ExportRow from '../../components/ExportRow.vue';
 import { isOpenExport } from '../../components/exportPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -57,6 +58,13 @@ const props = defineProps({
 
     /* Containerns exporter, nyast först, ur App\Http\Resources\ExportResource. */
     exports: { type: Array, required: true },
+
+    /*
+     * PDF-pärmen (issue 446): `available` är planens `pdf_binder`, och
+     * `items` är de items beställaren når som har bilagor — tom på en
+     * gratiscontainer, där formuläret inte ritas.
+     */
+    binder: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -114,6 +122,9 @@ function reloadExports() {
     router.reload({ only: ['exports'], onFinish: schedulePoll });
 }
 
+/* Plansidan väljer konto i sidan och följer med som `?account=` (66a). */
+const planHref = computed(() => `/settings/plan?account=${props.container.account}`);
+
 onMounted(schedulePoll);
 
 onUnmounted(() => {
@@ -165,6 +176,29 @@ onUnmounted(() => {
         -->
         <p v-if="hasOpenRow" class="mt-2 text-sm text-slate-600">{{ t('export.running_notice') }}</p>
     </form>
+
+    <!--
+        PDF-pärmen (issue 446). Pro-containern får formuläret; en gratiscontainer
+        får en rad om planen och en länk, och formuläret ritas inte.
+    -->
+    <section class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('export.pdf_binder_heading') }}</h2>
+
+        <template v-if="binder.available">
+            <p class="mt-2 text-sm text-slate-700">{{ t('export.pdf_binder_intro') }}</p>
+            <BinderForm
+                :container-ulid="container.ulid"
+                :items="binder.items"
+                :disabled="hasOpenRow"
+                @finished="schedulePoll"
+            />
+        </template>
+
+        <template v-else>
+            <p class="mt-2 text-sm text-slate-700">{{ t('export.pdf_binder_free') }}</p>
+            <Link :href="planHref" class="mt-2 inline-flex min-h-11 items-center underline">{{ t('export.pdf_binder_plans') }}</Link>
+        </template>
+    </section>
 
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('export.list_heading') }}</h2>

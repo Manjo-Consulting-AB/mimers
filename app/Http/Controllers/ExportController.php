@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Resources\ContainerResource;
@@ -9,6 +10,7 @@ use App\Http\Resources\ExportResource;
 use App\Jobs\BuildContainerExport;
 use App\Models\Container;
 use App\Models\Export;
+use App\Models\Item;
 use App\Models\SecurityLog;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
@@ -95,9 +97,17 @@ class ExportController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
+        // Issue 446: pärmen ingår i Pro. Fria konton får en rad om planen och
+        // ingen formulärdata alls — itemlistan läses bara när formuläret ritas.
+        $canBinder = $container->account->planLimit('pdf_binder') !== false;
+
         return Inertia::render('Containers/Export', [
             'container' => ContainerResource::make($container)->resolve($request),
             'exports' => ExportResource::collection($exports)->resolve($request),
+            'binder' => [
+                'available' => $canBinder,
+                'items' => $canBinder ? $this->itemsWithAttachments($request, $container) : [],
+            ],
         ]);
     }
 
@@ -170,11 +180,17 @@ class ExportController extends Controller
      * modellinstansen, aldrig via massildelning: App\Models\Export har
      * `#[Fillable([])]`.
      *
+     * Delas av BinderController (issue 446): pärmen är en exportrad med
+     * `kind = binder` och sina val i `options`, och spärren "högst en pågående
+     * export" gäller båda slagen — därför ingen tredje kopia av transaktionen.
+     *
+     * @param  array<string, mixed>|null  $options
+     *
      * @throws ApiException
      */
-    private function createExport(Request $request, Container $container): Export
+    public function createExport(Request $request, Container $container, string $kind = Export::KIND_ZIP, ?array $options = null): Export
     {
-        return DB::transaction(function () use ($request, $container): Export {
+        return DB::transaction(function () use ($request, $container, $kind, $options): Export {
             Container::whereKey($container->id)->lockForUpdate()->first();
 
             $existing = $container->exports()
@@ -189,9 +205,42 @@ class ExportController extends Controller
             $export->container_id = $container->id;
             $export->requested_by_user_id = $request->user()->id;
             $export->status = Export::STATUS_PENDING;
+            $export->kind = $kind;
+            $export->options = $options;
             $export->save();
 
             return $export;
         });
+    }
+
+    /**
+     * Items med bilagor inom beställarens omfång, för urvalet i pärmformuläret.
+     * Omfånget är samma som BinderBuilder löser: ett item beställaren inte når
+     * visas aldrig, och en bilaga som ändå skickas in för det tas inte med av
+     * byggaren.
+     *
+     * @return list<array{ulid: string, name: string, attachments: list<array{ulid: string, filename: string}>}>
+     */
+    private function itemsWithAttachments(Request $request, Container $container): array
+    {
+        $ids = app(ResolveItemScope::class)->handle($request->user(), $container)->itemIds();
+
+        return Item::query()
+            ->where('container_id', $container->id)
+            ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
+            ->whereHas('attachments')
+            ->with(['attachments' => fn ($q) => $q->orderBy('filename')->orderBy('id')])
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Item $item): array => [
+                'ulid' => $item->ulid,
+                'name' => $item->name,
+                'attachments' => $item->attachments
+                    ->map(fn ($a): array => ['ulid' => $a->ulid, 'filename' => $a->filename])
+                    ->values()
+                    ->all(),
+            ])
+            ->all();
     }
 }

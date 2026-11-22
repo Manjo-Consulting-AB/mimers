@@ -23,6 +23,7 @@ return [
             'default' => 'Working…',
             'upload' => 'Uploading…',
             'export' => 'Preparing the export…',
+            'pdf_binder' => 'Creating the PDF binder…',
             'complete' => 'Checking off…',
             'reopen' => 'Reopening…',
             'transfer' => 'Taking over the container…',
@@ -1395,6 +1396,7 @@ return [
                 // sentence per surface — the question "which plan is needed"
                 // is answered in one place.
                 'ownership_transfer' => 'Ownership transfer',
+                'pdf_binder' => 'PDF binder',
             ],
         ],
 
@@ -5485,6 +5487,36 @@ return [
         'size' => 'Size: :size',
 
         'download' => 'Download',
+
+        // Issue 446: the list shows both kinds, labelled. The keys carry
+        // `pdf_binder` because SprakTest keeps the word out of every other line.
+        'kind' => [
+            'zip' => 'ZIP export',
+            'pdf_binder' => 'PDF binder',
+        ],
+
+        // The section under the export. The user-facing word sits on lines whose
+        // key says `pdf_binder` (SprakTest).
+        'pdf_binder_heading' => 'PDF binder',
+        'pdf_binder_intro' => 'The whole container as one PDF document with a cover, a table of contents and page numbers. Choose what goes in.',
+        'pdf_binder_free' => 'The PDF binder is included in Pro.',
+        'pdf_binder_plans' => 'See the plans',
+        'pdf_binder_create' => 'Create PDF binder',
+        'pdf_binder_sections' => 'Sections',
+        'pdf_binder_attachments' => 'Attachments',
+        'pdf_binder_mode_link' => 'Add as links',
+        'pdf_binder_mode_merge' => 'Merge into the binder',
+        'pdf_binder_pick' => 'Choose attachments per item',
+        'pdf_binder_none' => 'No item has attachments.',
+        'pdf_binder_select_all' => 'Select all',
+        'pdf_binder_select_all_for' => 'Select all attachments on :item',
+        'section' => [
+            'items' => 'Items',
+            'relations' => 'Relations',
+            'schedules' => 'Tasks and maintenance',
+            'history' => 'History',
+            'costs' => 'Costs',
+        ],
 
         'status' => [
             'pending' => 'The bag is being packed',

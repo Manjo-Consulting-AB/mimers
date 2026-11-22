@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\RecoveryCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\BinderController;
 use App\Http\Controllers\CalendarFeedController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
@@ -2050,6 +2051,15 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/containers/{container}/export', [ExportController::class, 'store'])
         ->name('containers.export.store');
+
+    /*
+     * Issue 446 · PDF-pärmen på exportsidan: en POST som beställer en
+     * export med `kind = binder`, se App\Http\Controllers\BinderController.
+     * Grinden är `view` som för ZIP:en plus planens `pdf_binder`;
+     * nedladdningen är den befintliga `/exports/{export}/download`.
+     */
+    Route::post('/containers/{container}/binders', [BinderController::class, 'store'])
+        ->name('containers.binders.store');
 
     /*
      * Issue 56a · Kategoriträdet och tagglistan — den fria strukturen, se

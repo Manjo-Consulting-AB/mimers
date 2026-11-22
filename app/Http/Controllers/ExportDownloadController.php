@@ -85,10 +85,13 @@ class ExportDownloadController extends Controller
             meta: ['export' => $export->ulid],
         );
 
-        $filename = $export->container->name.'-export-'.$export->created_at->toDateString().'.zip';
+        // Pärmen (issue 446) är en PDF och ZIP:en en ZIP — samma rutt, samma
+        // grind, bara filändelsen och typen följer slaget.
+        $binder = $export->kind === Export::KIND_BINDER;
+        $filename = $export->container->name.'-export-'.$export->created_at->toDateString().($binder ? '.pdf' : '.zip');
 
         $headers = [
-            'Content-Type' => 'application/zip',
+            'Content-Type' => $binder ? 'application/pdf' : 'application/zip',
             'Content-Disposition' => $this->disposition($filename),
             'X-Content-Type-Options' => 'nosniff',
         ];
