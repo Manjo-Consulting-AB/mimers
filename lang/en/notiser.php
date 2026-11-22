@@ -93,10 +93,10 @@ return [
      * App\Support\Notification\NotificationPreferences).
      */
     'agent_deleted' => [
-        'subject' => 'An agent deleted :total things',
+        'subject' => 'An agent deleted :total thing|An agent deleted :total things',
         'greeting' => 'Hello!',
-        'line' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored.',
-        'line_containers' => 'The agent ":agent" deleted :total things. Anything that went to the trash can be restored. The deleted containers held :container_items items in total.',
+        'line' => 'The agent ":agent" deleted :total thing. Anything that went to the trash can be restored.|The agent ":agent" deleted :total things. Anything that went to the trash can be restored.',
+        'line_containers' => 'The agent ":agent" deleted :total thing. Anything that went to the trash can be restored. The deleted containers held :container_items items in total.|The agent ":agent" deleted :total things. Anything that went to the trash can be restored. The deleted containers held :container_items items in total.',
         'action' => 'Open the trash',
     ],
     /*

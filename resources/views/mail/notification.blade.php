@@ -22,7 +22,7 @@
 
 @php($replace = $type === 'container.content_moving' && isset($payload['bytes']) ? [...$payload, 'bytes' => \Illuminate\Support\Number::fileSize((int) $payload['bytes'], 1)] : $payload)
 
-{{ trans($lineKey, $replace) }}
+{{ $type === 'agent.deleted' ? trans_choice($lineKey, (int) ($payload['total'] ?? 0), $replace) : trans($lineKey, $replace) }}
 
 {{-- Issue 1457 · meningen om MCP står bara med när kontot har en giltig
      agentanslutning att förlora ([[ADR-0087 MCP-server för agenter]]

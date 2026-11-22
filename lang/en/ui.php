@@ -365,6 +365,7 @@ return [
             // (resources/js/components/NotificationRow.vue), which also
             // carries the container counts.
             'deleted' => ':agent deleted :total things',
+            'deleted_one' => ':agent deleted 1 thing',
             // Issue 409. The clock's sentence; the mail carries the owner.
             'access_lost' => 'Your agents lost access to :owner\'s containers',
         ],
@@ -1995,6 +1996,7 @@ return [
                  */
                 'agent' => [
                     'deleted' => ':agent deleted :total things. Anything in the trash can be restored.',
+                    'deleted_one' => ':agent deleted 1 thing. Anything in the trash can be restored.',
                     'container' => 'The container ":container" held :items items.',
                     /*
                      * Issue 409 followed by the follow-up: the row for
