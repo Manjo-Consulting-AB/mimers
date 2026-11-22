@@ -903,6 +903,7 @@ it('har ägarbytets nycklar och läser dem ur lang/', function () {
         'error.transfer.not_pending',
         'error.transfer.expired',
         'error.transfer.account_frozen',
+        'error.transfer.recipient_two_factor_required',
         'error.plan.feature_name.ownership_transfer',
     ];
 

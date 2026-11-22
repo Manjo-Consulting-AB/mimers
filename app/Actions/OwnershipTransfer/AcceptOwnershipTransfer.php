@@ -75,6 +75,7 @@ class AcceptOwnershipTransfer
      * @throws ApiException 422 `transfer.expired`, 403
      *                      `transfer.account_frozen`, 422
      *                      `transfer.legal_hold`, 422
+     *                      `transfer.recipient_two_factor_required`, 422
      *                      `transfer.not_pending`, 403 `quota.*`.
      */
     public function handle(OwnershipTransfer $transfer, Account $toAccount): Container
@@ -102,7 +103,17 @@ class AcceptOwnershipTransfer
             throw ApiException::make('transfer.legal_hold', [], 422);
         }
 
-        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount): Container {
+        // ADR-0092: kräver containern tvåfaktor får den inte byta till ett
+        // konto utan bekräftad tvåfaktor. Prövas igen här — mottagaren kan ha
+        // stängt av den sedan begäran. Före transaktionen: pending står kvar.
+        $containerForCheck = Container::query()->with('account')->findOrFail($transfer->container_id);
+        $kravFranKontot = (bool) $containerForCheck->account->require_two_factor;
+
+        if ($containerForCheck->requiresTwoFactor() && self::lacksTwoFactor($toAccount)) {
+            throw ApiException::make('transfer.recipient_two_factor_required', [], 422);
+        }
+
+        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount, $kravFranKontot): Container {
             // Beslut 5: statusövergången är en villkorad UPDATE, först i
             // transaktionen. Databasen serialiserar UPDATE-satser mot samma
             // rad, så två samtidiga accept-anrop kan aldrig båda lyckas —
@@ -155,6 +166,13 @@ class AcceptOwnershipTransfer
             // Beslut 6: containern flyttas. Ingen annan kolumn rörs — namn,
             // `kind` och `created_at` följer med containern.
             $container->account_id = $toAccount->id;
+
+            // ADR-0092: kom kravet bara från det gamla kontots flagga sätts det
+            // på containern, så att den inte tappar skyddet. Nya ägaren kan slå av det.
+            if ($kravFranKontot) {
+                $container->require_two_factor = true;
+            }
+
             $container->save();
 
             // Beslut 7: containerantalet flyttas mellan räknarna.
@@ -237,6 +255,15 @@ class AcceptOwnershipTransfer
 
             return $container;
         });
+    }
+
+    /**
+     * Saknar kontot en medlem med bekräftad tvåfaktor? Ett konto har en
+     * användare, så det betyder "mottagaren har ingen tvåfaktor".
+     */
+    public static function lacksTwoFactor(Account $account): bool
+    {
+        return ! $account->users()->whereNotNull('totp_confirmed_at')->exists();
     }
 
     /**
