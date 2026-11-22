@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Export;
+use App\Support\Export\BinderBuilder;
 use App\Support\Export\ContainerExportBuilder;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -43,7 +44,7 @@ class BuildContainerExport implements ShouldQueue
         $export->save();
 
         try {
-            $storagePath = app(ContainerExportBuilder::class)->build($export);
+            $storagePath = $this->builder($export)->build($export);
 
             $export->status = Export::STATUS_READY;
             $export->storage_path = $storagePath;
@@ -67,15 +68,33 @@ class BuildContainerExport implements ShouldQueue
     }
 
     /**
+     * Byggaren väljs efter `kind` (issue 445): pärmen är en exportrad och
+     * delar därför statusmaskinen, felhanteringen och `.part`-städningen här i
+     * stället för att få ett eget jobb som skulle kopiera alla tre.
+     */
+    private function builder(Export $export): ContainerExportBuilder|BinderBuilder
+    {
+        return $export->kind === Export::KIND_BINDER
+            ? app(BinderBuilder::class)
+            : app(ContainerExportBuilder::class);
+    }
+
+    /**
      * Rensar en halvskriven `.part`-fil efter ett byggfel. Sökvägen byggs av
-     * koden enligt Beslut 6 — `exports/{container-ulid}/{export-ulid}.zip.part`.
+     * koden enligt Beslut 6 — `exports/{container-ulid}/{export-ulid}.zip.part` (`.pdf.part` för en pärm).
      */
     private function deletePartial(Export $export): void
     {
         try {
             $containerUlid = $export->container->ulid;
 
-            Storage::disk('files')->delete('exports/'.$containerUlid.'/'.$export->ulid.'.zip.part');
+            $disk = Storage::disk('files');
+            $base = 'exports/'.$containerUlid.'/'.$export->ulid;
+
+            $disk->delete($base.'.zip.part');
+            // Pärmens `.part` och dess temporärmapp (issue 445).
+            $disk->delete($base.'.pdf.part');
+            $disk->deleteDirectory($base.'.parts');
         } catch (Throwable $e) {
             Log::warning('Den halvskrivna exportfilen kunde inte tas bort', [
                 'export_id' => $export->id,

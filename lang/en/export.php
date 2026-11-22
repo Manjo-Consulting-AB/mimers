@@ -29,4 +29,12 @@ return [
     'relation_parent' => 'Parent:',
     'relation_child' => 'Child:',
     'relation_related' => 'Related:',
+    'binder_title' => 'Binder',
+    'binder_date' => 'Date',
+    'owner' => 'Owner',
+    'notes' => 'Notes',
+    'history' => 'History',
+    'costs' => 'Costs',
+    'costs_total' => 'Total',
+    'page_of' => 'Page :page of :total',
 ];

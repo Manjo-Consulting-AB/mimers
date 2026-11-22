@@ -29,6 +29,9 @@ class ExportFactory extends Factory
         return [
             'container_id' => Container::factory(),
             'requested_by_user_id' => User::factory(),
+            'kind' => Export::KIND_ZIP,
+            'item_id' => null,
+            'options' => null,
             'status' => Export::STATUS_PENDING,
             'storage_path' => null,
             'byte_size' => null,
