@@ -242,7 +242,7 @@ function submit() {
 <template>
     <Head :title="t('settings.profile.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('settings.profile.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('settings.profile.heading') }}</h2>
 
     <form class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
         <FormField
@@ -403,7 +403,7 @@ function submit() {
         ritas av FlashMessage, som alla andra statusrader på sidan.
     -->
     <section class="mt-8 flex max-w-lg flex-col gap-4">
-        <h2 class="text-lg font-semibold">{{ t('settings.profile.avatar.heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('settings.profile.avatar.heading') }}</h3>
 
         <div class="flex items-center gap-4">
             <UserAvatar :user="currentUser" :size="64" />

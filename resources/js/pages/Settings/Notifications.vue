@@ -135,11 +135,11 @@ function submitPreferences() {
 <template>
     <Head :title="t('notifications.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('notifications.heading') }}</h1>
+    <h2 class="text-2xl font-semibold">{{ t('notifications.heading') }}</h2>
     <p class="mt-2 text-sm text-slate-700">{{ t('notifications.intro') }}</p>
 
     <form class="mt-8 flex flex-col gap-4" @submit.prevent="submitPreferences">
-        <h2 class="text-lg font-semibold">{{ t('notifications.types_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('notifications.types_heading') }}</h3>
 
         <!-- Förvalet och skälet till det (Beslut 3): säsongen. -->
         <p class="text-sm text-slate-700">{{ t('notifications.digest_default') }}</p>

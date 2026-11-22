@@ -85,7 +85,7 @@ function disconnect() {
 
     <Link href="/settings/agents" class="inline-flex min-h-11 items-center text-sm underline">{{ t('agents.back') }}</Link>
 
-    <h1 class="mt-2 text-2xl font-semibold">{{ agent.name }}</h1>
+    <h2 class="mt-2 text-2xl font-semibold">{{ agent.name }}</h2>
 
     <p class="mt-1 text-sm text-slate-700">
         {{ t('agents.connected_at') }}: {{ eventDate(agent.connectedAt).text }} ·
@@ -108,7 +108,7 @@ function disconnect() {
     </form>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('agents.pause_label') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('agents.pause_label') }}</h3>
         <div class="mt-1 flex items-center gap-2 text-sm">
             <UiCheckbox id="agent-paused" :model-value="agent.paused" @update:model-value="setPaused">
             </UiCheckbox>
@@ -118,7 +118,7 @@ function disconnect() {
     </section>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('agents.rights_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('agents.rights_heading') }}</h3>
         <p class="mt-1 text-sm text-slate-700">{{ t('agents.rights_intro') }}</p>
 
         <ul class="mt-4 flex flex-col gap-3">
@@ -154,7 +154,7 @@ function disconnect() {
     </section>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('agents.containers_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('agents.containers_heading') }}</h3>
         <p v-if="containers.length === 0" class="mt-1 text-sm text-slate-700">{{ t('agents.containers_empty') }}</p>
         <ul v-else class="mt-2 flex flex-col">
             <li v-for="container in containers" :key="container.ulid">
@@ -164,7 +164,7 @@ function disconnect() {
     </section>
 
     <section class="mt-8">
-        <h2 class="text-lg font-semibold">{{ t('agents.events_heading') }}</h2>
+        <h3 class="text-lg font-semibold">{{ t('agents.events_heading') }}</h3>
         <p v-if="events.length === 0" class="mt-1 text-sm text-slate-700">{{ t('agents.events_empty') }}</p>
         <ul v-else class="mt-2 flex flex-col gap-1 text-sm">
             <li v-for="event in events" :key="event.id" class="flex flex-wrap gap-x-3">

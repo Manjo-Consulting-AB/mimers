@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+import AppHero from '../components/AppHero.vue';
 import { settingsSections } from './settingsSections.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -8,10 +9,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Inställningarnas skal, se issue 53b § Beslut 2 och issue 274.
  *
  * **Ramen deklareras av sidan** (issue 274). Den här layouten ritar bara sin
- * egen del — sidonavigationen och ytan bredvid den — och varje
+ * egen del — hjälten, sidonavigationen och ytan bredvid den — och varje
  * inställningssida deklarerar `layout: [AppLayout, SettingsLayout]`. AppLayout
  * ligger då utanför, och header, flash och footer kommer därifrån och upprepas
  * inte här.
+ *
+ * **Hjälten ritas här en gång** (issue 438 · [[ADR-0090 Dashboardens hjälte]]
+ * § Tillägg 2026-11-22). Det är samma `AppHero` som dashboarden och
+ * toppnivåsidorna ritar — samma höjd, bild, brickor och donut — och bara
+ * rubriken *Settings* och undertiteln skiljer. Den står ovanför navigationen
+ * och innehållet och bär sidans enda `<h1>`; varje inställningssidas egen
+ * rubrik är därför en `<h2>`. Bekräftelsesidorna för radering använder inte
+ * den här layouten och ritar sin egen `<h1>`.
  *
  * Navigationen renderas ur settingsSections med v-for, inte som hårdkodade
  * <Link> — en post till kräver ingen ändring här, bara en rad i listan.
@@ -60,40 +69,54 @@ const sectionLabel = (section) => t(section.label ?? `settings.nav.${section.key
 </script>
 
 <template>
-    <div class="flex flex-col gap-8 md:flex-row">
-        <nav :aria-label="t('settings.title')" class="md:w-48 md:shrink-0">
-            <button
-                type="button"
-                class="inline-flex min-h-11 w-full items-center rounded border border-slate-300 px-3 text-sm font-medium md:hidden"
-                aria-controls="installningarnas-sidor"
-                :aria-expanded="sectionsOpen"
-                @click="sectionsOpen = !sectionsOpen"
-            >
-                {{ sectionsOpen ? t('nav.menu_close') : t('nav.menu') }}
-            </button>
+    <div class="flex flex-col gap-8">
+        <!--
+            Hjälten (issue 438 · [[ADR-0090 Dashboardens hjälte]] § Tillägg
+            2026-11-22) står ovanför både menyn och innehållet och bär sidans
+            enda `<h1>`. Rubriken är inställningarnas egen — sidans rubrik
+            ritas som `<h2>` i innehållet — och talen hämtas av `AppHero` när
+            de saknas, precis som på toppnivåsidorna.
+        -->
+        <AppHero
+            :heading="t('hero.heading.settings')"
+            :subtitle="t('hero.subtitle.settings')"
+        />
 
-            <ul
-                id="installningarnas-sidor"
-                class="flex-col gap-1 text-sm"
-                :class="sectionsOpen ? 'flex' : 'hidden md:flex'"
-            >
-                <template v-for="section in settingsSections" :key="section.key">
-                    <li v-if="isVisible(section)">
-                        <Link
-                            :href="section.href"
-                            :aria-current="isActive(section) ? 'page' : undefined"
-                            class="flex min-h-11 items-center rounded px-3"
-                            :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
-                        >
-                            {{ sectionLabel(section) }}
-                        </Link>
-                    </li>
-                </template>
-            </ul>
-        </nav>
+        <div class="flex flex-col gap-8 md:flex-row">
+            <nav :aria-label="t('settings.title')" class="md:w-48 md:shrink-0">
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 w-full items-center rounded border border-slate-300 px-3 text-sm font-medium md:hidden"
+                    aria-controls="installningarnas-sidor"
+                    :aria-expanded="sectionsOpen"
+                    @click="sectionsOpen = !sectionsOpen"
+                >
+                    {{ sectionsOpen ? t('nav.menu_close') : t('nav.menu') }}
+                </button>
 
-        <div class="min-w-0 flex-1">
-            <slot />
+                <ul
+                    id="installningarnas-sidor"
+                    class="flex-col gap-1 text-sm"
+                    :class="sectionsOpen ? 'flex' : 'hidden md:flex'"
+                >
+                    <template v-for="section in settingsSections" :key="section.key">
+                        <li v-if="isVisible(section)">
+                            <Link
+                                :href="section.href"
+                                :aria-current="isActive(section) ? 'page' : undefined"
+                                class="flex min-h-11 items-center rounded px-3"
+                                :class="isActive(section) ? 'bg-slate-200 font-medium' : 'hover:bg-slate-100'"
+                            >
+                                {{ sectionLabel(section) }}
+                            </Link>
+                        </li>
+                    </template>
+                </ul>
+            </nav>
+
+            <div class="min-w-0 flex-1">
+                <slot />
+            </div>
         </div>
     </div>
 </template>
