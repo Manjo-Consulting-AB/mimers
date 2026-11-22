@@ -63,8 +63,10 @@ use Illuminate\Support\Facades\DB;
  * ingen kaskad som städar):
  *
  * 1. spärrarna prövas, under radlås på personen,
- * 1b. personens profilbild rensas med RemoveUserAvatar — `attachment.user_id`
- *    är ON DELETE RESTRICT och bilden är hennes egen (ADR-0076 § 5),
+ * 1b. personens profilbild och hjältebild rensas med RemoveUserAvatar och
+ *    RemoveUserHero — `attachment.user_id` är ON DELETE RESTRICT och båda
+ *    bilderna är hennes egna (ADR-0076 § 5 och [[ADR-0090 Dashboardens
+ *    hjälte]] § 2),
  * 2. varje konto där personen är enda medlem raderas med DeleteAccount,
  * 3. personen lämnar övriga konton,
  * 4. författarkolumnerna mot `user` nollställs (ADR-0045 § Beslut 2): item,
@@ -103,6 +105,7 @@ class DeleteUser
         private readonly RevokeOwnershipTransfer $revokeOwnershipTransfer,
         private readonly PurgeContent $purgeContent,
         private readonly RemoveUserAvatar $removeUserAvatar,
+        private readonly RemoveUserHero $removeUserHero,
     ) {}
 
     /**
@@ -292,6 +295,13 @@ class DeleteUser
             // annars fått bilden rensad av DeleteAccount i steg 2, men en
             // person som lämnar ett kvarstående konto hade behållit den.
             $this->removeUserAvatar->handle($row);
+
+            // Hjältebilden på samma sätt ([[ADR-0090 Dashboardens hjälte]]
+            // § 2): den är personens egen, rensas direkt och bär samma
+            // RESTRICT-nyckel. Den ligger efter profilbilden för att
+            // ordningen ska vara förutsägbar, inte för att de två rör samma
+            // kolumner.
+            $this->removeUserHero->handle($row);
 
             // Antalen till loggen läses innan något raderas — efteråt finns
             // inget kvar att räkna (samma skäl som i DeleteAccount).

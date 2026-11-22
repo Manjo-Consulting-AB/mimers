@@ -13,9 +13,9 @@ namespace App\Support\Mcp;
  * beskriver förbudet.
  *
  * Förbjudet: att tömma eller rensa papperskorgen, kontots inställningar, plan
- * och betalning, inbjudningar, åtkomst och agenttak, containerns bild och
- * profilbilden, webhooks, kalenderflödet, ägarbyte, agenters rättigheter och
- * tokens, och export.
+ * och betalning, inbjudningar, åtkomst och agenttak, containerns bild,
+ * profilbilden och hjältebilden, webhooks, kalenderflödet, ägarbyte, agenters
+ * rättigheter och tokens, och export.
  */
 final class ForbiddenDomains
 {
@@ -30,7 +30,7 @@ final class ForbiddenDomains
         'trash', 'purge',
         'account', 'plan', 'billing', 'payment', 'subscription',
         'invitation', 'invite', 'member', 'access', 'accesses', 'grant', 'grants', 'ceiling',
-        'avatar', 'cover',
+        'avatar', 'hero', 'cover',
         'webhook', 'webhooks', 'calendar', 'feed', 'feeds',
         'transfer', 'transfers', 'ownership',
         'token', 'tokens', 'disconnect', 'settings',
@@ -60,6 +60,7 @@ final class ForbiddenDomains
         // Bilder som rensas direkt.
         'SetContainerCover', 'RemoveContainerCover', 'SetContainerCoverFocus',
         'SetUserAvatar', 'RemoveUserAvatar', 'SetUserAvatarCrop',
+        'SetUserHero', 'RemoveUserHero', 'SetUserHeroCrop',
         // Kalenderflödet.
         'CreateCalendarFeed', 'RevokeCalendarFeed',
         // Ägarbytet.

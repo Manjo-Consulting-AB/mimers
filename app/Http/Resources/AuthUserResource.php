@@ -38,6 +38,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Räkningen som gör värdena till en ritad bild bor i
  * resources/js/composables/useAvatarCrop.js.
  *
+ * **`hero` är personens hjältebild** ([[ADR-0090 Dashboardens hjälte]] § 2,
+ * issue 434), i exakt samma form som `avatar`: `null` när ingen bild är satt,
+ * annars bilagans `ulid`, `has_thumb`, `focus` och `zoom`. Dashboarden ritar
+ * den inte förrän issue 435, men fältet finns alltid — vyn ska kunna skilja
+ * "ingen egen bild" från "fältet finns inte".
+ *
  * @mixin User
  */
 class AuthUserResource extends JsonResource
@@ -48,6 +54,7 @@ class AuthUserResource extends JsonResource
     public function toArray(Request $request): array
     {
         $avatar = $this->avatarAttachment;
+        $hero = $this->heroAttachment;
 
         return [
             'ulid' => $this->ulid,
@@ -65,6 +72,15 @@ class AuthUserResource extends JsonResource
                     'y' => $this->avatar_focus_y ?? 50,
                 ],
                 'zoom' => $this->avatar_zoom ?? 100,
+            ],
+            'hero' => $hero === null ? null : [
+                'ulid' => $hero->ulid,
+                'has_thumb' => $hero->storedFile->derivatives->contains('variant', 'thumb'),
+                'focus' => [
+                    'x' => $this->hero_focus_x ?? 50,
+                    'y' => $this->hero_focus_y ?? 50,
+                ],
+                'zoom' => $this->hero_zoom ?? 100,
             ],
         ];
     }

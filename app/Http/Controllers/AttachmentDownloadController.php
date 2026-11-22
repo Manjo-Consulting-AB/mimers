@@ -57,10 +57,18 @@ use Symfony\Component\HttpFoundation\Response;
  * ur App\Models\Attachment::accessSubject() — itemet för en itembilaga,
  * containern för en containerbilaga, personen för en personbilaga — och
  * grinden ställs mot exakt det som kom tillbaka: `view` för de två första,
- * `viewAvatar` för personen. Containern för en itembilaga grindas alltså
- * fortfarande INTE: dess `view` hade släppt igenom varje medlem i ägarkontot
- * och därmed också en itemgrant-innehavare förbi itemets omfång. Valet av
- * ägare är det enda som avgör, och det valet bor i modellen och inte här.
+ * `viewAvatar` eller `viewHero` för personen. Containern för en itembilaga
+ * grindas alltså fortfarande INTE: dess `view` hade släppt igenom varje medlem
+ * i ägarkontot och därmed också en itemgrant-innehavare förbi itemets omfång.
+ * Valet av ägare är det enda som avgör, och det valet bor i modellen och inte
+ * här.
+ *
+ * **Profilbild och hjältebild har olika synlighet** ([[ADR-0090
+ * Dashboardens hjälte]] § 2): profilbilden får ses av den som delar ett konto
+ * eller en container med personen (`viewAvatar`), hjältebilden bara av henne
+ * själv (`viewHero`). Valet ställs mot bilagans id och personens pekare
+ * `hero_attachment_id` — en personbilaga som varken är avatar eller hjälte
+ * (en kvarlämnad rad) grindas som förut, med `viewAvatar`.
  *
  * **Sedan issue 177 skriver rutten också en öppning** i `attachment_open`,
  * för "senast öppnade filer" i dokumentfliken ([[ADR-0051 Senast öppnade
@@ -108,11 +116,19 @@ class AttachmentDownloadController extends Controller
         if ($subject instanceof User) {
             // En personbilaga hör inte till någon container: kravet på en
             // icke-mjukraderad container hoppas över, och grinden är
-            // [[ADR-0076 Profilbilden]] § 4 i stället för `view` på ett item
-            // eller en container. Säkerhetsloggens container är null — det
-            // finns ingen container vars ägarkonto nedladdningen kan mätas
-            // mot — och skrivs därför inte (se recordForeignDownload()).
-            Gate::authorize('viewAvatar', $subject);
+            // [[ADR-0076 Profilbilden]] § 4 eller [[ADR-0090 Dashboardens
+            // hjälte]] § 2 i stället för `view` på ett item eller en
+            // container. Är bilagan personens hjältebild är det bara hon själv
+            // som får se den; annars gäller profilbildens delningsregel.
+            // Säkerhetsloggens container är null — det finns ingen container
+            // vars ägarkonto nedladdningen kan mätas mot — och skrivs därför
+            // inte (se recordForeignDownload()).
+            $grind = $subject->hero_attachment_id !== null
+                && (int) $subject->hero_attachment_id === (int) $attachment->id
+                    ? 'viewHero'
+                    : 'viewAvatar';
+
+            Gate::authorize($grind, $subject);
 
             $container = null;
         } else {

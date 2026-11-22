@@ -8,6 +8,7 @@ use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
 use App\Actions\User\DeleteUser;
 use App\Actions\User\RemoveUserAvatar;
+use App\Actions\User\RemoveUserHero;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
@@ -897,6 +898,7 @@ it('ett fel mitt i raderingen lämnar ingenting halvt', function () {
         app(RevokeOwnershipTransfer::class),
         app(PurgeContent::class),
         app(RemoveUserAvatar::class),
+        app(RemoveUserHero::class),
     );
 
     expect(fn () => $action->handle($person))
