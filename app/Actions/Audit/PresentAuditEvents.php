@@ -78,10 +78,17 @@ use Illuminate\Database\Eloquent\Collection;
  * flit.** En rad kan sakna container HELT (kontoraderna, led 3:
  * `account.deleted`) eller peka på en container som gallrats — och panelen får
  * inte säga *a deleted container* om en rad som handlar om ett konto. `null`
- * betyder därför "raden gäller ingen container" och `['name' => null]` "den
- * finns men går inte att namnge", precis som `item` är `null` när raden inte
- * handlar om ett item. Utan den skillnaden hade en kontorad burit en
- * containerrad den inte har.
+ * betyder därför "raden gäller ingen container" och `['ulid' => null, 'name'
+ * => null]` "den finns men går inte att namnge", precis som `item` är `null`
+ * när raden inte handlar om ett item. Utan den skillnaden hade en kontorad
+ * burit en containerrad den inte har.
+ *
+ * **Containern bär sitt ULID så att raden kan länka till den** (M71 · issue
+ * 1500). Namnet och ULID:et slås upp i SAMMA fråga och faller bort
+ * tillsammans: en container som inte längre finns har varken ett namn att
+ * rita eller en sida att gå till, och `HistoryRow.vue` ritar då sin neutrala
+ * ersättare som text. ULID:et är containerns utåtriktade identifierare
+ * (AGENTS.md § Databaskonventioner) — löpnumret stannar i databasen.
  */
 class PresentAuditEvents
 {
@@ -89,7 +96,7 @@ class PresentAuditEvents
      * Raderna i ritad ordning — samma ordning ListAuditEvents gav dem.
      *
      * @param  Collection<int, AuditLog>  $logs
-     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, agent: array{ulid: string|null, name: string|null}|null, item: string|null, container: array{name: string|null}|null, changed: list<string>}>
+     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, agent: array{ulid: string|null, name: string|null}|null, item: string|null, container: array{ulid: string|null, name: string|null}|null, changed: list<string>}>
      */
     public function handle(Collection $logs): array
     {
@@ -108,7 +115,10 @@ class PresentAuditEvents
                 'item' => $log->item_id === null ? null : ($itemNames[$log->item_id] ?? null),
                 'container' => $log->container_id === null
                     ? null
-                    : ['name' => $containerNames[$log->container_id] ?? null],
+                    : [
+                        'ulid' => $containerNames[$log->container_id]['ulid'] ?? null,
+                        'name' => $containerNames[$log->container_id]['name'] ?? null,
+                    ],
                 'changed' => $this->changed($log),
             ])
             ->values()
@@ -181,16 +191,18 @@ class PresentAuditEvents
     }
 
     /**
-     * Containerns namn per löpnummer, i EN fråga — samma uppslag som
-     * `itemNames()` och av samma skäl (issue 126).
+     * Containerns ULID och namn per löpnummer, i EN fråga — samma uppslag som
+     * `itemNames()` och av samma skäl (issue 126, M71 · issue 1500).
      *
      * SoftDeletes' globala scope gäller: en container i papperskorgen är
      * raderad för läsaren, och en rad som handlar om den säger *a deleted
      * container*. Det är samma svar som ett gallrat item ger, och det är med
      * flit — de två går inte att skilja, och för läsaren är de samma sak.
+     * ULID:et följer namnet: båda uteblir när containern inte längre finns,
+     * eftersom raden inte ska länka till en sida som svarar 404.
      *
      * @param  Collection<int, AuditLog>  $logs
-     * @return array<int, string>
+     * @return array<int, array{ulid: string, name: string}>
      */
     private function containerNames(Collection $logs): array
     {
@@ -200,13 +212,13 @@ class PresentAuditEvents
             return [];
         }
 
-        $namn = [];
+        $containern = [];
 
-        foreach (Container::query()->whereIn('id', $ids)->get(['id', 'name']) as $container) {
-            $namn[$container->id] = $container->name;
+        foreach (Container::query()->whereIn('id', $ids)->get(['id', 'ulid', 'name']) as $container) {
+            $containern[$container->id] = ['ulid' => $container->ulid, 'name' => $container->name];
         }
 
-        return $namn;
+        return $containern;
     }
 
     /**

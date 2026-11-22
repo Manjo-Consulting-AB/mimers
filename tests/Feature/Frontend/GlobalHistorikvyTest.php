@@ -146,6 +146,30 @@ it('raderna visar sin container', function () {
 });
 
 /*
+ * Klart när: containerns namn leder till `/containers/{ulid}` (M71 · issue
+ * 1500).
+ *
+ * Den globala historiken är en av de två ytorna som ber om platsen
+ * (`show-container`), och raden är den enda som vet om containern finns.
+ * `PresentAuditEvents` ger `container` som `{ ulid, name }`; raden bygger
+ * länken ur ULID:et och ritar namnet som en `<Link>` i samma stil som
+ * containerlänken i `TodoRow.vue` — 44 px träffyta.
+ *
+ * Ersättaren för en gallrad container och *Account* har inget ULID och ritas
+ * därför som text: en länk till en sida som svarar 404 är värre än ingen
+ * länk. Grenen `container.href !== null` är det som skiljer dem.
+ */
+it('länkar containerns namn till containerns översikt', function () {
+    $raden = globalHistorikvyKod('js/components/HistoryRow.vue');
+
+    expect($raden)->toContain("import { Link } from '@inertiajs/vue3'")
+        ->toContain('/containers/${props.row.container.ulid}')
+        ->toContain('container.href !== null')
+        ->toContain('text-accent hover:underline')
+        ->toContain('min-h-11');
+});
+
+/*
  * Klart när: `en kontohändelse heter Account` — `HistoryRow.vue` läser
  * `audit.history.account_place` (Beslut 3).
  *

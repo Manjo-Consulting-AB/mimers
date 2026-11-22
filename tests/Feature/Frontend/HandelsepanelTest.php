@@ -343,9 +343,10 @@ it('monterar panelen i Dashboard.vue med sin egen propp', function () {
  * och containernamnet slås upp i EN fråga för hela listan — samma uppslag som
  * itemnamnen (App\Actions\Audit\PresentAuditEvents).
  *
- * Provet fäster båda ändarna: namnet kommer fram oförändrat i svaret, och
- * panelen ber HistoryRow rita containerraden. Historikflikarnas rad ritar den
- * inte, och det prövas i HistorikflikTest.
+ * Provet fäster båda ändarna: namnet och ULID:et kommer fram oförändrat i
+ * svaret, och panelen ber HistoryRow rita containerraden. ULID:et är det som
+ * gör namnet till en länk till containerns översikt (M71 · issue 1500).
+ * Historikflikarnas rad ritar den inte, och det prövas i HistorikflikTest.
  */
 it('låter varje rad säga vilken container den gäller', function () {
     withoutVite();
@@ -357,13 +358,22 @@ it('låter varje rad säga vilken container den gäller', function () {
 
     $visade = handelseRader(actingAs($ägare)->get('/dashboard')->assertOk());
 
-    expect($visade[0]['container'])->toBe(['name' => 'Havsörnen']);
+    expect($visade[0]['container'])->toBe(['ulid' => $pärm->ulid, 'name' => 'Havsörnen']);
 
     $panel = handelseKod('js/components/DashboardActivityPanel.vue');
 
     expect($panel)->toContain('show-container')
         ->toContain("import HistoryRow from './HistoryRow.vue'")
         ->toContain('<HistoryRow');
+
+    // Raden gör containernamnet till en länk dit ulid pekar (M71 · issue
+    // 1500). Panelen själv ritar ingen länk — den äger ingen egen markup.
+    $raden = handelseKod('js/components/HistoryRow.vue');
+
+    expect($raden)->toContain("import { Link } from '@inertiajs/vue3'")
+        ->toContain('props.row.container.ulid')
+        ->toContain('/containers/${props.row.container.ulid}')
+        ->toContain('min-h-11');
 
     // Panelen är hela ytan: ingen *Visa alla*, för sidan med alla händelser
     // finns inte.
@@ -419,7 +429,7 @@ it('visar ersättaren för en rad om en gallrad container', function () {
 
     expect($visade)->toHaveCount(1)
         ->and($visade[0]['ulid'])->toBe($rad->ulid)
-        ->and($visade[0]['container'])->toBe(['name' => null])
+        ->and($visade[0]['container'])->toBe(['ulid' => null, 'name' => null])
         // Itemet finns kvar och namnges: ersättaren gäller containern och
         // ingenting annat.
         ->and($visade[0]['item'])->toBe('Motorn');
