@@ -57,6 +57,19 @@ class Export extends Model
      */
     public const STATUSES = [self::STATUS_PENDING, self::STATUS_RUNNING, self::STATUS_READY, self::STATUS_FAILED, self::STATUS_EXPIRED];
 
+    public const KIND_ZIP = 'zip';
+
+    public const KIND_BINDER = 'binder';
+
+    /**
+     * De giltiga värdena för `kind`, se migrationens CHECK-villkor.
+     * `binder` är PDF-pärmen (issue 445 · ADR-0091), byggd av
+     * App\Support\Export\BinderBuilder; `zip` är den ursprungliga exporten.
+     *
+     * @var list<string>
+     */
+    public const EXPORT_KINDS = [self::KIND_ZIP, self::KIND_BINDER];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -71,6 +84,7 @@ class Export extends Model
         return [
             'byte_size' => 'integer',
             'expires_at' => 'datetime',
+            'options' => 'array',
         ];
     }
 

@@ -535,7 +535,7 @@ class ContainerExportBuilder
      *
      * @return list<array{label: string, type: string, value: string|null}>
      */
-    private function fieldEntries(Item $item, Container $container): array
+    public function fieldEntries(Item $item, Container $container): array
     {
         $values = $item->fieldValues->keyBy('item_field_id');
 
