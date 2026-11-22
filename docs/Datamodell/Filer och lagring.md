@@ -91,6 +91,23 @@ Uniknyckeln `(user_id, attachment_id)` är det som gör öppningen till ett PAR:
 
 Ingen `deleted_at`: raden är inget innehåll att återställa, papperskorgen listar fyra typer (issue 76 § Beslut 3), och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny öppning av samma fil.
 
+## export
+
+En beställd export av en container: ZIP med metadata och filer, eller en PDF-pärm ([[ADR-0091 PDF-pärmen]]). Raden är beställningens historik och har ingen `deleted_at`. Den räknas inte mot kvoten, och artefakten gallras efter `files.export_retention_days` (7).
+
+| Kolumn | Typ | Anmärkning |
+|---|---|---|
+| id, ulid | | `ulid` är identifieraren utåt |
+| container_id | FK | RESTRICT |
+| requested_by_user_id | FK | RESTRICT |
+| kind | VARCHAR(20) | `zip` \| `binder`, förval `zip`. CHECK på mysql |
+| item_id | FK NULL | RESTRICT. Satt bara för en pärm över ett enda item |
+| options | JSON NULL | Bara för `binder`: nycklarna `sections`, `costs`, `attachments` och `attachment_mode`. Värdena fastställs i issue 443 |
+| status | VARCHAR(20) | `pending`, `running`, `ready`, `failed`, `expired` |
+| storage_path, byte_size, failure_reason, expires_at | | NULL tills bygget är klart eller har misslyckats |
+
+Index: `(container_id, created_at)` och `(status, expires_at)`.
+
 ## Uppladdningsflödet
 
 1. Ta emot filen till en temporär plats.

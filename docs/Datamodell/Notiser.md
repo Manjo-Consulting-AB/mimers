@@ -30,7 +30,7 @@ Outboxen. Vad som hänt, till vem.
 | user_id | FK NULL | Mottagare. NULL för rena webhook-händelser till ett konto. |
 | account_id | FK | |
 | container_id | FK NULL | |
-| type | VARCHAR(60) | `task.due`, `task.overdue`, `loan.due`, `quota.warning`, `transfer.requested`, `account.inactive`, `container.deleted`, `agent.connected`, `agent.deleted`, `agent.access_lost`, `versioning.skipped` (till containerns ägare i appen, en gång per container och dygn när en version inte fick plats i kvoten, se [[ADR-0088 Versionshistorik för items]] Riktning 3) |
+| type | VARCHAR(60) | `task.due`, `task.overdue`, `loan.due`, `quota.warning`, `transfer.requested`, `account.inactive`, `container.deleted`, `agent.connected`, `agent.deleted`, `agent.access_lost`, `binder.ready` (till beställaren, bara i appen, se [[ADR-0091 PDF-pärmen]] Beslut 9), `versioning.skipped` (till containerns ägare i appen, en gång per container och dygn när en version inte fick plats i kvoten, se [[ADR-0088 Versionshistorik för items]] Riktning 3) |
 | subject_type, subject_id | | Vad notisen handlar om — oftast en `schedule_occurrence` |
 | payload | JSON | Data för mallen. **Ingen färdig text.** Renderas per kanal och språk vid leverans. |
 | dedupe_key | VARCHAR(191) UNIQUE NULL | Hindrar dubbletter när minutcronen kör om |
