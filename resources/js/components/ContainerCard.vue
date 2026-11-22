@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import ContainerCover from './ContainerCover.vue';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -65,7 +66,7 @@ const { t } = useTranslations();
     <UiCard v-if="props.container.locked" class="min-w-64 flex-1">
         <template #heading>
             <span class="inline-flex min-h-11 items-center gap-2 text-ink">
-                <span aria-hidden="true" class="shrink-0">🔒</span>
+                <UiIcon name="lock" class="shrink-0" />
                 {{ props.container.name }}
             </span>
         </template>

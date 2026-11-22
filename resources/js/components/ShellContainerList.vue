@@ -180,7 +180,7 @@ function isActive(container) {
                         :aria-label="t('container.locked.aria', { name: container.name })"
                         class="inline-flex min-h-11 w-full items-center gap-2 opacity-70"
                     >
-                        <span aria-hidden="true" class="shrink-0">🔒</span>
+                        <UiIcon name="lock" class="shrink-0" />
 
                         {{ container.name }}
                     </span>

@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({ layout: AppLayout });
@@ -22,7 +23,7 @@ const { t } = useTranslations();
 
     <section class="mt-8 flex flex-col items-start gap-3">
         <h1 class="inline-flex items-center gap-2 text-title font-semibold text-ink">
-            <span aria-hidden="true" class="shrink-0">🔒</span>
+            <UiIcon name="lock" class="shrink-0" />
             {{ container.name }}
         </h1>
 

@@ -301,4 +301,9 @@ export const icons = {
         ['circle', { cx: '15', cy: '5', r: '1' }],
         ['circle', { cx: '15', cy: '19', r: '1' }],
     ],
+    // lock · lucide-static 1.59.0
+    lock: [
+        ['rect', { width: '18', height: '11', x: '3', y: '11', rx: '2', ry: '2' }],
+        ['path', { d: 'M7 11V7a5 5 0 0 1 10 0v4' }],
+    ],
 };
