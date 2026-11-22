@@ -109,9 +109,9 @@ class ListContainerSummaries
         // när bilden saknas, och en kolumn som inte hämtats hade tyst gett
         // lådan i stället för den valda ikonen.
         $containers = Container::query()
-            ->accessibleBy($user, $accountIds)
+            ->accessibleBy($user, $accountIds, includeLocked: true)
             ->listable()
-            ->with('coverAttachment.storedFile.derivatives')
+            ->with(['account:id,require_two_factor', 'coverAttachment.storedFile.derivatives'])
             ->orderBy('name')
             ->get([
                 'id',
@@ -124,11 +124,20 @@ class ListContainerSummaries
                 'cover_focus_x',
                 'cover_focus_y',
                 'cover_zoom',
+                'account_id',
+                'require_two_factor',
             ]);
+
+        // Låsta containrar (ADR-0092, issue 449) visas men räknas inte: de
+        // bär inga tal och ingår varken i brickan eller i itemfrågan.
+        $locked = $containers->filter(
+            fn (Container $container): bool => ContainerResource::isLocked($container, $user, $accountIds),
+        )->pluck('id')->all();
+        $open = $containers->reject(fn (Container $container): bool => in_array($container->id, $locked, true));
 
         $itemCounts = $this->itemCounts(
             $user,
-            $containers->pluck('id')->all(),
+            $open->pluck('id')->all(),
         );
 
         $todoCounts = $this->todoCounts($todo['rows']);
@@ -136,7 +145,7 @@ class ListContainerSummaries
         return [
             'stats' => [
                 // Antalet containrar användaren når — samma urval som listan.
-                'containers' => $containers->count(),
+                'containers' => $open->count(),
                 // Det som är aktuellt nu — försenat plus i dag (issue 697) —
                 // och inte antalet rader bakom länken till `/tasks`: talet
                 // växer inte när listan börjar visa framtida rader. Inget
@@ -146,7 +155,7 @@ class ListContainerSummaries
                 // — den här filen jämför inget datum själv.
                 'overdue' => count($todo['groups'][ListTodo::GROUP_OVERDUE]),
             ],
-            'groups' => $this->group($containers, $itemCounts, $todoCounts),
+            'groups' => $this->group($containers, $itemCounts, $todoCounts, $locked),
         ];
     }
 
@@ -250,6 +259,7 @@ class ListContainerSummaries
      * @param  Collection<int, Container>  $containers
      * @param  array<int, int>  $itemCounts
      * @param  array<string, int>  $todoCounts
+     * @param  list<int>  $locked  löpnummer för de låsta containrarna
      * @return list<array{
      *     kind: string|null,
      *     containers: list<array{
@@ -263,7 +273,7 @@ class ListContainerSummaries
      *     }>
      * }>
      */
-    private function group(Collection $containers, array $itemCounts, array $todoCounts): array
+    private function group(Collection $containers, array $itemCounts, array $todoCounts, array $locked = []): array
     {
         /** @var list<array{
          *     kind: string|null,
@@ -280,22 +290,25 @@ class ListContainerSummaries
          */
         $grupper = ContainerKindGroups::byKind(
             $containers,
-            fn (Container $container): array => [
-                'ulid' => $container->ulid,
-                'name' => $container->name,
-                'items' => $itemCounts[$container->id] ?? 0,
-                'todos' => $todoCounts[$container->ulid] ?? 0,
-                // Bilden (issue 159). Formen kommer ur
-                // App\Http\Resources\ContainerResource::cover() och skrivs
-                // inte av här: kortet och containerlistan bär samma bild i
-                // samma form, och två formuleringar av den hade glidit isär.
-                'cover' => ContainerResource::cover($container),
-                // Ikonen och färgen (issue 317 · [[ADR-0064 Containerns
-                // ikon]] § 5), ur samma rad som namnet. Kortet skickar dem
-                // vidare till `ContainerCover` när bilden saknas.
-                'icon' => $container->icon,
-                'icon_color' => $container->icon_color,
-            ],
+            fn (Container $container): array => in_array($container->id, $locked, true)
+                ? ['ulid' => $container->ulid, 'name' => $container->name, 'locked' => true]
+                : [
+                    'locked' => false,
+                    'ulid' => $container->ulid,
+                    'name' => $container->name,
+                    'items' => $itemCounts[$container->id] ?? 0,
+                    'todos' => $todoCounts[$container->ulid] ?? 0,
+                    // Bilden (issue 159). Formen kommer ur
+                    // App\Http\Resources\ContainerResource::cover() och skrivs
+                    // inte av här: kortet och containerlistan bär samma bild i
+                    // samma form, och två formuleringar av den hade glidit isär.
+                    'cover' => ContainerResource::cover($container),
+                    // Ikonen och färgen (issue 317 · [[ADR-0064 Containerns
+                    // ikon]] § 5), ur samma rad som namnet. Kortet skickar dem
+                    // vidare till `ContainerCover` när bilden saknas.
+                    'icon' => $container->icon,
+                    'icon_color' => $container->icon_color,
+                ],
         );
 
         return $grupper;

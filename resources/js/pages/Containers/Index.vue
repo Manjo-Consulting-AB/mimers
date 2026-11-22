@@ -6,6 +6,7 @@ import AppHero from '../../components/AppHero.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
@@ -121,7 +122,25 @@ const isShared = (container) => accountName(container) === null;
 
     <ul v-else class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         <li v-for="container in containers" :key="container.ulid">
-            <UiCard class="h-full">
+            <!-- Låst (ADR-0092, issue 449): namn, lås och raden om tvåfaktor. -->
+            <UiCard v-if="container.locked" class="h-full">
+                <template #heading>
+                    <span class="inline-flex min-h-11 items-center gap-2 font-medium text-ink">
+                        <UiIcon name="lock" class="shrink-0" />
+                        {{ container.name }}
+                    </span>
+                </template>
+
+                <p v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</p>
+
+                <p class="text-sm text-slate-600">{{ t('container.locked.requires') }}</p>
+
+                <Link href="/settings/security" class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline">
+                    {{ t('container.locked.turn_on') }}
+                </Link>
+            </UiCard>
+
+            <UiCard v-else class="h-full">
                 <template #media>
                     <div class="aspect-video w-full">
                         <ContainerCover

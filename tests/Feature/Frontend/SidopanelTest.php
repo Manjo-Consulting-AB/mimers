@@ -473,7 +473,7 @@ it('gör en art med två containrar till en grupp och lägger en ensam art i hö
 
     // Raden bär namn, ULID och ikonval och ingenting mer: talen och bilden
     // hör till dashboardens kort, och adressen byggs i klienten ur ULID:n.
-    expect(array_keys($grupper[0]['containers'][0]))->toBe(['ulid', 'name', 'icon', 'icon_color'])
+    expect(array_keys($grupper[0]['containers'][0]))->toBe(['ulid', 'name', 'icon', 'icon_color', 'locked'])
         ->and($grupper[0]['containers'][0]['ulid'])->toBe(
             Container::query()->where('name', 'Traktorn')->firstOrFail()->ulid
         );
@@ -560,7 +560,8 @@ it('ritar varje containers ikon i dess färg i containerlistan', function () {
         ->toContain('fallback="container"');
 
     // Ikonen står före namnet och i samma rad.
-    $start = (int) strpos($lista, 'v-for="container in group.containers"');
+    // Den låsta grenen (issue 449) står först; provet gäller länkraden.
+    $start = (int) strpos($lista, 'v-else', (int) strpos($lista, 'v-for="container in group.containers"'));
     $namn = (int) strpos($lista, '{{ container.name }}', $start);
     $raden = substr($lista, $start, $namn - $start);
 

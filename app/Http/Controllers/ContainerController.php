@@ -158,7 +158,7 @@ class ContainerController extends Controller
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containers = Container::query()
-            ->accessibleBy($user, $accountIds)
+            ->accessibleBy($user, $accountIds, includeLocked: true)
             ->listable()
             // ContainerResource::toArray() läser $this->account->ulid och
             // containerns bild för varje rad — utan eager loading blir listan
@@ -169,12 +169,17 @@ class ContainerController extends Controller
             ->get();
 
         return Inertia::render('Containers/Index', [
-            'containers' => $containers->map(fn (Container $container): array => [
-                ...ContainerResource::make($container)->resolve($request),
-                'can' => [
-                    'update' => Gate::forUser($user)->allows('update', $container),
-                ],
-            ])->all(),
+            // En låst container (ADR-0092, issue 449) bär bara ulid, namn,
+            // art och `locked` — ingen bild, ingen ägare, inga rättigheter.
+            'containers' => $containers->map(fn (Container $container): array => ContainerResource::isLocked($container, $user, $accountIds)
+                ? ['ulid' => $container->ulid, 'name' => $container->name, 'kind' => $container->kind, 'locked' => true]
+                : [
+                    ...ContainerResource::make($container)->resolve($request),
+                    'locked' => false,
+                    'can' => [
+                        'update' => Gate::forUser($user)->allows('update', $container),
+                    ],
+                ])->all(),
             // Plusknappens mål (issue 152 · [[ADR-0048 Mobilen och
             // plusknappen]] § 2): i en containerlista skapar den en container,
             // precis som raden i huvudet redan gör. Formuleringen bor i
@@ -319,6 +324,19 @@ class ContainerController extends Controller
         ActiveContainer $activeContainer,
         CreateTarget $createTarget,
     ): Response {
+        // Den låsta medlemmen (ADR-0092, issue 449) får en sida och inte en
+        // ren 403: namnet, raden om tvåfaktor och länken. Bara den som annars
+        // hade nått containern genom en grant — ingen annan får veta att den
+        // finns. Alla andra containerrutter svarar 403 via policyn.
+        $accountIds = $request->user()->accounts->pluck('id')->values()->all();
+
+        if (ContainerResource::isLocked($container, $request->user(), $accountIds)
+            && Container::query()->accessibleBy($request->user(), $accountIds, includeLocked: true)->whereKey($container->id)->exists()) {
+            return Inertia::render('Containers/Locked', [
+                'container' => ['ulid' => $container->ulid, 'name' => $container->name, 'locked' => true],
+            ]);
+        }
+
         Gate::authorize('view', $container);
 
         // Ägarkontot OCH bilden: skalets topprad ritar miniatyren ur `cover`,

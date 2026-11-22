@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import ContainerCover from './ContainerCover.vue';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -58,7 +59,26 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <UiCard class="min-w-64 flex-1 relative">
+    <!--
+        Den låsta containern (ADR-0092, issue 449): namnet, ett lås och raden
+        om tvåfaktor — ingen länk till containern, ingen bild och inga tal.
+    -->
+    <UiCard v-if="props.container.locked" class="min-w-64 flex-1">
+        <template #heading>
+            <span class="inline-flex min-h-11 items-center gap-2 text-ink">
+                <UiIcon name="lock" class="shrink-0" />
+                {{ props.container.name }}
+            </span>
+        </template>
+
+        <p class="text-meta text-ink-subtle">{{ t('container.locked.requires') }}</p>
+
+        <Link href="/settings/security" class="mt-2 inline-flex min-h-11 items-center text-meta text-blue-700 hover:underline">
+            {{ t('container.locked.turn_on') }}
+        </Link>
+    </UiCard>
+
+    <UiCard v-else class="min-w-64 flex-1 relative">
         <template #media>
             <div class="aspect-video w-full">
                 <ContainerCover

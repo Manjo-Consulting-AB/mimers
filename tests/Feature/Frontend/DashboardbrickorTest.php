@@ -423,7 +423,9 @@ it('gör hela containerkortet till länkens klickyta', function () {
     expect($kort)->toContain('after:absolute')
         ->toContain('after:inset-0')
         ->toContain('relative')
-        ->and(substr_count($kort, '<Link'))->toBe(1);
+        // Den låsta grenen (issue 449) har sin egen länk, till
+        // säkerhetsinställningarna; provet gäller den vanliga grenen.
+        ->and(substr_count(substr($kort, (int) strpos($kort, 'v-else class="min-w-64')), '<Link'))->toBe(1);
 });
 
 /*

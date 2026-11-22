@@ -171,7 +171,22 @@ function isActive(container) {
 
             <ul class="flex flex-col gap-1 px-2 text-sm">
                 <li v-for="container in group.containers" :key="container.ulid" class="flex">
+                    <!-- Låst (ADR-0092, issue 449): ingen länk, ett lås. -->
+                    <span
+                        v-if="container.locked"
+                        role="link"
+                        aria-disabled="true"
+                        :title="t('container.locked.requires')"
+                        :aria-label="t('container.locked.aria', { name: container.name })"
+                        class="inline-flex min-h-11 w-full items-center gap-2 opacity-70"
+                    >
+                        <UiIcon name="lock" class="shrink-0" />
+
+                        {{ container.name }}
+                    </span>
+
                     <Link
+                        v-else
                         :href="`/containers/${container.ulid}`"
                         prefetch
                         :aria-current="isActive(container) ? 'page' : undefined"
