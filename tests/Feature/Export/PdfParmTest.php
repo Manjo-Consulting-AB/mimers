@@ -11,12 +11,15 @@ use App\Models\Export;
 use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\Notification;
+use App\Models\NotificationDelivery;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
 use App\Models\User;
 use App\Support\Access\ItemScope;
 use App\Support\Export\BinderBuilder;
+use App\Support\Notification\NotificationTarget;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -660,4 +663,45 @@ it('en bilage-ULID utanför pärmen eller en saknad nyckel ger inga bilagor', fu
 
     expect(parmDel($spion, 'export.binder.item')['attachments'])->toBe([])
         ->and($export->status)->toBe(Export::STATUS_READY);
+});
+
+// --- Notisen när pärmen är klar (issue 1518) -------------------------------
+
+it('en pärm som blir ready ger beställaren binder.ready i appen, länkad till exportsidan', function () {
+    [$account, $user, $container] = parmKontext();
+
+    $export = parmKör(parmRad($container, $user));
+
+    expect($export->status)->toBe(Export::STATUS_READY);
+
+    $notis = Notification::query()->where('type', Notification::TYPE_BINDER_READY)->sole();
+
+    expect($notis->user_id)->toBe($user->id)
+        ->and($notis->payload)->toBe(['container' => 'Båten', 'item' => null, 'export' => $export->ulid])
+        ->and(app(NotificationTarget::class)->for($notis))
+        ->toBe('/containers/'.$container->ulid.'/export')
+        ->and($notis->deliveries()->pluck('channel')->all())->toBe([NotificationDelivery::CHANNEL_IN_APP]);
+});
+
+it('en itempärm bär itemets namn i notisen', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Motorn');
+
+    parmKör(parmRad($container, $user, ['item_id' => $item->id]));
+
+    $notis = Notification::query()->where('type', Notification::TYPE_BINDER_READY)->sole();
+
+    expect($notis->payload['item'])->toBe('Motorn');
+});
+
+it('ZIP-exporten och en misslyckad pärm ger ingen notis', function () {
+    [, $user, $container] = parmKontext();
+
+    parmKör(parmRad($container, $user, ['kind' => Export::KIND_ZIP]));
+
+    app()->instance(BinderBuilder::class, Mockery::mock(BinderBuilder::class, fn ($m) => $m->shouldReceive('build')->andThrow(new RuntimeException('fel'))));
+    $failed = parmKör(parmRad($container, $user));
+
+    expect($failed->status)->toBe(Export::STATUS_FAILED)
+        ->and(Notification::query()->count())->toBe(0);
 });

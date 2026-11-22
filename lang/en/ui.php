@@ -323,6 +323,12 @@ return [
         'transfer' => [
             'requested' => ':container has been offered to you',
         ],
+        // Issue 1518: the notification type. `ready_item` is
+        // used for a single item (`ready` is a string, so it has no children).
+        'binder' => [
+            'ready' => 'Your PDF binder for :container is ready',
+            'ready_item' => 'Your PDF binder for :item is ready',
+        ],
 
         // Issue 131: the clock's invitation row, read from `invitation` and
         // not from `notification`. An invitation has no notification type —
@@ -2017,6 +2023,12 @@ return [
                  */
                 'versioning' => [
                     'skipped' => 'Your storage is full, so earlier versions of items in ":container" are not being saved. Free up space under Storage.',
+                ],
+                // Issue 1518: the new type. The row links to the
+                // container's export page.
+                'binder' => [
+                    'ready' => 'Your PDF binder for :container is ready.',
+                    'ready_item' => 'Your PDF binder for :item is ready.',
                 ],
                 /*
                  * Issue 1457 · [[Planer och kvoter]] § Nedgradering. The row

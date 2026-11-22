@@ -624,11 +624,11 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    // Tretton sedan issue 1457 lade till `account.downgrade_warning` (tolv
-    // sedan issue 412 lade till `versioning.skipped`). Räkningen är över
+    // Fjorton sedan issue 1518 lade till `binder.ready` (tretton efter issue
+    // 1457, tolv efter issue 412). Räkningen är över
     // KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
     // en typ någon lägger till `in_app` för utan att märka att texten saknas.
-    expect($typer)->toHaveCount(13);
+    expect($typer)->toHaveCount(14);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';
@@ -1570,7 +1570,9 @@ it('beskriver produkten generiskt, utan fordon i copyn', function () {
  *
  * `pdf_binder` är undantaget och det enda — [[ADR-0032 Produktens ord]]
  * § Konsekvenser håller namnet tills PDF-pärmen byggs. Raden bär ordet i både
- * nyckeln och värdet ('PDF binder'), och det är samma undantag.
+ * nyckeln och värdet ('PDF binder'), och det är samma undantag. Issue 1518
+ * lägger notistypen `binder.ready` till: nyckelraden `'binder' => [` och
+ * meningarna 'Your PDF binder …' är de enda nya träffarna.
  */
 it('säger inte binder någon annanstans än i pdf_binder', function () {
     $rader = preg_split('/\R/', File::get(lang_path('en/ui.php'))) ?: [];
@@ -1578,7 +1580,11 @@ it('säger inte binder någon annanstans än i pdf_binder', function () {
     $fel = [];
 
     foreach ($rader as $nummer => $rad) {
-        if (stripos($rad, 'binder') !== false && ! str_contains($rad, 'pdf_binder')) {
+        $tillåten = str_contains($rad, 'pdf_binder')
+            || trim($rad) === "'binder' => ["
+            || str_contains($rad, 'Your PDF binder for ');
+
+        if (stripos($rad, 'binder') !== false && ! $tillåten) {
             $fel[] = sprintf('rad %d: %s', $nummer + 1, trim($rad));
         }
     }

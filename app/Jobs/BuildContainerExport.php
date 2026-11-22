@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Actions\Notification\NotifyBinderReady;
 use App\Models\Export;
 use App\Support\Export\BinderBuilder;
 use App\Support\Export\ContainerExportBuilder;
@@ -64,6 +65,31 @@ class BuildContainerExport implements ShouldQueue
             $export->save();
 
             $this->deletePartial($export);
+
+            return;
+        }
+
+        $this->notifyBinderReady($export);
+    }
+
+    /**
+     * Pärmen är klar: beställaren får `binder.ready` i appen (issue 1518).
+     * Utanför byggets `try`: ett fel i notisen får aldrig göra en färdig
+     * pärm till `failed`.
+     */
+    private function notifyBinderReady(Export $export): void
+    {
+        if ($export->kind !== Export::KIND_BINDER) {
+            return;
+        }
+
+        try {
+            app(NotifyBinderReady::class)->handle($export);
+        } catch (Throwable $e) {
+            Log::warning('Notisen om den färdiga pärmen kunde inte skapas', [
+                'export_id' => $export->id,
+                'exception' => $e->getMessage(),
+            ]);
         }
     }
 

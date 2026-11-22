@@ -85,6 +85,9 @@ final class NotificationPreferences
         // står INTE i EMAIL_DEFAULTS och har därför ingen växel på
         // inställningssidan — den är ingen mejltyp (se NO_EMAIL_TYPES).
         Notification::TYPE_VERSIONING_SKIPPED => ['enabled' => true, 'digest' => false],
+        // Issue 1518: pärmen är klar. Samma form som `versioning.skipped`:
+        // bara i appen, ingen växel (se NO_EMAIL_TYPES).
+        Notification::TYPE_BINDER_READY => ['enabled' => true, 'digest' => false],
     ];
 
     /**
@@ -134,6 +137,7 @@ final class NotificationPreferences
      */
     private const NO_EMAIL_TYPES = [
         Notification::TYPE_VERSIONING_SKIPPED,
+        Notification::TYPE_BINDER_READY,
     ];
 
     /**
