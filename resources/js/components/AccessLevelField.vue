@@ -1,36 +1,35 @@
 <script setup>
 import { computed } from 'vue';
+import UiBadge from './UiBadge.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Nivåfältet — de fyra stegen i laddern, se issue 55a § Beslut 4 och
  * [[ADR-0028 Åtkomst på itemnivå]] § Beslut.
  *
- * **Fyra nivåer, två synliga.** `read` och `write` är de två vanliga valen;
- * `create` och `delete` ligger bakom en <details>-yta med rubriken
- * *Avancerat*, stängd som standard. Fyra val är för mycket för en ägare som
- * delar med sambon, och två är för lite för kundfallet i ADR-0028 — det är
- * hela skälet till uppdelningen.
+ * **Fyra nivåer, fyra likvärdiga val** (issue 439). Fältet svarar på frågan
+ * *Vad ska den här personen kunna göra i containern?* — därför står alla fyra
+ * stegen i ladderns ordning som samma sorts radio-kort, med samma ram och
+ * samma tyngd. Den tidigare uppdelningen i två vanliga och två *Avancerat*
+ * är borta: den gömde två av fyra val bakom en yta ingen letade efter, och
+ * beskrivningarna säger nu vad mottagaren får göra i stället för vad
+ * systemet gör.
  *
- * **Stängd är inte dold.** Fälten renderas alltid och ligger i DOM:en; det är
- * <details> som fäller ihop dem, inte en `v-if`. Den som öppnar *Avancerat*
- * med tangentbordet — summary är fokuserbart och fälls ut med Enter eller
- * mellanslag — hittar exakt samma radio-knappar och samma etiketter som de
- * två vanliga valen. Ett villkorat fält hade varit ett fält som inte gick att
- * nå alls utan mus.
+ * **Read bär märkningen *Recommended*.** Det är det val som ger minst och som
+ * de flesta delningar börjar i; brickan är ett ord, inte en färg
+ * ([[ADR-0042 Designsystemet]] § Beslut), och den sitter i etikettraden så
+ * att den inte konkurrerar med beskrivningen.
  *
- * **Egen komponent och inte ett fält i en vy.** 55b använder samma fält i sitt
- * inbjudningsformulär, och issue 57 vill ha det när ett enskilt item delas.
- * Nivåerna kommer som prop ur `AccessLevel::LADDER` — samma teknik som
- * `Container::KINDS` (issue 54 § Beslut 8): laddern finns på ett ställe, och
- * en avskrift i JavaScript blir en andra sanning om vilka nivåer som finns.
- * `advanced` är däremot en presentationsdom och bor här: vilka två som är
- * "avancerade" är inte en egenskap hos laddern.
+ * **Egen komponent och inte ett fält i en vy.** Inbjudningsformuläret,
+ * inbjudningsraden och åtkomstraden använder samma fält, så nivåvalet ändras
+ * på ett ställe. Nivåerna kommer som prop ur `AccessLevel::LADDER` — samma
+ * teknik som `Container::KINDS` (issue 54 § Beslut 8): laddern finns på ett
+ * ställe, och en avskrift i JavaScript blir en andra sanning om vilka nivåer
+ * som finns.
  *
  * Radio och inte en <select>: varje nivå bär en mening om vad den faktiskt
- * tillåter, formulerad ur regel 3, och en mening får inte plats i en
- * nedfällbar lista. Etiketten och beskrivningen kommer ur
- * `sharing.level.<nivå>`.
+ * tillåter, och en mening får inte plats i en nedfällbar lista. Etiketten och
+ * beskrivningen kommer ur `sharing.level.<nivå>`.
  *
  * Ingen klientvalidering och inget eget felmeddelande: `error` kommer ur
  * `form.errors.level`, som Inertia fyller från sessionens felpåse när
@@ -55,12 +54,6 @@ const emit = defineEmits(['update:modelValue']);
 
 const { t } = useTranslations();
 
-/* Presentationsdomen: dessa två hamnar bakom *Avancerat*. */
-const ADVANCED = ['create', 'delete'];
-
-const common = computed(() => props.levels.filter((level) => !ADVANCED.includes(level)));
-const advanced = computed(() => props.levels.filter((level) => ADVANCED.includes(level)));
-
 const inputId = (level) => `${props.id}-${level}`;
 const errorId = computed(() => `${props.id}-error`);
 </script>
@@ -70,7 +63,7 @@ const errorId = computed(() => `${props.id}-error`);
         <legend class="text-body font-medium text-ink">{{ t('sharing.accesses.level') }}</legend>
 
         <label
-            v-for="level in common"
+            v-for="level in levels"
             :key="level"
             :for="inputId(level)"
             class="flex min-h-11 cursor-pointer gap-2 rounded-control border border-border bg-surface p-2"
@@ -85,39 +78,14 @@ const errorId = computed(() => `${props.id}-error`);
                 class="mt-1"
                 @change="emit('update:modelValue', level)"
             >
-            <span class="flex flex-col">
-                <span class="text-body text-ink">{{ t(`sharing.level.${level}.label`) }}</span>
+            <span class="flex flex-col gap-1">
+                <span class="flex flex-wrap items-center gap-2">
+                    <span class="text-body text-ink">{{ t(`sharing.level.${level}.label`) }}</span>
+                    <UiBadge v-if="level === 'read'">{{ t('sharing.level.recommended') }}</UiBadge>
+                </span>
                 <span class="text-meta text-ink-muted">{{ t(`sharing.level.${level}.description`) }}</span>
             </span>
         </label>
-
-        <details class="rounded-control border border-border bg-surface">
-            <summary class="cursor-pointer p-2 text-body text-ink">{{ t('sharing.advanced') }}</summary>
-
-            <div class="flex flex-col gap-2 border-t border-border p-2">
-                <label
-                    v-for="level in advanced"
-                    :key="level"
-                    :for="inputId(level)"
-                    class="flex min-h-11 cursor-pointer items-center gap-2"
-                >
-                    <input
-                        :id="inputId(level)"
-                        type="radio"
-                        :name="id"
-                        :value="level"
-                        :checked="modelValue === level"
-                        :disabled="disabled"
-                        class="mt-1"
-                        @change="emit('update:modelValue', level)"
-                    >
-                    <span class="flex flex-col">
-                        <span class="text-body text-ink">{{ t(`sharing.level.${level}.label`) }}</span>
-                        <span class="text-meta text-ink-muted">{{ t(`sharing.level.${level}.description`) }}</span>
-                    </span>
-                </label>
-            </div>
-        </details>
 
         <!--
             `role="alert"` och `tabindex="-1"`: felet läses upp när svaret

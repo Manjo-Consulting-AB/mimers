@@ -2133,10 +2133,14 @@ return [
             'unknown_group' => 'Unknown agent group.',
             'saved' => 'Saved',
         ],
+        // Issue 439: the field answers what the person's agents may do, in
+        // everyday words, and folds behind a summary so it does not compete
+        // with the level choice above it.
         'access_field' => [
-            'label' => 'Agent access',
-            'none' => 'None',
-            'hint' => 'The highest level the member\'s agents may reach here. It is never higher than the access itself.',
+            'summary' => 'AI agent permissions',
+            'label' => 'Allow AI agents',
+            'none' => 'No agent access',
+            'hint' => 'Controls what this person\'s AI agents can access in this container. Agent permissions can never exceed the person\'s own permissions.',
             'saved' => 'Agent access updated',
         ],
         'pause_label' => 'Pause this agent',
@@ -5525,7 +5529,9 @@ return [
             // transfer of ownership. Stated once on the page, not per row.
             'limits' => 'No access grants the right to delete the container, manage accesses or start a transfer of ownership. That is always the owner account.',
 
-            'level' => 'Level',
+            // Issue 439: the legend asks the owner's question, not the
+            // system's field name. The four levels are equal choices.
+            'level' => 'What can this person do?',
 
             // The recipient and the granter are shown by NAME, never by ULID.
             // Neither `User` nor `Account` uses SoftDeletes, so a row can in
@@ -5563,8 +5569,12 @@ return [
             'description' => 'Addresses that have been invited but have not answered yet. An invitation grants no access until it is accepted.',
 
             'email' => 'Email',
-            'item' => 'Scope',
+            // Issue 439: the scope question is asked in the person's terms.
+            // The help text below the selector follows the choice.
+            'item' => 'What can this person access?',
             'item_container' => 'The whole container',
+            'item_container_hint' => 'All items and information in this container.',
+            'item_hint' => 'The item and everything under it.',
 
             'submit' => 'Invite',
             'revoke' => 'Withdraw',
@@ -5612,26 +5622,29 @@ return [
             'guest' => 'Temporary access with an expiry date.',
         ],
 
+        // Issue 439: the four steps of the ladder read as four actions, and
+        // each description says what the RECIPIENT may do — never what the
+        // system does. The values (`read`, `create`, `write`, `delete`) and
+        // the steps between them are unchanged.
         'level' => [
             'read' => [
                 'label' => 'Read',
-                'description' => 'Reads. Touches nothing.',
+                'description' => 'Can view everything that is shared. Cannot make changes.',
             ],
             'create' => [
                 'label' => 'Add',
-                'description' => 'Adds attachments, costs, tasks and new child items — but never touches anything that already exists.',
+                'description' => 'Can add new items, attachments, tasks and costs. Cannot change or remove existing information.',
             ],
             'write' => [
-                'label' => 'Change',
-                'description' => 'Also changes what is already in the container.',
+                'label' => 'Edit',
+                'description' => 'Can add new information and edit existing content. Cannot delete anything.',
             ],
             'delete' => [
                 'label' => 'Delete',
-                'description' => 'Soft-deletes and restores from the bin.',
+                'description' => 'Can also delete existing information and restore deleted content.',
             ],
+            'recommended' => 'Recommended',
         ],
-
-        'advanced' => 'Advanced',
 
         'frozen' => 'The account is frozen and cannot change levels. Revoking an access still works.',
     ],

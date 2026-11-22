@@ -54,6 +54,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * utgången. Raden under fältet säger det, i stället för att ägaren ska leta
  * efter en knapp som inte finns.
  *
+ * **Agenttaket står hopfällt** (issue 439): väljaren ligger bakom *AI agent
+ * permissions* och fälls ut från början när raden redan har en agentnivå.
+ * Värdena och taket är oförändrade.
+ *
  * **Borttagningen går genom UiConfirmDialog.** Dialogen är appens egen fråga
  * (issue 330), och fokusfällan är webbläsarens `<dialog>`; `trigger` lämnar
  * tillbaka fokus till knappen som öppnade den. `pending` håller dialogen kvar
@@ -319,28 +323,43 @@ function remove() {
             @update:model-value="saveLevel"
         />
 
-        <div v-if="agentAccess" class="flex flex-col gap-1">
-            <label :for="field('agent_level')" class="text-meta font-medium text-ink">
-                {{ t('agents.access_field.label') }}
-            </label>
+        <!--
+            Agenttaket står hopfällt (issue 439), efter nivåvalet. Ett satt
+            värde fälls ut från början: en nivå som redan gäller ska inte
+            gömmas bakom en sammanfattning.
+        -->
+        <details
+            v-if="agentAccess"
+            :open="agentLevel !== null"
+            class="rounded-control border border-border bg-surface"
+        >
+            <summary class="flex min-h-11 cursor-pointer items-center px-3 text-body font-medium text-ink">
+                {{ t('agents.access_field.summary') }}
+            </summary>
 
-            <UiSelect
-                :id="field('agent_level')"
-                :model-value="agentLevel ?? ''"
-                :disabled="pending"
-                class="self-start"
-                @update:model-value="saveAgentLevel"
-            >
-                <option value="">{{ t('agents.access_field.none') }}</option>
-                <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
-            </UiSelect>
+            <div class="flex flex-col gap-1 border-t border-border p-3">
+                <label :for="field('agent_level')" class="text-meta font-medium text-ink">
+                    {{ t('agents.access_field.label') }}
+                </label>
 
-            <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
+                <UiSelect
+                    :id="field('agent_level')"
+                    :model-value="agentLevel ?? ''"
+                    :disabled="pending"
+                    class="self-start"
+                    @update:model-value="saveAgentLevel"
+                >
+                    <option value="">{{ t('agents.access_field.none') }}</option>
+                    <option v-for="level in agentLevels" :key="level" :value="level">{{ t(`sharing.level.${level}.label`) }}</option>
+                </UiSelect>
 
-            <p v-if="agentSaved" role="status" class="text-meta text-ink-subtle">{{ t('agents.access_field.saved') }}</p>
+                <p class="text-meta text-ink-muted">{{ t('agents.access_field.hint') }}</p>
 
-            <p v-if="agentError" role="alert" class="text-body text-danger">{{ agentError }}</p>
-        </div>
+                <p v-if="agentSaved" role="status" class="text-meta text-ink-subtle">{{ t('agents.access_field.saved') }}</p>
+
+                <p v-if="agentError" role="alert" class="text-body text-danger">{{ agentError }}</p>
+            </div>
+        </details>
 
         <div v-if="hasExpiry" class="flex flex-col gap-1">
             <label :for="field('expires_at')" class="text-meta font-medium text-ink">
@@ -376,20 +395,28 @@ function remove() {
             {{ t('sharing.accesses.updated') }}
         </p>
 
-        <!-- Borttagningen gick inte igenom. Felet bär `role="alert"` och står
-             på raden, dit blicken redan är — dialogen är stängd. -->
-        <p v-if="removeError" role="alert" class="text-body text-danger">
-            {{ removeError }}
-        </p>
+        <!--
+            *Remove access* står sist på raden och skild från behörighetsvalen
+            med en avdelare och luft (issue 439): borttagningen är en annan
+            sorts handling än att välja nivå, och ska inte läsas som ett val
+            bland de andra. Den röda formen och bekräftelsedialogen står kvar.
+        -->
+        <div class="mt-1 flex flex-col gap-2 border-t border-border pt-3">
+            <!-- Borttagningen gick inte igenom. Felet bär `role="alert"` och
+                 står på raden, dit blicken redan är — dialogen är stängd. -->
+            <p v-if="removeError" role="alert" class="text-body text-danger">
+                {{ removeError }}
+            </p>
 
-        <button
-            type="button"
-            :disabled="revoking"
-            class="inline-flex min-h-11 items-center self-start rounded-control border border-danger px-3 text-body font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
-            @click="openRemove($event.currentTarget)"
-        >
-            {{ t('sharing.accesses.remove') }}
-        </button>
+            <button
+                type="button"
+                :disabled="revoking"
+                class="inline-flex min-h-11 items-center self-start rounded-control border border-danger px-3 text-body font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+                @click="openRemove($event.currentTarget)"
+            >
+                {{ t('sharing.accesses.remove') }}
+            </button>
+        </div>
 
         <UiConfirmDialog
             :open="confirming"

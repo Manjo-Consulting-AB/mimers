@@ -569,45 +569,107 @@ it('gör ett konstant antal frågor oavsett antal rader', function () {
 });
 
 /*
- * Beslut 4: fyra nivåer, två synliga. `create` och `delete` ligger bakom en
- * <details>-yta — STÄNGD, inte dold, alltså renderad och nåbar med
- * tangentbordet, inte villkorad med v-if.
+ * Klart när (issue 439): de fyra nivåerna står som fyra likvärdiga val i
+ * ladderns ordning, utan *Advanced*. Fältet renderar laddern ur propen —
+ * nivåerna kommer ur AccessLevel::LADDER, aldrig som en avskrift i
+ * JavaScript — och `read` bär märkningen *Recommended*.
  */
-it('lägger create och delete bakom Avancerat utan att gömma dem', function () {
+it('visar de fyra nivåerna som likvärdiga val utan Advanced', function () {
     withoutVite();
 
     [, $anvandare, $container] = delningsKontext();
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
-        // Laddern kommer som prop ur AccessLevel::LADDER, aldrig som en
-        // avskrift i JavaScript — samma teknik som Container::KINDS.
         ->where('levels', ['read', 'create', 'write', 'delete'])
     );
 
     $falt = File::get(resource_path('js/components/AccessLevelField.vue'));
 
-    expect($falt)->toContain('<details');
-    expect($falt)->toContain("t('sharing.advanced')");
-    // Alla fyra nivåerna ritas ur `levels`, och bara de två avancerade står
-    // innanför <details>. Ingen v-if någonstans i fältet.
-    expect($falt)->toContain('v-for="level in common"');
-    expect($falt)->toContain('v-for="level in advanced"');
-    expect($falt)->not->toContain('v-if="advanced"');
-    expect($falt)->toContain('t(`sharing.level.${level}.label`)');
-    expect($falt)->toContain('t(`sharing.level.${level}.description`)');
+    // Ingen <details>, ingen *Avancerat* och ingen uppdelning i två grupper.
+    expect($falt)->not->toContain('<details');
+    expect($falt)->not->toContain("t('sharing.advanced')");
+    expect($falt)->not->toContain('ADVANCED');
+    expect($falt)->not->toContain('level in common');
+    expect($falt)->not->toContain('level in advanced');
+
+    // Alla fyra ritas i en enda lista, i ladderns ordning.
+    expect($falt)->toContain('v-for="level in levels"')
+        ->toContain('t(`sharing.level.${level}.label`)')
+        ->toContain('t(`sharing.level.${level}.description`)');
+
+    // *Recommended* på Read, som en UiBadge i etikettraden.
+    expect($falt)->toContain('UiBadge')
+        ->toContain("v-if=\"level === 'read'\"")
+        ->toContain("t('sharing.level.recommended')");
 });
 
-it('visar nivåerna och deras beskrivningar', function () {
+/*
+ * Klart när (issue 439): etiketterna är de som ritas överallt där en nivå
+ * namnges, och varje beskrivning säger vad MOTTAGAREN får göra — inte vad
+ * systemet gör. Nivån `write` heter *Edit*; *Change* finns inte kvar.
+ */
+it('namnger nivåerna som fyra handlingar med mottagarens ord', function () {
     $en = require lang_path('en/ui.php');
+    $nivaer = $en['sharing']['level'];
 
-    foreach (['read', 'create', 'write', 'delete'] as $niva) {
-        foreach (['label', 'description'] as $falt) {
-            expect($en['sharing']['level'][$niva][$falt])->not->toBe('');
-        }
-    }
+    expect($nivaer['read']['label'])->toBe('Read')
+        ->and($nivaer['read']['description'])->toBe('Can view everything that is shared. Cannot make changes.')
+        ->and($nivaer['create']['label'])->toBe('Add')
+        ->and($nivaer['create']['description'])->toBe('Can add new items, attachments, tasks and costs. Cannot change or remove existing information.')
+        ->and($nivaer['write']['label'])->toBe('Edit')
+        ->and($nivaer['write']['description'])->toBe('Can add new information and edit existing content. Cannot delete anything.')
+        ->and($nivaer['delete']['label'])->toBe('Delete')
+        ->and($nivaer['delete']['description'])->toBe('Can also delete existing information and restore deleted content.')
+        ->and($nivaer['recommended'])->toBe('Recommended');
+
+    // *Change* finns inte kvar som namn på en nivå, och *Advanced* är borta.
+    expect([
+        $nivaer['read']['label'],
+        $nivaer['create']['label'],
+        $nivaer['write']['label'],
+        $nivaer['delete']['label'],
+    ])->not->toContain('Change');
+
+    expect($en['sharing'])->not->toHaveKey('advanced');
+    expect($en['sharing']['accesses']['level'])->toBe('What can this person do?');
 
     // Meningen om vad ingen nivå får göra står EN gång på sidan (Beslut 4).
     expect($en['sharing']['accesses']['limits'])->toContain('transfer of ownership');
+});
+
+/*
+ * Klart när (issue 439): agentfältet står hopfällt bakom *AI agent
+ * permissions* och fälls ut när en agentnivå redan är satt, och *Remove
+ * access* står sist på raden, skild från behörighetsvalen med en avdelare.
+ * Väljarens värden och taket är oförändrade.
+ */
+it('hopfäller agentfältet och skiljer Remove access från nivåvalet', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+    $en = require lang_path('en/ui.php');
+
+    expect($rad)->toContain('<details')
+        ->toContain("t('agents.access_field.summary')")
+        ->toContain(':open="agentLevel !== null"')
+        // Väljaren och taket är oförändrade.
+        ->toContain('v-for="level in agentLevels"')
+        ->toContain("t('agents.access_field.none')")
+        ->toContain('props.levels.slice(0, props.levels.indexOf(props.access.level) + 1)');
+
+    // Agentytan står EFTER nivåvalet.
+    expect(strpos($rad, '<AccessLevelField'))->toBeLessThan(strpos($rad, '<details'));
+
+    // *Remove access* står sist, inne i en avdelad yta med luft ovanför.
+    $knapp = strpos($rad, "t('sharing.accesses.remove')");
+    $avdelare = strpos($rad, 'border-t border-border pt-3');
+
+    expect($avdelare)->not->toBeFalse();
+    expect($avdelare)->toBeLessThan($knapp);
+    expect($knapp)->toBeGreaterThan(strpos($rad, '</details>'));
+
+    expect($en['agents']['access_field']['summary'])->toBe('AI agent permissions')
+        ->and($en['agents']['access_field']['label'])->toBe('Allow AI agents')
+        ->and($en['agents']['access_field']['none'])->toBe('No agent access')
+        ->and($en['agents']['access_field']['hint'])->toBe('Controls what this person\'s AI agents can access in this container. Agent permissions can never exceed the person\'s own permissions.');
 });
 
 /*
