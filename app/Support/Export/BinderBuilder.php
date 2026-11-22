@@ -6,6 +6,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Item\RenderItemNotes;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Export;
 use App\Models\Item;
@@ -19,6 +20,7 @@ use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Number;
 use RuntimeException;
 use setasign\Fpdi\Fpdi;
 use Throwable;
@@ -139,7 +141,7 @@ class BinderBuilder
     }
 
     /**
-     * @return array{sections: list<string>, costs: bool}
+     * @return array{sections: list<string>, costs: bool, attachments: list<string>, mode: string}
      */
     private function resolveOptions(Export $export): array
     {
@@ -157,11 +159,20 @@ class BinderBuilder
             $sections[] = 'costs';
         }
 
-        return ['sections' => $sections, 'costs' => $costs];
+        // Bilage-ULID:er; saknad nyckel eller något annat än en lista av
+        // strängar är inga bilagor. Urvalet prövas mot pärmens items i
+        // planAttachments().
+        $attachments = is_array($options['attachments'] ?? null)
+            ? array_values(array_unique(array_filter($options['attachments'], 'is_string')))
+            : [];
+
+        $mode = ($options['attachment_mode'] ?? 'link') === 'merge' ? 'merge' : 'link';
+
+        return ['sections' => $sections, 'costs' => $costs, 'attachments' => $attachments, 'mode' => $mode];
     }
 
     /**
-     * @param  array{sections: list<string>, costs: bool}  $options
+     * @param  array{sections: list<string>, costs: bool, attachments: list<string>, mode: string}  $options
      */
     private function assemble(Export $export, Container $container, ItemScope $scope, array $options, $requester, FilesystemAdapter $disk, string $tmp, string $partial): void
     {
@@ -180,6 +191,9 @@ class BinderBuilder
 
         $entries = [];
 
+        // Återstående utrymme för sammanslagna bilagor, delat av hela pärmen.
+        $budget = (int) config('files.binder_merge_bytes');
+
         if (in_array('items', $sections, true)) {
             $itemsById = $items;
 
@@ -187,9 +201,17 @@ class BinderBuilder
                 /** @var Item $item */
                 $item = $itemsById[$id];
 
-                $path = $this->renderItem($item, $depth, $container, $sections, $relatedLinks, $itemsById, $requester, $disk, $tmp, $n);
+                $plan = $this->planAttachments($item, $options, $disk, $tmp, $n, $budget);
 
-                $entries[] = ['name' => $item->name, 'depth' => $depth, 'path' => $path];
+                $path = $this->renderItem($item, $depth, $container, $sections, $relatedLinks, $itemsById, $requester, $disk, $tmp, $n, $plan['links']);
+
+                $entries[] = ['name' => $item->name, 'depth' => $depth, 'paths' => [$path]];
+
+                // Sammanslagna bilagor står direkt efter itemets avsnitt, med
+                // en egen rad i förteckningen.
+                foreach ($plan['merged'] as $merged) {
+                    $entries[] = ['name' => $merged['name'], 'depth' => $depth + 1, 'paths' => $merged['paths']];
+                }
 
                 // Itemets laddade relationer behövs inte längre.
                 $item->unsetRelations();
@@ -198,7 +220,7 @@ class BinderBuilder
         }
 
         $coverPages = $this->pageCount($disk, $parts['cover']);
-        $itemPages = array_map(fn (array $e): int => $this->pageCount($disk, $e['path']), $entries);
+        $itemPages = array_map(fn (array $e): int => array_sum(array_map(fn (string $p): int => $this->pageCount($disk, $p), $e['paths'])), $entries);
 
         // Förteckningen renderas sist. Första gissningen är en sida; stämmer
         // den inte flyttas alla sidnummer, och den renderas om med rätt längd.
@@ -223,7 +245,7 @@ class BinderBuilder
             $tocPages = $actual;
         }
 
-        $this->merge($disk, [$parts['cover'], $tocPath, ...array_column($entries, 'path')], $partial, $tmp);
+        $this->merge($disk, [$parts['cover'], $tocPath, ...array_merge(...array_column($entries, 'paths'))], $partial, $tmp);
     }
 
     /**
@@ -334,8 +356,9 @@ class BinderBuilder
      * @param  list<string>  $sections
      * @param  array<int, list<array{relation: string, item_id: int}>>  $relatedLinks
      * @param  Collection<int, Item>  $itemsById
+     * @param  list<array{filename: string, type: ?string, size: ?string, url: string, note: ?string}>  $attachments  bilagorna som står som länkar
      */
-    private function renderItem(Item $item, int $depth, Container $container, array $sections, array $relatedLinks, $itemsById, $requester, FilesystemAdapter $disk, string $tmp, int $n): string
+    private function renderItem(Item $item, int $depth, Container $container, array $sections, array $relatedLinks, $itemsById, $requester, FilesystemAdapter $disk, string $tmp, int $n, array $attachments = []): string
     {
         $with = ['category', 'tags', 'ownFields', 'fieldValues', 'loans'];
 
@@ -405,7 +428,148 @@ class BinderBuilder
             'relations' => $relations,
             'history' => $history,
             'costs' => $costs,
+            'attachments' => $attachments,
         ]);
+    }
+
+    /**
+     * Itemets valda bilagor, delade i länkar och sammanslagna.
+     *
+     * Urvalet är `options.attachments` skärat med itemets egna bilagor: en
+     * ULID som hör till ett annat item, en annan container eller ett item
+     * utanför beställarens omfång (som aldrig kommer hit) tas aldrig upp.
+     * Ett item i taget, en fil i taget (ADR-0007): inget annat än den
+     * bilagan som just läses ligger i minnet, och normaliserade PDF:er skrivs
+     * till temporärmappen i stället för att hållas kvar.
+     *
+     * Allt som inte går att slå ihop — fel filtyp, saknade bytes, en PDF som
+     * FPDI inte läser (krypterad, trasig eller med komprimerad xref), en bild
+     * utan medium-variant eller en fil över taket — blir en länk med en rad om
+     * varför. En bilaga fäller aldrig pärmen.
+     *
+     * @param  array{sections: list<string>, costs: bool, attachments: list<string>, mode: string}  $options
+     * @return array{links: list<array{filename: string, type: ?string, size: ?string, url: string, note: ?string}>, merged: list<array{name: string, paths: list<string>}>}
+     */
+    private function planAttachments(Item $item, array $options, FilesystemAdapter $disk, string $tmp, int $n, int &$budget): array
+    {
+        $plan = ['links' => [], 'merged' => []];
+
+        if ($options['attachments'] === []) {
+            return $plan;
+        }
+
+        $attachments = $item->attachments()
+            ->whereIn('ulid', $options['attachments'])
+            ->with('storedFile')
+            ->orderBy('filename')
+            ->orderBy('id')
+            ->get();
+
+        foreach ($attachments as $i => $attachment) {
+            $stored = $attachment->storedFile;
+
+            $link = [
+                'filename' => $attachment->filename,
+                'type' => $stored?->mime_type,
+                'size' => $stored === null ? null : Number::fileSize((int) $stored->byte_size),
+                'url' => route('files.download', $attachment),
+                'note' => null,
+            ];
+
+            $mime = (string) $stored?->mime_type;
+
+            if ($options['mode'] !== 'merge' || ($mime !== 'application/pdf' && ! str_starts_with($mime, 'image/'))) {
+                $plan['links'][] = $link;
+
+                continue;
+            }
+
+            $result = $this->mergeAttachment($attachment, $mime === 'application/pdf', $disk, $tmp, $n.'-'.$i, $budget);
+
+            if (is_string($result)) {
+                $link['note'] = __($result);
+                $plan['links'][] = $link;
+            } else {
+                $plan['merged'][] = ['name' => $attachment->filename, 'paths' => $result];
+            }
+        }
+
+        return $plan;
+    }
+
+    /**
+     * Gör en bilaga till sidor i pärmen. Returnerar delarnas sökvägar, eller
+     * språknyckeln till raden som förklarar varför den blir en länk.
+     *
+     * @return list<string>|string
+     */
+    private function mergeAttachment(Attachment $attachment, bool $pdf, FilesystemAdapter $disk, string $tmp, string $key, int &$budget): array|string
+    {
+        $stored = $attachment->storedFile;
+
+        // En bild läses ur sin medium-variant, aldrig originalet.
+        $source = $stored->storage_path;
+        $derivative = null;
+
+        if (! $pdf) {
+            $derivative = $stored->derivatives()->where('variant', 'medium')->first();
+            $source = $derivative?->storage_path;
+        }
+
+        if ($source === null) {
+            return 'export.attachment_unmerged';
+        }
+
+        if (! $disk->exists($source)) {
+            return 'export.missing';
+        }
+
+        $size = (int) $disk->size($source);
+
+        if ($size > $budget) {
+            return 'export.attachment_over_cap';
+        }
+
+        $divider = $tmp.'/att-'.$key.'-divider.pdf';
+        $out = $tmp.'/att-'.$key.'.pdf';
+
+        try {
+            if ($pdf) {
+                $doc = new Fpdi('P', 'pt');
+                $doc->SetAutoPageBreak(false);
+                $pages = $this->appendPages($doc, $disk->path($source), false, 0, 0);
+
+                if ($pages === 0) {
+                    return 'export.attachment_unmerged';
+                }
+
+                // Skrivs om till en vanlig PDF: en fil FPDI inte kan återge
+                // fäller här, inte i hopsättningen längre fram.
+                $doc->Output('F', $disk->path($out));
+                $doc->cleanUp(true);
+                unset($doc);
+
+                $this->renderPart($disk, $divider, 'export.binder.attachment', ['filename' => $attachment->filename, 'image' => null]);
+
+                $paths = [$divider, $out];
+            } else {
+                $mime = $disk->mimeType($source) ?: 'image/jpeg';
+                $image = 'data:'.$mime.';base64,'.base64_encode((string) $disk->get($source));
+
+                $this->renderPart($disk, $divider, 'export.binder.attachment', ['filename' => $attachment->filename, 'image' => $image]);
+                unset($image);
+
+                $paths = [$divider];
+            }
+        } catch (Throwable) {
+            $disk->delete([$divider, $out]);
+
+            return 'export.attachment_unmerged';
+        }
+
+        $budget -= $size;
+
+        return $paths;
     }
 
     /**

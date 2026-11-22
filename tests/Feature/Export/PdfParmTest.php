@@ -477,3 +477,187 @@ it('pärmens historik har den översatta meningen och inte åtgärdskoden', func
         ->and(implode(' ', $meningar))->toContain(__('ui.audit.action.item.created', ['user' => $user->name, 'item' => 'Prylen']))
         ->and(implode(' ', $meningar))->not->toContain('item.created');
 });
+
+// --- Bilagorna (issue 444) -------------------------------------------------
+
+/** En giltig PDF med $sidor sidor, skriven av FPDI. */
+function parmPdf(int $sidor): string
+{
+    $pdf = new Fpdi('P', 'pt');
+    $pdf->SetFont('Helvetica', '', 12);
+
+    for ($i = 1; $i <= $sidor; $i++) {
+        $pdf->AddPage();
+        $pdf->Cell(0, 20, "Bilagesida {$i}");
+    }
+
+    return $pdf->Output('S');
+}
+
+/** En PDF som FPDI:s gratisversion vägrar: trailern pekar på en kryptering. */
+function parmKrypteradPdf(): string
+{
+    return str_replace('trailer', "trailer\n<< /Encrypt 99 0 R >>\ntrailer", parmPdf(1));
+}
+
+/** En PNG som är mycket större än en sida, så skalningen syns. */
+function parmStorPng(): string
+{
+    $bild = imagecreatetruecolor(1600, 2400);
+    imagefill($bild, 0, 0, imagecolorallocate($bild, 200, 40, 40));
+
+    ob_start();
+    imagepng($bild);
+
+    return (string) ob_get_clean();
+}
+
+function parmBilaga(Item $item, string $namn, string $mime, string $bytes, ?string $medium = null): Attachment
+{
+    $stored = StoredFile::factory()->create([
+        'mime_type' => $mime,
+        'byte_size' => strlen($bytes),
+        'storage_path' => 'bilagor/'.Str::random(12),
+    ]);
+
+    Storage::disk('files')->put($stored->storage_path, $bytes);
+
+    if ($medium !== null) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $stored->id,
+            'variant' => 'medium',
+            'storage_path' => 'bilagor/'.Str::random(12).'-medium',
+        ]);
+
+        Storage::disk('files')->put(ImageDerivative::query()->where('stored_file_id', $stored->id)->value('storage_path'), $medium);
+    }
+
+    return Attachment::factory()->create([
+        'item_id' => $item->id,
+        'stored_file_id' => $stored->id,
+        'filename' => $namn,
+        'kind' => str_starts_with($mime, 'image/') ? 'image' : 'document',
+    ]);
+}
+
+it('options.attachment_mode link ger en lista med länkar under itemet och inga extra sidor', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $pdf = parmBilaga($item, 'manual.pdf', 'application/pdf', parmPdf(3));
+    parmBilaga($item, 'ovald.pdf', 'application/pdf', parmPdf(1));
+
+    $spion = parmSpion();
+    $export = parmKör(parmRad($container, $user, ['options' => ['attachments' => [$pdf->ulid]]]));
+
+    $lankar = parmDel($spion, 'export.binder.item')['attachments'];
+
+    expect($export->status)->toBe(Export::STATUS_READY)
+        ->and($lankar)->toHaveCount(1)
+        ->and($lankar[0]['filename'])->toBe('manual.pdf')
+        ->and($lankar[0]['type'])->toBe('application/pdf')
+        ->and($lankar[0]['url'])->toBe(route('files.download', $pdf))
+        ->and($lankar[0]['url'])->toStartWith('http')
+        ->and($lankar[0]['note'])->toBeNull()
+        ->and(parmSidor(Storage::disk('files')->path($export->storage_path)))->toBe(3);
+});
+
+it('merge lägger in PDF-sidor och bilder, med rader i förteckningen och sidnummer över allt', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $pdf = parmBilaga($item, 'manual.pdf', 'application/pdf', parmPdf(3));
+    $bild = parmBilaga($item, 'foto.png', 'image/png', 'ORIGINAL', parmStorPng());
+    $zip = parmBilaga($item, 'data.zip', 'application/zip', 'PK');
+
+    $spion = parmSpion();
+    $export = parmKör(parmRad($container, $user, [
+        'options' => ['attachments' => [$pdf->ulid, $bild->ulid, $zip->ulid], 'attachment_mode' => 'merge'],
+    ]));
+
+    $sokvag = Storage::disk('files')->path($export->storage_path);
+
+    // försättsblad + förteckning + item + (avdelare + 3 sidor) + avdelare med bilden = 8
+    expect($export->status)->toBe(Export::STATUS_READY)
+        ->and(parmSidor($sokvag))->toBe(8);
+
+    $rader = parmDel($spion, 'export.binder.toc')['rows'];
+
+    expect(array_column($rader, 'name'))->toBe(['Prylen', 'foto.png', 'manual.pdf'])
+        ->and(array_column($rader, 'page'))->toBe([3, 4, 5]);
+
+    // Zip-filen kan inte slås ihop och står kvar som länk; de sammanslagna gör det inte.
+    $lankar = parmDel($spion, 'export.binder.item')['attachments'];
+
+    expect(array_column($lankar, 'filename'))->toBe(['data.zip'])
+        ->and($lankar[0]['note'])->toBeNull()
+        ->and(parmText((string) file_get_contents($sokvag)))->toContain('Page 8 of 8')
+        ->and(Storage::disk('files')->exists($export->storage_path))->toBeTrue();
+});
+
+it('en krypterad eller oläsbar PDF och en fil över taket står som länk och pärmen blir ready', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $krypterad = parmBilaga($item, 'a-krypterad.pdf', 'application/pdf', parmKrypteradPdf());
+    $trasig = parmBilaga($item, 'b-trasig.pdf', 'application/pdf', 'inte en pdf');
+    $stor = parmBilaga($item, 'c-stor.pdf', 'application/pdf', parmPdf(2));
+    $bildUtanVariant = parmBilaga($item, 'd-bild.png', 'image/png', 'PNG');
+
+    config(['files.binder_merge_bytes' => strlen(parmPdf(2)) - 1]);
+
+    $spion = parmSpion();
+    $export = parmKör(parmRad($container, $user, [
+        'options' => [
+            'attachments' => [$krypterad->ulid, $trasig->ulid, $stor->ulid, $bildUtanVariant->ulid],
+            'attachment_mode' => 'merge',
+        ],
+    ]));
+
+    $lankar = collect(parmDel($spion, 'export.binder.item')['attachments'])->keyBy('filename');
+
+    expect($export->status)->toBe(Export::STATUS_READY)
+        ->and($lankar['a-krypterad.pdf']['note'])->toBe('Could not be merged — opened from Mimers')
+        ->and($lankar['b-trasig.pdf']['note'])->toBe('Could not be merged — opened from Mimers')
+        ->and($lankar['d-bild.png']['note'])->toBe('Could not be merged — opened from Mimers')
+        ->and($lankar['c-stor.pdf']['note'])->toContain('size limit')
+        ->and(parmSidor(Storage::disk('files')->path($export->storage_path)))->toBe(3);
+});
+
+it('taket räknas över alla bilagor i pärmen', function () {
+    [$account, $user, $container] = parmKontext();
+    $a = parmItem($container, $account, $user, 'A');
+    $b = parmItem($container, $account, $user, 'B');
+    $forsta = parmBilaga($a, 'ett.pdf', 'application/pdf', parmPdf(1));
+    $andra = parmBilaga($b, 'tva.pdf', 'application/pdf', parmPdf(1));
+
+    config(['files.binder_merge_bytes' => strlen(parmPdf(1)) + 10]);
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user, [
+        'options' => ['attachments' => [$forsta->ulid, $andra->ulid], 'attachment_mode' => 'merge'],
+    ]));
+
+    $itemDelar = collect($spion->rendered)->filter(fn (array $r): bool => $r[0] === 'export.binder.item')->values();
+
+    expect($itemDelar[0][1]['attachments'])->toBe([])
+        ->and($itemDelar[1][1]['attachments'])->toHaveCount(1);
+});
+
+it('en bilage-ULID utanför pärmen eller en saknad nyckel ger inga bilagor', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    parmBilaga($item, 'med.pdf', 'application/pdf', parmPdf(1));
+
+    $annan = Container::factory()->for($account, 'account')->create();
+    $annatItem = parmItem($annan, $account, $user, 'Grannen');
+    $utanfor = parmBilaga($annatItem, 'utanfor.pdf', 'application/pdf', parmPdf(1));
+
+    $spion = parmSpion();
+    $export = parmKör(parmRad($container, $user, ['options' => ['attachments' => [$utanfor->ulid, 'finns-inte', 7]]]));
+
+    expect(parmDel($spion, 'export.binder.item')['attachments'])->toBe([]);
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user, ['options' => ['attachment_mode' => 'merge']]));
+
+    expect(parmDel($spion, 'export.binder.item')['attachments'])->toBe([])
+        ->and($export->status)->toBe(Export::STATUS_READY);
+});
