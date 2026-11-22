@@ -44,6 +44,9 @@ const props = defineProps({
 const { t } = useTranslations();
 const page = usePage();
 
+/* Slaget som etikett; `binder` heter `pdf_binder` i katalogen (SprakTest). */
+const kindKey = computed(() => (props.row.kind === 'binder' ? 'export.kind.pdf_binder' : 'export.kind.zip'));
+
 const status = computed(() => exportStatus(props.row));
 
 /* Null när jobbet inte packat påsen än — då ritas ingen storleksrad alls. */
@@ -57,6 +60,8 @@ const showRemaining = computed(() => props.row.status === 'ready' && ! isExpired
 
 <template>
     <li class="flex flex-col gap-1 rounded border px-4 py-2 text-sm" :class="status === 'failed' ? 'border-red-300 bg-red-50' : 'border-slate-300 bg-white'">
+        <span class="text-xs font-semibold uppercase text-slate-600">{{ t(kindKey) }}</span>
+
         <span class="font-medium text-slate-800">{{ t(`export.status.${status}`) }}</span>
 
         <span class="text-xs text-slate-600">
