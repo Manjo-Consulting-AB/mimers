@@ -48,7 +48,9 @@ class NotificationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: trans('notiser.'.str_replace('.', '_', $this->type).'.subject', $this->payload),
+            subject: $this->type === 'agent.deleted'
+                ? trans_choice('notiser.agent_deleted.subject', (int) ($this->payload['total'] ?? 0), $this->payload)
+                : trans('notiser.'.str_replace('.', '_', $this->type).'.subject', $this->payload),
         );
     }
 

@@ -108,7 +108,9 @@ const message = computed(() => {
      * sammanfogade efter huvudsatsen.
      */
     if (row.type === 'agent.deleted') {
-        const base = t('notifications.list.type.agent.deleted', {
+        const base = t(payload.total === 1
+            ? 'notifications.list.type.agent.deleted_one'
+            : 'notifications.list.type.agent.deleted', {
             agent: payload.agent,
             total: payload.total,
         });

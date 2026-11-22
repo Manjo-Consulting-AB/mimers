@@ -118,6 +118,12 @@ export function notificationMessage(t, notification, formatDate) {
         case 'transfer.requested':
             return t('inbox.transfer.requested', { container: payload.container });
 
+        case 'agent.deleted':
+            return t(
+                payload.total === 1 ? 'inbox.agent.deleted_one' : 'inbox.agent.deleted',
+                { agent: payload.agent, total: payload.total },
+            );
+
         case 'container.deleted':
             return t('inbox.container.deleted', { container: payload.container });
 

@@ -659,10 +659,16 @@ it('hämtar agentraderingens meningar ur ui.php', function () {
     // containermeningen.
     preg_match_all("/t\\(\\s*'([a-z0-9_.]+)'/", $rad, $träffar);
 
-    expect($träffar[1])->toContain('notifications.list.type.agent.deleted')
-        ->and($träffar[1])->toContain('notifications.list.type.agent.container');
+    // Issue 1512: huvudsatsen väljer mellan `deleted` och `deleted_one` med
+    // ett villkor, så nycklarna står inte direkt efter `t(`.
+    expect($träffar[1])->toContain('notifications.list.type.agent.container');
 
-    foreach (array_unique($träffar[1]) as $nyckel) {
+    $nycklar = [...$träffar[1], 'notifications.list.type.agent.deleted', 'notifications.list.type.agent.deleted_one'];
+
+    expect($rad)->toContain("'notifications.list.type.agent.deleted'")
+        ->and($rad)->toContain("'notifications.list.type.agent.deleted_one'");
+
+    foreach (array_unique($nycklar) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
