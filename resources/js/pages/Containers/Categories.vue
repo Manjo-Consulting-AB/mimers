@@ -108,7 +108,11 @@ function dragStart(ulid) {
 
 function dragEnd() {
     draggingUlid.value = null;
+    topLevelDepth.value = 0;
 }
+
+/* Som radens hover-läge: enter/leave räknas, så barnelement inte släcker ringen. */
+const topLevelDepth = ref(0);
 
 /* En rad som sparas med väljaren gör dragets fel inaktuellt: felpåsen bär
    `errors.parent` utan radidentitet, så en kvarglömd ULID hade ritat den nya
@@ -131,6 +135,7 @@ function dropTopLevel() {
     const dragged = draggingUlid.value;
 
     draggingUlid.value = null;
+    topLevelDepth.value = 0;
     sendMove(dragged, movePayload(props.categories, dragged, null));
 }
 
@@ -190,6 +195,9 @@ const showsPreset = computed(
     <div
         v-if="draggingUlid !== null"
         class="mt-6 rounded border-2 border-dashed border-blue-400 bg-blue-50 px-3 py-4 text-center text-sm font-medium text-blue-800"
+        :class="{ 'ring-2 ring-blue-600': topLevelDepth > 0 }"
+        @dragenter="topLevelDepth += 1"
+        @dragleave="topLevelDepth = Math.max(0, topLevelDepth - 1)"
         @dragover.prevent
         @drop.prevent="dropTopLevel"
     >
