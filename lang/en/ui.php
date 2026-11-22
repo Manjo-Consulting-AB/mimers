@@ -803,6 +803,13 @@ return [
         // picture was changed, because it was not.
         'avatar-cropped' => 'The framing of your profile picture has been saved.',
 
+        // Issue 434 · [[ADR-0090 Dashboardens hjälte]] § 2. The hero image is
+        // its own picture with its own write paths, so it has its own three
+        // receipts — the same three meanings as the profile picture's above.
+        'hero-updated' => 'Your dashboard image has been saved.',
+        'hero-removed' => 'Your dashboard image has been removed.',
+        'hero-cropped' => 'The framing of your dashboard image has been saved.',
+
         // Issue 65a § Decision 6. Two codes and not one: the page has two
         // forms, and "saved" without saying what had been true but not an
         // answer to what happened.
@@ -1517,6 +1524,22 @@ return [
                  * three ways out live in the shared ImageCropEditor, whose
                  * words are `crop.*` — one set for both surfaces.
                  */
+                'adjust' => 'Adjust',
+                'crop_heading' => 'Adjust the picture',
+            ],
+
+            /*
+             * Issue 434 · [[ADR-0090 Dashboardens hjälte]] § 2. The hero image
+             * has its own section under the profile picture: upload, Remove
+             * and the same shared crop editor with `shape="wide"`. Its words
+             * mirror the profile picture's, because the two sections behave
+             * identically — only the surface the picture ends up on differs.
+             */
+            'hero' => [
+                'heading' => 'Dashboard image',
+                'upload' => 'Upload',
+                'remove' => 'Remove',
+                'uploading' => 'Uploading the picture…',
                 'adjust' => 'Adjust',
                 'crop_heading' => 'Adjust the picture',
             ],

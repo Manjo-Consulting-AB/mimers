@@ -61,6 +61,7 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PlanController;
 use App\Http\Controllers\Settings\ProfileAvatarController;
 use App\Http\Controllers\Settings\ProfileController;
+use App\Http\Controllers\Settings\ProfileHeroController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\StorageController;
 use App\Http\Controllers\Settings\TaskPreferenceController;
@@ -741,6 +742,29 @@ Route::middleware('auth')->group(function () {
      */
     Route::patch('/settings/profile/avatar/crop', [ProfileAvatarController::class, 'crop'])
         ->name('settings.profile.avatar.crop');
+
+    /*
+     * Issue 434 · Hjältebilden, se App\Http\Controllers\Settings\
+     * ProfileHeroController och [[ADR-0090 Dashboardens hjälte]] § 2.
+     *
+     * Samma tre rutter som profilbilden, under `/settings/profile/hero`: den
+     * egna bildens uppladdning, borttagning och utsnitt. Bilden kommer med
+     * personens egen prop ur App\Http\Resources\AuthUserResource (`hero`), och
+     * en andra väg till samma läsning hade varit en andra sanning om vilken
+     * bild som är satt. Namnen följer `settings.profile.*` — sidan, sedan
+     * handlingen, som för profilbilden.
+     *
+     * Alla tre svarar `back()` med en flash-kod; `hero-updated`,
+     * `hero-removed` och `hero-cropped` står i lang/en/ui.php.
+     */
+    Route::post('/settings/profile/hero', [ProfileHeroController::class, 'store'])
+        ->name('settings.profile.hero.store');
+
+    Route::delete('/settings/profile/hero', [ProfileHeroController::class, 'destroy'])
+        ->name('settings.profile.hero.destroy');
+
+    Route::patch('/settings/profile/hero/crop', [ProfileHeroController::class, 'crop'])
+        ->name('settings.profile.hero.crop');
 
     /*
      * Issue 130 · E-postadressen går att byta, se

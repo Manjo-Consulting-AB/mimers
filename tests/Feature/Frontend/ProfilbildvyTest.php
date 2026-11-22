@@ -106,3 +106,65 @@ it('bär profilbildens texter i katalogen', function () {
     expect(Lang::get('ui.flash.avatar-updated', [], 'en'))->toBe('Your profile picture has been saved.')
         ->and(Lang::get('ui.flash.avatar-removed', [], 'en'))->toBe('Your profile picture has been removed.');
 });
+
+/*
+ * Klart när: profilsidan visar avsnittet *Dashboard image* med uppladdning,
+ * borttagning och redigerare.
+ *
+ * Avsnittet bor i `ProfileHeroSection`, som profilsidan ritar under
+ * profilbilden. Uppladdningen postas direkt — ingen extra knapp — och Remove
+ * är en DELETE mot samma adress, bakom `v-if="hero"`. Redigeraren är den
+ * delade `ImageCropEditor` med `shape="wide"`, eftersom hjälten är bred
+ * ([[ADR-0090 Dashboardens hjälte]] § 2 och 4).
+ */
+it('visar Dashboard image-avsnittet med uppladdning, borttagning och redigerare', function () {
+    $profil = profilbildvyKod('pages/Settings/Profile.vue');
+    $sektion = profilbildvyKod('components/ProfileHeroSection.vue');
+
+    expect($profil)->toContain("import ProfileHeroSection from '../../components/ProfileHeroSection.vue'")
+        ->toContain('<ProfileHeroSection />');
+
+    expect($sektion)->toContain("router.post('/settings/profile/hero'")
+        ->toContain("router.delete('/settings/profile/hero'")
+        ->toContain("router.patch('/settings/profile/hero/crop'")
+        ->toContain('forceFormData: true')
+        ->toContain('accept="image/*"')
+        ->toContain("t('settings.profile.hero.heading')")
+        ->toContain('<ImageCropEditor')
+        ->toContain('shape="wide"')
+        ->toContain('@save="saveCrop"')
+        ->toContain('@cancel="closeEditor"');
+
+    // Remove ritas bara när det finns en bild.
+    preg_match(
+        '/<button\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?@click="removeHero"(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?>/s',
+        $sektion,
+        $knapp,
+    );
+
+    expect($knapp)->toHaveCount(1, 'Remove-knappen saknas i ProfileHeroSection.vue');
+    expect($knapp[0])->toContain('v-if="hero"');
+});
+
+/*
+ * Klart när: hjältebildens texter och flash-koder finns i katalogen.
+ *
+ * FlashMessage läser `flash.<kod>`; en kod utan nyckel renderas rå.
+ */
+it('bär hjältebildens texter i katalogen', function () {
+    /** @var array<string, string> $hero */
+    $hero = Lang::get('ui.settings.profile.hero', [], 'en');
+
+    expect($hero)->toBeArray()
+        ->toHaveKeys(['heading', 'upload', 'remove', 'uploading', 'adjust', 'crop_heading']);
+
+    expect($hero['heading'])->toBe('Dashboard image');
+
+    foreach ($hero as $nyckel => $varde) {
+        expect(trim((string) $varde))->not->toBe('', "ui.settings.profile.hero.{$nyckel} är tom");
+    }
+
+    expect(Lang::get('ui.flash.hero-updated', [], 'en'))->not->toBe('ui.flash.hero-updated')
+        ->and(Lang::get('ui.flash.hero-removed', [], 'en'))->not->toBe('ui.flash.hero-removed')
+        ->and(Lang::get('ui.flash.hero-cropped', [], 'en'))->not->toBe('ui.flash.hero-cropped');
+});

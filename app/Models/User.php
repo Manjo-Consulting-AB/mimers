@@ -151,6 +151,13 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'avatar_focus_x' => 'integer',
             'avatar_focus_y' => 'integer',
             'avatar_zoom' => 'integer',
+            // Hjältebildens utsnitt, se [[ADR-0090 Dashboardens hjälte]] § 2
+            // och migrationen 2026_11_22_000000. Samma form som profilbildens:
+            // utanför #[Fillable], bara App\Actions\User\SetUserHeroCrop
+            // skriver dem.
+            'hero_focus_x' => 'integer',
+            'hero_focus_y' => 'integer',
+            'hero_zoom' => 'integer',
         ];
     }
 
@@ -220,13 +227,32 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     }
 
     /**
-     * Bilagorna som hör till personen — profilbilden och det som en framtida
-     * yta lägger här — se [[ADR-0076 Profilbilden]] § 1.
+     * Personens hjältebild för dashboarden — en pekare till en av personens
+     * EGNA bilagor, se [[ADR-0090 Dashboardens hjälte]] § 2 och
+     * [[Konton och åtkomst]] § user. Nullbar som profilbilden: den som inte
+     * väljer någon bild får den inbyggda standardbilden i dashboarden.
+     *
+     * Pekaren är en PREFERENS och inte data. Att bilagan verkligen är
+     * personens egen upprätthålls i App\Actions\User\SetUserHero, som för
+     * profilbilden (ADR-0076 § 1).
+     *
+     * @return BelongsTo<Attachment, $this>
+     */
+    public function heroAttachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'hero_attachment_id');
+    }
+
+    /**
+     * Bilagorna som hör till personen — profilbilden, hjältebilden och det
+     * som en framtida yta lägger här — se [[ADR-0076 Profilbilden]] § 1 och
+     * [[ADR-0090 Dashboardens hjälte]] § 2.
      *
      * Relationen bär ingen åtkomst: den säger vilka bilagor som är personens,
      * inte vem som får se dem. Synligheten är App\Policies\UserPolicy::
-     * viewAvatar() för bilden och leveransen, och de andra läsarna (exporten,
-     * papperskorgen, lagringsvyn) väljer personbilagor bort.
+     * viewAvatar() för profilbilden, viewHero() för hjältebilden och
+     * leveransen, och de andra läsarna (exporten, papperskorgen, lagringsvyn)
+     * väljer personbilagor bort.
      *
      * @return HasMany<Attachment, $this>
      */

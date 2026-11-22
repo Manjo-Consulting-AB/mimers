@@ -22,9 +22,9 @@ use Illuminate\Support\Facades\DB;
  * Stegen i en transaktion (Beslut 2): först läses radens tillstånd (innan
  * forceDelete gör det oåtkomligt), sedan raderas bilagans öppningsrader
  * (issue 177 — `attachment_open.attachment_id` är ON DELETE RESTRICT) och
- * personens pekare till bilden nollställs (issue 379 —
- * `user.avatar_attachment_id` är ON DELETE RESTRICT), sedan forceDelete på
- * attachment-raden,
+ * personens pekare till profil- och hjältebilden nollställs (issue 379 och
+ * 434 — `user.avatar_attachment_id` och `user.hero_attachment_id` är ON
+ * DELETE RESTRICT), sedan forceDelete på attachment-raden,
  * sedan minskas stored_file.reference_count som SQL — aldrig som
  * läs-ändra-skriv i PHP, och aldrig under noll (Beslut 3) — sedan lämnar
  * bytena kontots förbrukningsräkning om bilagan var levande (issue 26a §
@@ -99,6 +99,15 @@ class PurgeAttachment
             DB::table('user')
                 ->where('avatar_attachment_id', $attachment->getKey())
                 ->update(['avatar_attachment_id' => null]);
+
+            // Hjältebildens pekare (issue 434 · [[ADR-0090 Dashboardens
+            // hjälte]] § 2). Samma RESTRICT-nyckel och samma skäl som
+            // profilbilden ovan: en hjältebild som byts ut, tas bort eller
+            // följer med en personradering måste släppa sin pekare innan
+            // raden kan forceDelete:as.
+            DB::table('user')
+                ->where('hero_attachment_id', $attachment->getKey())
+                ->update(['hero_attachment_id' => null]);
 
             // Steg 2 och Beslut 7 — idempotent per anrop, inte per rad:
             // forceDelete() på en rad som inte finns är en no-op i Eloquent

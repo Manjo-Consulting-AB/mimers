@@ -6,22 +6,21 @@ use App\Models\Container;
 use App\Models\User;
 
 /**
- * Behörighet till en person — i dag bara hennes profilbild, se
- * [[ADR-0076 Profilbilden]] § 4 och [[M59 Profilbilden]] § 379.
+ * Behörighet till en person — profilbilden och hjältebilden, se
+ * [[ADR-0076 Profilbilden]] § 4, [[ADR-0090 Dashboardens hjälte]] § 2 och
+ * [[M59 Profilbilden]] § 379.
  *
  * Auto-upptäckt av Laravel via namnkonventionen `App\Models\User` →
  * `App\Policies\UserPolicy`, ingen registrering behövs — samma form som
  * App\Policies\ContainerPolicy.
  *
- * **Synligheten är skriven för mer än profilbilden.** ADR-0076 § 4 säger att
- * bilden får ses av personen själv och av den som delar minst ett konto eller
- * en container med henne, och att regeln ska täcka inbjudningar, uppladdare
- * och skapare utan att ändras. Därför är frågan "delar de här två personerna
- * en yta?" och inte "får den här personen se den här bilden?" — vilket gör
- * metoden återanvändbar när bilden senare ritas vid en inbjudan eller bredvid
- * ett item.
+ * **De två bilderna har olika synlighet.** Profilbilden får ses av personen
+ * själv och av den som delar minst ett konto eller en container med henne
+ * (ADR-0076 § 4): den ska kunna ritas vid en inbjudan eller bredvid ett item.
+ * Hjältebilden är bara personens egen (ADR-0090 § 2): den är dashboardens
+ * bakgrund, inte ett ansikte, och ingen delad yta behöver den.
  *
- * **Frågan om en gemensam container ställs med samma fråga som resten av
+ * **Den gemensamma containern ställs med samma fråga som resten av
  * systemet**: App\Models\Container::scopeAccessibleBy(), som är
  * App\Policies\ContainerPolicy::view() i frågeform — kontomedlemskap eller en
  * giltig `container_access` på container- eller itemnivå, med inboxens
@@ -75,5 +74,18 @@ class UserPolicy
             ->accessibleBy($viewer, $viewerAccountIds)
             ->whereIn('container.id', $ownerContainers)
             ->exists();
+    }
+
+    /**
+     * Får `$viewer` se `$owner`s hjältebild?
+     *
+     * **Bara personen själv.** Hjältebilden är dashboardens bakgrund och
+     * ritas aldrig på en delad yta, till skillnad från profilbilden
+     * ([[ADR-0090 Dashboardens hjälte]] § 2). Att hon delar ett konto eller en
+     * container med någon ger alltså ingen rätt till den.
+     */
+    public function viewHero(User $viewer, User $owner): bool
+    {
+        return (int) $viewer->id === (int) $owner->id;
     }
 }

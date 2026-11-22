@@ -118,6 +118,39 @@ function personbilagaSattBild(User $person, Account $konto, string $namn = 'avat
 }
 
 /**
+ * Personens hjältebild — en bilaga med `user_id` satt och pekaren
+ * `user.hero_attachment_id` på plats. Samma konstruktion som
+ * personbilagaSattBild, men den egna kolumnen: hjältebilden har en annan
+ * synlighet ([[ADR-0090 Dashboardens hjälte]] § 2).
+ */
+function personbilagaSattHjalte(User $person, Account $konto, string $namn = 'hjalte.png'): Attachment
+{
+    $byten = personbilagaPng();
+    $stored = StoredFile::factory()->create([
+        'mime_type' => 'image/png',
+        'byte_size' => strlen($byten),
+    ]);
+
+    Storage::disk('files')->put($stored->storage_path, $byten);
+
+    $bilaga = Attachment::factory()->create([
+        'item_id' => null,
+        'container_id' => null,
+        'user_id' => $person->id,
+        'stored_file_id' => $stored->id,
+        'filename' => $namn,
+        'kind' => 'image',
+        'uploaded_by_user_id' => $person->id,
+        'billed_account_id' => $konto->id,
+    ]);
+
+    $person->hero_attachment_id = $bilaga->id;
+    $person->save();
+
+    return $bilaga;
+}
+
+/**
  * En itembilaga med byten på den fejkade disken — exportprovet behöver en
  * riktig bilaga att jämföra personbilagan mot.
  */
@@ -404,6 +437,58 @@ it('levererar thumb och medium för en personbilaga', function () {
     // Miniatyrer och medium räknas aldrig som öppningar — och en
     // personbilaga har ingen öppningsrad alls.
     expect(DB::table('attachment_open')->count())->toBe(0);
+});
+
+/*
+ * Klart när: personen når sin hjältebild genom leveransen, och en annan
+ * person som delar ett konto eller en container med henne får 403.
+ *
+ * Hjältebilden har en annan synlighet än profilbilden ([[ADR-0090
+ * Dashboardens hjälte]] § 2): `UserPolicy::viewHero` släpper bara igenom
+ * personen själv. Leveransen väljer grind ur bilagans id och personens
+ * `hero_attachment_id`, så samma personbilaga som annars hade gått genom
+ * `viewAvatar` nekas här.
+ */
+it('levererar hjältebilden till personen själv', function () {
+    [$person, $konto] = personbilagaKontext();
+    $hjälte = personbilagaSattHjalte($person, $konto);
+
+    somAnvandare($person);
+
+    get("/files/{$hjälte->ulid}")->assertOk();
+});
+
+it('nekar hjältebilden till en kontokamrat som ser profilbilden', function () {
+    [$person, $personkonto] = personbilagaKontext();
+    $hjälte = personbilagaSattHjalte($person, $personkonto);
+
+    $kamrat = User::factory()->create();
+    $personkonto->users()->attach($kamrat, ['role' => 'member']);
+
+    // Kontokamraten ser profilbilden (provet ovan), men inte hjältebilden.
+    somAnvandare($kamrat);
+
+    get("/files/{$hjälte->ulid}")->assertForbidden();
+});
+
+it('nekar hjältebilden till någon som delar en container med personen', function () {
+    [$person, $personkonto] = personbilagaKontext();
+    $hjälte = personbilagaSattHjalte($person, $personkonto);
+
+    // Personen är medlem i organisationen som äger containern; mottagaren når
+    // den bara genom en grant. Den vägen räcker för profilbilden men inte för
+    // hjältebilden.
+    $organisation = Account::factory()->organisation()->create();
+    $organisation->users()->attach($person, ['role' => 'member']);
+
+    $container = Container::factory()->for($organisation, 'account')->create();
+
+    $mottagare = User::factory()->create();
+    beviljaAccess($container, $mottagare, 'read', 'member');
+
+    somAnvandare($mottagare);
+
+    get("/files/{$hjälte->ulid}")->assertForbidden();
 });
 
 // --- Läsarna --------------------------------------------------------------

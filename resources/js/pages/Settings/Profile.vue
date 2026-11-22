@@ -7,6 +7,7 @@ import CurrencyField from '../../components/CurrencyField.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
 import ImageCropEditor from '../../components/ImageCropEditor.vue';
+import ProfileHeroSection from '../../components/ProfileHeroSection.vue';
 import UiSheet from '../../components/UiSheet.vue';
 import UserAvatar from '../../components/UserAvatar.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -453,6 +454,14 @@ function submit() {
              bild eller en person utan personkonto. -->
         <p v-if="avatarError" role="alert" class="text-sm text-danger">{{ avatarError }}</p>
     </section>
+
+    <!--
+        Hjältebilden, se [[ADR-0090 Dashboardens hjälte]] § 2 och 4 samt issue
+        434. Avsnittet *Dashboard image* står under profilbilden och äger sin
+        egen uppladdning, borttagning och redigerare — samma tre vägar som
+        avsnittet ovan, men bilden hamnar i dashboardens hjälte.
+    -->
+    <ProfileHeroSection />
 
     <!--
         Redigeraren, se [[ADR-0076 Profilbilden]] § 7 och [[ADR-0090
