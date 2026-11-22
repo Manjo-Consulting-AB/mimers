@@ -200,6 +200,27 @@ class ContainerSharingController extends Controller
     }
 
     /**
+     * Slår containerns tvåfaktorkrav på eller av (issue 450). Behörigheten
+     * (`manageAccess`) och "ägaren har tvåfaktor" prövas i actionen.
+     */
+    public function updateRequireTwoFactor(
+        UpdateRequireTwoFactorRequest $request,
+        Container $container,
+        SetContainerRequireTwoFactor $action,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        try {
+            $action->handle($container, $request->user(), $request->boolean('require_two_factor'));
+        } catch (ApiException $exception) {
+            throw ValidationException::withMessages([
+                'require_two_factor' => $translator->message($exception),
+            ]);
+        }
+
+        return back();
+    }
+
+    /**
      * Containerns obesvarade inbjudningar, hydrerade för
      * App\Http\Resources\InvitationResource.
      *
@@ -221,27 +242,6 @@ class ContainerSharingController extends Controller
      *
      * @return Collection<int, Invitation>
      */
-    /**
-     * Slår containerns tvåfaktorkrav på eller av (issue 450). Behörigheten
-     * (`manageAccess`) och "ägaren har tvåfaktor" prövas i actionen.
-     */
-    public function updateRequireTwoFactor(
-        UpdateRequireTwoFactorRequest $request,
-        Container $container,
-        SetContainerRequireTwoFactor $action,
-        ApiErrorTranslator $translator,
-    ): RedirectResponse {
-        try {
-            $action->handle($container, $request->user(), $request->boolean('require_two_factor'));
-        } catch (ApiException $exception) {
-            throw ValidationException::withMessages([
-                'require_two_factor' => $translator->message($exception),
-            ]);
-        }
-
-        return back();
-    }
-
     private function invitations(Container $container): Collection
     {
         $invitations = $container->invitations()

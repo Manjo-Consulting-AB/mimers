@@ -60,10 +60,11 @@ class TotpController extends Controller
     public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): Response
     {
         // Issue 450: `two_factor.required_by_sharing` medan ett krav gäller.
-        TwoFactorRequirement::assertMayDisable($request->user());
-
         try {
-            TotpBroker::disable($request->user(), $request->string('code')->toString());
+            TwoFactorRequirement::disableGuarded(
+                $request->user(),
+                fn () => TotpBroker::disable($request->user(), $request->string('code')->toString()),
+            );
         } catch (TotpInvalidException) {
             throw ApiException::make('auth.totp_invalid');
         }

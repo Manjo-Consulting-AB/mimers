@@ -158,6 +158,44 @@ class SecurityController extends Controller
     }
 
     /**
+     * Slår kontots tvåfaktorkrav på eller av. Behörigheten prövas i
+     * actionen; "ägaren saknar tvåfaktor" blir ett formulärfel på
+     * `require_two_factor`, aldrig en rå felkod.
+     */
+    public function updateRequireTwoFactor(
+        UpdateRequireTwoFactorRequest $request,
+        SetAccountRequireTwoFactor $action,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $account = self::ownedAccount($user, $request->input('account'));
+
+        abort_if($account === null, 403);
+
+        try {
+            $action->handle($account, $user, $request->boolean('require_two_factor'));
+        } catch (ApiException $exception) {
+            throw ValidationException::withMessages([
+                'require_two_factor' => $translator->message($exception),
+            ]);
+        }
+
+        return back();
+    }
+
+    /**
+     * Kontot kryssrutan gäller: ett konto användaren äger eller administrerar.
+     */
+    private static function ownedAccount(User $user, mixed $ulid = null): ?Account
+    {
+        return $user->accounts()
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->when(is_string($ulid), fn ($query) => $query->where('account.ulid', $ulid))
+            ->orderBy('account.id')
+            ->first();
+    }
+
+    /**
      * Personraderingens underlag, se [[M22 Redo för testare]] § 145 och
      * resources/js/components/UserDeletionSummary.vue: vilka konton som
      * raderas, vilka som lämnas, och vad som i så fall spärrar.
@@ -208,44 +246,6 @@ class SecurityController extends Controller
      *     warnings: list<array{code: string, account: string|null, containers: list<string>, members: list<string>}>
      * }
      */
-    /**
-     * Slår kontots tvåfaktorkrav på eller av. Behörigheten prövas i
-     * actionen; "ägaren saknar tvåfaktor" blir ett formulärfel på
-     * `require_two_factor`, aldrig en rå felkod.
-     */
-    public function updateRequireTwoFactor(
-        UpdateRequireTwoFactorRequest $request,
-        SetAccountRequireTwoFactor $action,
-        ApiErrorTranslator $translator,
-    ): RedirectResponse {
-        $user = $request->user();
-        $account = self::ownedAccount($user, $request->input('account'));
-
-        abort_if($account === null, 403);
-
-        try {
-            $action->handle($account, $user, $request->boolean('require_two_factor'));
-        } catch (ApiException $exception) {
-            throw ValidationException::withMessages([
-                'require_two_factor' => $translator->message($exception),
-            ]);
-        }
-
-        return back();
-    }
-
-    /**
-     * Kontot kryssrutan gäller: ett konto användaren äger eller administrerar.
-     */
-    private static function ownedAccount(User $user, mixed $ulid = null): ?Account
-    {
-        return $user->accounts()
-            ->wherePivotIn('role', ['owner', 'admin'])
-            ->when(is_string($ulid), fn ($query) => $query->where('account.ulid', $ulid))
-            ->orderBy('account.id')
-            ->first();
-    }
-
     public static function deletionSummary(User $user, DeleteUser $deleteUser): array
     {
         /** @var list<array{ulid: string, name: string}> $toDelete */

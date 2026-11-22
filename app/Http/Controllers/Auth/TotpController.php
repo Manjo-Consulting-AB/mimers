@@ -76,15 +76,14 @@ class TotpController extends Controller
         // håller tvåfaktorn på. Prövas före koden — det finns inget att
         // gissa om.
         try {
-            TwoFactorRequirement::assertMayDisable($request->user());
+            TwoFactorRequirement::disableGuarded(
+                $request->user(),
+                fn () => TotpBroker::disable($request->user(), $request->string('code')->toString()),
+            );
         } catch (ApiException $exception) {
             throw ValidationException::withMessages([
                 'code' => $translator->message($exception),
             ]);
-        }
-
-        try {
-            TotpBroker::disable($request->user(), $request->string('code')->toString());
         } catch (TotpInvalidException) {
             throw ValidationException::withMessages([
                 'code' => __('auth.totp_invalid'),

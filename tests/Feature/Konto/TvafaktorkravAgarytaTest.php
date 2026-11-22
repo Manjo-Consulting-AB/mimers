@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\Item;
 use App\Models\User;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -72,7 +73,7 @@ it('nekar kravet på kontot utan egen tvåfaktor med two_factor.owner_not_enroll
     actingAs($agare);
 
     patch('/settings/security/require-two-factor', ['account' => $konto->ulid, 'require_two_factor' => true])
-        ->assertSessionHasErrors('require_two_factor');
+        ->assertSessionHasErrors(['require_two_factor' => 'Set up two-factor authentication yourself before you require it from others.']);
 
     expect($konto->fresh()->require_two_factor)->toBeFalse()
         ->and(AuditLog::query()->where('account_id', $konto->id)->count())->toBe(0);
@@ -98,7 +99,7 @@ it('nekar kravet på containern utan egen tvåfaktor', function () {
     actingAs($agare);
 
     patch("/containers/{$container->ulid}/sharing/require-two-factor", ['require_two_factor' => true])
-        ->assertSessionHasErrors('require_two_factor');
+        ->assertSessionHasErrors(['require_two_factor' => 'Set up two-factor authentication yourself before you require it from others.']);
 
     expect($container->fresh()->require_two_factor)->toBeFalse();
 });
@@ -187,4 +188,83 @@ it('låter ägaren stänga av tvåfaktorn när inget krav gäller', function () 
     deleteJson('/api/totp', ['code' => totpKodFör($agare->totp_secret)], $huvuden)->assertNoContent();
 
     expect($agare->fresh()->totp_confirmed_at)->toBeNull();
+});
+
+it('låter en vanlig medlem stänga av sin tvåfaktor trots att kontot kräver tvåfaktor', function () {
+    [$konto, , $container] = agarkravBas();
+    $konto->forceFill(['require_two_factor' => true])->save();
+    $container->forceFill(['require_two_factor' => true])->save();
+    $medlem = agarkravMedTvafaktor(User::factory()->create());
+    $konto->users()->attach($medlem, ['role' => 'member']);
+    $token = $medlem->createToken('api');
+
+    deleteJson('/api/totp', ['code' => totpKodFör($medlem->totp_secret)], ['Authorization' => "Bearer {$token->plainTextToken}"])
+        ->assertNoContent();
+
+    expect($medlem->fresh()->totp_confirmed_at)->toBeNull();
+});
+
+it('räknar mottagare med bara itemgrant och kontomottagare som saknande', function () {
+    [, $agare, $container] = agarkravBas();
+    $container->accesses()->delete();
+
+    [, $grantMottagare] = kontoMedMedlem();
+    $grantMottagare->forceFill(['name' => 'Ida Itemgrant'])->save();
+    $item = Item::factory()->for($container, 'container')->create();
+    beviljaAccess($container, $grantMottagare, 'read', 'guest')->forceFill(['item_id' => $item->id])->save();
+
+    [$gastKonto, $kontoMedlem] = kontoMedMedlem();
+    $kontoMedlem->forceFill(['name' => 'Kalle Kontomedlem'])->save();
+    beviljaAccess($container, $gastKonto, 'read', 'managed');
+
+    $ulider = $container->accesses()->pluck('ulid')->sort()->values()->all();
+    actingAs($agare);
+
+    get("/containers/{$container->ulid}/sharing")
+        ->assertInertia(fn ($sida) => $sida
+            ->has('twoFactor.lacking', 2)
+            ->where('twoFactor.lackingGrantees', fn ($lista) => collect($lista)->sort()->values()->all() === $ulider));
+
+    get('/settings/security')->assertInertia(fn ($sida) => $sida->has('sharing.lacking', 2));
+});
+
+it('utelämnar ägarkontots egna medlemmar bland mottagarna som saknar tvåfaktor', function () {
+    [$konto, $agare, $container] = agarkravBas();
+    $container->accesses()->delete();
+    $kollega = User::factory()->create();
+    $konto->users()->attach($kollega, ['role' => 'member']);
+    beviljaAccess($container, $kollega, 'read', 'member');
+    beviljaAccess($container, $konto, 'read', 'managed');
+    actingAs($agare);
+
+    get("/containers/{$container->ulid}/sharing")
+        ->assertInertia(fn ($sida) => $sida->where('twoFactor.lacking', [])->where('twoFactor.lackingGrantees', []));
+
+    get('/settings/security')->assertInertia(fn ($sida) => $sida->where('sharing.lacking', []));
+});
+
+it('skriver ingen historikrad när växlingen inte ändrar något', function () {
+    [$konto, $agare, $container] = agarkravBas();
+    actingAs($agare);
+
+    patch("/containers/{$container->ulid}/sharing/require-two-factor", ['require_two_factor' => false])->assertSessionHasNoErrors();
+    patch('/settings/security/require-two-factor', ['account' => $konto->ulid, 'require_two_factor' => false])->assertSessionHasNoErrors();
+
+    expect(AuditLog::query()->where('account_id', $konto->id)->count())->toBe(0);
+
+    patch('/settings/security/require-two-factor', ['account' => $konto->ulid, 'require_two_factor' => true])->assertSessionHasNoErrors();
+    patch('/settings/security/require-two-factor', ['account' => $konto->ulid, 'require_two_factor' => true])->assertSessionHasNoErrors();
+
+    expect(AuditLog::query()->where('account_id', $konto->id)->count())->toBe(1);
+});
+
+it('skriver ingen historikrad för containerflaggan när kontokravet redan gäller', function () {
+    [$konto, $agare, $container] = agarkravBas();
+    $konto->forceFill(['require_two_factor' => true])->save();
+    actingAs($agare);
+
+    patch("/containers/{$container->ulid}/sharing/require-two-factor", ['require_two_factor' => true])->assertSessionHasNoErrors();
+
+    expect($container->fresh()->require_two_factor)->toBeFalse()
+        ->and(AuditLog::query()->where('container_id', $container->id)->count())->toBe(0);
 });

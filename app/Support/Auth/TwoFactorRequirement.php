@@ -165,14 +165,46 @@ final class TwoFactorRequirement
     }
 
     /**
+     * Läser aktörens rad med lås och prövar att tvåfaktorn fortfarande är
+     * bekräftad. Anropas inne i en transaktion: det serialiserar mot
+     * {@see disableGuarded()}, som låser samma rad.
+     */
+    public static function assertOwnerEnrolledLocked(User $owner): void
+    {
+        $fresh = User::query()->whereKey($owner->getKey())->lockForUpdate()->firstOrFail();
+
+        self::assertOwnerEnrolled($fresh);
+    }
+
+    /**
+     * Stänger av tvåfaktorn under lås: användarraden låses, kravet prövas och
+     * `$disable` körs i samma transaktion, så att ett samtidigt påslaget krav
+     * inte hinner förbi.
+     *
+     * @param  callable(): void  $disable
+     */
+    public static function disableGuarded(User $user, callable $disable): void
+    {
+        DB::transaction(function () use ($user, $disable): void {
+            User::query()->whereKey($user->getKey())->lockForUpdate()->firstOrFail();
+
+            self::assertMayDisable($user);
+
+            $disable();
+        });
+    }
+
+    /**
      * Antalet containrar i `$user`s konton som kräver tvåfaktor, och om
-     * kontokravet gäller. Kontokravet räknar alla kontots containrar.
+     * kontokravet gäller. Kontokravet räknar alla kontots containrar. Bara
+     * konton där användaren är ägare eller admin räknas — kravet gäller inte
+     * en vanlig medlem.
      *
      * @return array{account: bool, containers: int}
      */
     public static function requirementsOf(User $user): array
     {
-        $accountIds = $user->accounts()->pluck('account.id')->all();
+        $accountIds = $user->accounts()->wherePivotIn('role', ['owner', 'admin'])->pluck('account.id')->all();
 
         if ($accountIds === []) {
             return ['account' => false, 'containers' => 0];

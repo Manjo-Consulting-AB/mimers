@@ -27,11 +27,12 @@ class SetAccountRequireTwoFactor
     {
         Gate::forUser($actor)->authorize('update', $account);
 
-        if ($require) {
-            TwoFactorRequirement::assertOwnerEnrolled($actor);
-        }
-
         return DB::transaction(function () use ($account, $actor, $require): Account {
+            // Under lås, så att ett samtidigt DELETE /totp inte hinner förbi.
+            if ($require) {
+                TwoFactorRequirement::assertOwnerEnrolledLocked($actor);
+            }
+
             $row = Account::query()->whereKey($account->getKey())->lockForUpdate()->firstOrFail();
 
             if ((bool) $row->require_two_factor === $require) {
