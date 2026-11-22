@@ -1146,10 +1146,18 @@ it('ritar ringen bara över raden under markören och drar hela raden', function
     // Dragbilden är radens rot-div.
     expect($rad)->toContain('ref="rowElement"')
         ->toContain('setDragImage(')
-        ->toContain('rowElement.value,');
+        ->toContain('rowElement.value,')
+        ->toContain('event.clientX - box.left')
+        ->toContain('event.clientY - box.top')
+        ->toContain('setTimeout(() => emit(\'dragstart\'')
+        ->toContain('hoverDepth.value = Math.max(0, hoverDepth.value - 1)')
+        ->toContain('watch(() => props.draggingUlid')
+        ->toContain('@dragend="onDragEnd"');
+    expect(substr_count($rad, 'hoverDepth.value = 0;'))->toBeGreaterThanOrEqual(3);
 
     // Top level: ring bara vid hover.
     expect($sida)->toContain("'ring-2 ring-blue-600': topLevelDepth > 0")
         ->toContain('@dragenter="topLevelDepth += 1"')
-        ->toContain('@dragleave=');
+        ->toContain('@dragleave="topLevelDepth = Math.max(0, topLevelDepth - 1)"');
+    expect(substr_count($sida, 'topLevelDepth.value = 0;'))->toBe(2);
 });

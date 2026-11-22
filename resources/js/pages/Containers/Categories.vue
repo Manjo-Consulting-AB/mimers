@@ -98,6 +98,8 @@ const deleteErrorUlid = ref(null);
  * flytt skrivs just nu — då vilar radernas egna knappar.
  */
 const draggingUlid = ref(null);
+/* Som radens hover-läge: enter/leave räknas, så barnelement inte släcker ringen. */
+const topLevelDepth = ref(0);
 const moveErrorUlid = ref(null);
 const moving = ref(false);
 
@@ -110,9 +112,6 @@ function dragEnd() {
     draggingUlid.value = null;
     topLevelDepth.value = 0;
 }
-
-/* Som radens hover-läge: enter/leave räknas, så barnelement inte släcker ringen. */
-const topLevelDepth = ref(0);
 
 /* En rad som sparas med väljaren gör dragets fel inaktuellt: felpåsen bär
    `errors.parent` utan radidentitet, så en kvarglömd ULID hade ritat den nya

@@ -232,7 +232,14 @@ function onDragStart(event) {
         );
     }
 
-    emit('dragstart', props.category.ulid);
+    /* Efter att webbläsaren tagit dragbilden: sätts dämpningen synkront ritar
+       Vue om före bilden och den hade blivit genomskinlig. */
+    setTimeout(() => emit('dragstart', props.category.ulid), 0);
+}
+
+function onDragEnd() {
+    hoverDepth.value = 0;
+    emit('dragend');
 }
 
 function onDragEnter() {
@@ -263,7 +270,6 @@ function onDrop(event) {
     }
 
     event.preventDefault();
-    hoverDepth.value = 0;
     emit('drop', props.category.ulid);
 }
 </script>
@@ -288,7 +294,7 @@ function onDrop(event) {
                 class="hidden min-h-11 cursor-grab items-center px-1 text-slate-400 md:flex"
                 :title="t('container.categories.drag')"
                 @dragstart="onDragStart"
-                @dragend="hoverDepth = 0; emit('dragend')"
+                @dragend="onDragEnd"
             >⠿</span>
 
             <FormField
