@@ -39,3 +39,7 @@ Tonys beslut 2026-11-21, efter testarnas fynd samma dag och en mockup av dashboa
 **Ingen beskärning, `object-cover` mitt i bilden.** Valdes bort av Tony: en bred hjälte skär bort det mesta av en stående bild, och personen behöver kunna välja vad som syns. Samma skäl gäller containerns bild, och därför får den samma redigerare.
 
 **Hela hjälten också på mobilen.** Valdes bort: brickorna och donuten staplade inne i bilden gör hjälten högre än skärmen.
+
+## Tillägg 2026-11-22
+
+*Tony 2026-11-22:* Hjälten ritas på alla sidor i AppLayout som saknar en egen hjälte: `/containers`, `/containers/create`, `/inbox`, `/tasks`, `/tasks/create`, `/documents`, `/history`, `/search`, `/trash`, `/notifications`, `/transfers` och inställningssidorna (en hjälte i SettingsLayout). Den är identisk med dashboardens: samma höjd, bild, brickor och donut. Bara rubriken och undertiteln skiljer sig, och hälsningen står bara på dashboarden. Rubriken står på samma höjd i bilden på varje sida, så att hjälten inte byter storlek och texten inte flyttar sig när man går mellan sidorna. Under `md:` är hjälten det låga bandet, och siffrorna står under det bara på dashboarden. Det ersätter den globala historikens beslut att inte ha någon hjälte (issue 272), och motiveringen att "en hjälte hade påstått att historiken var en container" gäller inte längre. Siffrorna räknas av en delad action och hämtas som en valfri propp, så att de bara räknas på sidor som visar dem. Byggs i issue 437 och 438.
