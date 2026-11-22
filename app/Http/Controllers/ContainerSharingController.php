@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\Access\ListContainerAccesses;
 use App\Actions\Access\ListParticipants;
+use App\Actions\Container\SetContainerRequireTwoFactor;
+use App\Exceptions\Api\ApiException;
+use App\Http\Requests\Settings\UpdateRequireTwoFactorRequest;
 use App\Http\Resources\ContainerAccessResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\InvitationResource;
@@ -15,9 +18,13 @@ use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
+use App\Support\Auth\TwoFactorRequirement;
+use App\Support\Frontend\ApiErrorTranslator;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -135,7 +142,26 @@ class ContainerSharingController extends Controller
         // uppslag med — se klassens docblock och 55a § Beslut 3.
         $invitations = $mayViewAccesses ? $this->invitations($container) : null;
 
+        $mayManage = Gate::forUser($user)->allows('manageAccess', $container);
+
+        // Issue 450: mottagarna utan tvåfaktor. Bara för den som får se
+        // åtkomsterna — namnen är lika känsliga som listan.
+        $lacking = $mayViewAccesses
+            ? TwoFactorRequirement::lackingIn($container)
+                ->map(fn (User $lacker): array => ['ulid' => $lacker->ulid, 'name' => $lacker->name])
+                ->values()
+                ->all()
+            : [];
+
         return Inertia::render('Containers/Sharing', [
+            'twoFactor' => [
+                'required' => (bool) $container->require_two_factor,
+                'accountRequired' => (bool) $container->account->require_two_factor,
+                'effective' => $container->requiresTwoFactor(),
+                'ownerEnrolled' => $user->hasConfirmedTwoFactor(),
+                'lacking' => $lacking,
+                'lackingGrantees' => $mayViewAccesses ? TwoFactorRequirement::lackingAccessUlids($container) : [],
+            ],
             'container' => ContainerResource::make($container)->resolve($request),
             'participants' => ParticipantResource::collection($listParticipants->handle($container))->resolve($request),
             'accesses' => $accesses === null
@@ -195,6 +221,27 @@ class ContainerSharingController extends Controller
      *
      * @return Collection<int, Invitation>
      */
+    /**
+     * Slår containerns tvåfaktorkrav på eller av (issue 450). Behörigheten
+     * (`manageAccess`) och "ägaren har tvåfaktor" prövas i actionen.
+     */
+    public function updateRequireTwoFactor(
+        UpdateRequireTwoFactorRequest $request,
+        Container $container,
+        SetContainerRequireTwoFactor $action,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        try {
+            $action->handle($container, $request->user(), $request->boolean('require_two_factor'));
+        } catch (ApiException $exception) {
+            throw ValidationException::withMessages([
+                'require_two_factor' => $translator->message($exception),
+            ]);
+        }
+
+        return back();
+    }
+
     private function invitations(Container $container): Collection
     {
         $invitations = $container->invitations()

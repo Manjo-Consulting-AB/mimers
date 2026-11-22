@@ -7,6 +7,7 @@ import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
 import InvitationForm from '../../components/InvitationForm.vue';
 import InvitationRow from '../../components/InvitationRow.vue';
+import TwoFactorRequirementToggle from '../../components/TwoFactorRequirementToggle.vue';
 import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -87,6 +88,8 @@ const props = defineProps({
     /* Inbjudnings-ULID → inbjudans agenttak (issue 430). */
     invitationAgentLevels: { type: Object, default: () => ({}) },
     can: { type: Object, required: true },
+    /* Tvåfaktorkravet (issue 450, ADR-0092). */
+    twoFactor: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -109,6 +112,15 @@ const isValid = (access) =>
 
 const validAccesses = computed(() => (props.accesses ?? []).filter(isValid));
 const historicalAccesses = computed(() => (props.accesses ?? []).filter((access) => !isValid(access)));
+
+/*
+ * Tvåfaktorkravet gäller och mottagaren saknar tvåfaktor: raden märks.
+ * `twoFactor.lacking` bär användarnas ULID:er; en kontomottagare märks när
+ * någon av dess medlemmar saknar den, vilket servern redan räknat ut i
+ * `lacking_grantees`.
+ */
+const lacksTwoFactor = (access) =>
+    props.twoFactor.effective && props.twoFactor.lackingGrantees.includes(access.ulid);
 
 const historyDate = (access) =>
     access.revoked_at !== null
@@ -134,6 +146,21 @@ const historyDate = (access) =>
             {{ t('sharing.frozen') }}
         </p>
 
+        <!-- Tvåfaktorkravet (issue 450): bara för den som får hantera åtkomst. -->
+        <TwoFactorRequirementToggle
+            v-if="can.manage"
+            id="container-require-two-factor"
+            :label="t('sharing.two_factor.container_label')"
+            :url="`/containers/${container.ulid}/sharing/require-two-factor`"
+            :checked="twoFactor.required"
+            :locked="twoFactor.accountRequired"
+            :locked-note="t('sharing.two_factor.required_for_all')"
+            :needs-own="!twoFactor.ownerEnrolled && !twoFactor.required && !twoFactor.accountRequired"
+            :needs-own-note="t('sharing.two_factor.container_needs_own')"
+            :lacking="twoFactor.lacking"
+            :error="page.props.errors.require_two_factor ?? null"
+        />
+
         <ul v-if="accesses" class="mt-4 flex flex-col gap-2">
             <!-- Ägarkontot: namn och roll, utan kontroller. Det finns ingen
                  nivå att välja och ingen åtkomst att ta bort. -->
@@ -155,6 +182,7 @@ const historyDate = (access) =>
                 :levels="levels"
                 :agent-access="agentAccess"
                 :agent-level="agentLevels[access.ulid] ?? null"
+                :lacks-two-factor="lacksTwoFactor(access)"
             />
         </ul>
 
@@ -204,6 +232,10 @@ const historyDate = (access) =>
             :items="items"
             :agent-access="agentAccess"
         />
+
+        <p v-if="can.manage && twoFactor.effective" class="mt-2 text-meta text-ink-muted">
+            {{ t('sharing.two_factor.invite_note') }}
+        </p>
 
         <ul v-if="invitations.length > 0" class="mt-4 flex flex-col gap-2">
             <InvitationRow

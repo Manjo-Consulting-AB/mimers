@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Actions\Security\RecordSecurityEvent;
+use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\TotpCodeRequest;
 use App\Models\SecurityLog;
 use App\Support\Auth\TotpAlreadyConfirmedException;
 use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
+use App\Support\Auth\TwoFactorRequirement;
+use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -67,8 +70,19 @@ class TotpController extends Controller
         return back()->with('status', 'totp-confirmed');
     }
 
-    public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
+    public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent, ApiErrorTranslator $translator): RedirectResponse
     {
+        // Issue 450: ett tvåfaktorkrav på ägarens konto eller containrar
+        // håller tvåfaktorn på. Prövas före koden — det finns inget att
+        // gissa om.
+        try {
+            TwoFactorRequirement::assertMayDisable($request->user());
+        } catch (ApiException $exception) {
+            throw ValidationException::withMessages([
+                'code' => $translator->message($exception),
+            ]);
+        }
+
         try {
             TotpBroker::disable($request->user(), $request->string('code')->toString());
         } catch (TotpInvalidException) {
