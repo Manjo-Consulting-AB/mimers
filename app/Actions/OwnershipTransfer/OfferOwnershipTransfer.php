@@ -74,7 +74,8 @@ class OfferOwnershipTransfer
      * @param  string|null  $retainAccessLevel  Nivån säljaren behåller, eller
      *                                          `null` för ingen alls.
      *
-     * @throws ApiException 422 `transfer.already_pending`.
+     * @throws ApiException 422 `transfer.already_pending`,
+     *                      422 `transfer.recipient_two_factor_required`.
      */
     public function handle(
         Container $container,
@@ -96,6 +97,12 @@ class OfferOwnershipTransfer
         $toAccount = $toAccountUlid === null
             ? null
             : Account::query()->where('ulid', $toAccountUlid)->firstOrFail();
+
+        // ADR-0092: en container som kräver tvåfaktor går inte till ett konto
+        // utan. Saknas kontot (inbjudan per e-post) prövas det vid accepten.
+        if ($toAccount instanceof Account && $container->requiresTwoFactor() && AcceptOwnershipTransfer::lacksTwoFactor($toAccount)) {
+            throw ApiException::make('transfer.recipient_two_factor_required', [], 422);
+        }
 
         $transfer = DB::transaction(function () use ($container, $actor, $toAccount, $toEmail, $excludedItemUlids, $retainAccessLevel): OwnershipTransfer {
             $transfer = new OwnershipTransfer;
