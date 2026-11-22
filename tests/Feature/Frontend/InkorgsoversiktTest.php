@@ -31,14 +31,19 @@ use Illuminate\Support\Facades\Lang;
  * ingen kontroll, och den som klickar på den ska få något att hända.
  */
 
-it('sidan har rubriken och underraden', function () {
+it('sidan har rubriken och undertiteln', function () {
     $vy = File::get(resource_path('js/pages/Inbox/Index.vue'));
 
-    // Rubriken är sidans egen, och underraden står direkt under den (Beslut 1).
+    // Rubriken är sidans egen, och undertiteln står i hjälten: enligt
+    // ADR-0090 tillägget 2026-11-22 är undertiteln sidans enda beskrivande
+    // mening, så den gamla taglinen under rubriken är borta.
     expect($vy)->toContain("t('inbox.page.heading')")
-        ->toContain("t('inbox.page.tagline')");
+        ->toContain("t('hero.subtitle.inbox')");
 
-    expect(Lang::get('ui.inbox.page.tagline', [], 'en'))->toBe('Capture now. Organize later.');
+    expect($vy)->not->toContain("t('inbox.page.tagline')");
+
+    expect(Lang::get('ui.hero.subtitle.inbox', [], 'en'))->toBe('Capture first, sort later.');
+    expect(Lang::has('ui.inbox.page.tagline', 'en'))->toBeFalse();
 });
 
 it('fångstkortet har New task och Add files', function () {

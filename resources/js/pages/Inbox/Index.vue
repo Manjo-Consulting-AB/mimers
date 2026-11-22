@@ -457,7 +457,6 @@ function destroySelected() {
         :heading="t('inbox.page.heading')"
         :subtitle="t('hero.subtitle.inbox')"
     />
-    <p class="mt-1 text-body text-ink-muted">{{ t('inbox.page.tagline') }}</p>
 
     <!--
         Fångstkortet (Beslut 2): två halvor, åtskilda av en lodrät linje

@@ -391,12 +391,6 @@ return [
             'title' => 'Inbox',
             'heading' => 'Inbox',
 
-            // M28 · issue 776 · Beslut 1: the line under the heading, the
-            // mockup's own words (`docs/Design/findings_261007a/
-            // inkorgsoversikt.png`). It says what the place is FOR, and the
-            // two cards below do the two halves of it.
-            'tagline' => 'Capture now. Organize later.',
-
             // The card headings carry their count, the mockup's *Tasks (2)*
             // and *Files (1)*. The count is the prop's length, so an empty
             // list reads *Tasks (0)* — the empty sentence below still says
@@ -5788,7 +5782,6 @@ return [
         'inbox' => [
             'title' => 'Ownership transfers to you',
             'heading' => 'Ownership transfers to you',
-            'intro' => 'Containers someone wants to hand over to you.',
             'empty' => 'No ownership transfers are waiting for you.',
         ],
 

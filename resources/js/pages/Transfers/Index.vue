@@ -56,7 +56,6 @@ const page = usePage();
         :heading="t('transfer.inbox.heading')"
         :subtitle="t('hero.subtitle.transfers')"
     />
-    <p class="mt-2 text-sm text-slate-700">{{ t('transfer.inbox.intro') }}</p>
 
     <!--
         Meningen formulerades på servern ur `lang/` av
