@@ -398,3 +398,82 @@ it('fäller kategorier som inte stämmer mellan språken', function () {
         ->and($fel[0])->toContain('xx/help/categories.yaml')
         ->and($fel[0])->toContain('annat');
 });
+
+/*
+ * M80 · issue 463 — markdownen prövas av samma validering: interna länkar,
+ * sammanhangens ankare och bilderna. Varje trasig katalog ger exakt ett fel,
+ * enligt regeln från 460 att en fil får ett besked som pekar på rätt sak.
+ */
+
+it('fäller en intern länk till ett id som inte finns', function () {
+    $fel = hjalpFel('lank-okant-id');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('lank-okant-id.md')
+        ->and($fel[0])->toContain('finns-inte');
+});
+
+it('fäller en intern länk till ett ankare som inte finns', function () {
+    $fel = hjalpFel('lank-okant-ankare');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('lank-okant-ankare.md')
+        ->and($fel[0])->toContain('#finns-inte');
+});
+
+it('fäller ett sammanhang vars ankare inte finns i den egna artikeln', function () {
+    $fel = hjalpFel('context-okant-ankare');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('context-okant-ankare.md')
+        ->and($fel[0])->toContain('#finns-inte');
+});
+
+it('fäller en bild som saknas under help-media', function () {
+    $fel = hjalpFel('bild-saknas');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('help-media/saknas.png')
+        ->and($fel[0])->toContain('finns inte');
+});
+
+it('fäller en bild som är större än 5 MB', function () {
+    // Filen skapas i testet och städas bort efteråt; den hör inte till repot.
+    $fil = public_path('help-media/stor.png');
+    File::ensureDirectoryExists(dirname($fil));
+    file_put_contents($fil, str_repeat('a', 5 * 1024 * 1024 + 1));
+
+    try {
+        $fel = hjalpFel('bild-for-stor');
+    } finally {
+        File::delete($fil);
+    }
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('help-media/stor.png')
+        ->and($fel[0])->toContain('5 MB');
+});
+
+it('fäller en bild med otillåten ändelse', function () {
+    $fel = hjalpFel('bild-svg');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('help-media/ikon.svg')
+        ->and($fel[0])->toContain('png, jpg, jpeg, gif och webp');
+});
+
+it('fäller en bild utan alt-text', function () {
+    $fel = hjalpFel('bild-alt-tom');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('help-media/bild.png')
+        ->and($fel[0])->toContain('alt-text');
+});
+
+it('fäller en bild med extern adress', function () {
+    $fel = hjalpFel('bild-extern');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('https://example.com/a.png')
+        ->and($fel[0])->toContain('extern adress');
+});
