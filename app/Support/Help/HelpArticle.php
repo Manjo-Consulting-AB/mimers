@@ -20,10 +20,15 @@ use Carbon\CarbonImmutable;
  *   463 och sker inte här.
  *
  * **`updated` är en CarbonImmutable**, inte en sträng. Datumet skrivs för hand
- * i front mattern som `YYYY-MM-DD` (utrullningen saknar `.git`), men den som
- * renderar artikeln vill kunna formatera det per språk, och då är ett datum en
- * bättre bärare än en sträng. Objektet är serialiserbart, så katalogen kan
- * cachas som den är.
+ * i front mattern som ett quotat `YYYY-MM-DD` (utrullningen saknar `.git`), men
+ * den som renderar artikeln vill kunna formatera det per språk, och då är ett
+ * datum en bättre bärare än en sträng.
+ *
+ * **Cachen bär arrayer, inte objekt.** `toArray()` skriver `updated` som
+ * `Y-m-d`, och `fromArray()` bygger tillbaka objektet. Skälet är att
+ * `config/cache.php` inte tillåter att klasser packas upp
+ * (`serializable_classes => false`): en cachad CarbonImmutable kommer tillbaka
+ * som `__PHP_Incomplete_Class` ur en riktig butik.
  *
  * `locale` är katalogen filen lästes ur, inte ett fält i front mattern
  * (ADR-0094 § 2).
@@ -61,5 +66,92 @@ final readonly class HelpArticle
     public function isDraft(): bool
     {
         return $this->status === 'draft';
+    }
+
+    /**
+     * Artikeln som bara arrayer och skalärer — det som går i cachen.
+     *
+     * @return array{
+     *     id: string,
+     *     title: string,
+     *     type: string,
+     *     category: string,
+     *     description: ?string,
+     *     keywords: list<string>,
+     *     related: list<string>,
+     *     contexts: list<string>,
+     *     status: string,
+     *     updated: string,
+     *     featured: bool,
+     *     order: int,
+     *     markdown: string,
+     *     locale: string,
+     * }
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'type' => $this->type,
+            'category' => $this->category,
+            'description' => $this->description,
+            'keywords' => $this->keywords,
+            'related' => $this->related,
+            'contexts' => $this->contexts,
+            'status' => $this->status,
+            'updated' => $this->updated->format('Y-m-d'),
+            'featured' => $this->featured,
+            'order' => $this->order,
+            'markdown' => $this->markdown,
+            'locale' => $this->locale,
+        ];
+    }
+
+    /**
+     * Bygger tillbaka artikeln ur `toArray()`-formen.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: (string) $data['id'],
+            title: (string) $data['title'],
+            type: (string) $data['type'],
+            category: (string) $data['category'],
+            description: isset($data['description']) ? (string) $data['description'] : null,
+            keywords: self::strings($data['keywords'] ?? []),
+            related: self::strings($data['related'] ?? []),
+            contexts: self::strings($data['contexts'] ?? []),
+            status: (string) $data['status'],
+            updated: CarbonImmutable::parse((string) $data['updated'])->startOfDay(),
+            featured: (bool) $data['featured'],
+            order: (int) $data['order'],
+            markdown: (string) $data['markdown'],
+            locale: (string) $data['locale'],
+        );
+    }
+
+    /**
+     * En lista av strängar ur ett godtyckligt värde.
+     *
+     * @return list<string>
+     */
+    private static function strings(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $strings = [];
+
+        foreach ($value as $item) {
+            if (is_scalar($item)) {
+                $strings[] = (string) $item;
+            }
+        }
+
+        return $strings;
     }
 }

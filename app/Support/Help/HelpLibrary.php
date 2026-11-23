@@ -4,6 +4,7 @@ namespace App\Support\Help;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -31,8 +32,17 @@ use Symfony\Component\Yaml\Yaml;
  * `help:{locale}:{fingerprint}`, där fingeravtrycket är en hash av sökväg,
  * `filemtime` och `filesize` för varje fil i engelskan och språkets katalog.
  * En ändrad fil ger därför en ny nyckel, och utrullningen behöver aldrig rensa
- * något: den gamla nyckeln blir bara liggande. Katalogen är serialiserbar, så
- * värdet kan cachas som det är.
+ * något: den gamla nyckeln blir bara liggande.
+ *
+ * **Cachen bär arrayer, inte objekt.** Värdet är `HelpCatalog::toArray()`, och
+ * katalogen byggs med `HelpCatalog::fromArray()` efter hämtningen. Skälet är
+ * att `config/cache.php` inte tillåter att klasser packas upp
+ * (`serializable_classes => false`): en cachad HelpCatalog hade kommit tillbaka
+ * som `__PHP_Incomplete_Class` ur file-, database- och redis-butikarna.
+ *
+ * **Ett språk är en enkel språkkod.** `catalog()` tar emot språket som en
+ * sträng, men bara `^[a-z]{2,3}(_[A-Z]{2})?$` — annars kastar den. Sökvägarna
+ * byggs av värdet, och en kod som `../..` hade annars läst utanför roten.
  *
  * Front mattern läses med symfony/yaml (Tony godkände paketet 2026-11-23).
  * Klassen förutsätter att innehållet är giltigt — det prövar
@@ -55,17 +65,23 @@ final class HelpLibrary
      * Katalogen för språket, ur cachen när inget har ändrats.
      *
      * @param  ?string  $locale  Språket; standard `app()->getLocale()`.
+     *
+     * @throws InvalidArgumentException När språket inte är en enkel språkkod.
      */
     public function catalog(?string $locale = null): HelpCatalog
     {
         $locale ??= app()->getLocale();
 
+        if (preg_match('/^[a-z]{2,3}(_[A-Z]{2})?$/', $locale) !== 1) {
+            throw new InvalidArgumentException("Ogiltig språkkod \"{$locale}\".");
+        }
+
         $key = 'help:'.$locale.':'.$this->fingerprint($locale);
 
-        /** @var HelpCatalog $catalog */
-        $catalog = Cache::rememberForever($key, fn (): HelpCatalog => $this->build($locale));
+        /** @var array{categories: list<array<string, mixed>>, articles: list<array<string, mixed>>, synonyms: list<list<string>>} $data */
+        $data = Cache::rememberForever($key, fn (): array => $this->build($locale)->toArray());
 
-        return $catalog;
+        return HelpCatalog::fromArray($data);
     }
 
     /**
@@ -164,6 +180,7 @@ final class HelpLibrary
         }
 
         [$front, $markdown] = $this->split($file, $content);
+
         $data = Yaml::parse($front);
 
         if (! is_array($data)) {
@@ -180,7 +197,7 @@ final class HelpLibrary
             related: $this->strings($data['related'] ?? []),
             contexts: $this->strings($data['context'] ?? []),
             status: (string) ($data['status'] ?? 'published'),
-            updated: $this->updated($data['updated'] ?? ''),
+            updated: $this->updated($data['updated'] ?? '', $file),
             featured: (bool) ($data['featured'] ?? false),
             order: (int) ($data['order'] ?? 100),
             markdown: $markdown,
@@ -225,11 +242,8 @@ final class HelpLibrary
      */
     private function split(string $file, string $content): array
     {
-        if (preg_match('/\A---\R(.*?)\R---\R?(.*)\z/s', $content, $matches) !== 1) {
-            throw new RuntimeException("{$file} saknar front matter.");
-        }
-
-        return [$matches[1], $matches[2]];
+        return FrontMatter::split($content)
+            ?? throw new RuntimeException("{$file} saknar front matter.");
     }
 
     /**
@@ -271,6 +285,11 @@ final class HelpLibrary
     /**
      * Lägger språkets artiklar över engelskans på id; engelskans ordning behålls.
      *
+     * Är översättningen ett utkast men engelskan publicerad läggs båda in, den
+     * översatta först. Katalogen väljer den första synliga per id, så utkastet
+     * syns utanför produktion och engelskan tar över i produktion i stället för
+     * att artikeln försvinner.
+     *
      * @param  list<HelpArticle>  $english
      * @param  list<HelpArticle>  $local
      * @return list<HelpArticle>
@@ -288,7 +307,20 @@ final class HelpLibrary
 
         foreach ($english as $article) {
             $englishIds[$article->id] = true;
-            $merged[] = $translated[$article->id] ?? $article;
+
+            $localArticle = $translated[$article->id] ?? null;
+
+            if ($localArticle === null) {
+                $merged[] = $article;
+
+                continue;
+            }
+
+            $merged[] = $localArticle;
+
+            if ($localArticle->isDraft() && ! $article->isDraft()) {
+                $merged[] = $article;
+            }
         }
 
         foreach ($local as $article) {
@@ -346,22 +378,28 @@ final class HelpLibrary
     /**
      * Tolkar `updated` till ett datum.
      *
-     * Ett oquoterat `2026-11-22` blir en Unix-tid när symfony/yaml läser
-     * front mattern, ett quoterat blir en sträng. Båda är giltiga skrivsätt i
-     * källan; valideringen kräver att tiden är midnatt UTC, alltså en dag
-     * utan klockan.
+     * Datumet måste skrivas som ett quotat `YYYY-MM-DD` i front mattern. Ett
+     * oquoterat datum blir en Unix-tid när symfony/yaml läser det, och
+     * `2026-02-30` normaliseras då tyst till 2 mars — därför underkänner
+     * HelpValidator den formen, och här kastar den i stället för att tyst bli
+     * fel dag.
      */
-    private function updated(mixed $value): CarbonImmutable
+    private function updated(mixed $value, string $file): CarbonImmutable
     {
-        if (is_int($value)) {
-            return CarbonImmutable::createFromTimestampUTC($value)->startOfDay();
+        if (! is_string($value)) {
+            throw new RuntimeException(
+                "updated i {$file} måste skrivas som ett quotat datum på formen YYYY-MM-DD."
+            );
         }
 
-        return CarbonImmutable::parse((string) $value)->startOfDay();
+        return CarbonImmutable::parse($value)->startOfDay();
     }
 
     /**
      * Gör en YAML-lista till en lista av strängar.
+     *
+     * Ett värde som inte är skalärt hoppas över; det kan inte bli en sträng
+     * utan att kasta, och valideringen fäller formen i CI.
      *
      * @return list<string>
      */
@@ -371,6 +409,14 @@ final class HelpLibrary
             return [];
         }
 
-        return array_values(array_map(static fn (mixed $item): string => (string) $item, $value));
+        $strings = [];
+
+        foreach ($value as $item) {
+            if (is_scalar($item)) {
+                $strings[] = (string) $item;
+            }
+        }
+
+        return $strings;
     }
 }

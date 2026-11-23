@@ -6,6 +6,6 @@ category: sharing
 related: [what-can-the-people-i-share-with-do]
 context: [container.sharing]
 order: 10
-updated: 2026-11-22
+updated: "2026-11-22"
 ---
 Öppna containern och välj **Dela**.

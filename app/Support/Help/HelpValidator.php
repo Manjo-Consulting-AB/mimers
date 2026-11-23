@@ -25,9 +25,10 @@ use Symfony\Component\Yaml\Yaml;
  * front mattern och kategorifilen.
  *
  * Ett oquoterat `updated: 2026-11-22` blir en Unix-tid när symfony/yaml läser
- * det, ett quoterat blir en sträng — båda godtas, men tiden måste vara midnatt
- * UTC, alltså en dag utan klocka. En oquoterad, ogiltig dag som `2026-11-32`
- * fälls redan av YAML-tolkaren och rapporteras som ogiltig front matter.
+ * det, och en oquoterad, ogiltig dag som `2026-02-30` normaliseras då tyst till
+ * 2 mars. Datumet måste därför skrivas som ett quotat `YYYY-MM-DD`; ett
+ * oquoterat värde underkänns med ett eget besked. Ett quotat `2026-11-32` fälls
+ * av datumregeln, och ett oquoterat fälls redan av YAML-tolkaren.
  */
 final class HelpValidator
 {
@@ -151,7 +152,21 @@ final class HelpValidator
             return 'obligatoriska fält saknas: '.implode(', ', $missing).'.';
         }
 
-        $id = (string) $data['id'];
+        foreach (['id', 'title', 'type', 'category'] as $field) {
+            if (! is_string($data[$field])) {
+                return "{$field} måste vara en sträng.";
+            }
+        }
+
+        if (! is_string($data['updated'])) {
+            return 'updated måste skrivas som ett quotat datum på formen YYYY-MM-DD.';
+        }
+
+        if (isset($data['description']) && ! is_string($data['description'])) {
+            return 'description måste vara en sträng.';
+        }
+
+        $id = $data['id'];
         $filename = basename($file, '.md');
 
         if ($id !== $filename) {
@@ -166,20 +181,20 @@ final class HelpValidator
             return "id \"{$id}\" är längre än 80 tecken.";
         }
 
-        $type = (string) $data['type'];
+        $type = $data['type'];
         $types = config('help.types');
 
         if (! is_array($types) || ! in_array($type, $types, true)) {
             return "typen \"{$type}\" finns inte i config('help.types').";
         }
 
-        $category = (string) $data['category'];
+        $category = $data['category'];
 
         if (! array_key_exists($category, $categories)) {
             return "kategorin \"{$category}\" finns inte i categories.yaml.";
         }
 
-        $description = isset($data['description']) ? (string) $data['description'] : null;
+        $description = $data['description'] ?? null;
 
         if ($type !== 'faq' && ($description === null || trim($description) === '')) {
             return 'description saknas; den krävs för alla typer utom faq.';
@@ -312,14 +327,16 @@ final class HelpValidator
                 continue;
             }
 
-            if (preg_match('/\A---\R(.*?)\R---\R?(.*)\z/s', $content, $matches) !== 1) {
+            $parts = FrontMatter::split($content);
+
+            if ($parts === null) {
                 $entries[] = ['file' => $file, 'data' => null, 'error' => 'front matter saknas.'];
 
                 continue;
             }
 
             try {
-                $data = Yaml::parse($matches[1]);
+                $data = Yaml::parse($parts[0]);
             } catch (ParseException $e) {
                 $entries[] = ['file' => $file, 'data' => null, 'error' => 'front mattern är inte giltig YAML ('.$e->getMessage().').'];
 
@@ -349,13 +366,16 @@ final class HelpValidator
         return isset($data[$field]) && $data[$field] !== '';
     }
 
-    /** Är värdet en dag på formen `Y-m-d`, utan klocka? */
+    /**
+     * Är värdet en dag på formen `Y-m-d` utan klocka?
+     *
+     * Ett oquoterat datum kommer hit som en Unix-tid och godtas inte: tiden är
+     * redan normaliserad av YAML-tolkaren, så en ogiltig dag går inte längre
+     * att skilja från en giltig. Regeln kräver därför en sträng, och det egna
+     * beskedet om det står i `articleError()`.
+     */
     private function validDate(mixed $value): bool
     {
-        if (is_int($value)) {
-            return gmdate('H:i:s', $value) === '00:00:00';
-        }
-
         if (! is_string($value)) {
             return false;
         }
@@ -374,7 +394,15 @@ final class HelpValidator
             return [];
         }
 
-        return array_values(array_map(static fn (mixed $item): string => (string) $item, $value));
+        $strings = [];
+
+        foreach ($value as $item) {
+            if (is_scalar($item)) {
+                $strings[] = (string) $item;
+            }
+        }
+
+        return $strings;
     }
 
     /**

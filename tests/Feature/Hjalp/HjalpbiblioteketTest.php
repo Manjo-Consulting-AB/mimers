@@ -5,8 +5,10 @@ use App\Support\Help\HelpCatalog;
 use App\Support\Help\HelpCategory;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpValidator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /*
  * M80 · issue 460 — hjälpbiblioteket. Innehållet i den nya formen ur
@@ -137,6 +139,18 @@ it('ger översatt artikel och faller tillbaka på engelskan', function () {
         ->and($katalog->synonyms())->toBe([['radera', 'ta bort'], ['dela', 'bjud in']]);
 });
 
+it('faller tillbaka på engelskan när översättningen är ett utkast', function () {
+    $bibliotek = new HelpLibrary(__DIR__.'/fixtures/utkast-oversattning');
+
+    expect($bibliotek->catalog('xx')->article('en-artikel')?->title)->toBe('Översatt artikel');
+
+    app()->detectEnvironment(fn (): string => 'production');
+
+    expect($bibliotek->catalog('xx')->article('en-artikel')?->title)->toBe('English article')
+        ->and($bibliotek->catalog('xx')->article('en-artikel')?->locale)->toBe('en')
+        ->and(hjalpIdn($bibliotek->catalog('xx')->articles()))->toBe(['en-artikel']);
+});
+
 it('väljer appens språk när inget anges', function () {
     app()->setLocale('xx');
 
@@ -187,15 +201,29 @@ it('läser filerna en gång när inget har ändrats', function () {
     }
 });
 
-it('går att serialisera för cachen', function () {
-    $katalog = hjalpBibliotek()->catalog('en');
+it('kan läsas tillbaka ur en cache som serialiserar värdet', function () {
+    // Testsviten kör array-butiken utan serialisering, så ett cachat objekt
+    // hade passerat där. Appens riktiga butiker serialiserar värdet och tillåter
+    // inga klasser (config/cache.php: serializable_classes => false), så provet
+    // slår på serialiseringen och läser katalogen en andra gång.
+    config(['cache.stores.array.serialize' => true]);
+    Cache::forgetDriver('array');
 
-    /** @var HelpCatalog $kopia */
-    $kopia = unserialize(serialize($katalog));
+    $bibliotek = hjalpBibliotek();
 
-    expect($kopia)->toBeInstanceOf(HelpCatalog::class)
-        ->and($kopia->article('how-do-i-share-a-container')?->title)->toBe('How do I share a container?')
-        ->and($kopia->categories())->toHaveCount(3);
+    expect($bibliotek->catalog('en'))->toBeInstanceOf(HelpCatalog::class);
+
+    $katalog = $bibliotek->catalog('en');
+
+    expect($katalog)->toBeInstanceOf(HelpCatalog::class)
+        ->and($katalog->article('how-do-i-share-a-container')?->title)->toBe('How do I share a container?')
+        ->and($katalog->article('how-do-i-share-a-container')?->updated->format('Y-m-d'))->toBe('2026-11-22')
+        ->and($katalog->categories())->toHaveCount(3);
+});
+
+it('avvisar en språkkod som kan lämna roten', function () {
+    expect(fn () => hjalpBibliotek()->catalog('../..'))
+        ->toThrow(InvalidArgumentException::class);
 });
 
 it('ger inga fel för den giltiga testkatalogen', function () {
@@ -214,6 +242,22 @@ it('fäller ett obligatoriskt fält som saknas', function () {
     expect($fel)->toHaveCount(1)
         ->and($fel[0])->toContain('saknar-titel.md')
         ->and($fel[0])->toContain('title');
+});
+
+it('fäller ett id som är en lista', function () {
+    $fel = hjalpFel('id-lista');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('lista-id.md')
+        ->and($fel[0])->toContain('id måste vara en sträng');
+});
+
+it('fäller en titel som är en lista', function () {
+    $fel = hjalpFel('titel-lista');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('titel-lista.md')
+        ->and($fel[0])->toContain('title måste vara en sträng');
 });
 
 it('fäller ett id som inte stämmer med filnamnet', function () {
@@ -253,7 +297,7 @@ it('fäller en kategori som inte finns i categories.yaml', function () {
 
     expect($fel)->toHaveCount(1)
         ->and($fel[0])->toContain('kategori-saknas.md')
-        ->and($fel[0])->toContain('saknas');
+        ->and($fel[0])->toContain('kategorin');
 });
 
 it('fäller en guide som saknar description', function () {
@@ -277,7 +321,18 @@ it('fäller ett ogiltigt datum', function () {
 
     expect($fel)->toHaveCount(1)
         ->and($fel[0])->toContain('datum-trasigt.md')
-        ->and($fel[0])->toContain('datum');
+        ->and($fel[0])->toContain('giltigt datum');
+});
+
+it('fäller ett oquoterat datum', function () {
+    // Ett oquoterat 2026-02-30 blir en Unix-tid för 2 mars när YAML-tolkaren
+    // läser det, så dagen går inte längre att pröva. Regeln kräver därför ett
+    // quotat datum.
+    $fel = hjalpFel('datum-oquoterat');
+
+    expect($fel)->toHaveCount(1)
+        ->and($fel[0])->toContain('datum-oquoterat.md')
+        ->and($fel[0])->toContain('quotat datum');
 });
 
 it('fäller related som pekar på ett id som inte finns', function () {
@@ -285,7 +340,7 @@ it('fäller related som pekar på ett id som inte finns', function () {
 
     expect($fel)->toHaveCount(1)
         ->and($fel[0])->toContain('related-saknas.md')
-        ->and($fel[0])->toContain('finns-inte');
+        ->and($fel[0])->toContain('pekar på');
 });
 
 it('fäller related som pekar på artikeln själv', function () {
@@ -325,7 +380,7 @@ it('fäller ett kategori-id som förekommer två gånger', function () {
 
     expect($fel)->toHaveCount(1)
         ->and($fel[0])->toContain('categories.yaml')
-        ->and($fel[0])->toContain('test');
+        ->and($fel[0])->toContain('förekommer mer än en gång');
 });
 
 it('fäller ett id som bara finns i ett annat språk', function () {

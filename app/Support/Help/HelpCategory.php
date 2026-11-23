@@ -26,4 +26,42 @@ final readonly class HelpCategory
         public ?string $intro,
         public int $order,
     ) {}
+
+    /**
+     * Kategorin som bara arrayer och skalärer — det som går i cachen.
+     *
+     * @return array{
+     *     id: string,
+     *     title: string,
+     *     description: string,
+     *     intro: ?string,
+     *     order: int,
+     * }
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'description' => $this->description,
+            'intro' => $this->intro,
+            'order' => $this->order,
+        ];
+    }
+
+    /**
+     * Bygger tillbaka kategorin ur `toArray()`-formen.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            id: (string) $data['id'],
+            title: (string) $data['title'],
+            description: (string) $data['description'],
+            intro: isset($data['intro']) ? (string) $data['intro'] : null,
+            order: (int) $data['order'],
+        );
+    }
 }

@@ -22,8 +22,15 @@ namespace App\Support\Help;
  * `categories.yaml`, sedan artikelns `order` och sist titeln (ADR-0094 § 1).
  * Lika `order` ordnas alltså på titel, och sorteringen är stabil.
  *
- * Katalogen måste gå att serialisera: HelpLibrary lägger den i cachen som den
- * är, och alla fält är skalärer, listor eller CarbonImmutable.
+ * **Ett id förekommer en gång.** När en översättning är ett utkast har
+ * HelpLibrary lagt den före engelskan, så utkastet syns utanför produktion och
+ * engelskan tar över i produktion. `articles()` och `article()` väljer den
+ * första synliga posten per id, alltså aldrig två.
+ *
+ * **Cachen bär arrayer, inte objekt.** HelpLibrary cachar `toArray()`-formen
+ * och bygger katalogen med `fromArray()` efter hämtningen, eftersom
+ * `config/cache.php` inte tillåter att klasser packas upp
+ * (`serializable_classes => false`).
  */
 final class HelpCatalog
 {
@@ -63,11 +70,25 @@ final class HelpCatalog
     /**
      * Alla synliga artiklar, ordnade på kategori, `order` och titel.
      *
+     * Ett id som finns både som utkast och som publik post ger bara den första
+     * synliga posten — i praktiken översättningen utanför produktion och
+     * engelskan i produktion.
+     *
      * @return list<HelpArticle>
      */
     public function articles(): array
     {
-        $articles = array_values(array_filter($this->articles, $this->visible(...)));
+        $seen = [];
+        $articles = [];
+
+        foreach ($this->articles as $article) {
+            if (! $this->visible($article) || isset($seen[$article->id])) {
+                continue;
+            }
+
+            $seen[$article->id] = true;
+            $articles[] = $article;
+        }
 
         /** @var array<string, int> $position */
         $position = [];
@@ -135,6 +156,54 @@ final class HelpCatalog
     public function synonyms(): array
     {
         return $this->synonyms;
+    }
+
+    /**
+     * Katalogen som bara arrayer och skalärer — det som går i cachen.
+     *
+     * @return array{
+     *     categories: list<array<string, mixed>>,
+     *     articles: list<array<string, mixed>>,
+     *     synonyms: list<list<string>>,
+     * }
+     */
+    public function toArray(): array
+    {
+        return [
+            'categories' => array_map(
+                static fn (HelpCategory $category): array => $category->toArray(),
+                $this->categories,
+            ),
+            'articles' => array_map(
+                static fn (HelpArticle $article): array => $article->toArray(),
+                $this->articles,
+            ),
+            'synonyms' => $this->synonyms,
+        ];
+    }
+
+    /**
+     * Bygger tillbaka katalogen ur `toArray()`-formen.
+     *
+     * @param  array{
+     *     categories?: list<array<string, mixed>>,
+     *     articles?: list<array<string, mixed>>,
+     *     synonyms?: list<list<string>>,
+     * }  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        return new self(
+            array_map(
+                static fn (array $row): HelpCategory => HelpCategory::fromArray($row),
+                $data['categories'] ?? [],
+            ),
+            array_map(
+                static fn (array $row): HelpArticle => HelpArticle::fromArray($row),
+                $data['articles'] ?? [],
+            ),
+            $data['synonyms'] ?? [],
+        );
     }
 
     /** Syns artikeln i den här miljön? Utkast gör det bara utanför produktion. */

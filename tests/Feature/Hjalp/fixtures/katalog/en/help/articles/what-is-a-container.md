@@ -7,6 +7,6 @@ keywords: [container, item]
 context: [container.overview]
 featured: true
 order: 10
-updated: 2026-11-22
+updated: "2026-11-22"
 ---
 A container is a place for things that belong together.
