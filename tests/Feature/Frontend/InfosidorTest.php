@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: omdöpt testfall (fyra sidor blir tre); /help-delen prövas i HjalpsidanTest, som är rött på basen.
+
 use App\Models\User;
 use Inertia\Testing\AssertableInertia;
 
