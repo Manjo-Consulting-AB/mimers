@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Help\CountHelpEvent;
 use App\Support\Help\HelpArticle;
 use App\Support\Help\HelpCatalog;
 use App\Support\Help\HelpLibrary;
@@ -57,8 +58,12 @@ use Inertia\Response;
 class HelpController extends Controller
 {
     /** Startsidan, `/help` — och träfflistan, `/help?q=…`. */
-    public function index(Request $request, HelpLibrary $library, HelpSearch $search): Response
-    {
+    public function index(
+        Request $request,
+        HelpLibrary $library,
+        HelpSearch $search,
+        CountHelpEvent $counter,
+    ): Response {
         $catalog = $library->catalog();
 
         // Frågan är bara en fråga när den är en sträng med något i. Ett tomt
@@ -66,6 +71,16 @@ class HelpController extends Controller
         $raw = $request->query('q');
         $query = is_string($raw) ? trim($raw) : '';
         $searching = $query !== '';
+
+        // Träfflistan är en sökning, även om den kom som en vanlig GET i
+        // stället för genom JSON-ytan (ADR-0094 § 8). Den räknas först när
+        // svaret är byggt, längst ned — ett fel i propsen ska inte bli en
+        // räknad sökning. Gav frågan noll träffar sparas den som en lucka.
+        $result = null;
+
+        if ($searching) {
+            $result = $search->search($catalog, $query, 20);
+        }
 
         // Kortet bär de tre första frågorna som egna länkar. Hela kortet kan
         // inte vara en länk, för då hamnade länkar inuti en länk; rubriken är
@@ -123,13 +138,13 @@ class HelpController extends Controller
             $anchors[$article->id] = route('help.category', $article->category, false).'#'.$article->id;
         }
 
-        return Inertia::render('Help', [
+        $response = Inertia::render('Help', [
             'categories' => $categories,
             'featured' => $featured,
             'anchors' => $anchors,
             ...($searching ? [
                 'q' => $query,
-                'search' => $search->search($catalog, $query, 20)->toArray(),
+                'search' => $result->toArray(),
             ] : []),
         ])->withViewData(['meta' => [
             'title' => $searching
@@ -140,6 +155,16 @@ class HelpController extends Controller
             // En sökträfflista ska inte indexeras (ADR-0094 § 10).
             'robots' => $searching ? 'noindex' : null,
         ]]);
+
+        if ($result !== null) {
+            $counter->event(CountHelpEvent::SEARCH);
+
+            if ($result->results === []) {
+                $counter->searchGap($query);
+            }
+        }
+
+        return $response;
     }
 
     /**
@@ -153,15 +178,23 @@ class HelpController extends Controller
      * sammanhanget — 470 räknar båda utfallen. Ankaret står i front matterns
      * värde och aldrig i adressen, så det finns inget att läsa ur rutten.
      */
-    public function context(string $context, HelpLibrary $library): RedirectResponse
+    public function context(string $context, HelpLibrary $library, CountHelpEvent $counter): RedirectResponse
     {
         $found = $library->catalog()->byContext($context);
 
         if ($found === null) {
             Log::info('help.context_unknown', ['context' => $context]);
 
+            // Ett okänt sammanhang är en lucka i texterna: någon länkade hit
+            // med ett sammanhang ingen artikel bär. Det räknas utan artikel.
+            $counter->event(CountHelpEvent::CONTEXT_UNKNOWN, '', $context);
+
             return redirect()->route('info.help');
         }
+
+        // Ett sammanhang som hittade en artikel räknas med både sammanhanget
+        // och artikeln, så rapporten kan se vilka ingångar som används.
+        $counter->event(CountHelpEvent::CONTEXT_OPEN, $found['article']->id, $context);
 
         $url = route('help.article', $found['article']->id);
 
@@ -213,8 +246,12 @@ class HelpController extends Controller
     }
 
     /** Artikelsidan, `/help/articles/{id}`. */
-    public function article(string $article, HelpLibrary $library): Response
-    {
+    public function article(
+        string $article,
+        Request $request,
+        HelpLibrary $library,
+        CountHelpEvent $counter,
+    ): Response {
         $catalog = $library->catalog();
         $found = $catalog->article($article);
 
@@ -231,7 +268,7 @@ class HelpController extends Controller
         $rendered = $catalog->rendered($found);
         $neighbours = $catalog->inCategory($found->category);
 
-        return Inertia::render('Help/Article', [
+        $response = Inertia::render('Help/Article', [
             'article' => [
                 'id' => $found->id,
                 'title' => $found->title,
@@ -258,6 +295,31 @@ class HelpController extends Controller
             'description' => $this->description($found, $rendered),
             'canonical' => route('help.article', $found->id),
         ]]);
+
+        $this->countArticleView($request, $counter, $found->id);
+
+        return $response;
+    }
+
+    /**
+     * Räknar artikelvisningen — och sökklikket när adressen bär `?ref=search`.
+     *
+     * Bara fullständiga sidladdningar räknas: en partiell Inertia-omladdning
+     * bär `X-Inertia-Partial-*` och är ingen visning av artikeln, samma regel
+     * som App\Http\Middleware\CountRouteView. Räknandet sker efter att
+     * artikeln hittats, så ett 404 blir aldrig en visning.
+     */
+    private function countArticleView(Request $request, CountHelpEvent $counter, string $articleId): void
+    {
+        if ($request->headers->has('X-Inertia-Partial-Component') || $request->headers->has('X-Inertia-Partial-Data')) {
+            return;
+        }
+
+        $counter->event(CountHelpEvent::ARTICLE_VIEW, $articleId);
+
+        if ($request->query('ref') === 'search') {
+            $counter->event(CountHelpEvent::SEARCH_CLICK, $articleId);
+        }
     }
 
     /**

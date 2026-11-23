@@ -15,6 +15,7 @@ use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredApiTokens;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PrunesHelpData;
 use App\Console\PrunesInAppNotifications;
 use App\Console\PrunesLogs;
 use App\Console\PrunesRegistrationIps;
@@ -502,6 +503,24 @@ Schedule::call(fn () => app(WatchesDeliveryQueues::class)->handle())
 Schedule::call(fn () => app(SummarizesPerformance::class)->handle())
     ->weeklyOn(1, '6:00')
     ->name('summarize-performance');
+
+/*
+ * Issue 470 · Gallringen av hjälpens mätning: sökfrågorna utan träff sparas i
+ * 90 dagar och händelserna i 400 — se App\Console\PrunesHelpData,
+ * config/help.php § search_gap_retention_days och § event_retention_days, och
+ * [[ADR-0094 Hjälpcentret]] § 8. Logiken bor i en vanlig klass, testad direkt
+ * i tests/Feature/Hjalp/HjalpgallringenTest.php; det här är bara
+ * schemaläggningen. Kör i samma nattliga fönster som de andra gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön. Posten ligger före `drain-queue`, som ska fortsätta ligga sist
+ * i filen.
+ */
+Schedule::call(fn () => app(PrunesHelpData::class)->handle())
+    ->daily()
+    ->name('prune-help-data');
 
 /*
  * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]

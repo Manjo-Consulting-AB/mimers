@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Help\CountHelpEvent;
 use App\Http\Requests\Help\HelpSearchRequest;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpSearch;
@@ -20,18 +21,37 @@ use Illuminate\Http\JsonResponse;
  * också före `/help/{category}`, annars hade kategoriruttens enskilda segment
  * fångat `search` (se routes/web.php).
  *
- * Ingen räkning av sökningar här — hjälpens mätning är 470 (ADR-0094 § 8).
+ * **`log=1` räknar sökningen** (M82 · issue 470, ADR-0094 § 8). Den parametern
+ * sätter `HelpSearchBox.vue` bara på den ena frågan per stillestånd eller
+ * Enter — förslagen som hämtas medan man skriver bär den inte. Gav frågan
+ * noll träffar sparas den som en lucka i texterna.
  */
 class HelpSearchController extends Controller
 {
-    public function __invoke(HelpSearchRequest $request, HelpLibrary $library, HelpSearch $search): JsonResponse
-    {
+    public function __invoke(
+        HelpSearchRequest $request,
+        HelpLibrary $library,
+        HelpSearch $search,
+        CountHelpEvent $counter,
+    ): JsonResponse {
+        $query = $request->string('q')->toString();
+
         $result = $search->search(
             $library->catalog(),
-            $request->string('q')->toString(),
+            $query,
             $request->integer('limit', 8),
         );
 
-        return response()->json($result->toArray());
+        $response = response()->json($result->toArray());
+
+        if ($request->boolean('log')) {
+            $counter->event(CountHelpEvent::SEARCH);
+
+            if ($result->results === []) {
+                $counter->searchGap($query);
+            }
+        }
+
+        return $response;
     }
 }
