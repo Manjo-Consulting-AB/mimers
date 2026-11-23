@@ -1,0 +1,9 @@
+- id: basics
+  title: Basics
+  description: The basics of the test catalogue.
+- id: sharing
+  title: Sharing
+  description: Sharing with other people.
+- id: storage
+  title: Storage
+  description: Space and allowances.
