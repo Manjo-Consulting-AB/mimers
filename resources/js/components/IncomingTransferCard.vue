@@ -8,7 +8,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Konsekvenserna står FÖRE knappen** (Beslut 6): vilken container, från vilket
  * konto, hur många items som följer med och hur många som undantas, vilken
- * åtkomst avsändaren behåller, och att mottagaren får tolv månader Pro.
+ * åtkomst avsändaren behåller, och — bara när `grants_bonus` är sant — att tolv månader Pro ingår.
  * Därför fem rader text och två knappar under dem, i den ordningen — att
  * trycka först och läsa sedan är fel ordning för den mest konsekvensrika
  * handlingen i produkten.
@@ -97,7 +97,7 @@ function reject() {
         </p>
         <p class="text-slate-700">{{ retained }}</p>
 
-        <p class="text-slate-700">{{ t('transfer.card.pro') }}</p>
+        <p v-if="transfer.grants_bonus" class="text-slate-700">{{ t('transfer.card.pro') }}</p>
         <p class="text-slate-600">{{ t('transfer.card.quota') }}</p>
 
         <div v-if="choosesAccount && accounts.length > 1" class="mt-1 flex flex-col gap-1">

@@ -138,6 +138,7 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
                 <span class="text-slate-700">{{ t(`transfer.status.${transfer.status}`) }}</span>
                 <span class="text-slate-700">{{ excludedLabel(transfer) }}</span>
                 <span class="text-slate-700">{{ retainedLabel(transfer) }}</span>
+                <span v-if="transfer.grants_bonus" class="text-slate-700">{{ t('transfer.outgoing.pro') }}</span>
                 <span class="text-xs text-slate-600">
                     {{ t('transfer.row.created', { date: formatDate(transfer.created_at, page.props.locale) }) }}
                 </span>

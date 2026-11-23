@@ -90,7 +90,8 @@ function submit() {
             Vad överlåtelsen omfattar, innan den skickas (Beslut 2). Fyra
             meningar i en: hela containern följer med utom undantagen,
             förbrukningen flyttar till mottagarens konto, åtkomsterna
-            återkallas, och mottagaren får tolv månader Pro.
+            återkallas. Sist en egen mening: en mottagare utan konto får tolv månader Pro
+            om avsändaren själv betalar för Pro, högst två ägarbyten om året.
         -->
         <p class="text-sm text-slate-600">{{ t('transfer.form.notice') }}</p>
 

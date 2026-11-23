@@ -259,8 +259,8 @@ class OwnershipTransferController extends Controller
      * **Konsekvenserna visas innan knappen** (Beslut 6), och de kommer med
      * raden: `from_account_name` är "från vilket konto", `item_count` och
      * `excluded_count` är "hur många följer med och hur många undantas", och
-     * `retain_access_level` är åtkomsten avsändaren behåller. De tolv
-     * månaderna Pro är en fast mening i vyn. Allt det är presentation BREDVID
+     * `retain_access_level` är åtkomsten avsändaren behåller. `grants_bonus` styr om raden om de tolv
+     * månaderna Pro visas. Allt det är presentation BREDVID
      * `OwnershipTransferResource` — resursen är `/api`:s kontrakt och
      * `app/Http/Resources/**` ligger utanför omfångsrutan, och `from_account`
      * finns inte i den.
@@ -292,6 +292,7 @@ class OwnershipTransferController extends Controller
             'transfers' => $transfers->map(fn (OwnershipTransfer $transfer): array => [
                 ...OwnershipTransferResource::make($transfer)->resolve($request),
                 'from_account_name' => $transfer->fromAccount?->name,
+                'grants_bonus' => (bool) $transfer->grants_bonus,
                 'item_count' => $itemCounts[$transfer->container_id] ?? 0,
                 'excluded_count' => $excludedCounts[$transfer->ulid] ?? 0,
             ])->all(),
