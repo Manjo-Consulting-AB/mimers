@@ -19,7 +19,6 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Notifications\MagicLinkNotification;
 use App\Support\Auth\MagicLinkBroker;
-use Illuminate\Auth\SessionGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -83,21 +82,12 @@ function efterverkanContainer(Account $konto): Container
 }
 
 /**
- * Sessionsnyckeln webbvakten loggar in under, alltså
- * `Auth::guard('web')->getName()`. Instanskontrollen finns bara för att
- * `AuthManager::guard()` svarar `Guard|StatefulGuard` och kontraktet inte
- * har `getName()` — formen är densamma, och en hårdkodad nyckel hade varit
- * en avskrift av ramverkets.
+ * Sessionsnyckeln webbvakten loggar in under. Ramverkets nyckel och inte en
+ * hårdkodad avskrift av den.
  */
 function efterverkanSessionsnyckel(): string
 {
-    $vakt = Auth::guard('web');
-
-    if (! $vakt instanceof SessionGuard) {
-        throw new RuntimeException('Webbvakten är ingen sessionsvakt.');
-    }
-
-    return $vakt->getName();
+    return Auth::guard('web')->getName();
 }
 
 /**
