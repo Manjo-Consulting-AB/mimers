@@ -1539,6 +1539,9 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         // namn. Ingen ny läsare och ingen ny mottagare läggs till.
         'containers/{container}/cover',
         'containers/{container}/calendar',
+        // Issue 1529: mottagaren lämnar. Den ÅTERKALLAR egna rader och
+        // beviljar ingenting; grinden är `leave`.
+        'containers/{container}/leave',
         'containers/{container}/invitations',
         'containers/{container}/transfer',
         'containers/{container}/export',

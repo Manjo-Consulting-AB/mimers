@@ -195,6 +195,7 @@ class ContainerSharingController extends Controller
             'can' => [
                 'manage' => Gate::forUser($user)->allows('manageAccess', $container),
                 'revoke' => Gate::forUser($user)->allows('revokeAccess', $container),
+                'leave' => Gate::forUser($user)->allows('leave', $container),
             ],
         ]);
     }

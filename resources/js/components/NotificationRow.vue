@@ -69,6 +69,7 @@ const ICONS = {
     'agent.access_lost': 'warning',
     'account.downgrade_warning': 'warning',
     'binder.ready': 'export',
+    'access.left': 'share',
 };
 
 const icon = computed(() => ICONS[props.notification.type] ?? 'notifications');
@@ -163,6 +164,7 @@ const message = computed(() => {
         container: payload.container,
         percent: payload.percent,
         owner: payload.owner,
+        person: payload.person,
     });
 
     return text === key ? t('notifications.list.fallback') : text;

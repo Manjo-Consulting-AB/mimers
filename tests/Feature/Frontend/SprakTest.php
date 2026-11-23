@@ -624,11 +624,12 @@ it('har en mening åt varje notistyp klockan visar', function () {
         }
     }
 
-    // Fjorton sedan issue 1518 lade till `binder.ready` (tretton efter issue
+    // Femton sedan issue 1529 lade till `access.left` (fjorton efter issue
+    // 1518, som lade till `binder.ready`; tretton efter issue
     // 1457, tolv efter issue 412). Räkningen är över
     // KONSTANTERNA och inte över klockans kanaler: en typ utan ord är
     // en typ någon lägger till `in_app` för utan att märka att texten saknas.
-    expect($typer)->toHaveCount(14);
+    expect($typer)->toHaveCount(15);
 
     foreach ($typer as $namn => $typ) {
         $mening = $lov["inbox.{$typ}"] ?? '';

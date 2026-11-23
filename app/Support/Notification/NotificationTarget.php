@@ -59,8 +59,22 @@ final class NotificationTarget
             // Issue 1518 · [[ADR-0091 PDF-pärmen]]: pärmen hämtas på
             // containerns exportsida, där raden också visar status.
             Notification::TYPE_BINDER_READY => $this->binderTarget($notification),
+            // Issue 1529: ägaren ser på delningssidan vem som finns kvar.
+            Notification::TYPE_ACCESS_LEFT => $this->leftTarget($notification),
             default => null,
         };
+    }
+
+    /**
+     * Containerns delningssida, eller `null` när containern inte längre finns.
+     */
+    private function leftTarget(Notification $notification): ?string
+    {
+        $container = $notification->container;
+
+        return $container === null
+            ? null
+            : route('containers.sharing', [$container], false);
     }
 
     /**

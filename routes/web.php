@@ -23,6 +23,7 @@ use App\Http\Controllers\ContainerCurrencyController;
 use App\Http\Controllers\ContainerDocumentController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
+use App\Http\Controllers\ContainerLeaveController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTaskController;
 use App\Http\Controllers\ContainerTemplateController;
@@ -1880,6 +1881,10 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/containers/{container}/agents/{agent}', [ContainerAgentController::class, 'destroy'])
         ->name('containers.agents.destroy');
+
+    // Issue 1529 (M75): mottagaren lämnar containern själv.
+    Route::post('/containers/{container}/leave', [ContainerLeaveController::class, 'store'])
+        ->name('containers.leave');
 
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy'])
         ->scopeBindings()
