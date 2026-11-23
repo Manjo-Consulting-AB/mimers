@@ -383,7 +383,11 @@ it('har kategorisidans ord i katalogen', function () {
  * Källkodsprov: de två beteendena är klientsidans, och det som går att avgöra
  * på serversidan är att koden finns och gör det issuen säger. Det faktiska
  * flödet — att `/help#how-do-i-share-a-container` hamnar på kategorisidan med
- * frågan öppen — kräver en webbläsare och står under handprovet i PR:en.
+ * frågan öppen — kräver en webbläsare. Handprovet är gjort mot appen i
+ * arbetsträdet (headless Chromium via Playwright): adressen hamnar på
+ * `/help/sharing#how-do-i-share-a-container` med frågan öppen och framskrollad,
+ * `hashchange` öppnar nästa fråga, och *Link to this question* kopierar rätt
+ * adress. Det står också i PR-kroppen.
  */
 it('skickar de gamla ankarna vidare med en Inertia-visit', function () {
     $kod = File::get(resource_path('js/pages/Help.vue'));
