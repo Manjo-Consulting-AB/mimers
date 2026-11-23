@@ -202,5 +202,6 @@ it('ritar en raderingsknapp utom när raden packas, och historiken har en mening
     $ui = require lang_path('en/ui.php');
     expect($ui['audit']['action']['export']['deleted'])->toBe(':user deleted an export');
     expect($ui['export']['delete'])->toBe('Delete');
-    expect($ui['error']['export']['still_running'])->toBeString()->not->toBe('');
+    expect($ui['error']['export']['still_running'])->toBeString();
+    expect($ui['error']['export']['still_running'])->not->toBe('');
 });
