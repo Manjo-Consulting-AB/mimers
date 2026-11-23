@@ -13,6 +13,7 @@ use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\Storage\ReadContainerStorageShare;
 use App\Actions\Template\CreateContainerFromTemplate;
 use App\Actions\User\ReadOverviewPanels;
 use App\Exceptions\Api\ApiException;
@@ -37,7 +38,6 @@ use App\Support\Tips;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -949,18 +949,9 @@ class ContainerController extends Controller
      */
     private function storageFor(Container $container): array
     {
-        // Rå tabellfråga, så inga globala SoftDeletes-scope filtrerar bort
-        // papperskorgen. Bilagan hör hit via `container_id` (containerns bild)
-        // eller via ett item, raderat eller ej, som tillhör containern.
-        $used = (int) DB::table('attachment')
-            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-            ->where(function ($query) use ($container) {
-                $query->where('attachment.container_id', $container->id)
-                    ->orWhereIn('attachment.item_id', DB::table('item')
-                        ->select('id')
-                        ->where('container_id', $container->id));
-            })
-            ->sum('stored_file.byte_size');
+        // Samma läsning som toppradens kvotmodul (issue 459): bara bilagor som
+        // ägarkontot faktiskt debiteras för.
+        $used = app(ReadContainerStorageShare::class)->handle($container);
 
         $limit = $container->account->planLimit('storage_bytes');
 

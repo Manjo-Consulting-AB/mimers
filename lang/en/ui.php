@@ -2293,6 +2293,31 @@ return [
 
     // The plan page, see issue 66a decisions 4–9 and [[Planer och kvoter]].
     //
+    // The storage quota module in the top bar and its panel (issue 459 · M79).
+    // All of it lives under `quota.*`; the same breakdown is drawn on
+    // /settings/storage.
+    'quota' => [
+        'details' => 'Storage details',
+        'used_of' => ':used of :limit',
+        'used_unlimited' => ':used used',
+        'in_container' => ':container in the container · :used of :limit',
+        'in_container_unlimited' => ':container in the container · :used used',
+        'panel_heading' => 'What the storage is used for',
+        'loading' => 'Loading…',
+        'files' => 'Files',
+        'text' => 'Text',
+        'largest_containers' => 'Largest containers',
+        'largest_items' => 'Largest items',
+        'largest_files' => 'Largest files',
+        'none' => 'Nothing here yet.',
+        'in_trash' => 'In the trash',
+        'item_in' => 'in :container',
+        'other_accounts' => 'Other accounts',
+        'other_account' => ':name · :used of :limit',
+        'other_account_unlimited' => ':name · :used used',
+        'manage' => 'Manage storage',
+    ],
+
     // A branch of its own at the top level, like `trash` and `sharing`: the
     // plan page is a surface with a vocabulary of its own, and the keys live
     // under `plan.*` and nowhere else (decision 9).

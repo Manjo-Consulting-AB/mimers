@@ -1,7 +1,9 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import ShellContainerList from './ShellContainerList.vue';
 import ShellSections from './ShellSections.vue';
+import StorageQuota from './StorageQuota.vue';
 import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -63,6 +65,8 @@ const props = defineProps({
 const emit = defineEmits(['close']);
 
 const { t } = useTranslations();
+const page = usePage();
+const storageQuota = computed(() => page.props.storageQuota);
 
 const menuElement = ref(null);
 
@@ -152,6 +156,9 @@ function onClosed() {
                 <ShellSections part="trash" />
 
                 <ShellSections part="account" />
+
+                <!-- Kvotmodulen längst ned i menyn (issue 459 · M79); samma panel som i toppraden. -->
+                <StorageQuota v-if="storageQuota" inline id-suffix="menu" class="mt-2 border-t border-border pt-2" />
             </aside>
 
             <!--

@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import StorageBreakdown from '../../components/StorageBreakdown.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -39,6 +40,9 @@ defineOptions({ layout: [AppLayout, SettingsLayout] });
  * **Ingen sträng står i den här filen** (Beslut 9).
  */
 const props = defineProps({
+    /* Uppdelningen av det valda kontots utrymme, med tio av varje (issue 459). */
+    breakdown: { type: Object, required: true },
+
     /* Användarens konton, `{ulid, name}`, sorterade på namn. */
     accounts: { type: Array, required: true },
 
@@ -180,6 +184,15 @@ function saveVersioning(value) {
             </option>
         </select>
     </div>
+
+    <!-- Vad utrymmet används till (issue 459 · M79): samma fyra delar som
+         panelen i toppraden, med tio av varje. -->
+    <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
+        <h3 class="text-lg font-semibold">{{ t('quota.panel_heading') }}</h3>
+        <div class="mt-4">
+            <StorageBreakdown :breakdown="props.breakdown" />
+        </div>
+    </section>
 
     <!-- Vad rensningen gjorde, med serverns tal (Beslut 8). Rutan ritas
          bara direkt efter en rensning, och den säger papperskorgen och de
