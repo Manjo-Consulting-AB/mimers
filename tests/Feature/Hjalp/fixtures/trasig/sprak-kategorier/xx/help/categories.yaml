@@ -1,0 +1,6 @@
+- id: test
+  title: Test
+  description: En testkategori.
+- id: annat
+  title: Annat
+  description: En kategori som engelskan inte har.
