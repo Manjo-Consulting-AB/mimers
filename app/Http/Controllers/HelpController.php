@@ -8,7 +8,9 @@ use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpMarkdown;
 use App\Support\Help\HelpRendered;
 use App\Support\Help\HelpSearch;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -138,6 +140,32 @@ class HelpController extends Controller
             // En sökträfflista ska inte indexeras (ADR-0094 § 10).
             'robots' => $searching ? 'noindex' : null,
         ]]);
+    }
+
+    /**
+     * Hjälpen för ett sammanhang, `/help/context/{sammanhang}` — M81 · issue
+     * 468, [[ADR-0094 Hjälpcentret]] § 6.
+     *
+     * Vyn känner inte till någon artikeladress: den länkar med sammanhanget,
+     * och servern slår upp artikeln som bär det. En träff ger 302 till
+     * artikelsidan, med `#ankaret` när sammanhanget har ett. Ett okänt
+     * sammanhang ger 302 till `/help` och en rad på nivån `info` med
+     * sammanhanget — 470 räknar båda utfallen. Ankaret står i front matterns
+     * värde och aldrig i adressen, så det finns inget att läsa ur rutten.
+     */
+    public function context(string $context, HelpLibrary $library): RedirectResponse
+    {
+        $found = $library->catalog()->byContext($context);
+
+        if ($found === null) {
+            Log::info('help.context_unknown', ['context' => $context]);
+
+            return redirect()->route('info.help');
+        }
+
+        $url = route('help.article', $found['article']->id);
+
+        return redirect($found['anchor'] === null ? $url : $url.'#'.$found['anchor']);
     }
 
     /** Kategorisidan, `/help/{kategori}`. */

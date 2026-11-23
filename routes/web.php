@@ -385,6 +385,18 @@ Route::get('/help/articles/{article}', [HelpController::class, 'article'])
     ->name('help.article')
     ->where('article', '[a-z0-9-]+');
 
+// M81 · issue 468: hjälpen i sammanhanget, /help/context/{sammanhang}
+// (ADR-0094 § 6). Vyn länkar med sammanhanget i stället för med en
+// artikeladress, och servern skickar vidare till artikeln som bär det —
+// `#ankaret` när sammanhanget har ett. Rutten ligger utanför `auth` och
+// `guest` som /help, och mönstret är sammanhangets form ur front matterns
+// `context`: gemener, `_` och `.`, minst två tecken. Ankaret hör till
+// front matterns värde och aldrig till adressen. Den registreras ovanför
+// `{category}`, som de andra /help/-rutterna.
+Route::get('/help/context/{context}', [HelpController::class, 'context'])
+    ->name('help.context')
+    ->where('context', '[a-z][a-z_.]*[a-z]');
+
 // M80 · issue 462: kategorisidan, /help/{kategori}. Rutten ligger utanför
 // `auth` och `guest` som /help, och dess mönster tar bara gemener, siffror och
 // bindestreck — ett kategori-id ur categories.yaml.
