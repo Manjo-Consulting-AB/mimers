@@ -6164,5 +6164,13 @@ return [
         'copy_link' => 'Link to this question',
         'link_copied' => 'Link copied',
         'questions_count' => ':count question|:count questions',
+        // Faktarutornas rubriker — M80 · issue 463, ADR-0094 § 4. Ordet står
+        // här och inte i markdownen, så att `> [!NOTE]` ritar samma rubrik i
+        // varje artikel och kan översättas på ett ställe.
+        'callout' => [
+            'note' => 'Note',
+            'tip' => 'Tip',
+            'warning' => 'Warning',
+        ],
     ],
 ];

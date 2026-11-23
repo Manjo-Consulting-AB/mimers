@@ -390,6 +390,78 @@
 }
 
 /*
+ * Hjälpartiklarnas rendering — M80 · issue 463, [[ADR-0094 Hjälpcentret]] § 4.
+ *
+ * Faktarutorna är GitHubs form: ett citat som börjar med `[!NOTE]`, `[!TIP]`
+ * eller `[!WARNING]` ritas som en `<aside>` med egen rubrik. Färgerna är
+ * designsystemets roller ([[ADR-0042 Designsystemet]] § Beslut) — ingen
+ * hårdkodad färg och ingen ny token.
+ *
+ * Videon är en ruta i 16:9 som ser ut som en spelare men bara är en länk.
+ * Först vid klick laddar 464 `youtube-nocookie.com`, så fram till dess
+ * kontaktas ingen tredje part och ingen bild hämtas i förväg. Ingen
+ * `overflow-x`: rutan krymper med spalten i stället för att skrolla i sidled.
+ */
+.help-callout {
+    background: var(--color-accent-soft);
+    border-left: 3px solid var(--color-accent);
+    border-radius: var(--radius-control);
+    padding: 0.75rem 1rem;
+}
+
+.help-callout-title {
+    color: var(--color-ink);
+    font-weight: 600;
+}
+
+.help-callout-tip {
+    background: var(--color-success-soft);
+    border-left-color: var(--color-success);
+}
+
+.help-callout-warning {
+    background: var(--color-warning-soft);
+    border-left-color: var(--color-warning);
+}
+
+.help-video {
+    align-items: center;
+    aspect-ratio: 16 / 9;
+    background: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    display: flex;
+    justify-content: center;
+}
+
+.help-content .help-video-start {
+    align-items: center;
+    color: var(--color-ink);
+    display: inline-flex;
+    font-weight: 600;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    text-align: center;
+    text-decoration: none;
+}
+
+/* Spelknappen: en triangel i accenten, ritad med en kant. */
+.help-content .help-video-start::before {
+    border-color: transparent transparent transparent var(--color-accent);
+    border-style: solid;
+    border-width: 0.55em 0 0.55em 0.9em;
+    content: '';
+    display: block;
+    flex: none;
+}
+
+/* Fokusringen är `--color-focus` och får aldrig tas bort (ADR-0042 § Beslut). */
+.help-content .help-video-start:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+/*
  * Mjuka övergångar mellan sidorna — se issue 279 § Beslut 2.
  *
  * Webbläsarens View Transitions tonar över ett sidbyte. Förvalet är 250 ms,

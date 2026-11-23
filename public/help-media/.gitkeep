@@ -1,0 +1,5 @@
+Katalogen för hjälpcentrets bilder — M80 · issue 463, [[ADR-0094 Hjälpcentret]] § 4.
+
+Bara filer härifrån ritas i en hjälpartikel. HelpValidator kräver att varje
+`![alt](help-media/…)` finns här, har ändelsen png, jpg, jpeg, gif eller webp,
+är högst 5 MB och har en alt-text. Mappen ligger kvar i git genom den här filen.

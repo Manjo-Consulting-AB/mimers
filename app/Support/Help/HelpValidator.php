@@ -20,9 +20,14 @@ use Symfony\Component\Yaml\Yaml;
  * följdfel som alla beror på det första. Kategorifilen kan däremot ge flera
  * fel, eftersom varje dubblett är sin egen brist.
  *
- * **Det som inte prövas här.** Ankare inuti markdownen, interna länkar och
- * bilder prövas av 463, där renderingen finns. Den här klassen läser bara
- * front mattern och kategorifilen.
+ * **Markdownen prövas också.** Varje `help:`-länk måste peka på en artikel som
+ * finns och, om den bär ett ankare, på en rubrik i den artikeln. Varje
+ * `context` med `#ankare` måste peka på en rubrik i sin egen artikel. Varje bild
+ * måste ligga under `public/help-media/`, ha en tillåten ändelse, vara högst
+ * 5 MB, ha en alt-text och sakna extern adress. Rubrikerna läses ur samma
+ * ritning som sidan använder (HelpMarkdown), så valideringen och renderingen
+ * aldrig kan tycka olika om vilka id:n som finns — `{#eget-id}`, `Str::slug`
+ * och `-2`-svansen räknas på ett ställe.
  *
  * Ett oquoterat `updated: 2026-11-22` blir en Unix-tid när symfony/yaml läser
  * det, och en oquoterad, ogiltig dag som `2026-02-30` normaliseras då tyst till
@@ -55,7 +60,7 @@ final class HelpValidator
                 continue;
             }
 
-            $local = $this->language($root, $locale, $english['articles']);
+            $local = $this->language($root, $locale, $english['articles'], $english['headings']);
 
             $errors = [...$errors, ...$local['errors']];
 
@@ -81,9 +86,10 @@ final class HelpValidator
      * Prövar en språkkatalog.
      *
      * @param  array<string, string>  $known  Engelskans artikel-id:n => fil; tom för engelskan.
-     * @return array{errors: list<string>, articles: array<string, string>, categories: array<string, string>}
+     * @param  array<string, list<array{id: string, title: string, level: int}>>  $knownHeadings  Engelskans rubriker, som reserv för ett ankare till en artikel som bara finns på engelska.
+     * @return array{errors: list<string>, articles: array<string, string>, categories: array<string, string>, headings: array<string, list<array{id: string, title: string, level: int}>>}
      */
-    private function language(string $root, string $locale, array $known = []): array
+    private function language(string $root, string $locale, array $known = [], array $knownHeadings = []): array
     {
         $directory = $root.'/'.$locale.'/help';
 
@@ -102,6 +108,12 @@ final class HelpValidator
         /** @var list<string> $targets */
         $targets = array_keys($known + $declared);
 
+        $headings = $this->headings($entries);
+
+        // Språkets egna rubriker vinner; engelskans är reserven för ett ankare
+        // till en artikel som bara finns på engelska.
+        $allHeadings = $headings + $knownHeadings;
+
         /** @var array<string, string> $seenContexts */
         $seenContexts = [];
 
@@ -116,6 +128,10 @@ final class HelpValidator
 
             $error = $this->articleError($entry['data'], $file, $categories, $targets, $seenContexts);
 
+            if ($error === null) {
+                $error = $this->markdownError($entry['data'], $entry['markdown'], $targets, $allHeadings);
+            }
+
             if ($error !== null) {
                 $errors[] = $this->relative($root, $file).': '.$error;
 
@@ -127,7 +143,7 @@ final class HelpValidator
             }
         }
 
-        return ['errors' => $errors, 'articles' => $declared, 'categories' => $categories];
+        return ['errors' => $errors, 'articles' => $declared, 'categories' => $categories, 'headings' => $headings];
     }
 
     /**
@@ -261,6 +277,139 @@ final class HelpValidator
     }
 
     /**
+     * Rubrik-id:na per artikel, räknade av samma ritning som sidan använder.
+     *
+     * @param  list<array{file: string, data: array<string, mixed>|null, error: string|null, markdown: string}>  $entries
+     * @return array<string, list<array{id: string, title: string, level: int}>>
+     */
+    private function headings(array $entries): array
+    {
+        $markdown = new HelpMarkdown;
+        $headings = [];
+
+        foreach ($entries as $entry) {
+            if ($entry['data'] === null || ! is_string($entry['data']['id'] ?? null)) {
+                continue;
+            }
+
+            $headings[$entry['data']['id']] = $markdown->render($entry['markdown'])->headings;
+        }
+
+        return $headings;
+    }
+
+    /**
+     * Prövar markdownen: interna länkar, sammanhangens ankare och bilderna.
+     *
+     * Länkarna läses ur dokumentträdet av HelpMarkdown::scan(), inte ur råtexten
+     * med ett reguljärt uttryck, så att en `help:`-länk i ett kodblock inte
+     * blir ett falskt fynd.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  list<string>  $targets
+     * @param  array<string, list<array{id: string, title: string, level: int}>>  $headings
+     */
+    private function markdownError(array $data, string $markdown, array $targets, array $headings): ?string
+    {
+        $references = (new HelpMarkdown)->scan($markdown);
+
+        foreach ($references->helpLinks as $link) {
+            $parts = explode('#', $link, 2);
+            $id = $parts[0];
+            $anchor = $parts[1] ?? '';
+
+            if (! in_array($id, $targets, true)) {
+                return "länken \"help:{$link}\" pekar på artikeln \"{$id}\", som inte finns.";
+            }
+
+            if ($anchor !== '' && ! $this->hasHeading($headings[$id] ?? [], $anchor)) {
+                return "länken \"help:{$link}\" pekar på ankaret \"#{$anchor}\", som inte finns i \"{$id}\".";
+            }
+        }
+
+        $own = $headings[(string) ($data['id'] ?? '')] ?? [];
+
+        foreach ($this->strings($data['context'] ?? []) as $context) {
+            $parts = explode('#', $context, 2);
+            $anchor = $parts[1] ?? '';
+
+            if ($anchor !== '' && ! $this->hasHeading($own, $anchor)) {
+                return "sammanhanget \"{$context}\" pekar på ankaret \"#{$anchor}\", som inte finns i artikeln.";
+            }
+        }
+
+        foreach ($references->images as $image) {
+            $error = $this->imageError($image['src'], $image['alt']);
+
+            if ($error !== null) {
+                return $error;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Finns rubriken med det id:t?
+     *
+     * @param  list<array{id: string, title: string, level: int}>  $headings
+     */
+    private function hasHeading(array $headings, string $anchor): bool
+    {
+        foreach ($headings as $heading) {
+            if ($heading['id'] === $anchor) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Den första bristen i en bild, eller null.
+     *
+     * Ordningen är vald så att ett fel pekar på rätt sak: en extern adress
+     * innan sökvägen, ändelsen innan filen prövas (en `.svg` är fel även om
+     * filen inte finns), alt-texten innan filen (en tom alt-text är fel även om
+     * bilden är kvar i en annan gren). Storleken prövas sist, eftersom den
+     * kräver att filen finns.
+     */
+    private function imageError(string $src, string $alt): ?string
+    {
+        if (preg_match('~^([a-z][a-z0-9+.-]*:|//)~i', $src) === 1) {
+            return "bilden \"{$src}\" har en extern adress; bilder måste ligga under public/help-media/.";
+        }
+
+        if (! str_starts_with($src, 'help-media/') || str_contains($src, '..')) {
+            return "bilden \"{$src}\" ligger inte under public/help-media/.";
+        }
+
+        $extension = strtolower(pathinfo($src, PATHINFO_EXTENSION));
+
+        if (! in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+            return "bilden \"{$src}\" har ändelsen .{$extension}; tillåtna är png, jpg, jpeg, gif och webp.";
+        }
+
+        if (trim($alt) === '') {
+            return "bilden \"{$src}\" saknar alt-text.";
+        }
+
+        $path = public_path($src);
+
+        if (! is_file($path)) {
+            return "bilden \"{$src}\" finns inte i public/help-media/.";
+        }
+
+        $size = filesize($path);
+
+        if ($size !== false && $size > 5 * 1024 * 1024) {
+            return "bilden \"{$src}\" är större än 5 MB.";
+        }
+
+        return null;
+    }
+
+    /**
      * Läser kategorifilen och prövar att id:na är unika.
      *
      * @return array{0: array<string, string>, 1: list<string>}
@@ -307,9 +456,9 @@ final class HelpValidator
     }
 
     /**
-     * Läser artikelfilerna och deras front matter.
+     * Läser artikelfilerna, deras front matter och markdownkroppen.
      *
-     * @return list<array{file: string, data: array<string, mixed>|null, error: string|null}>
+     * @return list<array{file: string, data: array<string, mixed>|null, error: string|null, markdown: string}>
      */
     private function entries(string $directory): array
     {
@@ -322,7 +471,7 @@ final class HelpValidator
             $content = file_get_contents($file);
 
             if ($content === false) {
-                $entries[] = ['file' => $file, 'data' => null, 'error' => 'filen går inte att läsa.'];
+                $entries[] = ['file' => $file, 'data' => null, 'error' => 'filen går inte att läsa.', 'markdown' => ''];
 
                 continue;
             }
@@ -330,7 +479,7 @@ final class HelpValidator
             $parts = FrontMatter::split($content);
 
             if ($parts === null) {
-                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front matter saknas.'];
+                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front matter saknas.', 'markdown' => ''];
 
                 continue;
             }
@@ -338,19 +487,19 @@ final class HelpValidator
             try {
                 $data = Yaml::parse($parts[0]);
             } catch (ParseException $e) {
-                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front mattern är inte giltig YAML ('.$e->getMessage().').'];
+                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front mattern är inte giltig YAML ('.$e->getMessage().').', 'markdown' => $parts[1]];
 
                 continue;
             }
 
             if (! is_array($data)) {
-                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front mattern är inte en mappning.'];
+                $entries[] = ['file' => $file, 'data' => null, 'error' => 'front mattern är inte en mappning.', 'markdown' => $parts[1]];
 
                 continue;
             }
 
             /** @var array<string, mixed> $data */
-            $entries[] = ['file' => $file, 'data' => $data, 'error' => null];
+            $entries[] = ['file' => $file, 'data' => $data, 'error' => null, 'markdown' => $parts[1]];
         }
 
         return $entries;

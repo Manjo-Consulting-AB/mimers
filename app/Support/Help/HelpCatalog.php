@@ -2,6 +2,8 @@
 
 namespace App\Support\Help;
 
+use Illuminate\Support\Facades\Cache;
+
 /**
  * Det inlästa hjälpinnehållet för ett språk — M80 · issue 460,
  * [[ADR-0094 Hjälpcentret]] § 1 och § 2.
@@ -156,6 +158,34 @@ final class HelpCatalog
     public function synonyms(): array
     {
         return $this->synonyms;
+    }
+
+    /**
+     * Den ritade artikeln — M80 · issue 463, [[ADR-0094 Hjälpcentret]] § 4.
+     *
+     * Resultatet av `HelpMarkdown::render()` läggs i cachen per artikel, så att
+     * ingen artikel ritas två gånger: en kategorisida som visar samma artikel
+     * som artikelsidan ritar den en gång, och en andra sidvisning läser cachen.
+     *
+     * **Nyckeln är innehållet, inte id:t.** Markdownens text hashas tillsammans
+     * med språk och id, så en ändrad artikel får en ny nyckel och den gamla
+     * blir bara liggande — samma princip som HelpLibrarys fingeravtryck.
+     *
+     * **Cachen bär arrayer.** `HelpRendered::toArray()` skrivs och
+     * `fromArray()` bygger tillbaka, eftersom `config/cache.php` inte tillåter
+     * att klasser packas upp (`serializable_classes => false`).
+     */
+    public function rendered(HelpArticle $article): HelpRendered
+    {
+        $key = 'help:rendered:'.hash('xxh128', $article->locale."\0".$article->id."\0".$article->markdown);
+
+        /** @var array{html: string, text: string, headings: list<array{id: string, title: string, level: int}>} $data */
+        $data = Cache::rememberForever(
+            $key,
+            static fn (): array => (new HelpMarkdown)->render($article->markdown)->toArray(),
+        );
+
+        return HelpRendered::fromArray($data);
     }
 
     /**
