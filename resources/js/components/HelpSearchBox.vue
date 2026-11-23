@@ -52,9 +52,11 @@ const SEARCH_DELAY_MS = 250;
 
 /*
  * Mätningen (470): rutan skickar `log=1` en gång per fråga när användaren
- * varit stilla i 1,5 s med minst tre tecken, eller trycker Enter. Servern
- * räknar `search` och sparar frågan som en lucka när den gav noll träffar
- * (ADR-0094 § 8). Förslagen som hämtas medan man skriver bär aldrig `log=1`.
+ * varit stilla i 1,5 s med minst tre tecken, eller trycker Enter på en
+ * markerad träff. Övriga Enter-vägar går till `/help?q=…`, som servern
+ * räknar. Servern räknar `search` och sparar frågan som en lucka när den gav
+ * noll träffar (ADR-0094 § 8). Förslagen som hämtas medan man skriver bär
+ * aldrig `log=1`.
  */
 const LOG_QUERY_LENGTH = 3;
 const LOG_DELAY_MS = 1500;
@@ -219,12 +221,15 @@ function onKeydown(event) {
     }
 
     if (event.key === 'Enter') {
-        /* Enter är det andra tillfället som räknar frågan. */
-        logSearch();
-
         const result = results.value[activeIndex.value];
 
+        /*
+         * Bara Enter på en markerad träff räknar här. De andra två vägarna
+         * leder till `/help?q=…`, och `HelpController::index` räknar frågan
+         * på servern — att räkna även i rutan hade gett två.
+         */
         if (result) {
+            logSearch();
             event.preventDefault();
             openUrl(`${result.url}?ref=search`);
 

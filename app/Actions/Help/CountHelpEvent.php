@@ -50,6 +50,13 @@ class CountHelpEvent
     public const CONTEXT_UNKNOWN = 'context_unknown';
 
     /**
+     * Kolumnen `context` är VARCHAR(100), men rutten för sammanhang har ingen
+     * längdgräns. Kapa därför innan raden byggs: en för lång adress ska inte
+     * fälla upserten och därmed spamma loggen.
+     */
+    public const CONTEXT_MAX_LENGTH = 100;
+
+    /**
      * Räknar upp en händelse. `$articleId` fylls i när händelsen gäller en
      * artikel, `$context` vid `context_open` och `context_unknown`; annars är
      * de tomma strängar, som det unika indexet kräver.
@@ -57,6 +64,8 @@ class CountHelpEvent
     public function event(string $event, string $articleId = '', string $context = ''): void
     {
         try {
+            $context = mb_substr($context, 0, self::CONTEXT_MAX_LENGTH);
+
             $now = now();
             $date = $now->toDateString();
 

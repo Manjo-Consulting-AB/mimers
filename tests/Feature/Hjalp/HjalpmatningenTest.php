@@ -208,6 +208,26 @@ it('räknar öppnade och okända sammanhang med sammanhanget', function () {
         ->and(hjalpmatningCount(CountHelpEvent::CONTEXT_UNKNOWN, '', 'finns.inte'))->toBe(1);
 });
 
+/*
+ * Granskningens fynd 2: ruttmönstret för sammanhang har ingen längdgräns, men
+ * kolumnen är VARCHAR(100). Ett långt, okänt sammanhang kapas i stället för
+ * att fälla upserten — annars är felloggen den enda spärren mot spam.
+ */
+it('kapar ett okänt sammanhang som är längre än kolumnen', function () {
+    $langt = 'a.'.str_repeat('b', 120);
+
+    expect(mb_strlen($langt))->toBeGreaterThan(CountHelpEvent::CONTEXT_MAX_LENGTH);
+
+    get('/help/context/'.$langt)->assertRedirect('/help');
+
+    expect(hjalpmatningCount(
+        CountHelpEvent::CONTEXT_UNKNOWN,
+        '',
+        mb_substr($langt, 0, CountHelpEvent::CONTEXT_MAX_LENGTH),
+    ))->toBe(1)
+        ->and(DB::table('help_event_daily')->count())->toBe(1);
+});
+
 it('stoppar nya okända sammanhang vid taket men räknar upp ett befintligt', function () {
     $dag = now()->toDateString();
     $rader = [];
@@ -268,6 +288,33 @@ it('skickar log=1 efter 1500 ms stillhet eller vid Enter, en gång per fråga', 
 
     // Både stilleståndstimern och Enter-anropet går genom logSearch().
     expect(substr_count($kod, 'logSearch();'))->toBeGreaterThanOrEqual(2);
+});
+
+/*
+ * Granskningens fynd 1: Enter räknar bara när en träff är markerad. De andra
+ * två vägarna — *See all results* och Enter utan markering — leder till
+ * `/help?q=…`, där HelpController::index räknar frågan på servern. Ett anrop
+ * även i rutan hade gett `search` 2 per fråga.
+ */
+it('räknar Enter bara när en träff är markerad', function () {
+    $kod = hjalpmatningKod('components/HelpSearchBox.vue');
+
+    $enterPos = strpos($kod, "event.key === 'Enter'");
+    $resultPos = $enterPos === false ? false : strpos($kod, 'const result = results.value[activeIndex.value];', $enterPos);
+
+    expect($enterPos)->not->toBeFalse()
+        ->and($resultPos)->not->toBeFalse();
+
+    $enter = substr($kod, (int) $enterPos);
+
+    // Anropet står inuti `if (result) { … }` — den gren där sidan inte
+    // navigerar till /help?q=…
+    expect(preg_match('/if \(result\) \{\s*logSearch\(\);/', $enter))->toBe(1);
+
+    // Och inget anrop före markeringen, där formuläret tar över.
+    $foreResultatet = substr($enter, 0, (int) $resultPos - (int) $enterPos);
+
+    expect($foreResultatet)->not->toContain('logSearch();');
 });
 
 /*
