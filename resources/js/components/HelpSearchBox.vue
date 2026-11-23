@@ -50,6 +50,17 @@ const { t } = useTranslations();
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_DELAY_MS = 250;
 
+/*
+ * Mätningen (470): rutan skickar `log=1` en gång per fråga när användaren
+ * varit stilla i 1,5 s med minst tre tecken, eller trycker Enter på en
+ * markerad träff. Övriga Enter-vägar går till `/help?q=…`, som servern
+ * räknar. Servern räknar `search` och sparar frågan som en lucka när den gav
+ * noll träffar (ADR-0094 § 8). Förslagen som hämtas medan man skriver bär
+ * aldrig `log=1`.
+ */
+const LOG_QUERY_LENGTH = 3;
+const LOG_DELAY_MS = 1500;
+
 const query = ref(props.initialQuery);
 const results = ref([]);
 const activeIndex = ref(-1);
@@ -67,6 +78,10 @@ const listId = 'help-search-results';
  */
 let requestId = 0;
 let timer = null;
+
+/* Mätningen: timern för `log=1` och den senast loggade frågan. */
+let logTimer = null;
+let loggedQuery = null;
 
 /* Listan är öppen först när det finns något att visa. */
 const expanded = computed(() => open.value && results.value.length > 0);
@@ -95,10 +110,20 @@ function onInput(event) {
         clearTimeout(timer);
     }
 
+    if (logTimer !== null) {
+        clearTimeout(logTimer);
+    }
+
     timer = setTimeout(() => {
         timer = null;
         runSearch();
     }, SEARCH_DELAY_MS);
+
+    /* Stilleståndet i 1,5 s är det som räknar frågan. */
+    logTimer = setTimeout(() => {
+        logTimer = null;
+        logSearch();
+    }, LOG_DELAY_MS);
 }
 
 async function runSearch() {
@@ -152,6 +177,26 @@ function fail() {
     close();
 }
 
+/*
+ * Skickar den ena mätfrågan. `log=1` används bara här, en gång per fråga
+ * (`loggedQuery`) och först från tre tecken. Svaret används inte, och ett
+ * fel får aldrig störa sökningen.
+ */
+function logSearch() {
+    const term = query.value.trim();
+
+    if (term.length < LOG_QUERY_LENGTH || term === loggedQuery) {
+        return;
+    }
+
+    loggedQuery = term;
+
+    fetch(`/help/search?q=${encodeURIComponent(term)}&log=1`, {
+        headers: { Accept: 'application/json' },
+        keepalive: true,
+    }).catch(() => {});
+}
+
 function onKeydown(event) {
     if (event.key === 'ArrowDown') {
         if (!expanded.value) {
@@ -178,7 +223,13 @@ function onKeydown(event) {
     if (event.key === 'Enter') {
         const result = results.value[activeIndex.value];
 
+        /*
+         * Bara Enter på en markerad träff räknar här. De andra två vägarna
+         * leder till `/help?q=…`, och `HelpController::index` räknar frågan
+         * på servern — att räkna även i rutan hade gett två.
+         */
         if (result) {
+            logSearch();
             event.preventDefault();
             openUrl(`${result.url}?ref=search`);
 
@@ -246,12 +297,17 @@ watch(
     () => props.initialQuery,
     (value) => {
         query.value = value;
+        loggedQuery = null;
     },
 );
 
 onUnmounted(() => {
     if (timer !== null) {
         clearTimeout(timer);
+    }
+
+    if (logTimer !== null) {
+        clearTimeout(logTimer);
     }
 });
 </script>
