@@ -6158,6 +6158,15 @@ return [
      * ändå som en nyckel så att singular och plural bor på ett ställe.
      */
     'help' => [
+        // Startsidans egna ord — M80 · issue 465. Rubriken och raden under
+        // den är hjälpcentrets framsida; `popular` är rubriken över listan
+        // med `featured`-artiklarna. `info.help.title` är kvar som sidans
+        // `<title>`, för det är dokumentets namn och inte rubriken.
+        'home' => [
+            'title' => 'How can we help?',
+            'subtitle' => 'Search the help or pick a topic.',
+            'popular' => 'Popular articles',
+        ],
         'breadcrumb' => [
             'home' => 'Help',
         ],

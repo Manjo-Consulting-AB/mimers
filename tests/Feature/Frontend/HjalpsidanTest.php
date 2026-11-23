@@ -406,3 +406,177 @@ it('ritar frågorna som details och öppnar den som matchar ankaret', function (
         ->toContain('try')
         ->toContain('target.open = true');
 });
+
+/*
+ * M80 · issue 465 — hjälpcentrets startsida.
+ *
+ * Kategorierna bär nu också `top`: de tre första frågorna, som egna länkar
+ * bredvid rubriken (hela kortet får inte vara en länk, för då hamnade en länk
+ * inuti en annan). `featured` är de fem artiklarna med `featured: true`, i
+ * katalogens ordning, med sin kategoris titel.
+ */
+it('ger startsidan kategorierna med de tre första frågorna och de fem populära artiklarna', function () {
+    withoutVite();
+
+    /** @var array{props: array<string, mixed>} $sida */
+    $sida = get('/help')->assertOk()->viewData('page');
+
+    $kategorier = $sida['props']['categories'];
+
+    expect($kategorier)->toHaveCount(9);
+
+    foreach ($kategorier as $kategori) {
+        expect($kategori)->toHaveKeys(['id', 'title', 'description', 'count', 'top'])
+            ->and($kategori['top'])->toHaveCount(min(3, $kategori['count']))
+            ->and($kategori['top'])->each->toHaveKeys(['id', 'title']);
+    }
+
+    expect($kategorier[0]['top'][0])->toBe(['id' => 'what-is-mimers', 'title' => 'What is Mimers?']);
+
+    // De fem märkta artiklarna, i katalogens ordning (kategori, order, titel).
+    expect($sida['props']['featured'])->toBe([
+        [
+            'id' => 'what-is-mimers',
+            'title' => 'What is Mimers?',
+            'type' => 'faq',
+            'category_title' => 'Getting started',
+        ],
+        [
+            'id' => 'how-do-i-set-up-recurring-maintenance',
+            'title' => 'How do I set up recurring maintenance?',
+            'type' => 'faq',
+            'category_title' => 'Tasks and reminders',
+        ],
+        [
+            'id' => 'how-much-storage-space-do-i-have',
+            'title' => 'How much storage space do I have?',
+            'type' => 'faq',
+            'category_title' => 'Files and storage',
+        ],
+        [
+            'id' => 'how-do-i-share-a-container',
+            'title' => 'How do I share a container?',
+            'type' => 'faq',
+            'category_title' => 'Sharing',
+        ],
+        [
+            'id' => 'what-does-mimers-cost',
+            'title' => 'What does Mimers cost?',
+            'type' => 'faq',
+            'category_title' => 'Plans and pricing',
+        ],
+    ]);
+});
+
+/*
+ * `featured` ska bli tom när ingen artikel är märkt, och då ska rubriken
+ * *Popular articles* inte ritas. Här prövas servern mot testkatalogen — vars
+ * enda märkta artikel avmärks i en tillfällig kopia — och `v-if` som källkod,
+ * eftersom villkoret är klientsidans.
+ */
+it('skickar en tom featured när ingen artikel är märkt', function () {
+    withoutVite();
+
+    $mål = sys_get_temp_dir().'/hjalp-featured-'.Str::random(12);
+    File::copyDirectory(__DIR__.'/../Hjalp/fixtures/katalog', $mål);
+
+    foreach (glob($mål.'/*/help/articles/*.md') ?: [] as $fil) {
+        $innehåll = (string) file_get_contents($fil);
+        file_put_contents($fil, (string) preg_replace('/^featured: true\n/m', '', $innehåll));
+    }
+
+    app()->instance(HelpLibrary::class, new HelpLibrary($mål));
+
+    try {
+        get('/help')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Help')
+            ->has('featured', 0));
+    } finally {
+        File::deleteDirectory($mål);
+    }
+});
+
+it('ritar Popular articles bara när featured har något', function () {
+    $kod = File::get(resource_path('js/pages/Help.vue'));
+
+    expect($kod)->toContain('v-if="featured.length"')
+        ->toContain("t('help.home.popular')");
+});
+
+/*
+ * Källkodsprov: kategorikartan får bara peka på roller som finns i den slutna
+ * ikonlistan ([[ADR-0057 Ikoner och typsnitt]] § 1). Standardrollen räknas
+ * med, för det är den en okänd kategori ritas med.
+ */
+it('använder bara ikonroller som finns i ikonlistan', function () {
+    $kod = File::get(resource_path('js/pages/Help.vue'));
+    $ikoner = File::get(resource_path('js/icons/index.js'));
+
+    preg_match('/const categoryIcons = \{(.*?)\n\};/s', $kod, $karta);
+
+    expect($karta)->not->toBeEmpty('Help.vue saknar kategorikartan');
+
+    preg_match_all("/'?([\w-]+)'?: '([a-z-]+)'/", $karta[1], $par, PREG_SET_ORDER);
+
+    preg_match('/const defaultCategoryIcon = \'([a-z-]+)\'/', $kod, $standard);
+
+    expect($par)->not->toBeEmpty()
+        ->and($standard)->not->toBeEmpty('Help.vue saknar standardrollen');
+
+    preg_match_all('/^    ([a-z][\w-]*): \[/m', $ikoner, $roller);
+
+    expect($roller[1])->toContain('category');
+
+    $använda = array_column($par, 2);
+    $använda[] = $standard[1];
+
+    foreach ($använda as $roll) {
+        expect(in_array($roll, $roller[1], true))
+            ->toBeTrue("rollen {$roll} saknas i resources/js/icons/index.js");
+    }
+});
+
+/*
+ * Källkodsprov: hela kortet får inte vara en länk som innehåller länkar.
+ * Provet går igenom öppnings- och stängningstaggar i ordning och fäller varje
+ * länk som öppnas medan en annan står öppen. Kommentarerna tas bort först —
+ * docblocken förklarar regeln och får inte räknas som markup.
+ */
+it('lägger ingen länk inuti en annan', function () {
+    $kod = File::get(resource_path('js/pages/Help.vue'));
+
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    foreach (['Link', 'a'] as $tagg) {
+        preg_match_all('#</?'.$tagg.'\b#', $kod, $träffar, PREG_OFFSET_CAPTURE);
+
+        $djup = 0;
+
+        foreach ($träffar[0] as [$markup, $offset]) {
+            if (str_starts_with($markup, '</')) {
+                $djup--;
+
+                expect($djup)->toBeGreaterThanOrEqual(0, "en {$tagg} stängs utan att vara öppnad");
+
+                continue;
+            }
+
+            expect($djup)->toBe(0, sprintf(
+                'en %s öppnas inuti en annan på rad %d',
+                $tagg,
+                substr_count(substr($kod, 0, $offset), "\n") + 1,
+            ));
+
+            $djup++;
+        }
+
+        expect($djup)->toBe(0, "en {$tagg} stängs inte");
+    }
+});
+
+it('har startsidans ord i katalogen', function () {
+    expect(trans('ui.help.home.title', [], 'en'))->toBe('How can we help?')
+        ->and(trans('ui.help.home.subtitle', [], 'en'))->toBe('Search the help or pick a topic.')
+        ->and(trans('ui.help.home.popular', [], 'en'))->toBe('Popular articles');
+});

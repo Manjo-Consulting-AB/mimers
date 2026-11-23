@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Support\Help\HelpArticle;
 use App\Support\Help\HelpCatalog;
-use App\Support\Help\HelpCategory;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpMarkdown;
 use App\Support\Help\HelpRendered;
@@ -20,7 +19,8 @@ use Inertia\Response;
  * cachar katalogen, och HelpMarkdown ritar svaren på servern.
  *
  * **`index` är startsidan, `/help`.** Den skickar kategorierna — `id`, `title`,
- * `description` och antalet artiklar — och `anchors`, en karta från varje
+ * `description`, antalet artiklar och de tre första frågorna som `top` — de
+ * högst sex `featured`-artiklarna, och `anchors`, en karta från varje
  * ankare till den adress det hör hemma på (ADR-0094 § 3). Kartan är det som
  * låter de gamla adresserna leva: `Help.vue` ser `location.hash`, slår upp det
  * i kartan och skickar webbläsaren vidare. Fragmentet når aldrig servern, så
@@ -50,15 +50,44 @@ class HelpController extends Controller
     {
         $catalog = $library->catalog();
 
-        $categories = array_map(
-            static fn (HelpCategory $category): array => [
+        // Kortet bär de tre första frågorna som egna länkar. Hela kortet kan
+        // inte vara en länk, för då hamnade länkar inuti en länk; rubriken är
+        // kortets enda väg till kategorisidan och frågorna ligger bredvid.
+        $categories = [];
+
+        foreach ($catalog->categories() as $category) {
+            $articles = $catalog->inCategory($category->id);
+
+            $categories[] = [
                 'id' => $category->id,
                 'title' => $category->title,
                 'description' => $category->description,
-                'count' => count($catalog->inCategory($category->id)),
-            ],
-            $catalog->categories(),
-        );
+                'count' => count($articles),
+                'top' => array_map(
+                    static fn (HelpArticle $article): array => [
+                        'id' => $article->id,
+                        'title' => $article->title,
+                    ],
+                    array_slice($articles, 0, 3),
+                ),
+            ];
+        }
+
+        // *Popular articles* — högst sex, i katalogens ordning. Kategorins
+        // titel följer med så att raden kan säga var artikeln hör hemma utan
+        // att klienten slår upp kategorin själv.
+        $featured = [];
+
+        foreach (array_slice($catalog->featured(), 0, 6) as $article) {
+            $category = $catalog->category($article->category);
+
+            $featured[] = [
+                'id' => $article->id,
+                'title' => $article->title,
+                'type' => $article->type,
+                'category_title' => $category === null ? '' : $category->title,
+            ];
+        }
 
         // Varje kategori och varje artikel får en post. Ett kategori-id och ett
         // artikel-id kan aldrig krocka: de gamla ankarna är unika tillsammans
@@ -79,6 +108,7 @@ class HelpController extends Controller
 
         return Inertia::render('Help', [
             'categories' => $categories,
+            'featured' => $featured,
             'anchors' => $anchors,
         ])->withViewData(['meta' => [
             'title' => (string) __('ui.info.help.title'),
