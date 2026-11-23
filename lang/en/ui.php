@@ -6144,4 +6144,25 @@ return [
         ],
         'placeholder' => 'This page is coming soon.',
     ],
+
+    /*
+     * M80 · issue 462 — kategorisidan och de gamla ankarna.
+     *
+     * `breadcrumb.home` är första ledet i brödsmulan och samma ord som
+     * `info.help.title`, men det står här: `info.help.*` är sidans rubrik och
+     * ingress, och brödsmulan är en egen yta.
+     *
+     * `questions_count` är Laravels tvågrenade form — `:count question` för
+     * ett, `:count questions` för övriga. `t()` i frontenden pluraliserar
+     * inte, så Help.vue delar strängen på `|` och väljer gren; formen står
+     * ändå som en nyckel så att singular och plural bor på ett ställe.
+     */
+    'help' => [
+        'breadcrumb' => [
+            'home' => 'Help',
+        ],
+        'copy_link' => 'Link to this question',
+        'link_copied' => 'Link copied',
+        'questions_count' => ':count question|:count questions',
+    ],
 ];

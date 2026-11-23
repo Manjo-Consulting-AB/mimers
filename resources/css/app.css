@@ -342,6 +342,54 @@
 }
 
 /*
+ * Hjälpcentrets utfällbara frågor — M80 · issue 462,
+ * [[ADR-0094 Hjälpcentret]] § 3.
+ *
+ * En fråga är en `<details>` med frågan i `<summary>` och svaret i ett
+ * `.help-content` under. `<summary>` är en flexrad för att frågan och pilen ska
+ * stå i linje, och då ritar webbläsaren ingen `::marker` — raden hade sett ut
+ * som vilken text som helst. Pilen ritas därför själv: en roterad kant som
+ * pekar nedåt när raden är öppen, så att det syns att den går att fälla ut.
+ * **Fokusringen är `--color-focus`, två pixlar med två pixlars förskjutning,
+ * och får aldrig tas bort** ([[ADR-0042 Designsystemet]] § Beslut): en
+ * `<summary>` är radens enda tabb-stopp.
+ */
+.help-faq > summary {
+    border-radius: var(--radius-control);
+    cursor: pointer;
+    list-style: none;
+}
+
+/* Safari ritar annars sin egen markör trots `list-style: none`. */
+.help-faq > summary::-webkit-details-marker {
+    display: none;
+}
+
+.help-faq > summary::after {
+    content: '';
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    transition: transform 150ms;
+}
+
+.help-faq[open] > summary::after {
+    transform: rotate(-135deg);
+}
+
+.help-faq > summary:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+.help-faq[open] > summary {
+    color: var(--color-accent);
+}
+
+/*
  * Mjuka övergångar mellan sidorna — se issue 279 § Beslut 2.
  *
  * Webbläsarens View Transitions tonar över ett sidbyte. Förvalet är 250 ms,

@@ -361,7 +361,19 @@ foreach (['about', 'privacy', 'terms'] as $infoPage) {
 
 // M78 · issue 458: hjälpsidan har egna texter (lang/{locale}/help/*.md) och en
 // egen controller. Ruttnamnet står kvar, för Login.vue länkar till /help.
-Route::get('/help', HelpController::class)->name('info.help');
+Route::get('/help', [HelpController::class, 'index'])->name('info.help');
+
+// M80 · issue 462: kategorisidan, /help/{kategori}. Rutten ligger utanför
+// `auth` och `guest` som /help, och dess mönster tar bara gemener, siffror och
+// bindestreck — ett kategori-id ur categories.yaml.
+//
+// **Rutten måste ligga EFTER varje annan /help/…-rutt.** `{category}` matchar
+// ett enskilt segment, så en senare `/help/search` eller `/help/articles/{id}`
+// som registreras nedanför hade aldrig nåtts: den här rutten hade fångat den
+// först och gett 404. Nya /help/-rutter läggs alltså ovanför den här raden.
+Route::get('/help/{category}', [HelpController::class, 'category'])
+    ->name('help.category')
+    ->where('category', '[a-z0-9-]+');
 
 /*
  * Issue 4 · Autentisering med lösenord. Webben kör på Laravels

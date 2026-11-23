@@ -5,6 +5,7 @@ use App\Support\Help\HelpArticle;
 use App\Support\Help\HelpCategory;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpMarkdown;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
@@ -13,9 +14,11 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * M78 · issue 458, M80 · issue 461 — hjälpsidan. Texterna är en artikelfil per
- * fråga under lang/en/help/articles/, HelpLibrary läser dem och HelpController
- * skickar dem till Help.vue i samma form som förut.
+ * M78 · issue 458, M80 · issue 461 och 462 — hjälpsidan. Texterna är en
+ * artikelfil per fråga under lang/en/help/articles/, HelpLibrary läser dem och
+ * HelpController skickar dem vidare: startsidan får kategorierna och
+ * ankarkartan, kategorisidan (tests/Feature/Hjalp/KategorisidanTest.php) får
+ * kategorin och dess frågor.
  */
 
 function hjälpKategorier(): array
@@ -41,15 +44,23 @@ function hjälpKategorier(): array
     );
 }
 
-it('renderar Help med nio kategorier i filordning för en gäst och en inloggad', function () {
+it('renderar Help med nio kategorier och ankarkartan för en gäst och en inloggad', function () {
     withoutVite();
 
     $kontroll = fn (AssertableInertia $page) => $page
         ->component('Help')
         ->has('categories', 9)
-        ->where('categories.0.slug', 'getting-started')
+        ->where('categories.0.id', 'getting-started')
         ->where('categories.0.title', 'Getting started')
-        ->where('categories.8.slug', 'privacy-and-data');
+        ->where('categories.0.description', 'The basics of Mimers, containers and items.')
+        ->where('categories.0.count', 6)
+        ->where('categories.8.id', 'privacy-and-data')
+        ->where('categories.8.count', 6)
+        // De gamla adresserna: en fråga och en kategori, ur kartan.
+        ->where('anchors.how-do-i-share-a-container', '/help/sharing#how-do-i-share-a-container')
+        ->where('anchors.sharing', '/help/sharing')
+        // En post för varje artikel (66) och varje kategori (9).
+        ->has('anchors', 75);
 
     get('/help')->assertOk()->assertInertia($kontroll);
     actingAs(User::factory()->create())->get('/help')->assertOk()->assertInertia($kontroll);
@@ -60,6 +71,31 @@ it('ger kategorin sharing frågorna i filordning med ankare', function () {
 
     expect($sharing['questions'][0]['question'])->toBe('How do I share a container?')
         ->and($sharing['questions'][0]['anchor'])->toBe('how-do-i-share-a-container');
+});
+
+/*
+ * M80 · issue 462 — de gamla adresserna. Fragmentet når aldrig servern, så
+ * startsidan bär kartan och skickar webbläsaren vidare själv (ADR-0094 § 3).
+ */
+it('har en ankarpost för varje artikel och varje kategori', function () {
+    withoutVite();
+
+    $katalog = (new HelpLibrary)->catalog('en');
+
+    $förväntat = [];
+
+    foreach ($katalog->categories() as $kategori) {
+        $förväntat[$kategori->id] = '/help/'.$kategori->id;
+    }
+
+    foreach ($katalog->articles() as $artikel) {
+        $förväntat[$artikel->id] = '/help/'.$artikel->category.'#'.$artikel->id;
+    }
+
+    /** @var array{props: array<string, mixed>} $sida */
+    $sida = get('/help')->assertOk()->viewData('page');
+
+    expect($sida['props']['anchors'])->toBe($förväntat);
 });
 
 it('har unika ankare för kategorier och frågor tillsammans', function () {
@@ -325,5 +361,48 @@ it('har sidans ord i katalogen och behåller ruttnamnet', function () {
     expect(trans('ui.info.help.title', [], 'en'))->toBe('Help')
         ->and(trans('ui.info.help.subtitle', [], 'en'))->toBe('Answers to common questions about Mimers.')
         ->and(trans('ui.info.help.contents', [], 'en'))->toBe('Contents')
-        ->and(route('info.help', [], false))->toBe('/help');
+        ->and(route('info.help', [], false))->toBe('/help')
+        ->and(route('help.category', 'sharing', false))->toBe('/help/sharing');
+});
+
+/*
+ * M80 · issue 462 — kategorisidans fyra nycklar. Tvågrenad form för antalet:
+ * `t()` i frontenden pluraliserar inte, så Help.vue väljer gren; här prövas
+ * att båda grenarna finns och att `trans_choice` läser dem som Laravel ska.
+ */
+it('har kategorisidans ord i katalogen', function () {
+    expect(trans('ui.help.breadcrumb.home', [], 'en'))->toBe('Help')
+        ->and(trans('ui.help.copy_link', [], 'en'))->toBe('Link to this question')
+        ->and(trans('ui.help.link_copied', [], 'en'))->toBe('Link copied')
+        ->and(trans('ui.help.questions_count', [], 'en'))->toBe(':count question|:count questions')
+        ->and(trans_choice('ui.help.questions_count', 1, ['count' => 1], 'en'))->toBe('1 question')
+        ->and(trans_choice('ui.help.questions_count', 3, ['count' => 3], 'en'))->toBe('3 questions');
+});
+
+/*
+ * Källkodsprov: de två beteendena är klientsidans, och det som går att avgöra
+ * på serversidan är att koden finns och gör det issuen säger. Det faktiska
+ * flödet — att `/help#how-do-i-share-a-container` hamnar på kategorisidan med
+ * frågan öppen — kräver en webbläsare och provas för hand. Resultatet står i
+ * PR-kroppen.
+ */
+it('skickar de gamla ankarna vidare med en Inertia-visit', function () {
+    $kod = File::get(resource_path('js/pages/Help.vue'));
+
+    expect($kod)->toContain('window.location.hash')
+        ->toContain('Object.hasOwn(props.anchors, anchor)')
+        ->toContain("typeof address !== 'string'")
+        ->toContain('props.anchors')
+        ->toContain('router.visit(address, { replace: true })');
+});
+
+it('ritar frågorna som details och öppnar den som matchar ankaret', function () {
+    $kod = File::get(resource_path('js/pages/Help/Category.vue'));
+
+    expect($kod)->toContain('<details')
+        ->toContain(':id="article.id"')
+        ->toContain('window.location.hash')
+        ->toContain('hashchange')
+        ->toContain('try')
+        ->toContain('target.open = true');
 });
