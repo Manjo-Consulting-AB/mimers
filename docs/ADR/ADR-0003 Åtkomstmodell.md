@@ -48,3 +48,10 @@ Att inbjudna måste ha konto är avsiktligt — alla som läser något i systeme
 **Varvet äger, kunden får åtkomst.** Bättre inlåsning för varvet. Valdes bort av skälen ovan.
 
 **Enbart R/RW utan `managed`.** Enklare. Valdes bort — då går det inte att tillskriva poster en organisation, och kvotmodellen fungerar inte.
+
+## Tillägg 2026-11-22: mottagaren kan lämna
+
+En testare frågade om en inbjuden kan stänga sin åtkomst själv. Tidigare kunde bara ägarkontots medlemmar återkalla en åtkomst. Tony beslutade 2026-11-22 att en mottagare ska kunna **lämna** själv, att ägaren får en notis bara i klockan, och att regel 3 i [[Konton och åtkomst]] § Behörighetsregler ändras så att den tillåter det. Att lämna är att återkalla sina egna rader på containern, både den som gäller hela containern och raderna för enskilda items, oavsett nivå och även när kontot är `read_only`. Det ger ingen rätt att se eller ändra någon annans åtkomst.
+
+- Återkallelsen loggas som `access.revoked` med mottagaren som aktör.
+- Ägarkontots ägare får notisen `access.left` i klockan. Inget mejl skickas, och typen har ingen växel. Se [[Notiser]].
