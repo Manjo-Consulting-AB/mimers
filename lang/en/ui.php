@@ -6167,6 +6167,30 @@ return [
             'subtitle' => 'Search the help or pick a topic.',
             'popular' => 'Popular articles',
         ],
+        /*
+         * Sökrutan och träfflistan — M81 · issue 467, ADR-0094 § 5.
+         *
+         * `label` är fältets tillgängliga namn, `placeholder` det som står i
+         * den tomma rutan. `all` är sista raden i förslagslistan, `clear`
+         * länkar tillbaka till startsidan från träfflistan, och `home` är
+         * länken i läget utan träffar. `count` är Laravels tvågrenade form
+         * som `questions_count`: `t()` pluraliserar inte, så HelpSearchBox
+         * delar strängen på `|` och väljer gren. `title` är dokumentets namn
+         * på `/help?q=…`.
+         */
+        'search' => [
+            'label' => 'Search help',
+            'placeholder' => 'Search for an answer…',
+            'all' => 'See all results',
+            'loading' => 'Searching…',
+            'empty' => 'No results for “:query”. Try fewer or different words.',
+            'error' => 'The search could not be completed. Try again.',
+            'count' => ':count result|:count results',
+            'home' => 'Go to the help home',
+            'results_for' => 'Results for “:query”',
+            'clear' => 'Clear search',
+            'title' => 'Search: :query',
+        ],
         'breadcrumb' => [
             'home' => 'Help',
         ],

@@ -20,6 +20,11 @@
         @if (! empty($meta['canonical']))
             <link rel="canonical" href="{{ $meta['canonical'] }}">
         @endif
+        {{-- En sida som inte ska indexeras — hjälpens träfflista, `/help?q=…`
+             (issue 467, ADR-0094 § 10). Utan `robots` skrivs raden inte. --}}
+        @if (! empty($meta['robots']))
+            <meta name="robots" content="{{ $meta['robots'] }}">
+        @endif
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @inertiaHead
