@@ -150,18 +150,22 @@ class AcceptOwnershipTransfer
 
             $bytesSomFlyttas = $this->bytesAttFlytta($container, $fromAccount);
 
-            // Beslut 4: kvotkontroll mot mottagarens NUVARANDE plan, före
-            // bonusen i Beslut 9. Den ordningen är den enda som håller:
-            // bonusen ges en gång per mottagande konto (issue 49/M9), så ett
-            // andra ägarbyte till samma konto har ingen bonus att luta sig
-            // mot — en kontroll som räknade med Pro skulle neka det andra och
-            // släppa igenom det första. Kastar någon av kontrollerna rullas
-            // hela transaktionen tillbaka och ägarbytet står kvar som pending.
+            // ADR-0093 (ersätter ADR-0086 § 7): bonusen avgörs FÖRE kvotprövningen.
+            // Den ges bara om ägarbytet erbjöd den, mottagarkontot inte bär en
+            // betald plan just nu och spärren är tom. Ges den prövas containertaket
+            // och utrymmet mot Pro — mottagaren får ju Pro — annars mot nuvarande
+            // plan som förut. Kastar något rullas transaktionen tillbaka och
+            // ägarbytet står kvar som pending.
+            $bonusEligible = (bool) $transfer->grants_bonus
+                && $toAccount->currentPlan()->code === 'free'
+                && Account::query()->whereKey($toAccount->getKey())->whereNull('transfer_bonus_granted_at')->exists();
+            $kvotPlan = $bonusEligible ? Plan::query()->where('code', 'pro')->firstOrFail() : null;
+
             $entitlements = new Entitlements;
-            $entitlements->assertCanCreateContainer($toAccount);
+            $entitlements->assertCanCreateContainer($toAccount, $kvotPlan);
             // ADR-0081 § 1: mottagaren ska rymma både bilagorna och raderna. Det är
             // ingen enskild fil, så felet bär `added_bytes`, inte `file_bytes`.
-            $entitlements->assertMetadataWithinLimit($toAccount, $bytesSomFlyttas + $this->radbytesAttFlytta($container, $fromAccount));
+            $entitlements->assertMetadataWithinLimit($toAccount, $bytesSomFlyttas + $this->radbytesAttFlytta($container, $fromAccount), $kvotPlan);
 
             // Beslut 6: containern flyttas. Ingen annan kolumn rörs — namn,
             // `kind` och `created_at` följer med containern.
@@ -219,7 +223,11 @@ class AcceptOwnershipTransfer
             // Beslut 9: tolv månader Pro till mottagarkontot — en gång per
             // mottagande konto (issue 49/Beslut 3). Nekar spärren lämnas
             // `false` tillbaka och ägarbytet fortsätter oberört.
-            $proBonusGranted = $this->beviljaPro($toAccount);
+            $proBonusGranted = $bonusEligible && $this->beviljaPro($toAccount);
+
+            if ($proBonusGranted) {
+                OwnershipTransfer::query()->whereKey($transfer->getKey())->update(['bonus_granted_at' => now()]);
+            }
 
             // Beslut 9 (issue 40): loggraden skrivs INNE i transaktionen,
             // efter att containern flyttats och innan den stängs — en rad
@@ -681,28 +689,8 @@ class AcceptOwnershipTransfer
             return true;
         }
 
-        // ADR-0086 § 7: bonusen sänker aldrig planen. En aktiv rad på en
-        // betald plan (pro, pro_plus eller en grundarplan) förlängs på
-        // SAMMA plan; allt annat ger Pro från idag.
-        $aktivBetald = $subscription->status === 'active'
-            && Plan::query()->whereKey($subscription->plan_id)->where('code', '!=', 'free')->exists();
-
-        if ($aktivBetald) {
-            // Beslut 3 (issue 265): ett år räknas från det SENARE av nu och
-            // slutet. Låg slutet redan i det förflutna — ett Pro som löpt ut —
-            // hade `current_period_end->addYear()` lagt den nya perioden i det
-            // förflutna, och bonusen hade varit värdelös. Ett framtida slut
-            // förlängs som förut, så en betalande kunds period kortas aldrig.
-            $utgang = $subscription->current_period_end->greaterThan(now())
-                ? $subscription->current_period_end
-                : now();
-
-            $subscription->current_period_end = $utgang->copy()->addYear();
-            $subscription->save();
-
-            return true;
-        }
-
+        // ADR-0093: bonusen förlänger aldrig en befintlig plan; den här raden
+        // bär ingen betald plan just nu, så den skrivs som Pro från idag.
         $subscription->plan_id = $pro->id;
         $subscription->status = 'active';
         $subscription->current_period_end = now()->addYear();

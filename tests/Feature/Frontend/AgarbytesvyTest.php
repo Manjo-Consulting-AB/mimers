@@ -832,7 +832,7 @@ it('lämnar /api:s avsändarrutter oförändrade', function () {
     // Samma kropp som förut: resursens fält och ingenting mer.
     expect(array_keys($skapat->json('data')))->toBe([
         'ulid', 'status', 'to_email', 'to_account', 'container', 'excluded_items',
-        'retain_access_level', 'accepted_at', 'expires_at', 'created_at',
+        'retain_access_level', 'grants_bonus', 'accepted_at', 'expires_at', 'created_at',
     ]);
 
     getJson($url, $saljarHeaders)->assertOk()->assertJsonCount(1, 'data');

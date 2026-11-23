@@ -82,6 +82,8 @@ class OwnershipTransfer extends Model
         return [
             'excluded_item_ids' => 'array',
             'accepted_at' => 'datetime',
+            'grants_bonus' => 'boolean',
+            'bonus_granted_at' => 'datetime',
         ];
     }
 
