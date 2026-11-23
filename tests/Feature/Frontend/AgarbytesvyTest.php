@@ -309,6 +309,15 @@ it('säger att allt annat än undantagen följer med', function () {
     expect($formular)->toContain('excluded_items');
 });
 
+it('lovar bonusen bara till mottagare utan konto när avsändaren betalar', function () {
+    $text = __('ui.transfer.form.notice');
+
+    expect($text)->toContain("doesn't have an account yet");
+    expect($text)->toContain('if you pay for Pro yourself');
+    expect($text)->toContain('up to two transfers a year');
+    expect($text)->not->toContain('first received ownership transfer');
+});
+
 it('erbjuder read och write som kvarhållen åtkomst, inget annat', function () {
     withoutVite();
     Notification::fake();
