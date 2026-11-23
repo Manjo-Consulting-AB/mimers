@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Agent\ResolveAgentAccess;
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\User\RecordActivity;
 use App\Models\Agent;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -42,7 +43,8 @@ use Throwable;
  * `IsIdempotent` på klassen.
  *
  * **`handle()` är slutlig.** Avvisningarna före verktyget ligger där, i en
- * fast ordning: pausad agent, plan utan MCP, rate limit. Verktyget skriver
+ * fast ordning: pausad agent, plan utan MCP, rate limit, raderingstak. Därefter
+ * räknas anropet som användarens aktivitet (RecordActivity). Verktyget skriver
  * bara `run()`. Varje undantag blir ett verktygsfel i det delade formatet
  * (App\Support\Mcp\ToolError); `server.error` bär aldrig undantagstext.
  *
@@ -115,6 +117,12 @@ abstract class McpTool extends Tool
             if ($this->kind === ToolKind::Delete) {
                 app(AgentDeletionLimit::class)->assertCanDelete($agent);
             }
+
+            // Ett anrop agenten fick köra räknas som användarens aktivitet,
+            // också när verktyget självt svarar med ett fel. Efter alla
+            // spärrar, så en pausad agent eller ett konto utan plan inte kan
+            // hålla kontot vid liv (ADR-0045 § Uppföljning 2026-11-14).
+            app(RecordActivity::class)->handle($agent->user);
 
             // Historiken märks när raden skrivs, inte efteråt — se
             // App\Support\Mcp\AgentAudit.

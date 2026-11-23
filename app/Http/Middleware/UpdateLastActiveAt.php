@@ -2,10 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\User;
+use App\Actions\User\RecordActivity;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -27,46 +26,20 @@ use Symfony\Component\HttpFoundation\Response;
  * passerar strypningen lämnar det nya värdet i minnet, så nästa kontroll i
  * samma request är gratis.
  *
- * Autentisering byggs inte här (issue 4). `saveQuietly()` undviker att
+ * Själva skrivningen ligger i App\Actions\User\RecordActivity, som MCP-
+ * verktygen också anropar. Autentisering byggs inte här (issue 4). `saveQuietly()` undviker att
  * trigga modellhändelser för en så frekvent, sidoeffektsfri skrivning.
  */
 class UpdateLastActiveAt
 {
-    /**
-     * Hur gammalt värdet måste vara för att skrivas om. Ett dygn, för att
-     * livscykelns gränser är månader — se [[Planer och kvoter]] §
-     * Kontolivscykel.
-     */
-    private const WRITE_INTERVAL_HOURS = 24;
-
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
 
-        if ($user !== null && $this->shouldWrite($user)) {
-            $user->forceFill(['last_active_at' => now()])->saveQuietly();
+        if ($user !== null) {
+            app(RecordActivity::class)->handle($user);
         }
 
         return $next($request);
-    }
-
-    /**
-     * Skriver bara när kolumnen är NULL eller äldre än ett dygn. Läser
-     * `last_active_at` ur modellens redan laddade attribut — en `fresh()`
-     * eller en `exists`-fråga här hade kostat en fråga per anrop, vilket är
-     * precis vad strypningen finns för att undvika.
-     *
-     * Attributet läses med `getAttribute()` och inte som en egenskap: casten
-     * säger att värdet alltid är ett `Carbon` (kolumnen är NOT NULL), så en
-     * egenskapsläsning får den statiska analysen att avvisa NULL-grenen som
-     * död kod. Den är inte död — en modell vars attribut ännu inte laddats
-     * har inget värde alls.
-     */
-    private function shouldWrite(User $user): bool
-    {
-        $lastActiveAt = $user->getAttribute('last_active_at');
-
-        return ! $lastActiveAt instanceof Carbon
-            || $lastActiveAt->lt(now()->subHours(self::WRITE_INTERVAL_HOURS));
     }
 }
