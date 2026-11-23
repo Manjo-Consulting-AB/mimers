@@ -62,6 +62,7 @@ B2B-nivåerna finns i [[ADR-0014 Prismodell]] och byggs inte i MVP.
 | status | VARCHAR(20) | `active` \| `past_due` \| `cancelled` |
 | current_period_end | TIMESTAMP | En `active`-rad bär sin plan bara före detta ögonblick; därefter gäller Free. `past_due` bär sin plan oavsett. Se [[ADR-0055 Inbjudningskoder och stängd registrering]] § Konsekvenser. |
 | grace_until | TIMESTAMP NULL | Sätts vid nedgradering, se nedan |
+| source | VARCHAR(20) | `paid` \| `transfer_bonus` \| `voucher` \| `internal` — vad som gav kontot dess nuvarande plan. Bara `paid` ger bonus vid ägarbyte, se [[ADR-0093 Ägarbytets bonus till nya kunder]] |
 | external_ref | VARCHAR(191) NULL | Merchant of record — tomt i MVP |
 
 Betalning sker via en **merchant of record**, Paddle eller Lemon Squeezy, inte via Stripe direkt. De blir säljare gentemot kunden och hanterar EU-momsen. Se [[ADR-0014 Prismodell]].
@@ -140,6 +141,6 @@ Skicka fler än en varning. Radering av flera års dokumentation efter ett enda 
 
 ## Ägarbyte och kvot
 
-Vid accept av ett ägarbyte kontrolleras mottagarens plan. Ryms inte containern nekas överlåtelsen med felkod — ett gratiskonto ska inte kunna ärva en pärm på åtta gigabyte.
+Kvoten prövas mot mottagarens nuvarande plan vid accept, utom när ägarbytet ger bonusen: då prövas den mot Pro. Ryms inte containern nekas överlåtelsen med felkod.
 
-Mottagaren får **tolv månader** som del av överlämningen: har kontot redan Pro eller Pro+ förlängs den planen, annars ges Pro. Bonusen sänker aldrig planen, se [[ADR-0086 Pro, Pro+ och grundarpris]] § 7. Båtaffären blir därmed kundanskaffningskanal: säljaren betalar redan, köparen ärver en välfylld pärm hon inte vill förlora, och när året går ut har hon ett års egen historik i den.
+Bonusen är tolv månader Pro till en mottagare som saknade konto när ägarbytet skickades, från en avsändare med betald Pro, högst två per avsändare på tolv månader. Ingen förlängning för befintliga konton. Motiveringen står i [[ADR-0093 Ägarbytets bonus till nya kunder]] och upprepas inte.

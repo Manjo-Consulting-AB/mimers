@@ -366,11 +366,13 @@ Unikt index på (`voucher_id`, `account_id`): en kod får lösas in högst en g�
 | retain_access_level | VARCHAR(20) NULL | Varvet behåller ofta `write` efter överlämning |
 | status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | accepted_at | TIMESTAMP NULL | |
+| grants_bonus | BOOLEAN | Sätts vid erbjudandet, se [[ADR-0093 Ägarbytets bonus till nya kunder]] |
+| bonus_granted_at | TIMESTAMP NULL | När accepten faktiskt gav bonusen |
 | initiated_by_user_id | FK NULL | Speglar `invitation.invited_by_user_id`; accepten sätter den som `granted_by_user_id` på en kvarhållen åtkomst. `NULL` när personen raderats |
 
 `revoked` är avsändarens ånger, av samma skäl som på `invitation`: en överlåtelse som skickats till fel adress måste gå att dra tillbaka. Raden raderas aldrig när ett ägarbyte dras tillbaka — **men den raderas när dess container gallras eller när ett av kontona raderas.** Två `RESTRICT`-nycklar pekar på containern och kontona, och en rad som redan spelat ut sin roll ska inte hindra en gallring eller en personradering ([[ADR-0045 Radering av konto och person]] § Beslut 3). Historiken går inte förlorad: accepten finns kvar i `audit_log` utan främmande nyckel. Utgången härleds ur `created_at` i kod — `status` står kvar på `pending` när tiden passerat, samma princip som `container_access` och `invitation`. **Ingen `token_hash`:** en inbjudan ger läsrätt, ett ägarbyte överlåter hela pärmen, och en bärartoken i ett mejl till en overifierad adress vore en kapabilitet att ta emot någon annans pärm. Mottagaren hittar sitt inkommande ägarbyte på identitet — konto eller verifierad adress — inte på hemlighet.
 
-**Vid accept** ska implementationen, i en transaktion: kontrollera att mottagarens plan rymmer containern (annars nekas överlåtelsen med felkod, inte tyst), flytta `container.account_id`, flytta förbrukat utrymme mellan `usage_counter`-rader, återkalla åtkomster som inte ska följa med, skapa den kvarhållna åtkomsten om sådan begärts, och skriva en `audit_log`-rad. Mottagaren får tolv månader Pro enligt [[ADR-0014 Prismodell]].
+**Vid accept** ska implementationen, i en transaktion: kontrollera att mottagarens plan rymmer containern (annars nekas överlåtelsen med felkod, inte tyst), flytta `container.account_id`, flytta förbrukat utrymme mellan `usage_counter`-rader, återkalla åtkomster som inte ska följa med, skapa den kvarhållna åtkomsten om sådan begärts, och skriva en `audit_log`-rad. Mottagaren får tolv månader Pro när `grants_bonus` är satt och kontot saknar betald plan, och kvoten prövas då mot Pro, se [[ADR-0093 Ägarbytets bonus till nya kunder]].
 
 ## audit_log
 
