@@ -119,6 +119,7 @@ class RedeemVoucher
         $subscription->status = 'active';
         $subscription->current_period_end = $periodEnd;
         $subscription->external_ref = 'voucher';
+        $subscription->source = 'voucher';
         $subscription->grace_until = null;
 
         $subscription->save();

@@ -19,6 +19,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * `grace_until` sätts först vid nedgraderingen (issue 28) och `external_ref`
  * skrivs av betalflödet som inte finns i MVP.
  *
+ * `source` (`paid` | `transfer_bonus` | `voucher` | `internal`, issue 453)
+ * säger vad som gav kontot dess plan. Den skrivs explicit av
+ * GrantInternalPro, RedeemVoucher och AcceptOwnershipTransfer och står
+ * utanför `#[Fillable]`; ingen kod läser den än.
+ *
  * `ulid` eftersom prenumerationen hör till ett konto och kan visas i en
  * kontovy — aldrig ett löpnummer utåt (issue 25 § Beslut 1).
  *

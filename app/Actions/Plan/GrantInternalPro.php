@@ -81,6 +81,7 @@ class GrantInternalPro
         $subscription->status = 'active';
         $subscription->current_period_end = Carbon::parse(self::PERIOD_END);
         $subscription->external_ref = 'internal';
+        $subscription->source = 'internal';
         $subscription->grace_until = null;
 
         $subscription->save();

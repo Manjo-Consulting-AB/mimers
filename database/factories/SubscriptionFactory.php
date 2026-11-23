@@ -29,7 +29,18 @@ class SubscriptionFactory extends Factory
             'current_period_end' => now()->addYear(),
             'grace_until' => null,
             'external_ref' => null,
+            'source' => 'voucher',
         ];
+    }
+
+    /**
+     * En betald prenumeration — `source` = `paid` (issue 453).
+     */
+    public function paid(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'source' => 'paid',
+        ]);
     }
 
     /**

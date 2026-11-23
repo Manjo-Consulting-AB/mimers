@@ -102,6 +102,7 @@ it('ger en intern användare Pro när hon följer verifieringslänken', function
     expect($subscription->plan->code)->toBe('pro');
     expect($subscription->status)->toBe('active');
     expect($subscription->external_ref)->toBe('internal');
+    expect($subscription->source)->toBe('internal');
     expect($subscription->current_period_end->format('Y-m-d H:i:s'))->toBe('2037-12-31 00:00:00');
     expect($konto->fresh()->currentPlan()->code)->toBe('pro');
 });
