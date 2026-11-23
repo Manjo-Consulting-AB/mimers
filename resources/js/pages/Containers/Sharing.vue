@@ -192,6 +192,10 @@ const historyDate = (access) =>
             :error="page.props.errors.require_two_factor ?? null"
         />
 
+        <p v-if="can.manage && twoFactor.effective" class="mt-1 text-meta text-ink-muted">
+            {{ t('sharing.two_factor.invite_note') }}
+        </p>
+
         <ul v-if="accesses" class="mt-4 flex flex-col gap-2">
             <!-- Ägarkontot: namn och roll, utan kontroller. Det finns ingen
                  nivå att välja och ingen åtkomst att ta bort. -->
@@ -288,10 +292,6 @@ const historyDate = (access) =>
             :items="items"
             :agent-access="agentAccess"
         />
-
-        <p v-if="can.manage && twoFactor.effective" class="mt-2 text-meta text-ink-muted">
-            {{ t('sharing.two_factor.invite_note') }}
-        </p>
 
         <ul v-if="invitations.length > 0" class="mt-4 flex flex-col gap-2">
             <InvitationRow
