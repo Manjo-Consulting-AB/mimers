@@ -11,8 +11,11 @@ defineOptions({ layout: AppLayout });
  * [[ADR-0094 Hjälpcentret]] § 3.
  *
  * Frågorna (`faq`) ritas som utfällbara rader: `<details>` med artikelns id
- * som ankare, så en fråga går att länka som `/help/{kategori}#{id}`. Vid
- * laddning — och vid `hashchange`, så att en länk inom sidan gör samma sak —
+ * som ankare, så en fråga går att länka som `/help/{kategori}#{id}`. Den
+ * adressen byggs ur `category.url`, som controllern hämtar ur ruttnamnet
+ * `help.category` — inte ur en handsatt sträng — och kopieringsknappen sätter
+ * bara `location.origin` framför, så länken blir klistringsbar (ADR-0094 § 3).
+ * Vid laddning — och vid `hashchange`, så att en länk inom sidan gör samma sak —
  * öppnas den rad som matchar `location.hash` och skrollas fram. Övriga typer
  * (`guide`, `reference`, `troubleshooting`) är en lista med länkar till
  * `/help/articles/{id}`, som 464 bygger; det finns inga sådana artiklar än, så
@@ -82,7 +85,7 @@ function copyLink(article) {
         return;
     }
 
-    const address = `${window.location.origin}/help/${props.category.id}#${article.id}`;
+    const address = `${window.location.origin}${props.category.url}#${article.id}`;
 
     navigator.clipboard.writeText(address).then(() => {
         copied.value = article.id;

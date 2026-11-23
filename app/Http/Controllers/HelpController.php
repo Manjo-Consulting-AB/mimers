@@ -50,14 +50,18 @@ class HelpController extends Controller
         // Varje kategori och varje artikel får en post. Ett kategori-id och ett
         // artikel-id kan aldrig krocka: de gamla ankarna är unika tillsammans
         // (provet i tests/Feature/Frontend/HjalpsidanTest.php).
+        //
+        // Adressen byggs ur ruttnamnet, inte ur en handsatt sträng, så att den
+        // är samma källa som kategorisidans egen `url` och följer rutten om
+        // dess mönster ändras (ADR-0094 § 3).
         $anchors = [];
 
         foreach ($catalog->categories() as $category) {
-            $anchors[$category->id] = '/help/'.$category->id;
+            $anchors[$category->id] = route('help.category', $category->id, false);
         }
 
         foreach ($catalog->articles() as $article) {
-            $anchors[$article->id] = '/help/'.$article->category.'#'.$article->id;
+            $anchors[$article->id] = route('help.category', $article->category, false).'#'.$article->id;
         }
 
         return Inertia::render('Help', [
@@ -97,6 +101,10 @@ class HelpController extends Controller
                 'title' => $found->title,
                 'description' => $found->description,
                 'intro_html' => $markdown->toHtml($found->intro ?? ''),
+                // Kategorins egen adress ur ruttnamnet. Kopieringsknappen
+                // sätter bara `location.origin` framför, så den kopierade
+                // länken blir klistringsbar (ADR-0094 § 3).
+                'url' => route('help.category', $found->id, false),
             ],
             'articles' => $articles,
         ]);
