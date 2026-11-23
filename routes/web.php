@@ -363,6 +363,15 @@ foreach (['about', 'privacy', 'terms'] as $infoPage) {
 // egen controller. Ruttnamnet står kvar, för Login.vue länkar till /help.
 Route::get('/help', [HelpController::class, 'index'])->name('info.help');
 
+// M80 · issue 464: artikelsidan, /help/articles/{id}. Rutten ligger utanför
+// `auth` och `guest` som /help, och mönstret tar bara gemener, siffror och
+// bindestreck — ett artikel-id ur front mattern (ADR-0094 § 3). Den registreras
+// före kategorisidan: ordningen är den ADR-0094 § 3 listar adresserna i, och
+// nya /help/-rutter läggs alltid ovanför `{category}` (se kommentaren nedan).
+Route::get('/help/articles/{article}', [HelpController::class, 'article'])
+    ->name('help.article')
+    ->where('article', '[a-z0-9-]+');
+
 // M80 · issue 462: kategorisidan, /help/{kategori}. Rutten ligger utanför
 // `auth` och `guest` som /help, och dess mönster tar bara gemener, siffror och
 // bindestreck — ett kategori-id ur categories.yaml.

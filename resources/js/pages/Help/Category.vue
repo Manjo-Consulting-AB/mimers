@@ -16,10 +16,13 @@ defineOptions({ layout: AppLayout });
  * `help.category` — inte ur en handsatt sträng — och kopieringsknappen sätter
  * bara `location.origin` framför, så länken blir klistringsbar (ADR-0094 § 3).
  * Vid laddning — och vid `hashchange`, så att en länk inom sidan gör samma sak —
- * öppnas den rad som matchar `location.hash` och skrollas fram. Övriga typer
- * (`guide`, `reference`, `troubleshooting`) är en lista med länkar till
- * `/help/articles/{id}`, som 464 bygger; det finns inga sådana artiklar än, så
- * delen syns inte förrän innehållet kommer.
+ * öppnas den rad som matchar `location.hash` och skrollas fram.
+ *
+ * **Varje fråga har en egen sida.** Raden bär *Open as a page* bredvid
+ * *Link to this question* och länkar till `/help/articles/{id}` — samma sida
+ * som övriga typer (`guide`, `reference`, `troubleshooting`) redan länkas
+ * till i listan under (issue 464). Frågan står kvar här med sitt svar, och
+ * artikelsidan är den adress som går att dela och förhandsvisa.
  *
  * **`v-html` här är samma undantag som i Help.vue och ItemNotes.vue**
  * ([[ADR-0066 Itemets anteckning]] § 3, [[ADR-0094 Hjälpcentret]] § 4). Det är
@@ -133,13 +136,21 @@ function copyLink(article) {
                 <div class="px-4 pb-4">
                     <div class="help-content" v-html="article.answer_html" />
 
-                    <button
-                        type="button"
-                        class="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                        @click="copyLink(article)"
-                    >
-                        {{ copied === article.id ? t('help.link_copied') : t('help.copy_link') }}
-                    </button>
+                    <div class="mt-3 flex flex-wrap items-center gap-4">
+                        <button
+                            type="button"
+                            class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                            @click="copyLink(article)"
+                        >
+                            {{ copied === article.id ? t('help.link_copied') : t('help.copy_link') }}
+                        </button>
+                        <Link
+                            :href="`/help/articles/${article.id}`"
+                            class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        >
+                            {{ t('help.open_page') }}
+                        </Link>
+                    </div>
                 </div>
             </details>
         </section>

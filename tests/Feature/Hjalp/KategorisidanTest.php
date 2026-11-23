@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -39,6 +40,20 @@ it('renderar Help/Category med kategorin och dess tolv frågor i ordning', funct
 
 it('ger 404 för en kategori som inte finns', function () {
     get('/help/finns-inte')->assertNotFound();
+});
+
+/*
+ * M80 · issue 464 — varje fråga har en egen sida, och kategorisidan länkar
+ * dit bredvid kopieringsknappen. Länken prövas som källkod: den ritas av
+ * Vue i webbläsaren, och det som går att avgöra här är att raden bär den och
+ * att ordet finns i katalogen.
+ */
+it('länkar varje fråga till sin egen sida', function () {
+    $kod = File::get(resource_path('js/pages/Help/Category.vue'));
+
+    expect($kod)->toContain('`/help/articles/${article.id}`')
+        ->toContain("t('help.open_page')")
+        ->and(trans('ui.help.open_page', [], 'en'))->toBe('Open as a page');
 });
 
 it('ritar ingressen för en kategori som har en', function () {
