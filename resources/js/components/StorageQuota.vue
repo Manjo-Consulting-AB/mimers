@@ -73,14 +73,8 @@ const tone = computed(() => {
     return percent >= 80 ? 'bg-warning' : 'bg-accent';
 });
 
-/* Bredden på containerns segment, för ritningen och inget annat. */
-const containerWidth = computed(() => {
-    if (quota.value.container === null || ! quota.value.limitBytes) {
-        return 0;
-    }
-
-    return Math.min(100, (quota.value.container.bytes / quota.value.limitBytes) * 100);
-});
+/* Bredden på containerns segment kommer från servern (`container.percent`). */
+const containerWidth = computed(() => quota.value.container?.percent ?? 0);
 
 const isOpen = ref(false);
 const root = ref(null);

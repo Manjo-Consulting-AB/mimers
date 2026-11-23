@@ -6,6 +6,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\UsageCounter;
@@ -160,7 +161,8 @@ it('bär ägarkontot och containerns andel på en container- och en itemsida', f
         $kvot = kvotmodulProps($anvandare, $url)['storageQuota'];
 
         expect($kvot['account']['ulid'])->toBe($agare->ulid);
-        expect($kvot['container'])->toBe(['ulid' => $container->ulid, 'name' => $container->name, 'bytes' => 500]);
+        expect($kvot['container']['percent'])->toBe(min(100.0, round(500 / $kvot['limitBytes'] * 100, 1)));
+        expect($kvot['container'])->toBe(['ulid' => $container->ulid, 'name' => $container->name, 'bytes' => 500, 'percent' => $kvot['container']['percent']]);
         expect($kvot['otherAccounts'][0]['ulid'])->toBe($eget->ulid);
     }
 });
@@ -314,5 +316,35 @@ it('har varje quota-nyckel i katalogen', function () {
         foreach ($traffar[1] as $nyckel) {
             expect(data_get($katalog, $nyckel))->toBeString("{$nyckel} saknas i lang/en/ui.php");
         }
+    }
+});
+
+it('ger en grant-gäst utan medlemskap sitt eget konto och ingen uppdelning på container- och itemsidan', function () {
+    [$eget, $gast] = kvotmodulKonto('owner', 11);
+    [$agare] = kvotmodulKonto('owner', 5000);
+    $container = Container::factory()->for($agare, 'account')->create();
+    $item = kvotmodulItem($container);
+    kvotmodulBilaga($item, 300, $agare);
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => null,
+        'grantee_type' => 'user',
+        'grantee_id' => $gast->id,
+        'level' => 'read',
+        'kind' => 'member',
+        'expires_at' => null,
+        'granted_by_user_id' => User::factory()->create()->id,
+    ]);
+
+    foreach (["/containers/{$container->ulid}", "/containers/{$container->ulid}/items/{$item->ulid}"] as $url) {
+        $props = kvotmodulProps($gast, $url);
+
+        expect($props['storageQuota']['account']['ulid'])->toBe($eget->ulid);
+        expect($props['storageQuota']['usedBytes'])->toBe(11);
+        expect($props['storageQuota']['container'])->toBeNull();
+        expect($props['storageQuota']['otherAccounts'])->toBe([]);
+
+        $uppdelning = kvotmodulReload($gast, $url, 'Containers/Show')->json('props.storageBreakdown');
+        expect(json_encode($uppdelning))->not->toContain($agare->ulid);
     }
 });

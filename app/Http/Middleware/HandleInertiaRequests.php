@@ -397,6 +397,8 @@ class HandleInertiaRequests extends Middleware
         [$account, $container, $others] = $context;
 
         $storage = $this->readPlanUsage->handle($account)['usage']['storage'];
+        $containerBytes = $container === null ? 0 : $this->readContainerStorageShare->handle($container);
+        $limit = $storage['limitBytes'];
 
         return [
             'account' => ['ulid' => $account->ulid, 'name' => $account->name],
@@ -406,7 +408,12 @@ class HandleInertiaRequests extends Middleware
             'container' => $container === null ? null : [
                 'ulid' => $container->ulid,
                 'name' => $container->name,
-                'bytes' => $this->readContainerStorageShare->handle($container),
+                'bytes' => $containerBytes,
+                // Segmentets bredd räknas här och inte i klienten; en decimal,
+                // så att en liten andel inte blir 0. `null` för ett obegränsat tak.
+                'percent' => is_int($limit) && $limit > 0
+                    ? min(100.0, round($containerBytes / $limit * 100, 1))
+                    : null,
             ],
             'otherAccounts' => $this->otherAccountsUsage($others),
         ];
@@ -505,6 +512,10 @@ class HandleInertiaRequests extends Middleware
                 ->accessibleBy($user, $accounts->pluck('id')->all())
                 ->whereKey($container->getKey())
                 ->exists()
+            // En gäst med bara en grant är inte medlem i ägarkontot: då gäller
+            // kontokontexten, så att ägarkontots tal, uppdelning och
+            // 403-länken till /settings/storage aldrig når henne.
+            && Gate::forUser($user)->allows('viewStorage', $container->account)
         ) {
             $account = $container->account;
 
