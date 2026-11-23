@@ -21,6 +21,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | status | VARCHAR(20) | `active` \| `read_only` \| `closed` |
 | read_only_reason | VARCHAR(40) NULL | `payment_failed`, `over_quota`, `inactivity` |
 | versioning_max_versions | TINYINT UNSIGNED | Högsta antal versioner per item, 0–20, där 0 är av. Förval 3, även för befintliga konton. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
+| require_two_factor | BOOLEAN NOT NULL DEFAULT false | Kräver bekräftad tvåfaktor av den som når någon av kontots containrar via en `container_access`. Bara en ägare med bekräftad tvåfaktor slår på det. Se [[ADR-0092 Tvåfaktor som krav för delade containrar]] |
 | registration_ip | VARCHAR(45) NULL | IP:n registreringen kom från, IPv6 ryms i textform. Sätts vid registrering, nollas av `prune-registration-ips` — se [[Registerförteckning]] |
 | created_at, updated_at | | |
 
@@ -260,6 +261,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case, som `item.icon`. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0064 Containerns ikon]] |
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | versioning_max_versions | TINYINT UNSIGNED NULL | `NULL` följer kontot, 0 stänger av versionshistoriken i containern, och ett tal får inte överstiga kontots. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
+| require_two_factor | BOOLEAN NOT NULL DEFAULT false | Kräver bekräftad tvåfaktor av den som når just den här containern via en `container_access`. Kravet gäller när kontots eller containerns flagga är satt. Se [[ADR-0092 Tvåfaktor som krav för delade containrar]] |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.
@@ -532,6 +534,7 @@ Sammanfattat, att implementera som en policy och inte utspritt i controllers:
     Är `item_id` satt gäller accessen **bara det itemet och dess ättlingar** via `item_link`-relationen `parent`/`child` — transitivt, aldrig uppåt, och `sibling` bär ingen behörighet alls. Itemets `attachment`, `cost_entry`, `schedule` och `loan` följer itemets nivå. När flera grants når samma item vinner **den högsta nivån**. Se [[ADR-0028 Åtkomst på itemnivå]].
 4. Är kontot `read_only` nekas allt skrivande oavsett behörighet — **utom två saker: att återkalla en åtkomst, och att rensa lagring**. Båda minskar exponeringen i stället för att öka den, och ett fruset konto ska varken vara utlåst från att klippa en relation det inte längre vill ha eller från att ta sig under sin nya gräns. Rensningen går via `DELETE /api/accounts/{account}/storage` (issue 28a) och prövas mot `AccountPolicy` utan `read_only`-kontroll; det är just den vägen ur en nedgradering som `read_only` finns till för att framtvinga. Att bevilja eller bjuda in är däremot fortfarande spärrat.
 5. Uppladdningar räknas mot **den uppladdande användarens konto**, inte ägarkontot.
+6. En `container_access` ger ingenting när kravet gäller (`account.require_two_factor` eller `container.require_two_factor`) och mottagaren saknar bekräftad tvåfaktor. Ägarkontots medlemmar och inboxen berörs inte, och samma gäller mottagarens agenter och token. Regeln sitter i `ResolveItemScope`, `ContainerPolicy` och `Container::scopeAccessibleBy()`. Se [[ADR-0092 Tvåfaktor som krav för delade containrar]].
 
 **Regel 1 har ett undantag, och det är en inbox.** En container med `inbox_user_id` når **bara** den personen, oavsett roll i ägarkontot: en inkorg är där man fångar tankar innan de är färdiga, och den som delar sitt konto med en sambo ska inte dela sina halvfärdiga anteckningar ([[ADR-0054 Inboxen]] § 2). Undantaget är den enda regeln som prövas för en inbox — en `container_access`-rad mot den ger ingenting. Ägaren får `view` på containern och `view`, `create`, `update` och `delete` på dess item; ingen, inte ens ägaren, får döpa om, radera, dela, överlåta eller lägga nya items i den, och ingen ser dess åtkomst- eller överlåtelsehistorik. Den bor i `App\Actions\Access\ResolveItemScope` regel 0 och i `App\Policies\ContainerPolicy`.
 
