@@ -1,9 +1,10 @@
 <script setup>
-import { computed } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
+import UiConfirmDialog from './UiConfirmDialog.vue';
 import { formatDate } from './accessPresentation.js';
 import { formatByteSize } from './attachmentPresentation.js';
-import { canDownloadExport, exportStatus, isExpiredExport, remainingLabel } from './exportPresentation.js';
+import { canDeleteExport, canDownloadExport, exportStatus, isExpiredExport, remainingLabel } from './exportPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -39,10 +40,41 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* En rad ur App\Http\Resources\ExportResource. */
     row: { type: Object, required: true },
+    /* Containerns ULID, för raderingsrutten (issue 1564). */
+    containerUlid: { type: String, required: true },
 });
 
 const { t } = useTranslations();
 const page = usePage();
+
+/*
+ * Raderingen (issue 1564). Allt utom en rad som packas har knappen, och frågan
+ * går genom UiConfirmDialog. En aktiv export tar filen med sig och kan inte
+ * återställas, och det säger frågan. Någon papperskorg finns inte (ADR-0008
+ * § Uppföljning 2026-09-26). En utgången eller misslyckad rad försvinner bara
+ * ur listan.
+ */
+const confirming = ref(false);
+const deleteTrigger = ref(null);
+const deleting = ref(false);
+
+const deletable = computed(() => canDeleteExport(props.row));
+
+function openDelete(element) {
+    deleteTrigger.value = element;
+    confirming.value = true;
+}
+
+function destroy() {
+    router.delete(`/containers/${props.containerUlid}/exports/${props.row.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { deleting.value = true; },
+        onFinish: () => {
+            deleting.value = false;
+            confirming.value = false;
+        },
+    });
+}
 
 /* Slaget som etikett; `binder` heter `pdf_binder` i katalogen (SprakTest). */
 const kindKey = computed(() => (props.row.kind === 'binder' ? 'export.kind.pdf_binder' : 'export.kind.zip'));
@@ -84,5 +116,28 @@ const showRemaining = computed(() => props.row.status === 'ready' && ! isExpired
         >
             {{ t('export.download') }}
         </a>
+
+        <button
+            v-if="deletable"
+            type="button"
+            :disabled="deleting"
+            class="inline-flex min-h-11 items-center self-start rounded-control border border-danger px-3 text-body font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+            @click="openDelete($event.currentTarget)"
+        >
+            {{ t('export.delete') }}
+        </button>
+
+        <UiConfirmDialog
+            v-if="deletable"
+            :open="confirming"
+            :heading="t('export.delete_heading')"
+            :body="downloadable ? t('export.delete_body_active') : t('export.delete_body_inactive')"
+            :confirm-label="t('export.delete')"
+            tone="danger"
+            :pending="deleting"
+            :trigger="deleteTrigger"
+            @confirm="destroy"
+            @cancel="confirming = false"
+        />
     </li>
 </template>

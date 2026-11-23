@@ -1286,6 +1286,9 @@ return [
         // packed". The same trade-off `error.loan.already_open` made in 67a.
         'export' => [
             'already_running' => 'An export is already being packed. It is in the list below — wait until it is done.',
+            // Issue 1564: a row that is being packed cannot be deleted — the
+            // job writes the file after us.
+            'still_running' => 'The export is still being packed. Wait until it is done, then delete it.',
         ],
 
         // Issue 450 · [[ADR-0092 Tvåfaktor som krav för delade containrar]].
@@ -3726,6 +3729,12 @@ return [
             // Issue 423 · [[ADR-0089 Egna fält på items]] § Riktning 8. The
             // label is free text and never appears in the log; the row says
             // only that a field definition was deleted.
+            // Issue 1564: an export that could still be downloaded was
+            // deleted, and its file with it.
+            'export' => [
+                'deleted' => ':user deleted an export',
+            ],
+
             'field' => [
                 'deleted' => ':user deleted a field',
             ],
@@ -5559,6 +5568,14 @@ return [
         'size' => 'Size: :size',
 
         'download' => 'Download',
+
+        // Issue 1564: every row that is not being packed can be deleted. An
+        // active export takes its file with it; there is no trash, and the
+        // question says so. An expired or failed row only leaves the list.
+        'delete' => 'Delete',
+        'delete_heading' => 'Delete the export?',
+        'delete_body_active' => 'The file is deleted right away and cannot be restored. You can order a new export at any time.',
+        'delete_body_inactive' => 'The row is removed from the list.',
 
         // Issue 446: the list shows both kinds, labelled. The keys carry
         // `pdf_binder` because SprakTest keeps the word out of every other line.

@@ -2071,6 +2071,18 @@ Route::middleware('auth')->group(function () {
         ->name('containers.export.store');
 
     /*
+     * Issue 1564 · Radera en export ur listan. En aktiv export tar filen med
+     * sig och loggas i historiken; en utgången eller misslyckad försvinner
+     * bara. Ingen papperskorg (ADR-0008 § Uppföljning 2026-09-26). Grinden är
+     * `view` plus att raden är anroparens egen. `scopeBindings()` binder
+     * `{export}` genom Container::exports(), så en ULID från en annan
+     * container ger 404.
+     */
+    Route::delete('/containers/{container}/exports/{export}', [ExportController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.exports.destroy');
+
+    /*
      * Issue 446 · PDF-pärmen på exportsidan: en POST som beställer en
      * export med `kind = binder`, se App\Http\Controllers\BinderController.
      * Grinden är `view` som för ZIP:en plus planens `pdf_binder`;
