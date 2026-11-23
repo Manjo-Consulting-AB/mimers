@@ -24,6 +24,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Relationer som tas bort går inte att få tillbaka.** `UnlinkItems` raderar hårt, och varken papperskorgen eller [[ADR-0088 Versionshistorik för items]] fångar det. Det gäller både användaren och en agent via [[ADR-0087 MCP-server för agenter]]. Möjliga svar är att mjukradera relationen eller att versionera relationerna. Inget är bestämt.
 
+- **En adminsida för den som underhåller produkten.** Hjälprapporten ([[ADR-0094 Hjälpcentret]] § 9), missbruksrapporten och mätningen skrivs i dag till loggen och läses med `grep` över ssh. Frågan är när det behövs en sida i stället, och vilken behörighetsmodell den i så fall ska ha — det finns ingen adminroll i dag. Uppstod ur #1568, 2026-11-23.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.

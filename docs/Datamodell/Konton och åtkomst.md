@@ -525,6 +525,54 @@ Mellanlagringen för sidvisningar och funktionsanvändning, [[ADR-0079 Övervakn
 
 UNIQUE `(date, source, name, plan)` — uppräkningen är en enda upsert. **Ingen kolumn pekar på en person, ett konto eller en IP-adress.**
 
+## help_event_daily
+
+Hjälpens mätning, [[ADR-0094 Hjälpcentret]] § 8, i samma form som `usage_event_daily`: anonyma summor per dag över vad som görs i hjälpen. Rapporten läser raderna, och de gallras efter 400 dagar av `PrunesHelpData`.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` |
+| date | DATE | Räknedagen |
+| event | VARCHAR(30) | `article_view` \| `search` \| `search_click` \| `context_open` \| `context_unknown`. CHECK-villkor i databasen |
+| article_id | VARCHAR(80) NOT NULL DEFAULT '' | Artikelns id. Tom sträng när händelsen inte gäller en artikel |
+| context | VARCHAR(100) NOT NULL DEFAULT '' | Sammanhanget vid `context_open` och `context_unknown`. Tom sträng annars |
+| count | INT UNSIGNED | |
+| created_at, updated_at | | |
+
+UNIQUE `(date, event, article_id, context)` — uppräkningen är en enda upsert. **Tom sträng i stället för NULL med flit:** MySQL släpper igenom dubbletter av NULL i ett unikt index, så en nullbar kolumn hade gjort upserten till en ny rad varje gång. **Ingen kolumn pekar på en person, ett konto eller en IP-adress**, och det finns ingen `ulid` och ingen `deleted_at`: raden är en räknare utan användarinnehåll.
+
+## help_search_gap_daily
+
+Sökfrågor som gav noll träffar, avidentifierade och per dag, [[ADR-0094 Hjälpcentret]] § 8. Frågan normaliseras och får e-postadresser och sifferföljder borttagna innan den sparas, och det finns ett tak på 1000 nya frågor per dag. Gallras efter 90 dagar av `PrunesHelpData`.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` |
+| date | DATE | Sökdagen |
+| query | VARCHAR(60) | Den avidentifierade frågan, normaliserad och kapad på ordgräns |
+| count | INT UNSIGNED | |
+| created_at, updated_at | | |
+
+UNIQUE `(date, query)` — en fråga räknas upp i stället för att läggas till igen. Ingen koppling till person, konto eller IP, och ingen `deleted_at`: gallringen raderar på riktigt.
+
+## help_feedback
+
+*Was this helpful?* på artikelsidan, [[ADR-0094 Hjälpcentret]] § 7. Ja/Nej och orsaken sparas för alla, fritexten bara för inloggade. Raden gallras efter 90 dagar av `PrunesHelpFeedback` och raderas med användaren av `DeleteUser`.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | |
+| ulid | CHAR(26) | Unikt index. Identifieraren utåt |
+| article_id | VARCHAR(80) | Artikelns id |
+| locale | VARCHAR(10) | Språket artikeln lästes på |
+| helpful | BOOLEAN | Ja eller Nej |
+| reason | VARCHAR(20) NULL | `unclear` \| `incomplete` \| `outdated` \| `incorrect` \| `missing`. CHECK-villkor i databasen. Bara när `helpful` är falskt |
+| comment | TEXT NULL | Fritext, högst 1000 tecken, bara från en inloggad |
+| user_id | BIGINT UNSIGNED NULL | FK till `user`, `ON DELETE RESTRICT`. Raderas av `DeleteUser` |
+| created_at, updated_at | | |
+
+INDEX `(article_id, created_at)` för rapporten och `(user_id)` för personraderingen. **Ingen `deleted_at`:** ingen kan radera en rad i gränssnittet, och gallringen raderar på riktigt efter 90 dagar. Ingen IP-kolumn — strypningen sker i begränsaren.
+
 ## Behörighetsregler
 
 Sammanfattat, att implementera som en policy och inte utspritt i controllers:
