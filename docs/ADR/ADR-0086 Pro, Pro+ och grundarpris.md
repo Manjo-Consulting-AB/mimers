@@ -1,6 +1,6 @@
 # ADR-0086 Pro, Pro+ och grundarpris
 
-**Status:** Antagen 2026-11-18 · Ersätter konsumentnivåerna och ägarbytets bonus i [[ADR-0014 Prismodell]]; B2B-delen där gäller oförändrad · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Ersätter konsumentnivåerna och ägarbytets bonus i [[ADR-0014 Prismodell]]; B2B-delen där gäller oförändrad · § 7 ersatt av [[ADR-0093 Ägarbytets bonus till nya kunder]] 2026-11-22 · [[ADR-index]]
 
 Tonys beslut 2026-11-18.
 
@@ -33,6 +33,8 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 **5. Vi lovar att priset inte höjs för befintliga kunder.** En löpande prenumeration behåller sitt pris. Prisändringar gäller bara nya prenumerationer. § 4 är det tekniska stödet för löftet.
 
 **6. Vi är öppna med vart pengarna går.** En offentlig sida förklarar i klartext vad priset betalar för: lagring i Sverige och Frankrike, backup, support och utveckling. Den förklarar också vad vi inte gör: inga annonser, ingen försäljning av data. Sidan upprepar löftet i § 5 och att export och påminnelser är fria på alla nivåer.
+
+*Ersatt av ADR-0093 2026-11-22: bonusen ges bara till nya kunder och förlänger aldrig en plan.*
 
 **7. Bonusen vid ägarbyte sänker aldrig planen.** Mottagaren får fortfarande tolv månader, en gång per konto (se [[ADR-0017 Missbruksvektorer]] § 4). Har kontot redan en aktiv Pro- eller Pro+-rad förlängs den raden ett år, på samma plan. Annars ges Pro. Kvotprövningen sker som förut mot mottagarens nuvarande plan, innan bonusen ges. Är containern större än 10 GB behöver mottagaren alltså Pro+ för att kunna ta emot den.
 
