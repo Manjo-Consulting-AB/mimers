@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerCurrencyController;
 use App\Http\Controllers\Api\ContainerInvitationController;
+use App\Http\Controllers\Api\ContainerLeaveController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTemplateController;
 use App\Http\Controllers\Api\ContainerTrashController;
@@ -191,6 +192,8 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // att hantera åtkomster ([[Konton och åtkomst]] § Behörighetsregler
     // regel 3).
     Route::patch('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'update']);
+    // Issue 1529 (M75): mottagaren lämnar containern själv.
+    Route::post('/containers/{container}/leave', [ContainerLeaveController::class, 'store']);
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy']);
 
     // Issue 9c · Deltagarlistan — vem som HAR åtkomst just nu, läsbar för

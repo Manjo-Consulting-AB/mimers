@@ -1,12 +1,13 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
 import InvitationForm from '../../components/InvitationForm.vue';
 import InvitationRow from '../../components/InvitationRow.vue';
+import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import TwoFactorRequirementToggle from '../../components/TwoFactorRequirementToggle.vue';
 import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -104,6 +105,36 @@ const page = usePage();
  */
 const isFrozenOwner = computed(() => props.can.revoke && !props.can.manage);
 
+/*
+ * Lämna containern (issue 1529 · M75). Knappen ritas bara när `can.leave` är
+ * sant och öppnar en bekräftelse; grinden är ContainerPolicy::leave().
+ */
+const leaveOpen = ref(false);
+const leaveTrigger = ref(null);
+const leavePending = ref(false);
+const leaveError = ref(null);
+
+function openLeave(button) {
+    leaveTrigger.value = button;
+    leaveError.value = null;
+    leaveOpen.value = true;
+}
+
+function leave() {
+    router.post(`/containers/${props.container.ulid}/leave`, {}, {
+        onStart: () => {
+            leavePending.value = true;
+        },
+        onFinish: () => {
+            leavePending.value = false;
+            leaveOpen.value = false;
+        },
+        onError: () => {
+            leaveError.value = t('sharing.leave.error');
+        },
+    });
+}
+
 /* Ägarkontot är alltid deltagarlistans första post (issue 9c § Beslut 3). */
 const owner = computed(() => props.participants[0] ?? null);
 
@@ -198,6 +229,31 @@ const historyDate = (access) =>
                 <span class="text-meta text-ink-muted">{{ t(`sharing.role.${participant.role}`) }}</span>
             </li>
         </ul>
+
+        <div v-if="can.leave" class="mt-4">
+            <p v-if="leaveError" role="alert" class="mb-2 text-body text-danger">{{ leaveError }}</p>
+
+            <button
+                type="button"
+                :disabled="leavePending"
+                class="inline-flex min-h-11 items-center rounded-control border border-danger px-3 text-body font-medium text-danger hover:bg-danger-soft disabled:opacity-50"
+                @click="openLeave($event.currentTarget)"
+            >
+                {{ t('sharing.leave.button') }}
+            </button>
+
+            <UiConfirmDialog
+                :open="leaveOpen"
+                :heading="t('sharing.leave.heading')"
+                :body="t('sharing.leave.body', { container: container.name })"
+                :confirm-label="t('sharing.leave.button')"
+                tone="danger"
+                :pending="leavePending"
+                :trigger="leaveTrigger"
+                @confirm="leave"
+                @cancel="leaveOpen = false"
+            />
+        </div>
     </section>
 
     <!--

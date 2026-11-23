@@ -311,6 +311,35 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren LÄMNA containern (issue 1529 · M75)? Ja när hon har minst
+     * en giltig egen rad på containern och inte är medlem i ägarkontot.
+     *
+     * Ingen `read_only`-kontroll, av samma skäl som revokeAccess(): att lämna
+     * minskar exponeringen. Inte heller tvåfaktorkravet (hasContainerAccess()
+     * nekar den som saknar tvåfaktor) — den som inte längre når containern ska
+     * ändå kunna klippa relationen. En inbox har inga åtkomstrader, så frågan
+     * uppstår aldrig där. Bara personens EGNA rader (`grantee_type = user`)
+     * räknas: en `managed`-rad tillhör ett konto, inte personen.
+     */
+    public function leave(User $user, Container $container): bool
+    {
+        if ($container->isInbox()) {
+            return false;
+        }
+
+        if ($this->isMemberOfOwnerAccount($user, $container->account)) {
+            return false;
+        }
+
+        return ContainerAccess::query()
+            ->where('container_id', $container->id)
+            ->where('grantee_type', 'user')
+            ->where('grantee_id', $user->id)
+            ->valid()
+            ->exists();
+    }
+
+    /**
      * Får användaren tömma containerns papperskorg? Oåterkalleligt, därför
      * bara ägarsidan: inboxens ägare för en inbox, annars en medlem i det
      * ägande kontot. En delegerad användare får aldrig tömma, oavsett nivå —

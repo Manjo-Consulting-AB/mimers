@@ -129,6 +129,9 @@ export function notificationMessage(t, notification, formatDate) {
                 ? t('inbox.binder.ready_item', { item: payload.item })
                 : t('inbox.binder.ready', { container: payload.container });
 
+        case 'access.left':
+            return t('inbox.access.left', { person: payload.person, container: payload.container });
+
         case 'container.deleted':
             return t('inbox.container.deleted', { container: payload.container });
 

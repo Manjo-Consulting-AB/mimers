@@ -325,6 +325,10 @@ return [
         ],
         // Issue 1518: the notification type. `ready_item` is
         // used for a single item (`ready` is a string, so it has no children).
+        // Issue 1529 (M75): someone left a container you own.
+        'access' => [
+            'left' => ':person left the container ":container"',
+        ],
         'binder' => [
             'ready' => 'Your PDF binder for :container is ready',
             'ready_item' => 'Your PDF binder for :item is ready',
@@ -863,6 +867,8 @@ return [
         'container-currencies-updated' => 'The currencies for costs have been saved.',
         'access-updated' => 'The access has been saved.',
         'access-revoked' => 'The access has been revoked.',
+        // Issue 1529 (M75): the receipt after leaving a container.
+        'container-left' => 'You have left the container.',
         'invitation-sent' => 'The invitation has been sent.',
         // Issue 430: the level of a waiting invitation was saved.
         'invitation-updated' => 'The invitation has been saved.',
@@ -2034,6 +2040,10 @@ return [
                 ],
                 // Issue 1518: the new type. The row links to the
                 // container's export page.
+                // Issue 1529 (M75). The row links to the container's sharing page.
+                'access' => [
+                    'left' => ':person left the container ":container".',
+                ],
                 'binder' => [
                     'ready' => 'Your PDF binder for :container is ready.',
                     'ready_item' => 'Your PDF binder for :item is ready.',
@@ -5743,6 +5753,14 @@ return [
         ],
 
         'frozen' => 'The account is frozen and cannot change levels. Revoking an access still works.',
+
+        // Issue 1529 (M75): a recipient leaves the container herself.
+        'leave' => [
+            'button' => 'Leave container',
+            'heading' => 'Leave this container?',
+            'body' => 'You will lose access to ":container". Only the owner can give it back.',
+            'error' => 'Could not leave the container. Try again.',
+        ],
     ],
 
     // The landing page of the email, see issue 55b decisions 2, 3 and 4.

@@ -114,6 +114,15 @@ class Notification extends Model
     public const TYPE_VERSIONING_SKIPPED = 'versioning.skipped';
 
     /**
+     * En mottagare lämnade containern, se issue 1529 (M75). Går till
+     * ägarkontots ägare, bara i appen. `payload` bär `container` och
+     * `person` (`user.name`, aldrig en e-postadress). En rad per container,
+     * person och dygn. Ingen mejltyp och ingen inställning (se
+     * App\Support\Notification\NotificationPreferences).
+     */
+    public const TYPE_ACCESS_LEFT = 'access.left';
+
+    /**
      * Kontot är nedgraderat och det egna innehållet kan raderas i steg 4, se
      * [[Planer och kvoter]] § Nedgradering och issue 1457 (uppföljningen av
      * issue 409). Skickas till kontots ägare och administratörer vid steg 1
