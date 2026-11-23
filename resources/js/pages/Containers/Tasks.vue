@@ -297,7 +297,7 @@ function onCreated(ulids) {
 
         <span class="flex items-center">
             <HelpLink context="container.tasks" icon-only class="sm:hidden" />
-            <HelpLink context="container.tasks" class="hidden sm:inline-flex" />
+            <HelpLink context="container.tasks" class="max-sm:hidden" />
         </span>
     </div>
 

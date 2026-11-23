@@ -168,7 +168,7 @@ const historyDate = (access) =>
 
         <span class="flex items-center">
             <HelpLink context="container.sharing" icon-only class="sm:hidden" />
-            <HelpLink context="container.sharing" class="hidden sm:inline-flex" />
+            <HelpLink context="container.sharing" class="max-sm:hidden" />
         </span>
     </div>
 

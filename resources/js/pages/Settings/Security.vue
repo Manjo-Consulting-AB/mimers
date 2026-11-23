@@ -162,7 +162,7 @@ function outcomeLabel(login) {
 
         <span class="flex items-center">
             <HelpLink context="account.security" icon-only class="sm:hidden" />
-            <HelpLink context="account.security" class="hidden sm:inline-flex" />
+            <HelpLink context="account.security" class="max-sm:hidden" />
         </span>
     </div>
 

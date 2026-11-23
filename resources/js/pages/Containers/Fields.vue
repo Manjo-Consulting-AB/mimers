@@ -204,7 +204,7 @@ const atLimitText = computed(() => t('container.fields.limit_reached', { limit: 
 
         <span class="flex items-center">
             <HelpLink context="container.fields" icon-only class="sm:hidden" />
-            <HelpLink context="container.fields" class="hidden sm:inline-flex" />
+            <HelpLink context="container.fields" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-1 text-sm text-ink-muted">{{ t('container.fields.description') }}</p>

@@ -34,7 +34,7 @@ const { eventDate } = useRelativeDate();
 
         <span class="flex items-center">
             <HelpLink context="account.agents" icon-only class="sm:hidden" />
-            <HelpLink context="account.agents" class="hidden sm:inline-flex" />
+            <HelpLink context="account.agents" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('agents.intro') }}</p>

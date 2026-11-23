@@ -171,7 +171,7 @@ function saveVersioning(value) {
 
         <span class="flex items-center">
             <HelpLink context="account.storage" icon-only class="sm:hidden" />
-            <HelpLink context="account.storage" class="hidden sm:inline-flex" />
+            <HelpLink context="account.storage" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>

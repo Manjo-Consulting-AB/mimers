@@ -50,7 +50,7 @@ const { t } = useTranslations();
 
         <span class="flex items-center">
             <HelpLink context="container.agents" icon-only class="sm:hidden" />
-            <HelpLink context="container.agents" class="hidden sm:inline-flex" />
+            <HelpLink context="container.agents" class="max-sm:hidden" />
         </span>
     </div>
 

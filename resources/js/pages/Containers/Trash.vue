@@ -95,7 +95,7 @@ function emptyTrash() {
 
         <span class="flex items-center gap-2">
             <HelpLink context="trash" icon-only class="sm:hidden" />
-            <HelpLink context="trash" class="hidden sm:inline-flex" />
+            <HelpLink context="trash" class="max-sm:hidden" />
 
             <UiButton
                 v-if="canEmpty && entries.length > 0"

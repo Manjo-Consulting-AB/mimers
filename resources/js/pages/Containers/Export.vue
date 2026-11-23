@@ -142,7 +142,7 @@ onUnmounted(() => {
 
         <span class="flex items-center">
             <HelpLink context="container.export" icon-only class="sm:hidden" />
-            <HelpLink context="container.export" class="hidden sm:inline-flex" />
+            <HelpLink context="container.export" class="max-sm:hidden" />
         </span>
     </div>
 

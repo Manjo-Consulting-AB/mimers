@@ -61,9 +61,14 @@ it('importerar och ritar HelpLink med sitt sammanhang i varje vy', function () {
         }
 
         // Telefonens ikon och den bredare radens ikon med etiketten.
+        //
+        // Döljningen måste vara en variantregel (`max-sm:` respektive `sm:`),
+        // inte `hidden`: `HelpLink` bär själv `inline-flex`, och i den byggda
+        // stilen står den regeln efter `.hidden` med samma specificitet. Ett
+        // naket `hidden` förlorar därför och båda länkarna syntes på telefon.
         foreach ([
             sprintf('<HelpLink context="%s" icon-only class="sm:hidden" />', $sammanhang),
-            sprintf('<HelpLink context="%s" class="hidden sm:inline-flex" />', $sammanhang),
+            sprintf('<HelpLink context="%s" class="max-sm:hidden" />', $sammanhang),
         ] as $tagg) {
             if (! str_contains($kod, $tagg)) {
                 $fynd[] = "{$fil} ritar inte {$tagg}";

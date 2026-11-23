@@ -92,7 +92,7 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
 
         <span class="flex items-center">
             <HelpLink context="container.transfer" icon-only class="sm:hidden" />
-            <HelpLink context="container.transfer" class="hidden sm:inline-flex" />
+            <HelpLink context="container.transfer" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('transfer.intro') }}</p>

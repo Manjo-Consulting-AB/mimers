@@ -53,7 +53,7 @@ const showsAccount = computed(() => accounts.value.length > 1);
 
         <span class="flex items-center">
             <HelpLink context="account.templates" icon-only class="sm:hidden" />
-            <HelpLink context="account.templates" class="hidden sm:inline-flex" />
+            <HelpLink context="account.templates" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 max-w-2xl text-sm text-slate-700">{{ t('settings.templates.description') }}</p>

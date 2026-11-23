@@ -76,7 +76,7 @@ function create() {
 
         <span class="flex items-center">
             <HelpLink context="container.calendar" icon-only class="sm:hidden" />
-            <HelpLink context="container.calendar" class="hidden sm:inline-flex" />
+            <HelpLink context="container.calendar" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('calendar.intro') }}</p>

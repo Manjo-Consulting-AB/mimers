@@ -109,7 +109,7 @@ function graceLabel(days) {
 
         <span class="flex items-center">
             <HelpLink context="account.plan" icon-only class="sm:hidden" />
-            <HelpLink context="account.plan" class="hidden sm:inline-flex" />
+            <HelpLink context="account.plan" class="max-sm:hidden" />
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('plan.intro') }}</p>
