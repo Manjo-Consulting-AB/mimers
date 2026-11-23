@@ -35,7 +35,6 @@ use App\Support\Invitation\PendingInvitation;
 use App\Support\Notification\NotificationTarget;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
@@ -971,17 +970,11 @@ class HandleInertiaRequests extends Middleware
             )
             ->with([
                 'container',
-                // Relation och inte MorphTo i signaturen: `with()` tar en
-                // closure över vilken relation som helst, och en smalare
-                // parametertyp hade varit ett kontravariansk brott mot det
-                // kontraktet (phpstan). instanceof säger samma sak i kroppen.
-                'subject' => function (Relation $relation): void {
-                    if ($relation instanceof MorphTo) {
-                        $relation->morphWith([
-                            ScheduleOccurrence::class => ['schedule.item'],
-                            Loan::class => ['item'],
-                        ]);
-                    }
+                'subject' => function (MorphTo $relation): void {
+                    $relation->morphWith([
+                        ScheduleOccurrence::class => ['schedule.item'],
+                        Loan::class => ['item'],
+                    ]);
                 },
             ])
             ->orderByDesc('created_at')
