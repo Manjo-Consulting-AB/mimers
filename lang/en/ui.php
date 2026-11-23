@@ -6194,6 +6194,18 @@ return [
         'breadcrumb' => [
             'home' => 'Help',
         ],
+        /*
+         * Hjälplänken i en vy — M81 · issue 468, ADR-0094 § 6.
+         *
+         * `default` är etiketten när vyn inte sänder en egen, och `new_tab`
+         * är länkens tillgängliga namn: det säger både vad länken heter och
+         * att den öppnas i en ny flik, så att den som står mitt i en dialog
+         * inte tappar den. `:label` byts mot etiketten.
+         */
+        'link' => [
+            'default' => 'Help',
+            'new_tab' => ':label (opens in a new tab)',
+        ],
         'copy_link' => 'Link to this question',
         'link_copied' => 'Link copied',
         'questions_count' => ':count question|:count questions',

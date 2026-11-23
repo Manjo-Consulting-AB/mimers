@@ -125,6 +125,42 @@ final class HelpCatalog
     }
 
     /**
+     * Artikeln som bär sammanhanget, med ankaret — M81 · issue 468,
+     * [[ADR-0094 Hjälpcentret]] § 6.
+     *
+     * Ett sammanhang i front mattern får bära ett `#ankare`
+     * (`account.security#two-factor`). Ankaret hör till värdet och inte till
+     * adressen, så uppslaget jämför bara delen före `#` och lämnar ankaret
+     * tillbaka till den som bygger omdirigeringen.
+     *
+     * Katalogen söks i `articles()`-ordning, alltså bara synliga artiklar: ett
+     * utkast svarar null i produktion, på samma sätt som `article()`. Ett
+     * sammanhang förekommer en gång per språk (HelpValidator), så den första
+     * träffen är den enda.
+     *
+     * @return array{article: HelpArticle, anchor: ?string}|null
+     */
+    public function byContext(string $context): ?array
+    {
+        foreach ($this->articles() as $article) {
+            foreach ($article->contexts as $candidate) {
+                $parts = explode('#', $candidate, 2);
+
+                if ($parts[0] !== $context) {
+                    continue;
+                }
+
+                return [
+                    'article' => $article,
+                    'anchor' => $parts[1] ?? null,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Kategorins artiklar, i samma ordning som `articles()`.
      *
      * @return list<HelpArticle>
