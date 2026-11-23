@@ -675,6 +675,7 @@ class AcceptOwnershipTransfer
             $subscription->status = 'active';
             $subscription->current_period_end = now()->addYear();
             $subscription->grace_until = null;
+            $subscription->source = 'transfer_bonus';
             $subscription->save();
 
             return true;
@@ -706,6 +707,7 @@ class AcceptOwnershipTransfer
         $subscription->status = 'active';
         $subscription->current_period_end = now()->addYear();
         $subscription->grace_until = null;
+        $subscription->source = 'transfer_bonus';
         $subscription->save();
 
         return true;

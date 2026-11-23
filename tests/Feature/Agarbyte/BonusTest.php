@@ -122,6 +122,7 @@ it('ett konto som aldrig tagit emot ett ägarbyte får tolv månader Pro och få
     expect($subscription)->not->toBeNull();
     expect($subscription->plan->code)->toBe('pro');
     expect($subscription->status)->toBe('active');
+    expect($subscription->source)->toBe('transfer_bonus');
     expect($subscription->current_period_end->greaterThanOrEqualTo(now()->addYear()->subMinute()))->toBeTrue();
 
     expect($köparkonto->fresh()->transfer_bonus_granted_at)->not->toBeNull();

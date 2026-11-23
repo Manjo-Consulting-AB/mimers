@@ -87,6 +87,7 @@ it('inlösen ger pro i 365 dagar med external_ref voucher', function () {
     // ur raden, precis som varje annan kontroll gör.
     expect($subscription->status)->toBe('active');
     expect($subscription->external_ref)->toBe('voucher');
+    expect($subscription->source)->toBe('voucher');
     expect($subscription->grace_until)->toBeNull();
     expect($subscription->current_period_end->toDateTimeString())->toBe('2027-10-08 12:00:00');
     expect($account->fresh()->currentPlan()->code)->toBe('pro');
