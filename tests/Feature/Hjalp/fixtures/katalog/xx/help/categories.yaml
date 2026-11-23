@@ -1,0 +1,11 @@
+- id: containers
+  title: Containrar
+  description: Allt om containrar och vad de rymmer.
+- id: sharing
+  title: Delning
+  description: Bjude in folk, sätt behörighet och lämna över en container.
+  intro: |
+    Delning är att bry sig.
+- id: account
+  title: Konto
+  description: Ditt konto och din säkerhet.

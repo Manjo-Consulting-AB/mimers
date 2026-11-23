@@ -1,0 +1,6 @@
+- id: test
+  title: Test
+  description: En testkategori.
+- id: test
+  title: Test igen
+  description: Samma id en gång till.

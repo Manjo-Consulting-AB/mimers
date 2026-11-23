@@ -1,0 +1,11 @@
+- id: containers
+  title: Containers
+  description: Everything about containers and what goes in them.
+- id: sharing
+  title: Sharing
+  description: Invite people, set access and hand over a container.
+  intro: |
+    Sharing is **caring**.
+- id: account
+  title: Account
+  description: Your account and security.
