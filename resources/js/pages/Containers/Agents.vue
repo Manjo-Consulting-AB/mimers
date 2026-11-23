@@ -4,6 +4,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAgentsSection from '../../components/ContainerAgentsSection.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({
@@ -44,7 +45,14 @@ const { t } = useTranslations();
 <template>
     <Head :title="t('container.nav.agents')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('container.nav.agents') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('container.nav.agents') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.agents" icon-only class="sm:hidden" />
+            <HelpLink context="container.agents" class="hidden sm:inline-flex" />
+        </span>
+    </div>
 
     <ContainerAgentsSection :container-ulid="container.ulid" :section="section" />
 </template>

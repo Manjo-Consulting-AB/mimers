@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import StorageBreakdown from '../../components/StorageBreakdown.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
@@ -165,7 +166,14 @@ function saveVersioning(value) {
 <template>
     <Head :title="t('storage.title')" />
 
-    <h2 class="text-2xl font-semibold">{{ t('storage.heading') }}</h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold">{{ t('storage.heading') }}</h2>
+
+        <span class="flex items-center">
+            <HelpLink context="account.storage" icon-only class="sm:hidden" />
+            <HelpLink context="account.storage" class="hidden sm:inline-flex" />
+        </span>
+    </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
     <p v-if="props.usage.textBytes > 0" class="mt-1 text-sm text-slate-700">{{ t('storage.text_note') }}</p>
 

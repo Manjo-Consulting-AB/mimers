@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import AppHero from '../../components/AppHero.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import ItemIcon from '../../components/ItemIcon.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
 import UiIcon from '../../components/UiIcon.vue';
@@ -403,7 +404,16 @@ onBeforeUnmount(() => {
         :heading="t('trash.heading')"
         :subtitle="t('hero.subtitle.trash')"
     />
-    <p class="mt-1 text-sm text-ink-muted">{{ t('trash.overview.description') }}</p>
+    <!-- Rubriken ritas av AppHero; vyn har ingen egen, så hjälplänken står
+         överst till höger i innehållet. -->
+    <div class="mt-1 flex items-start justify-between gap-3">
+        <p class="text-sm text-ink-muted">{{ t('trash.overview.description') }}</p>
+
+        <span class="flex items-center">
+            <HelpLink context="trash" icon-only class="sm:hidden" />
+            <HelpLink context="trash" class="hidden sm:inline-flex" />
+        </span>
+    </div>
 
     <p
         v-if="page.props.errors.ulid"

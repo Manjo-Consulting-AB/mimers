@@ -4,6 +4,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import TransferForm from '../../components/TransferForm.vue';
 import { formatDate } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -86,7 +87,14 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
 <template>
     <Head :title="t('transfer.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('transfer.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('transfer.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.transfer" icon-only class="sm:hidden" />
+            <HelpLink context="container.transfer" class="hidden sm:inline-flex" />
+        </span>
+    </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('transfer.intro') }}</p>
 
     <div

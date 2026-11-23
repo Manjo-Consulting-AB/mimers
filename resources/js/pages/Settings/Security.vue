@@ -4,6 +4,7 @@ import { Head, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import PasswordForm from '../../components/PasswordForm.vue';
 import TwoFactorRequirementToggle from '../../components/TwoFactorRequirementToggle.vue';
 import TotpQrCode from '../../components/TotpQrCode.vue';
@@ -156,7 +157,14 @@ function outcomeLabel(login) {
 <template>
     <Head :title="t('settings.security.title')" />
 
-    <h2 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h2>
+
+        <span class="flex items-center">
+            <HelpLink context="account.security" icon-only class="sm:hidden" />
+            <HelpLink context="account.security" class="hidden sm:inline-flex" />
+        </span>
+    </div>
 
     <PasswordForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 

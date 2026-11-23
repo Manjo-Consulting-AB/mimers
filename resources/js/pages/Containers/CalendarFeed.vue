@@ -4,6 +4,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CalendarFeedRow from '../../components/CalendarFeedRow.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import SecretOnce from '../../components/SecretOnce.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
@@ -70,7 +71,14 @@ function create() {
 <template>
     <Head :title="t('calendar.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('calendar.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('calendar.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.calendar" icon-only class="sm:hidden" />
+            <HelpLink context="container.calendar" class="hidden sm:inline-flex" />
+        </span>
+    </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('calendar.intro') }}</p>
 
     <SecretOnce

@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { formatByteSize } from '../../components/attachmentPresentation.js';
 
@@ -103,7 +104,14 @@ function graceLabel(days) {
 <template>
     <Head :title="t('plan.title')" />
 
-    <h2 class="text-2xl font-semibold">{{ t('plan.heading') }}</h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold">{{ t('plan.heading') }}</h2>
+
+        <span class="flex items-center">
+            <HelpLink context="account.plan" icon-only class="sm:hidden" />
+            <HelpLink context="account.plan" class="hidden sm:inline-flex" />
+        </span>
+    </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('plan.intro') }}</p>
 
     <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">

@@ -5,6 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerTaskQuickCreate from '../../components/ContainerTaskQuickCreate.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
@@ -293,6 +294,11 @@ function onCreated(ulids) {
 
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.tasks" icon-only class="sm:hidden" />
+            <HelpLink context="container.tasks" class="hidden sm:inline-flex" />
+        </span>
     </div>
 
     <!--
