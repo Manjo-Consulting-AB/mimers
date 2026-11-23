@@ -139,6 +139,11 @@ const allSections = [
     // `/containers` får inte samma flagga, för på en containersida är det
     // containerraden i sidopanelen som är den aktuella (issue 169).
     { key: 'settings', href: '/settings', icon: 'settings', matchPrefix: true },
+    // Hjälpsidan (M78 · issue 458): raden står i `trash`-delen, strax ovanför
+    // papperskorgen, och hamnar därmed längst ned i sidopanelen och i
+    // mobilmenyn. Den bär ingen räknare och ingen `matchPrefix` — /help har
+    // inga undersidor.
+    { key: 'help', href: '/help', icon: 'help' },
     // Den samlade papperskorgen (M39 · issue 320 · [[ADR-0065 Den samlade
     // papperskorgen]] § 1): raden står sist i listan och ritas i sin egen del
     // längst ned i sidopanelen, strax ovanför användarens namn. Den är aktuell
@@ -155,7 +160,7 @@ const allSections = [
 const partKeys = {
     'top': ['dashboard'],
     'rows': ['inbox', 'tasks', 'containers', 'documents', 'history', 'search'],
-    'trash': ['trash'],
+    'trash': ['help', 'trash'],
     'account': ['settings'],
 };
 

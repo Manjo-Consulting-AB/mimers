@@ -185,6 +185,8 @@ return [
         // page's own (`trash.heading`) and the same word the container's
         // trash tab carries (`container.nav.trash`) — one word for one place.
         'trash' => 'Trash',
+        // M78 · issue 458: the row above Trash, same word as the page's heading.
+        'help' => 'Help',
         'login' => 'Log in',
         // The FAVOURITES section in the shell, see issue 106. The word is the
         // section's heading AND the nav element's accessible name: the section
@@ -6093,7 +6095,11 @@ return [
         'about' => ['title' => 'About Mimers'],
         'privacy' => ['title' => 'Privacy policy'],
         'terms' => ['title' => 'Terms of use'],
-        'help' => ['title' => 'Help'],
+        'help' => [
+            'title' => 'Help',
+            'subtitle' => 'Answers to common questions about Mimers.',
+            'contents' => 'Contents',
+        ],
         'placeholder' => 'This page is coming soon.',
     ],
 ];

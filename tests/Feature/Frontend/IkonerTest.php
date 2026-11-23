@@ -95,6 +95,7 @@ function ikonRoller(): array
         'move-down' => 'arrow-down',
         'drag' => 'grip-vertical',
         'lock' => 'lock',
+        'help' => 'circle-question-mark',
     ];
 }
 

@@ -37,6 +37,7 @@ use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
@@ -339,13 +340,13 @@ Route::delete('/settings/overview-panels', [OverviewPanelController::class, 'des
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('welcome');
 
 /*
- * Issue 202 · Informationssidorna — /about, /privacy, /terms och /help. Inloggnings-
+ * Issue 202 · Informationssidorna — /about, /privacy och /terms, plus /help. Inloggnings-
  * sidans nya design länkar hit (issue 203).
  *
- * **Fyra rutter, en sida.** Adresserna skiljer sig åt men innehållet är det
+ * **Tre rutter, en sida.** Adresserna skiljer sig åt men innehållet är det
  * samma — en rubrik och en mening — och bara rubriken skiljer dem åt. Sidan
  * `Info` får sin adress som prop och slår upp `info.<sida>.title` i
- * lang/{locale}/ui.php, så en femte sida är en rad i listan och en nyckel i
+ * lang/{locale}/ui.php, så en fjärde sida är en rad i listan och en nyckel i
  * katalogen, inte en ny .vue-fil.
  *
  * **Utanför `auth` och `guest`.** En informationssida ska nås av både en gäst
@@ -354,9 +355,13 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'logi
  *
  * Texterna är platshållare; de riktiga skrivs i en senare runda.
  */
-foreach (['about', 'privacy', 'terms', 'help'] as $infoPage) {
+foreach (['about', 'privacy', 'terms'] as $infoPage) {
     Route::get('/'.$infoPage, fn () => Inertia::render('Info', ['page' => $infoPage]))->name('info.'.$infoPage);
 }
+
+// M78 · issue 458: hjälpsidan har egna texter (lang/{locale}/help/*.md) och en
+// egen controller. Ruttnamnet står kvar, för Login.vue länkar till /help.
+Route::get('/help', HelpController::class)->name('info.help');
 
 /*
  * Issue 4 · Autentisering med lösenord. Webben kör på Laravels

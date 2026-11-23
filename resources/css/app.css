@@ -172,60 +172,78 @@
  * Ingen typografiplugin: reglerna är få och ett npm-paket hade varit ett nytt
  * beroende för dem (ADR-0066 § 3, Alternativ).
  *
- * `.item-notes-content` läses av ItemNotes.vue och är det enda stället den
- * ritade HTML:en möter CSS.
+ * `.item-notes-content` läses av ItemNotes.vue och `.help-content` av Help.vue
+ * (M78 · issue 458) — de är de två ställen där serverritad HTML möter CSS, och
+ * reglerna delas så att listor, fetstil, länkar och stycken ser likadana ut.
  */
-.item-notes-content {
+.item-notes-content,
+.help-content {
     color: var(--color-ink);
     font-size: var(--text-body);
     line-height: 1.6;
     overflow-wrap: anywhere;
 }
 
-.item-notes-content > * + * {
+.item-notes-content > * + *,
+.help-content > * + * {
     margin-top: 0.75rem;
 }
 
 .item-notes-content h1,
+.help-content h1,
 .item-notes-content h2,
+.help-content h2,
 .item-notes-content h3,
+.help-content h3,
 .item-notes-content h4,
+.help-content h4,
 .item-notes-content h5,
-.item-notes-content h6 {
+.help-content h5,
+.item-notes-content h6,
+.help-content h6 {
     color: var(--color-ink);
     font-weight: 600;
     line-height: 1.3;
 }
 
-.item-notes-content h1 {
+.item-notes-content h1,
+.help-content h1 {
     font-size: 1.5em;
 }
 
-.item-notes-content h2 {
+.item-notes-content h2,
+.help-content h2 {
     font-size: 1.3em;
 }
 
-.item-notes-content h3 {
+.item-notes-content h3,
+.help-content h3 {
     font-size: 1.15em;
 }
 
 .item-notes-content h4,
+.help-content h4,
 .item-notes-content h5,
-.item-notes-content h6 {
+.help-content h5,
+.item-notes-content h6,
+.help-content h6 {
     font-size: 1em;
 }
 
-.item-notes-content ul {
+.item-notes-content ul,
+.help-content ul {
     list-style: disc;
     padding-left: 1.25rem;
 }
 
-.item-notes-content ol {
+.item-notes-content ol,
+.help-content ol {
     list-style: decimal;
     padding-left: 1.25rem;
 }
 
-.item-notes-content li + li {
+.item-notes-content li + li,
+.help-content li + li {
     margin-top: 0.25rem;
 }
 
@@ -236,23 +254,27 @@
  * flyttas vänster om listans `padding-left`, så att checkboxen står där
  * punkten annars hade stått. Rader utan checkbox behåller sin markör.
  */
-.item-notes-content li:has(> input[type="checkbox"]) {
+.item-notes-content li:has(> input[type="checkbox"]),
+.help-content li:has(> input[type="checkbox"]) {
     list-style: none;
     margin-left: -1.25rem;
 }
 
-.item-notes-content a {
+.item-notes-content a,
+.help-content a {
     color: var(--color-accent);
     text-decoration: underline;
 }
 
-.item-notes-content blockquote {
+.item-notes-content blockquote,
+.help-content blockquote {
     border-left: 3px solid var(--color-border);
     color: var(--color-ink-muted);
     padding-left: 0.75rem;
 }
 
-.item-notes-content code {
+.item-notes-content code,
+.help-content code {
     background: var(--color-surface-sunken);
     border-radius: 4px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -260,19 +282,22 @@
     padding: 0.1em 0.3em;
 }
 
-.item-notes-content pre {
+.item-notes-content pre,
+.help-content pre {
     background: var(--color-surface-sunken);
     border-radius: var(--radius-control);
     overflow-x: auto;
     padding: 0.75rem;
 }
 
-.item-notes-content pre code {
+.item-notes-content pre code,
+.help-content pre code {
     background: transparent;
     padding: 0;
 }
 
-.item-notes-content table {
+.item-notes-content table,
+.help-content table {
     border-collapse: collapse;
     display: block;
     max-width: 100%;
@@ -281,24 +306,45 @@
 }
 
 .item-notes-content th,
-.item-notes-content td {
+.help-content th,
+.item-notes-content td,
+.help-content td {
     border: 1px solid var(--color-border);
     padding: 0.375rem 0.5rem;
     text-align: left;
 }
 
-.item-notes-content th {
+.item-notes-content th,
+.help-content th {
     background: var(--color-surface-sunken);
     font-weight: 600;
 }
 
-.item-notes-content hr {
+.item-notes-content hr,
+.help-content hr {
     border-top: 1px solid var(--color-border);
 }
 
-.item-notes-content img {
+.item-notes-content img,
+.help-content img {
     height: auto;
     max-width: 100%;
+}
+
+/*
+ * Tabeller på hjälpsidan (pristabellen i 06-plans.md). Ramen är samma som i
+ * anteckningen; sifferkolumnerna högerställs av markdownens `---:`, som
+ * CommonMark skriver som `style="text-align: right"` och som därför går före
+ * `text-align: left` nedan.
+ */
+.help-content table {
+    border: 1px solid var(--color-border);
+}
+
+.help-content th,
+.help-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.375rem 0.5rem;
 }
 
 /*

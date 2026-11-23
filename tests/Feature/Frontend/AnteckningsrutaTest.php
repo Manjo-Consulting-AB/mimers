@@ -302,7 +302,7 @@ it('ritar en rad med checkbox utan punkt med checkboxen i punktens kolumn', func
     $css = File::get(resource_path('css/app.css'));
 
     preg_match(
-        '/\.item-notes-content li:has\(> input\[type="checkbox"\]\)\s*\{([^}]*)\}/',
+        '/\.item-notes-content li:has\(> input\[type="checkbox"\]\)(?:,\s*\.help-content[^{]*)?\s*\{([^}]*)\}/',
         $css,
         $uppgiftsrad,
     );
@@ -311,8 +311,8 @@ it('ritar en rad med checkbox utan punkt med checkboxen i punktens kolumn', func
     expect($uppgiftsrad)->toContain('list-style: none')
         ->and($uppgiftsrad)->toContain('margin-left: -1.25rem');
 
-    preg_match('/\.item-notes-content ul\s*\{([^}]*)\}/', $css, $punktlista);
-    preg_match('/\.item-notes-content ol\s*\{([^}]*)\}/', $css, $numrerad);
+    preg_match('/\.item-notes-content ul(?:,\s*\.help-content[^{]*)?\s*\{([^}]*)\}/', $css, $punktlista);
+    preg_match('/\.item-notes-content ol(?:,\s*\.help-content[^{]*)?\s*\{([^}]*)\}/', $css, $numrerad);
 
     expect($punktlista[1] ?? '')->toContain('list-style: disc')
         ->and($punktlista[1] ?? '')->toContain('padding-left: 1.25rem')

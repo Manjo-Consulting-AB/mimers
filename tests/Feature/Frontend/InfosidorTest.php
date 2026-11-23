@@ -8,9 +8,10 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 202 · Informationssidorna — /about, /privacy, /terms och /help.
+ * Issue 202 · Informationssidorna — /about, /privacy och /terms. /help ritas
+ * sedan M78 · issue 458 av Help.vue och prövas i HjalpsidanTest.
  *
- * Fyra adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
+ * Tre adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
  * vilken sida det är i `page`-proppen och komponenten slår upp rubriken ur
  * `info.<sida>.title`. Filen prövar serverns halva av det kontraktet —
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
@@ -25,7 +26,7 @@ use function Pest\Laravel\withoutVite;
  * grupperna hade skickat den ena parten vidare.
  */
 
-it('renderar Info för var och en av de fyra sidorna för en gäst', function (string $sida) {
+it('renderar Info för var och en av de tre sidorna för en gäst', function (string $sida) {
     withoutVite();
 
     get('/'.$sida)
@@ -34,7 +35,7 @@ it('renderar Info för var och en av de fyra sidorna för en gäst', function (s
             ->component('Info')
             ->where('page', $sida)
         );
-})->with(['about', 'privacy', 'terms', 'help']);
+})->with(['about', 'privacy', 'terms']);
 
 it('renderar Info också för en inloggad användare', function () {
     withoutVite();

@@ -78,6 +78,7 @@ it('ger varje sektionsrad en ikon ur samma lista som raden', function () {
         'search' => 'search',
         'settings' => 'settings',
         // Papperskorgen (M39 · issue 320): samma roll ur den slutna listan.
+        'help' => 'help',
         'trash' => 'trash',
     ]);
 

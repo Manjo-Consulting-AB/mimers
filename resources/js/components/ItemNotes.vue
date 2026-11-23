@@ -9,9 +9,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * [[ADR-0066 Itemets anteckning]] § 3–9.
  *
  * **Läsläget ritar HTML som servern har ritat.** `notesHtml` kommer ur
- * App\Actions\Item\RenderItemNotes och skrivs med `v-html`. Det är det enda
- * stället i koden där `v-html` används för innehåll, och undantaget gäller
- * bara just den här HTML:en: klienten ritar aldrig Markdown själv (§ 2 och 3).
+ * App\Actions\Item\RenderItemNotes och skrivs med `v-html`. Det är ett av två
+ * ställen i koden där `v-html` används för innehåll — det andra är Help.vue —
+ * och undantaget gäller bara just den här HTML:en: klienten ritar aldrig Markdown själv (§ 2 och 3).
  * Förbudet i [[ADR-0057 Ikoner och typsnitt]] § 2 gäller ikonernas SVG och
  * står kvar.
  *
@@ -358,7 +358,7 @@ onBeforeUnmount(() => {
             <!--
                 Läsläget. Den ritade HTML:en är serverritad enligt
                 ADR-0066 § 2 och 3, och det här är det enda stället i koden
-                där `v-html` bär innehåll.
+                där `v-html` bär innehåll — det andra är Help.vue.
             -->
             <div
                 v-else

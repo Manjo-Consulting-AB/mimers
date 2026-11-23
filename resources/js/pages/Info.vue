@@ -6,16 +6,17 @@ import { useTranslations } from '../composables/useTranslations.js';
 defineOptions({ layout: AppLayout });
 
 /*
- * Informationssidorna — /about, /privacy, /terms och /help, se issue 202.
+ * Informationssidorna — /about, /privacy och /terms, se issue 202. /help har
+ * sedan M78 · issue 458 en egen sida, Help.vue.
  *
- * EN sida för fyra adresser: rutten skickar vilken sida det är i `page`-
+ * EN sida för tre adresser: rutten skickar vilken sida det är i `page`-
  * proppen, och all text slås upp ur `info.<sida>.title` och
  * `info.placeholder` i lang/{locale}/ui.php. Ingen sträng bor här — samma
  * regel som resten av webben ([[ADR-0021 Frontendteknik]] § Beslut: webbens
  * text formuleras på servern ur lang/).
  *
  * Rubriken är det enda som skiljer sidorna åt; brödtexten är densamma på alla
- * fyra tills de riktiga texterna skrivs. Sidan ritas i AppLayout som
+ * tre tills de riktiga texterna skrivs. Sidan ritas i AppLayout som
  * Welcome.vue och är publik — både en gäst och en inloggad når den.
  */
 defineProps({
