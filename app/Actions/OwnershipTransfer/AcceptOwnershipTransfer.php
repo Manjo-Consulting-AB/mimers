@@ -158,7 +158,10 @@ class AcceptOwnershipTransfer
             // ägarbytet står kvar som pending.
             $bonusEligible = (bool) $transfer->grants_bonus
                 && $toAccount->currentPlan()->code === 'free'
-                && Account::query()->whereKey($toAccount->getKey())->whereNull('transfer_bonus_granted_at')->exists();
+                // Radlåset serialiserar samtida accepter till samma mottagarkonto:
+                // den andra väntar tills den första är klar och ser då spärren satt,
+                // så ingen kan pröva mot Pro-kvot utan att bonusen ges.
+                && Account::query()->whereKey($toAccount->getKey())->lockForUpdate()->value('transfer_bonus_granted_at') === null;
             $kvotPlan = $bonusEligible ? Plan::query()->where('code', 'pro')->firstOrFail() : null;
 
             $entitlements = new Entitlements;

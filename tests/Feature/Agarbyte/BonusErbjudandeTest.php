@@ -93,21 +93,18 @@ it('en avsändare med Pro genom bonus, voucher eller internt Pro ger grants_bonu
     expect(bonusErbjud($konto, $headers)->grants_bonus)->toBeFalse();
 })->with(['transfer_bonus', 'voucher', 'internal']);
 
-it('en betald rad som löpt ut räknas som Free och ger grants_bonus false', function () {
+it('en betald rad som löpt ut räknas som Free och nekas av planen', function () {
     [$konto, $headers] = bonusAvsändare();
-    // Free får inte erbjuda alls; sätt Pro-funktionen via en annan väg vore
-    // fusk — i stället prövas regeln direkt mot den utgångna raden.
     Subscription::query()->where('account_id', $konto->id)->update(['current_period_end' => now()->subDay()]);
 
     $container = Container::factory()->for($konto, 'account')->create();
     $svar = postJson("/api/containers/{$container->ulid}/transfers", ['to_email' => 'ny@exempel.se'], $headers);
 
-    // Antingen nekas erbjudandet av planen, eller så skapas det utan bonus.
-    if ($svar->status() === 201) {
-        expect($svar->json('data.grants_bonus'))->toBeFalse();
-    } else {
-        expect($svar->json('error.code'))->toBe('plan.feature_unavailable');
-    }
+    // Free har inte ownership_transfer: en utgången betald rad är Free, så
+    // erbjudandet nekas av planen och ingen rad skapas.
+    expect($svar->status())->toBe(403)
+        ->and($svar->json('error.code'))->toBe('plan.feature_unavailable')
+        ->and(OwnershipTransfer::query()->count())->toBe(0);
 });
 
 it('det tredje ägarbytet med bonus inom tolv månader får grants_bonus false', function () {

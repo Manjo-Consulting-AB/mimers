@@ -314,6 +314,26 @@ it('en mottagare med en betald plan får ingen förlängning', function (string 
     ['pro_plus', 'past_due'],
 ]);
 
+it('en mottagare som registrerat sig med en Pro-kod får ingen bonus och ingen förlängning', function () {
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    $plan = Plan::where('code', 'pro')->firstOrFail();
+    $slut = now()->addMonths(3)->startOfSecond();
+    Subscription::factory()->for($köparkonto)->for($plan)->create([
+        'status' => 'active',
+        'source' => 'voucher',
+        'current_period_end' => $slut,
+    ]);
+
+    bonusAccepteraTill($köparkonto, $köparHeaders);
+
+    $rad = Subscription::query()->where('account_id', $köparkonto->id)->sole();
+
+    expect($rad->source)->toBe('voucher')
+        ->and($rad->current_period_end->equalTo($slut))->toBeTrue()
+        ->and($köparkonto->fresh()->transfer_bonus_granted_at)->toBeNull()
+        ->and(DB::table('ownership_transfer')->whereNotNull('bonus_granted_at')->count())->toBe(0);
+});
+
 it('en rad på free eller en uppsagd plan ger Pro från idag', function (string $kod, string $status) {
     [$köparkonto, , $köparHeaders] = kontoMedMedlem();
     Subscription::factory()->for($köparkonto)->for(Plan::where('code', $kod)->firstOrFail())->create([
@@ -374,6 +394,23 @@ it('en ny mottagare med Free tar emot en container över Frees tak men under Pro
     postJson("/api/transfers/{$rad->ulid}/accept", [], $köparHeaders)->assertOk();
 
     expect($rad->fresh()->bonus_granted_at)->not->toBeNull();
+});
+
+it('en mottagare vars spärr redan är satt prövas mot sin egen plan, inte mot Pro', function () {
+    [$säljare, $säljarAnvändare, $container] = bonusSäljare();
+    bonusBilaga($container, $säljare, $säljarAnvändare, 5000);
+    $frees = Plan::where('code', 'free')->firstOrFail()->planLimit('storage_bytes');
+
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+    $köparkonto->forceFill(['transfer_bonus_granted_at' => now()->subMonth()])->save();
+    UsageCounter::factory()->create(['account_id' => $köparkonto->id, 'container_count' => 0, 'storage_bytes' => $frees]);
+
+    $rad = skapaÄgarbyteRad($container, ['grants_bonus' => true, 'to_account_id' => $köparkonto->id, 'to_email' => null]);
+    $svar = postJson("/api/transfers/{$rad->ulid}/accept", [], $köparHeaders);
+
+    expect($svar->status())->toBe(403)
+        ->and($svar->json('error.code'))->toBe('quota.storage_exceeded')
+        ->and($rad->fresh()->status)->toBe('pending');
 });
 
 it('en container över Pros tak nekas med quota.storage_exceeded och ägarbytet står kvar som pending', function () {

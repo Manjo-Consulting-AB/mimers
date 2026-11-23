@@ -177,6 +177,20 @@ class OfferOwnershipTransfer
      * gånger (efter att den första raden hunnit skapas men innan svaret)
      * skapar CreateNotification ingen andra notisrad.
      */
+    private function notifyAccountMembers(OwnershipTransfer $transfer, Account $toAccount, Container $container): void
+    {
+        foreach ($toAccount->users as $recipient) {
+            app(CreateNotification::class)->handle(
+                type: NotificationModel::TYPE_TRANSFER_REQUESTED,
+                account: $toAccount,
+                user: $recipient,
+                container: $container,
+                payload: ['container' => $container->name],
+                dedupeKey: "transfer.requested:{$transfer->ulid}:{$recipient->ulid}",
+            );
+        }
+    }
+
     /**
      * ADR-0093: bonusen erbjuds bara när avsändaren bär en betald plan
      * (`source = 'paid'`, samma `isCurrent()` som `Account::currentPlan()`) och
@@ -186,6 +200,10 @@ class OfferOwnershipTransfer
      */
     private function senderMayGiveBonus(int $fromAccountId): bool
     {
+        // Låset på avsändarkontot serialiserar samtida erbjudanden så att
+        // räkningen nedan inte kan passeras av flera parallella anrop.
+        Account::query()->whereKey($fromAccountId)->lockForUpdate()->value('id');
+
         $subscription = Subscription::query()->where('account_id', $fromAccountId)->first();
 
         if (! $subscription instanceof Subscription || $subscription->source !== 'paid' || ! $subscription->isCurrent()) {
@@ -210,20 +228,6 @@ class OfferOwnershipTransfer
             ->count();
 
         return $used < 2;
-    }
-
-    private function notifyAccountMembers(OwnershipTransfer $transfer, Account $toAccount, Container $container): void
-    {
-        foreach ($toAccount->users as $recipient) {
-            app(CreateNotification::class)->handle(
-                type: NotificationModel::TYPE_TRANSFER_REQUESTED,
-                account: $toAccount,
-                user: $recipient,
-                container: $container,
-                payload: ['container' => $container->name],
-                dedupeKey: "transfer.requested:{$transfer->ulid}:{$recipient->ulid}",
-            );
-        }
     }
 
     /**
