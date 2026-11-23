@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Actions\Plan\ReadPlanUsage;
 use App\Actions\Security\RecordSecurityEvent;
+use App\Actions\Storage\ReadStorageBreakdown;
 use App\Actions\Trash\PurgeContent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
@@ -107,7 +108,7 @@ class StorageController extends Controller
      * `removed` är rensningens sammanfattning ur flashen, och är `null` vid
      * varje annan visning än den direkt efter en rensning (Beslut 8).
      */
-    public function index(Request $request, ReadPlanUsage $readPlanUsage): Response
+    public function index(Request $request, ReadPlanUsage $readPlanUsage, ReadStorageBreakdown $readStorageBreakdown): Response
     {
         $user = $request->user();
 
@@ -119,16 +120,7 @@ class StorageController extends Controller
 
         Gate::authorize('viewStorage', $account);
 
-        $attachments = Attachment::query()
-            ->select('attachment.*')
-            ->where('billed_account_id', $account->id)
-            // En personbilaga är profilbilden (issue 379 · [[ADR-0076
-            // Profilbilden]] § 5): den listas inte som rensbar, för ytan ska
-            // inte erbjuda att radera någon annans ansikte. Bytena räknas
-            // fortfarande i kvoten genom `usage_counter`, och `usage` nedan
-            // läses därifrån — summan blir alltså rätt utan raden.
-            ->whereNull('attachment.user_id')
-            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+        $attachments = ReadStorageBreakdown::attachmentsOf($account)
             ->with([
                 'storedFile',
                 'item' => fn ($query) => $query->withTrashed()->with([
@@ -170,6 +162,9 @@ class StorageController extends Controller
             ])->all(),
 
             'usage' => $readPlanUsage->handle($account)['usage']['storage'],
+
+            // Uppdelningen ovanför fillistan (issue 459 · M79), med tio av varje.
+            'breakdown' => $readStorageBreakdown->handle($account, 10),
 
             // Kontots tak för versionshistoriken (issue 411 · [[ADR-0088
             // Versionshistorik för items]] Riktning 1). `limit` är den övre

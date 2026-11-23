@@ -784,3 +784,23 @@ it('skickar fileBytes och textBytes som tillsammans är usedBytes', function () 
         ->and($usage['textBytes'])->toBe(150)
         ->and($usage['usedBytes'])->toBe($usage['fileBytes'] + $usage['textBytes']);
 });
+
+it('bär breakdown för det valda kontot med högst tio av varje, och fillistan är oförändrad', function () {
+    [$konto, $anvandare] = lagringsvyKonto();
+    $annat = Account::factory()->create();
+
+    foreach (range(1, 12) as $i) {
+        lagringsvyBilaga($konto, $anvandare, $i * 100);
+    }
+    lagringsvyBilaga($annat, $anvandare, 99999);
+
+    $props = lagringsvyProps($anvandare, $konto);
+
+    expect($props['breakdown']['files'])->toHaveCount(10);
+    expect($props['breakdown']['containers'])->toHaveCount(10);
+    expect($props['breakdown']['items'])->toHaveCount(10);
+    expect($props['breakdown']['files'][0]['byte_size'])->toBe(1200);
+    expect($props['attachments'])->toHaveCount(12);
+    expect(array_column($props['breakdown']['files'], 'ulid'))
+        ->toBe(array_slice(array_column($props['attachments'], 'ulid'), 0, 10));
+});

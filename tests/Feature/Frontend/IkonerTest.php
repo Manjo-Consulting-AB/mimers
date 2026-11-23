@@ -96,6 +96,7 @@ function ikonRoller(): array
         'drag' => 'grip-vertical',
         'lock' => 'lock',
         'help' => 'circle-question-mark',
+        'info' => 'info',
     ];
 }
 

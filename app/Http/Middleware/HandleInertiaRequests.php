@@ -9,7 +9,10 @@ use App\Actions\Item\ListFavorites;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
 use App\Actions\Notification\CountUnreadInAppNotifications;
+use App\Actions\Plan\ReadPlanUsage;
 use App\Actions\Schedule\ListTodo;
+use App\Actions\Storage\ReadContainerStorageShare;
+use App\Actions\Storage\ReadStorageBreakdown;
 use App\Http\Controllers\ContainerAgentController;
 use App\Http\Controllers\Settings\AgentController;
 use App\Http\Resources\AccountResource;
@@ -21,8 +24,10 @@ use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\Notification;
+use App\Models\Plan;
 use App\Models\RecentVisit;
 use App\Models\ScheduleOccurrence;
+use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Cost\Currencies;
 use App\Support\Frontend\ActiveContainer;
@@ -32,6 +37,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Lang;
@@ -251,6 +257,9 @@ class HandleInertiaRequests extends Middleware
         private readonly ListTodo $listTodo,
         private readonly NotificationTarget $notificationTarget,
         private readonly PendingInvitation $pendingInvitation,
+        private readonly ReadContainerStorageShare $readContainerStorageShare,
+        private readonly ReadPlanUsage $readPlanUsage,
+        private readonly ReadStorageBreakdown $readStorageBreakdown,
     ) {}
 
     /**
@@ -319,6 +328,10 @@ class HandleInertiaRequests extends Middleware
             // saker med olika kostnad. Namnet byttes i stället för att
             // kapslas in under märket, så att en partiell omladdning av
             // `notifications` (385) bara hämtar siffran — inte tjugo rader.
+            // Kvotmodulen i toppraden (issue 459 · M79) och dess uppdelning —
+            // se storageContext() om varför kontexten kommer ur rutten.
+            'storageQuota' => fn (): ?array => $this->storageQuota($request),
+            'storageBreakdown' => Inertia::optional(fn (): ?array => $this->storageBreakdown($request)),
             'notificationList' => Inertia::optional(fn (): array => $this->notifications($request)),
             // Den andra optionala proppen, av samma skäl som den första: en
             // rad per väntande inbjudan behövs bara när klockan är öppen, och
@@ -358,6 +371,147 @@ class HandleInertiaRequests extends Middleware
                 'status' => fn (): ?string => $request->session()->get('status'),
             ],
         ];
+    }
+
+    /**
+     * Kvotmodulens tal i toppraden, eller `null` för en gäst och för någon
+     * utan konto (issue 459 · M79).
+     *
+     * `usedBytes`, `limitBytes` och `percent` är ReadPlanUsage:s — filer plus
+     * text ur `usage_counter`, `null` för ett obegränsat tak — och
+     * klienten räknar ingenting. `container` är containerns andel av kontot
+     * (ReadContainerStorageShare) i containerkontexten, annars `null`.
+     * `otherAccounts` är personens övriga konton, var och ett med sitt
+     * förbrukade och sitt tak.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function storageQuota(Request $request): ?array
+    {
+        $context = $this->storageContext($request);
+
+        if ($context === null) {
+            return null;
+        }
+
+        [$account, $container, $others] = $context;
+
+        $storage = $this->readPlanUsage->handle($account)['usage']['storage'];
+
+        return [
+            'account' => ['ulid' => $account->ulid, 'name' => $account->name],
+            'usedBytes' => (int) $storage['usedBytes'],
+            'limitBytes' => $storage['limitBytes'],
+            'percent' => $storage['percent'],
+            'container' => $container === null ? null : [
+                'ulid' => $container->ulid,
+                'name' => $container->name,
+                'bytes' => $this->readContainerStorageShare->handle($container),
+            ],
+            'otherAccounts' => $this->otherAccountsUsage($others),
+        ];
+    }
+
+    /**
+     * Övriga konton med förbrukning och tak — konstant antal frågor oavsett
+     * hur många konton personen har: räknarraderna läses i EN fråga och
+     * planerna ur de förladdade prenumerationerna, med gratisplanen slagen
+     * upp högst en gång. Samma två läsningar som ReadPlanUsage gör, men utan
+     * dess nedgraderingsfrågor, som ett konto i en lista inte behöver.
+     *
+     * @param  Collection<int, Account>  $accounts
+     * @return list<array{ulid: string, name: string, usedBytes: int, limitBytes: int|null}>
+     */
+    private function otherAccountsUsage(Collection $accounts): array
+    {
+        // Frågorna ställs också när listan är tom: kostnaden ska inte hoppa
+        // med antalet konton (DeladePropsTest), och de två är billiga.
+        $counters = UsageCounter::query()
+            ->whereIn('account_id', $accounts->pluck('id'))
+            ->get(['account_id', 'storage_bytes', 'metadata_bytes'])
+            ->keyBy('account_id');
+
+        $free = Plan::query()->where('code', 'free')->first();
+
+        return $accounts->map(function (Account $account) use ($counters, &$free): array {
+            $subscription = $account->subscription;
+            $plan = $subscription !== null && $subscription->isCurrent() ? $subscription->plan : null;
+            $plan ??= $free ?? throw new \RuntimeException('Grundplanen [free] saknas i tabellen plan.');
+            $limit = $plan->planLimit('storage_bytes');
+            $counter = $counters->get($account->id);
+
+            return [
+                'ulid' => $account->ulid,
+                'name' => $account->name,
+                'usedBytes' => $counter === null ? 0 : (int) $counter->storage_bytes + (int) $counter->metadata_bytes,
+                'limitBytes' => is_int($limit) ? $limit : null,
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * Uppdelningen panelen visar, för samma konto som `storageQuota.account`.
+     * Optional: hämtas när panelen öppnas.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function storageBreakdown(Request $request): ?array
+    {
+        $context = $this->storageContext($request);
+
+        return $context === null ? null : $this->readStorageBreakdown->handle($context[0]);
+    }
+
+    /**
+     * Kvotmodulens kontext: kontot, containern (om någon) och övriga konton.
+     *
+     * **Kontexten kommer ur RUTTEN och inte ur sessionen.** `activeContainer`
+     * ligger kvar i sessionen när personen lämnat containern och får inte
+     * användas här. Containerkontexten gäller när rutten bär `container` (en
+     * Container) eller `item` (dess container) och personen har åtkomst enligt
+     * `Container::scopeAccessibleBy()`; då är kontot containerns ägarkonto.
+     * Annars gäller kontokontexten: kontot där personen är `owner` med lägst
+     * `id`, annars medlemskapet med lägst `id`.
+     *
+     * @return array{0: Account, 1: Container|null, 2: Collection<int, Account>}|null
+     */
+    private function storageContext(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $accounts = $user->accounts()->with('subscription.plan')->get()->sortBy('id')->values();
+
+        if ($accounts->isEmpty()) {
+            return null;
+        }
+
+        $ownedIds = $user->accounts()->wherePivot('role', 'owner')->pluck('account.id');
+        $default = $accounts->first(fn (Account $account): bool => $ownedIds->contains($account->id))
+            ?? $accounts->first();
+
+        $container = $request->route('container');
+        $item = $request->route('item');
+
+        if (! $container instanceof Container && $item instanceof Item) {
+            $container = $item->container;
+        }
+
+        if ($container instanceof Container
+            && Container::query()
+                ->accessibleBy($user, $accounts->pluck('id')->all())
+                ->whereKey($container->getKey())
+                ->exists()
+        ) {
+            $account = $container->account;
+
+            return [$account, $container, $accounts->reject(fn (Account $other): bool => $other->is($account))];
+        }
+
+        return [$default, null, $accounts->reject(fn (Account $other): bool => $other->is($default))];
     }
 
     /**
