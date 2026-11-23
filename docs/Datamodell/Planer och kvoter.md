@@ -133,7 +133,7 @@ Tre villkor som **måste** kontrolleras innan något raderas:
 
 **Aktiv prenumeration undantar alltid.** Hur sällan någon än loggar in.
 
-**Aktivitet räknas som aktivitet i webben eller API:et**, inte bara inloggning.
+**Aktivitet är aktivitet i webben, i REST-API:et eller ett verktygsanrop från användarens agent via MCP**, inte bara inloggning. Det som inte räknas: anrop från en pausad agent, från ett konto utan plan med MCP, anrop som stoppas av rate limit och protokollanrop som `tools/list`.
 
 **Innehåll i någon annans container hindrar inte raderingen.** Ett item, en kostnadsrad eller en avbockad förekomst i en främmande container står kvar, med författarkolumnen mot kontot nollställd. Bilagor och räknade rader kontot betalar för i en främmande container får **containerns ägarkonto** som `billed_account_id`, och bytena flyttar mellan kontonas `usage_counter` i samma transaktion. Kvoten kontrolleras inte vid flytten: hamnar ägarkontot över sin gräns gäller samma regel som för en vanlig överskriden kvot — nya uppladdningar och växande skrivningar nekas med `quota.storage_exceeded`, ingen nedgradering startar. Samma flytt sker vid nedgradering och när kontot förlorar sin sista giltiga åtkomst till containern. Se [[ADR-0045 Radering av konto och person]] § Beslut 1 och 2 och [[ADR-0081 All lagrad data räknas mot kvoten]] § 4.
 

@@ -82,3 +82,13 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 **Motiveringen står kvar, som skäl till ordningen.** Att items förstörs sist är just för att det är dem som gör att någon betalar igen.
 
 **"Metadatan är mikroskopisk" gäller den vanliga användaren, inte ett skript.** Utan att text räknades kunde ett skript mot API:et fylla databasen och backuperna gratis.
+
+## Uppföljning 2026-11-22
+
+**Beslutet:** en agents verktygsanrop via MCP räknas som aktivitet för användaren bakom agenten.
+
+**Varför:** agenten autentiserar som användaren och arbetar för hens räkning. Utan regeln får den som bara arbetar genom en agent ett `last_active_at` som står still. Säger hen upp Pro efter mer än femton månader stängs kontot vid nästa nattkörning, utan påminnelse.
+
+**Vad som inte räknas, och varför:** en pausad agent och ett konto utan plan med MCP räknas inte. Annars kunde en agent som fortsätter fråga hålla ett konto vid liv för alltid, mot skälet i [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14.
+
+Den gällande formuleringen står i [[Planer och kvoter]] § Kontolivscykel.
