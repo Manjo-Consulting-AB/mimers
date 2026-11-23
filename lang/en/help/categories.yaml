@@ -1,0 +1,29 @@
+- id: getting-started
+  title: Getting started
+  description: The basics of Mimers, containers and items.
+- id: containers-and-items
+  title: Containers and items
+  description: Organise, find, move and restore your items.
+- id: tasks
+  title: Tasks and reminders
+  description: Recurring maintenance, reminders and your calendar.
+  intro: |
+    Mimers uses the GTD (Getting Things Done) approach to help you organise and keep track of everything that needs to be done. You can manage tasks at account, container and item level.
+- id: files-and-storage
+  title: Files and storage
+  description: Uploads, file sizes and storage space.
+- id: sharing
+  title: Sharing
+  description: Invite people, set access and hand over a container.
+- id: plans
+  title: Plans and pricing
+  description: Prices, plans and what happens when you change plan.
+- id: account-and-security
+  title: Account and security
+  description: Logging in, two-factor authentication and your account.
+- id: agents
+  title: AI agents
+  description: Using Mimers with Claude and other AI assistants.
+- id: privacy-and-data
+  title: Privacy and your data
+  description: Where your data lives and who can see it.
