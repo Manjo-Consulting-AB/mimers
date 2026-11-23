@@ -462,6 +462,18 @@
 }
 
 /*
+ * Spelaren som 464 byter in vid klick (issue 464). `iframe` har ingen klass —
+ * den byggs i Article.vue — så rutan fyller figuren och tar bort den
+ * ram webbläsaren ritar som förval. Annars hade spelaren blivit 300×150 inuti
+ * en 16:9-ruta.
+ */
+.help-video iframe {
+    border: 0;
+    height: 100%;
+    width: 100%;
+}
+
+/*
  * Mjuka övergångar mellan sidorna — se issue 279 § Beslut 2.
  *
  * Webbläsarens View Transitions tonar över ett sidbyte. Förvalet är 250 ms,

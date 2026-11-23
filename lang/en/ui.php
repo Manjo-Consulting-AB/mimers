@@ -6164,6 +6164,23 @@ return [
         'copy_link' => 'Link to this question',
         'link_copied' => 'Link copied',
         'questions_count' => ':count question|:count questions',
+        // Frågans egen sida — M80 · issue 464. Länken står bredvid
+        // kopieringsknappen och leder till /help/articles/{id}.
+        'open_page' => 'Open as a page',
+        // Artikelsidans ord — M80 · issue 464, ADR-0094 § 3 och § 4.
+        // `types` är artikelns typ som etikett; nyckeln byggs ur front
+        // matterns `type`, så en ny typ är en ny rad här.
+        'types' => [
+            'faq' => 'Question',
+            'guide' => 'Guide',
+            'reference' => 'Reference',
+            'troubleshooting' => 'Troubleshooting',
+        ],
+        'updated' => 'Updated :date',
+        'contents' => 'On this page',
+        'related' => 'Related',
+        'previous' => 'Previous',
+        'next' => 'Next',
         // Faktarutornas rubriker — M80 · issue 463, ADR-0094 § 4. Ordet står
         // här och inte i markdownen, så att `> [!NOTE]` ritar samma rubrik i
         // varje artikel och kan översättas på ett ställe.

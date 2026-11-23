@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Support\Help\HelpArticle;
+use App\Support\Help\HelpCatalog;
 use App\Support\Help\HelpCategory;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpMarkdown;
+use App\Support\Help\HelpRendered;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,7 +28,18 @@ use Inertia\Response;
  *
  * **`category` är kategorisidan, `/help/{kategori}`.** Frågorna (`faq`) får
  * sitt svar ritat; övriga typer får sin beskrivning och länkas till
- * `/help/articles/{id}`, som 464 bygger. Ett okänt kategori-id ger 404.
+ * `/help/articles/{id}`. Ett okänt kategori-id ger 404.
+ *
+ * **`article` är artikelsidan, `/help/articles/{id}`.** Varje artikel — också
+ * varje fråga — har en egen sida. Sidan bär brödsmulan, typen, datumet,
+ * innehållet, innehållsförteckningen, de relaterade artiklarna och grannarna i
+ * kategorins ordning. Ett okänt id ger 404, och ett utkast ger 404 i
+ * produktion men syns utanför den (regeln sitter i HelpCatalog).
+ *
+ * **Servern skriver sidhuvudet.** De tre sidorna skickar `meta` som vydata med
+ * `withViewData()`, och `app.blade.php` skriver `<title>`, beskrivningen och
+ * den kanoniska adressen när de finns (ADR-0094 § 10). Utan dem ser huvudet ut
+ * som förut, så en sida utan `meta` — `/dashboard` — får ingen beskrivning.
  *
  * Rutterna ligger utanför `auth` och `guest`, som de andra informationssidorna.
  */
@@ -67,7 +80,11 @@ class HelpController extends Controller
         return Inertia::render('Help', [
             'categories' => $categories,
             'anchors' => $anchors,
-        ]);
+        ])->withViewData(['meta' => [
+            'title' => (string) __('ui.info.help.title'),
+            'description' => (string) __('ui.info.help.subtitle'),
+            'canonical' => route('info.help'),
+        ]]);
     }
 
     /** Kategorisidan, `/help/{kategori}`. */
@@ -107,6 +124,151 @@ class HelpController extends Controller
                 'url' => route('help.category', $found->id, false),
             ],
             'articles' => $articles,
-        ]);
+        ])->withViewData(['meta' => [
+            'title' => $found->title,
+            'description' => $found->description,
+            'canonical' => route('help.category', $found->id),
+        ]]);
+    }
+
+    /** Artikelsidan, `/help/articles/{id}`. */
+    public function article(string $article, HelpLibrary $library): Response
+    {
+        $catalog = $library->catalog();
+        $found = $catalog->article($article);
+
+        if ($found === null) {
+            abort(404);
+        }
+
+        $category = $catalog->category($found->category);
+
+        if ($category === null) {
+            abort(404);
+        }
+
+        $rendered = $catalog->rendered($found);
+        $neighbours = $catalog->inCategory($found->category);
+
+        return Inertia::render('Help/Article', [
+            'article' => [
+                'id' => $found->id,
+                'title' => $found->title,
+                'type' => $found->type,
+                'description' => $found->description,
+                // Datumet som ISO-dag, så att klienten formaterar det för
+                // användarens locale med datumregeln (issue 104).
+                'updated' => $found->updated->format('Y-m-d'),
+                'html' => $rendered->html,
+                // Innehållsförteckningen länkar bara till nivå 2 — en
+                // underrubrik är ingen egen destination på sidan (ADR-0094
+                // § 4).
+                'headings' => $this->contents($rendered),
+            ],
+            'category' => [
+                'id' => $category->id,
+                'title' => $category->title,
+            ],
+            'related' => $this->related($catalog, $found),
+            'previous' => $this->neighbour($neighbours, $found->id, -1),
+            'next' => $this->neighbour($neighbours, $found->id, 1),
+        ])->withViewData(['meta' => [
+            'title' => $found->title,
+            'description' => $this->description($found, $rendered),
+            'canonical' => route('help.article', $found->id),
+        ]]);
+    }
+
+    /**
+     * Rubrikerna på nivå 2, som `id` och `title` — innehållsförteckningen.
+     *
+     * @return list<array{id: string, title: string}>
+     */
+    private function contents(HelpRendered $rendered): array
+    {
+        $contents = [];
+
+        foreach ($rendered->headings as $heading) {
+            if ($heading['level'] !== 2) {
+                continue;
+            }
+
+            $contents[] = ['id' => $heading['id'], 'title' => $heading['title']];
+        }
+
+        return $contents;
+    }
+
+    /**
+     * De relaterade artiklarna, i front matterns ordning.
+     *
+     * Ett id som inte finns — eller ett utkast i produktion — hoppas över:
+     * katalogen svarar null för det som inte syns, och en trasig referens ska
+     * inte ge en tom rad på sidan. Ordningen är artikelns egen och inte
+     * katalogens.
+     *
+     * @return list<array{id: string, title: string, type: string}>
+     */
+    private function related(HelpCatalog $catalog, HelpArticle $article): array
+    {
+        $related = [];
+
+        foreach ($article->related as $id) {
+            $found = $catalog->article($id);
+
+            if ($found === null) {
+                continue;
+            }
+
+            $related[] = [
+                'id' => $found->id,
+                'title' => $found->title,
+                'type' => $found->type,
+            ];
+        }
+
+        return $related;
+    }
+
+    /**
+     * Grannen före eller efter artikeln i kategorins ordning.
+     *
+     * @param  list<HelpArticle>  $neighbours
+     * @return array{id: string, title: string}|null
+     */
+    private function neighbour(array $neighbours, string $id, int $offset): ?array
+    {
+        foreach ($neighbours as $index => $neighbour) {
+            if ($neighbour->id !== $id) {
+                continue;
+            }
+
+            $neighbour = $neighbours[$index + $offset] ?? null;
+
+            return $neighbour === null
+                ? null
+                : ['id' => $neighbour->id, 'title' => $neighbour->title];
+        }
+
+        return null;
+    }
+
+    /**
+     * Sidans beskrivning — artikelns egen, annars för en fråga de första 160
+     * tecknen av den ritade texten (ADR-0094 § 10).
+     */
+    private function description(HelpArticle $article, HelpRendered $rendered): ?string
+    {
+        if ($article->description !== null && trim($article->description) !== '') {
+            return $article->description;
+        }
+
+        if ($article->type !== 'faq') {
+            return null;
+        }
+
+        $text = trim($rendered->text);
+
+        return $text === '' ? null : mb_substr($text, 0, 160);
     }
 }
