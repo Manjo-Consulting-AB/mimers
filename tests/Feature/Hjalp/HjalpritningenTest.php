@@ -174,6 +174,7 @@ it('ger en intern hjälplänk ingen target', function () {
     expect($html)->not->toContain('target="_blank"');
 });
 
+// vakt: regressionsvakt — toHtml ska fortsätta vara ett tunt omslag och ge null för tom text, precis som före 463.
 it('behåller toHtml som ett tunt omslag', function () {
     expect((new HelpMarkdown)->toHtml(''))->toBeNull()
         ->and((new HelpMarkdown)->toHtml('   '))->toBeNull()
