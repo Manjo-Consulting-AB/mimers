@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { onMounted } from 'vue';
 import AppLayout from '../layouts/AppLayout.vue';
+import HelpSearchBox from '../components/HelpSearchBox.vue';
 import UiIcon from '../components/UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -33,12 +34,23 @@ defineOptions({ layout: AppLayout });
  * Sidans egna ord slås upp ur `help.*` i lang/{locale}/ui.php
  * ([[ADR-0021 Frontendteknik]] § Beslut). Kategoriernas titlar och
  * beskrivningar kommer ur innehållet, inte ur lang/.
+ *
+ * **`?q=` ritar träfflistan i stället för kategorikorten** (issue 467).
+ * Servern skickar `q` och `search` — samma form som `/help/search` svarar —
+ * och sidan loopar segmenten och ritar `<mark>` där `match` är sant. Ingen
+ * `v-html` och ingen egen sökning i klienten: frågan är serverns, och
+ * adressen går att dela och backa till. Sökrutan står kvar ovanför med
+ * frågan ifylld, och *Clear search* leder tillbaka till startsidan.
  */
 const props = defineProps({
     categories: { type: Array, required: true },
     /* Artiklarna med `featured: true`, högst sex; tom när ingen är märkt. */
     featured: { type: Array, required: true },
     anchors: { type: Object, required: true },
+    /* Frågan på `/help?q=…`, annars null (issue 467). */
+    q: { type: String, default: null },
+    /* Svaret ur HelpSearch på `/help?q=…`, annars null. */
+    search: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -101,13 +113,69 @@ function questionsLabel(count) {
 </script>
 
 <template>
-    <Head :title="t('info.help.title')" />
+    <Head :title="q ? t('help.search.title', { query: q }) : t('info.help.title')" />
 
     <div class="mx-auto max-w-5xl py-12">
         <h1 class="text-display font-semibold">{{ t('help.home.title') }}</h1>
         <p class="mt-3 text-ink-muted">{{ t('help.home.subtitle') }}</p>
 
-        <div><!-- Sökrutan, issue 467 --></div>
+        <div class="mt-6">
+            <HelpSearchBox :initial-query="q ?? ''" size="large" />
+        </div>
+
+        <!--
+            Träfflistan (issue 467). Servern har redan sökt och rangordnat;
+            sidan ritar bara segmenten — `mark` där `match` är sant, aldrig
+            HTML ur svaret. Rubriken nämner frågan, och *Clear search* leder
+            tillbaka till startsidan.
+        -->
+        <section v-if="search" class="mt-10">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-heading font-semibold text-ink">
+                    {{ t('help.search.results_for', { query: q }) }}
+                </h2>
+
+                <Link
+                    href="/help"
+                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                >
+                    {{ t('help.search.clear') }}
+                </Link>
+            </div>
+
+            <p v-if="!search.results.length" class="mt-4 text-ink-muted">
+                {{ t('help.search.empty', { query: q }) }}
+            </p>
+
+            <ul v-else class="mt-4 divide-y divide-border">
+                <li v-for="result in search.results" :key="result.id" class="py-2">
+                    <Link
+                        :href="`${result.url}?ref=search`"
+                        class="flex min-h-11 flex-col justify-center py-2 outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    >
+                        <span class="text-title font-medium text-ink">
+                            <template v-for="(segment, part) in result.title" :key="`title-${part}`">
+                                <mark v-if="segment.match" class="bg-accent-soft text-ink">{{ segment.text }}</mark>
+                                <template v-else>{{ segment.text }}</template>
+                            </template>
+                        </span>
+
+                        <span class="mt-1 text-body text-ink-muted">
+                            <template v-for="(segment, part) in result.snippet" :key="`snippet-${part}`">
+                                <mark v-if="segment.match" class="bg-accent-soft text-ink">{{ segment.text }}</mark>
+                                <template v-else>{{ segment.text }}</template>
+                            </template>
+                        </span>
+
+                        <span class="mt-1 text-meta text-ink-subtle">
+                            {{ result.category.title }} · {{ t(`help.types.${result.type}`) }}
+                        </span>
+                    </Link>
+                </li>
+            </ul>
+        </section>
+
+        <template v-else>
 
         <!--
             Populära artiklar (issue 465). Rubriken ritas bara när listan har
@@ -174,5 +242,6 @@ function questionsLabel(count) {
                 </ul>
             </div>
         </div>
+        </template>
     </div>
 </template>

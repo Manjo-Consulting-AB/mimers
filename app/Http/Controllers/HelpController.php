@@ -7,6 +7,8 @@ use App\Support\Help\HelpCatalog;
 use App\Support\Help\HelpLibrary;
 use App\Support\Help\HelpMarkdown;
 use App\Support\Help\HelpRendered;
+use App\Support\Help\HelpSearch;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,6 +27,13 @@ use Inertia\Response;
  * låter de gamla adresserna leva: `Help.vue` ser `location.hash`, slår upp det
  * i kartan och skickar webbläsaren vidare. Fragmentet når aldrig servern, så
  * det kan inte göras som en omdirigering.
+ *
+ * **`?q=` gör startsidan till träfflistan** (issue 467). Finns frågan skickas
+ * `q` och `search` — svaret ur HelpSearch med taket 20, i samma form som
+ * `/help/search` svarar — och `Help.vue` ritar träffarna i stället för
+ * kategorikorten. Sidan får `noindex`: en sökträfflista är ingen adress någon
+ * ska hitta i en sökmotor (ADR-0094 § 10). Utan fråga finns varken `q` eller
+ * `search` bland propsen, och sidhuvudet är som förut.
  *
  * **`category` är kategorisidan, `/help/{kategori}`.** Frågorna (`faq`) får
  * sitt svar ritat; övriga typer får sin beskrivning och länkas till
@@ -45,10 +54,16 @@ use Inertia\Response;
  */
 class HelpController extends Controller
 {
-    /** Startsidan, `/help`. */
-    public function index(HelpLibrary $library): Response
+    /** Startsidan, `/help` — och träfflistan, `/help?q=…`. */
+    public function index(Request $request, HelpLibrary $library, HelpSearch $search): Response
     {
         $catalog = $library->catalog();
+
+        // Frågan är bara en fråga när den är en sträng med något i. Ett tomt
+        // `?q=` och ett `?q[]=` behandlas som startsidan.
+        $raw = $request->query('q');
+        $query = is_string($raw) ? trim($raw) : '';
+        $searching = $query !== '';
 
         // Kortet bär de tre första frågorna som egna länkar. Hela kortet kan
         // inte vara en länk, för då hamnade länkar inuti en länk; rubriken är
@@ -110,10 +125,18 @@ class HelpController extends Controller
             'categories' => $categories,
             'featured' => $featured,
             'anchors' => $anchors,
+            ...($searching ? [
+                'q' => $query,
+                'search' => $search->search($catalog, $query, 20)->toArray(),
+            ] : []),
         ])->withViewData(['meta' => [
-            'title' => (string) __('ui.info.help.title'),
+            'title' => $searching
+                ? (string) __('ui.help.search.title', ['query' => $query])
+                : (string) __('ui.info.help.title'),
             'description' => (string) __('ui.info.help.subtitle'),
             'canonical' => route('info.help'),
+            // En sökträfflista ska inte indexeras (ADR-0094 § 10).
+            'robots' => $searching ? 'noindex' : null,
         ]]);
     }
 

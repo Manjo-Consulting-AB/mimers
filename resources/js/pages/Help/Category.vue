@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppLayout from '../../layouts/AppLayout.vue';
+import HelpSearchBox from '../../components/HelpSearchBox.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({ layout: AppLayout });
@@ -114,6 +115,12 @@ function copyLink(article) {
                 <li aria-current="page" class="flex min-h-11 items-center">{{ category.title }}</li>
             </ol>
         </nav>
+
+        <!-- Sökrutan i mindre form — M81 · issue 467. Den står under
+             brödsmulan och över rubriken, och söker i hela hjälpen. -->
+        <div class="mb-6">
+            <HelpSearchBox size="compact" />
+        </div>
 
         <h1 class="text-3xl font-semibold">{{ category.title }}</h1>
         <p class="mt-3 text-slate-600">{{ category.description }}</p>
