@@ -54,6 +54,7 @@ class OwnershipTransferResource extends JsonResource
             ],
             'excluded_items' => $this->excluded_item_ids ?? [],
             'retain_access_level' => $this->retain_access_level,
+            'grants_bonus' => (bool) $this->grants_bonus,
             'accepted_at' => $this->accepted_at?->toIso8601String(),
             'expires_at' => $this->created_at
                 ->addDays(OwnershipTransfer::TTL_DAYS)

@@ -10,6 +10,8 @@ use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Notification as NotificationModel;
 use App\Models\OwnershipTransfer;
+use App\Models\Plan;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\OwnershipTransferNotification;
 use Illuminate\Support\Facades\DB;
@@ -121,6 +123,12 @@ class OfferOwnershipTransfer
                 $transfer->to_email = mb_strtolower((string) $toEmail);
             }
 
+            // Ingen hade ett konto med adressen: varken en `to_account` eller en
+            // användare vars e-post är adressen (ADR-0093, villkor 1).
+            $transfer->grants_bonus = $toAccount === null
+                && ! User::query()->whereRaw('LOWER(email) = ?', [(string) $transfer->to_email])->exists()
+                && $this->senderMayGiveBonus($container->account_id);
+
             $transfer->save();
 
             // `meta` bär mottagarens typ och ULID, nivån säljaren behåller och
@@ -181,6 +189,45 @@ class OfferOwnershipTransfer
                 dedupeKey: "transfer.requested:{$transfer->ulid}:{$recipient->ulid}",
             );
         }
+    }
+
+    /**
+     * ADR-0093: bonusen erbjuds bara när avsändaren bär en betald plan
+     * (`source = 'paid'`, samma `isCurrent()` som `Account::currentPlan()`) och
+     * har färre än två andra bonusbyten som väntar eller accepterades de
+     * senaste tolv månaderna. Återkallade, avvisade och utgångna räknas inte.
+     * Anropas inne i transaktionen.
+     */
+    private function senderMayGiveBonus(int $fromAccountId): bool
+    {
+        // Låset på avsändarkontot serialiserar samtida erbjudanden så att
+        // räkningen nedan inte kan passeras av flera parallella anrop.
+        Account::query()->whereKey($fromAccountId)->lockForUpdate()->value('id');
+
+        $subscription = Subscription::query()->where('account_id', $fromAccountId)->first();
+
+        if (! $subscription instanceof Subscription || $subscription->source !== 'paid' || ! $subscription->isCurrent()) {
+            return false;
+        }
+
+        $plan = Plan::query()->find($subscription->plan_id);
+
+        if ($plan === null || $plan->code === 'free') {
+            return false;
+        }
+
+        $used = OwnershipTransfer::query()
+            ->where('from_account_id', $fromAccountId)
+            ->where('grants_bonus', true)
+            ->where(function ($q): void {
+                $q->where(fn ($p) => $p->where('status', 'pending')
+                    ->where('created_at', '>', now()->subDays(OwnershipTransfer::TTL_DAYS)))
+                    ->orWhere(fn ($a) => $a->where('status', 'accepted')
+                        ->where('accepted_at', '>', now()->subYear()));
+            })
+            ->count();
+
+        return $used < 2;
     }
 
     /**

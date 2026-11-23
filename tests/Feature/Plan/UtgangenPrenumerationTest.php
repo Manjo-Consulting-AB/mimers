@@ -223,6 +223,7 @@ it('ägarbytets bonus på ett utgånget pro räknas från nu', function () {
     $container = Container::factory()->for($saljare, 'account')->create();
 
     $overforing = skapaÄgarbyteRad($container, [
+        'grants_bonus' => true,
         'to_account_id' => $kopa->id,
         'to_email' => null,
     ]);

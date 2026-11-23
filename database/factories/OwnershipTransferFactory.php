@@ -33,6 +33,8 @@ class OwnershipTransferFactory extends Factory
             'retain_access_level' => null,
             'status' => OwnershipTransfer::STATUSES[0],
             'accepted_at' => null,
+            'grants_bonus' => false,
+            'bonus_granted_at' => null,
             'initiated_by_user_id' => User::factory(),
         ];
     }

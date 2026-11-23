@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
+use App\Models\Plan;
 use App\Models\UsageCounter;
 use Illuminate\Support\Facades\DB;
 
@@ -39,9 +40,11 @@ final class Entitlements
      * Beslut 4), och gäller det konto som anges i kroppen — inte den
      * inloggade användarens eventuella något-konto.
      */
-    public function assertCanCreateContainer(Account $account): void
+    public function assertCanCreateContainer(Account $account, ?Plan $plan = null): void
     {
-        $limit = $account->planLimit('containers');
+        // `$plan` prövar gränsen mot en annan plan än kontots gällande — ägarbytets
+        // bonus (ADR-0093) prövar mottagaren mot Pro. Gränsen formuleras ändå bara här.
+        $limit = ($plan ?? $account->currentPlan())->planLimit('containers');
 
         if ($limit === null) {
             return;
@@ -278,9 +281,9 @@ final class Entitlements
      * (App\Support\Usage\MetadataLedger), bara när en räknad rad skapas eller
      * växer. Att krympa, slänga, återställa och radera prövas aldrig.
      */
-    public function assertMetadataWithinLimit(Account $payer, int $addedBytes): void
+    public function assertMetadataWithinLimit(Account $payer, int $addedBytes, ?Plan $plan = null): void
     {
-        $limit = $payer->planLimit('storage_bytes');
+        $limit = ($plan ?? $payer->currentPlan())->planLimit('storage_bytes');
 
         if ($limit === null) {
             return;

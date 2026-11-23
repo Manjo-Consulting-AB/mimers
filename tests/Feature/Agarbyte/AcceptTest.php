@@ -199,7 +199,7 @@ it('ett gratiskonto som skulle spränga sin lagringskvot nekas — kontrollen r�
 });
 
 it('mottagaren får en aktiv Pro-prenumeration på tolv månader', function () {
-    [, $köparkonto, $köparHeaders, $överföring] = acceptUtgångsläge();
+    [, $köparkonto, $köparHeaders, $överföring] = acceptUtgångsläge(['grants_bonus' => true]);
 
     postJson("/api/transfers/{$överföring->ulid}/accept", [], $köparHeaders)->assertOk();
 
@@ -213,19 +213,18 @@ it('mottagaren får en aktiv Pro-prenumeration på tolv månader', function () {
     expect($subscription->current_period_end->lessThanOrEqualTo(now()->addYear()->addMinute()))->toBeTrue();
 });
 
-it('en aktiv Pro-prenumeration förlängs med ett år från sitt tidigare värde, inte från idag', function () {
-    [, $köparkonto, $köparHeaders, $överföring] = acceptUtgångsläge();
+it('en aktiv Pro-prenumeration förlängs inte av ett ägarbyte', function () {
+    [, $köparkonto, $köparHeaders, $överföring] = acceptUtgångsläge(['grants_bonus' => true]);
 
     $pro = Plan::where('code', 'pro')->firstOrFail();
-    $före = now()->addDays(30);
+    $före = now()->addDays(30)->startOfSecond();
     Subscription::factory()->for($köparkonto)->for($pro)->create(['current_period_end' => $före]);
 
     postJson("/api/transfers/{$överföring->ulid}/accept", [], $köparHeaders)->assertOk();
 
     $efter = Subscription::query()->where('account_id', $köparkonto->id)->firstOrFail()->current_period_end;
 
-    expect($efter->toDateTimeString())->toBe($före->copy()->addYear()->toDateTimeString());
-    expect($efter->lessThan(now()->addYear()->addMonths(1)))->toBeTrue();
+    expect($efter->toDateTimeString())->toBe($före->toDateTimeString());
 });
 
 it('usage_counter för säljare och köpare summerar till samma tal efteråt, och tredjekontobokförda bilagor ligger kvar', function () {
