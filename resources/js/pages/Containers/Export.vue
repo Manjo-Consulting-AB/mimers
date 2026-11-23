@@ -206,7 +206,7 @@ onUnmounted(() => {
         <p v-if="exports.length === 0" class="mt-2 text-sm text-slate-600">{{ t('export.empty') }}</p>
 
         <ul v-else class="mt-4 flex flex-col gap-2">
-            <ExportRow v-for="row in exports" :key="row.ulid" :row="row" />
+            <ExportRow v-for="row in exports" :key="row.ulid" :row="row" :container-ulid="container.ulid" />
         </ul>
     </section>
 </template>

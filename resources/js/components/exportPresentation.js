@@ -57,6 +57,15 @@ export function canDownloadExport(row, now = new Date()) {
 }
 
 /*
+ * Får raden en raderingsknapp? Allt utom en export som packas (issue 1564):
+ * jobbet skriver filen och raden efter oss, och servern nekar raderingen med
+ * `export.still_running`.
+ */
+export function canDeleteExport(row) {
+    return ! isOpenExport(row);
+}
+
+/*
  * Vad raden heter i listan. Statusen är kolumnens värde utom för en `ready`
  * rad som gått ut: den är utgången, hur kolumnen än står — se modulens
  * docblock.

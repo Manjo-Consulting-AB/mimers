@@ -274,6 +274,15 @@ class AuditLog extends Model
      */
     public const ACTION_FIELD_DELETED = 'field.deleted';
 
+    /**
+     * En aktiv export raderades från exportsidan, och filen togs bort från
+     * disken — issue 1564. Bara en export som gick att hämta loggas: en
+     * utgången eller misslyckad rad hade ingen fil, och att plocka bort den ur
+     * listan är ingen händelse. `subject_id` är exportens ULID och `meta.kind`
+     * är `zip` eller `binder`.
+     */
+    public const ACTION_EXPORT_DELETED = 'export.deleted';
+
     public const ACTION_TAG_CREATED = 'tag.created';
 
     public const ACTION_TAG_UPDATED = 'tag.updated';

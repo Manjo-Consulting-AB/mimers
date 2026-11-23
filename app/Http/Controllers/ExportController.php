@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ExportResource;
 use App\Jobs\BuildContainerExport;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Export;
 use App\Models\Item;
@@ -17,6 +19,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -164,6 +167,84 @@ class ExportController extends Controller
         return redirect()
             ->route('containers.export', $container)
             ->with('status', 'export-requested');
+    }
+
+    /**
+     * DELETE /containers/{container}/exports/{export} — tar bort en export ur
+     * listan, 302 tillbaka till sidan. Issue 1564.
+     *
+     * Grinden är `view` på containern, som resten av sidan, och raden måste
+     * vara anroparens egen. Listan visar bara ens egna beställningar, så en
+     * annans export svarar 404 och inte 403. Vi bekräftar inte att den finns.
+     *
+     * **En export som packas raderas inte.** Jobbet skriver filen och raden
+     * efter oss, och en radering mitt i ett bygge hade lämnat en fil utan rad.
+     * Svaret är ett formulärfel på nyckeln `export`, som dubblettspärren.
+     *
+     * **Bara en aktiv export loggas.** `ready` med `expires_at` i framtiden
+     * är en fil man kunde hämta, och att den försvinner hör hemma i
+     * containerns historik. En utgången eller misslyckad rad hade ingen fil att
+     * hämta, och att den plockas bort ur listan är ingen händelse.
+     *
+     * Raden raderas helt (ingen papperskorg, ADR-0008 § Uppföljning
+     * 2026-09-26). Filen tas bort i samma låsta transaktion som raden, i samma
+     * form som App\Console\PurgesExpiredExports: bytena först och raden sedan.
+     * En fil som redan saknas på disken är inget fel.
+     */
+    public function destroy(
+        Request $request,
+        Container $container,
+        Export $export,
+        ApiErrorTranslator $translator,
+        RecordAuditEvent $recordAuditEvent,
+    ): RedirectResponse {
+        Gate::authorize('view', $container);
+
+        abort_unless($export->requested_by_user_id === $request->user()->id, 404);
+
+        $container->loadMissing('account');
+
+        try {
+            DB::transaction(function () use ($request, $container, $export, $recordAuditEvent): void {
+                $locked = Export::query()->whereKey($export->getKey())->lockForUpdate()->first();
+
+                if ($locked === null) {
+                    return;
+                }
+
+                if (in_array($locked->status, [Export::STATUS_PENDING, Export::STATUS_RUNNING], true)) {
+                    throw ApiException::make('export.still_running', ['export' => $locked->ulid], 422);
+                }
+
+                $active = $locked->status === Export::STATUS_READY
+                    && $locked->expires_at !== null
+                    && $locked->expires_at->isFuture();
+
+                if ($locked->storage_path !== null) {
+                    Storage::disk('files')->delete($locked->storage_path);
+                }
+
+                $locked->delete();
+
+                if ($active) {
+                    $recordAuditEvent->handle(
+                        action: AuditLog::ACTION_EXPORT_DELETED,
+                        account: $container->account,
+                        user: $request->user(),
+                        container: $container,
+                        subjectType: 'export',
+                        subjectUlid: $locked->ulid,
+                        meta: ['kind' => $locked->kind],
+                    );
+                }
+            });
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['export' => $translator->message($e)]);
+        }
+
+        return redirect()
+            ->route('containers.export', $container)
+            ->with('status', 'export-deleted');
     }
 
     /**
