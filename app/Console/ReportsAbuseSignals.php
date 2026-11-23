@@ -102,6 +102,7 @@ class ReportsAbuseSignals
      *     container_clusters_per_registration_ip: list<array<string, mixed>>,
      *     shared_stored_files: list<array<string, mixed>>,
      *     largest_free_accounts_by_items: list<array{account_ulid: string, items: int, metadata_bytes: int, storage_bytes: int}>,
+     *     transfer_bonuses_per_sender: list<array{account_ulid: string, bonuses: int}>,
      * }
      */
     public function handle(): array
@@ -119,6 +120,7 @@ class ReportsAbuseSignals
             'container_clusters_per_registration_ip' => $this->containerClustersPerRegistrationIp($windowStart),
             'shared_stored_files' => $this->sharedStoredFiles(),
             'largest_free_accounts_by_items' => $this->largestFreeAccountsByItems(),
+            'transfer_bonuses_per_sender' => $this->transferBonusesPerSender(),
         ];
 
         $visade = [];
@@ -141,6 +143,7 @@ class ReportsAbuseSignals
             'container_clusters_per_registration_ip' => $visade['container_clusters_per_registration_ip'],
             'shared_stored_files' => $visade['shared_stored_files'],
             'largest_free_accounts_by_items' => $visade['largest_free_accounts_by_items'],
+            'transfer_bonuses_per_sender' => $visade['transfer_bonuses_per_sender'],
         ];
 
         $this->logReport($rapport, $windowDays, $visade, $antal);
@@ -372,6 +375,33 @@ class ReportsAbuseSignals
                 'items' => (int) $rad->items,
                 'metadata_bytes' => (int) $rad->metadata_bytes,
                 'storage_bytes' => (int) $rad->storage_bytes,
+            ])
+            ->all();
+    }
+
+    /**
+     * Utdelade ägarbytesbonusar per avsändarkonto, senaste tolv månaderna
+     * ([[ADR-0093 Ägarbytets bonus till nya kunder]], [[ADR-0017
+     * Missbruksvektorer]] § Mätningen). Räknar bara överlåtelser där bonusen
+     * faktiskt gavs (`bonus_granted_at`), inte där den bara erbjöds
+     * (`grants_bonus`). Mäter, spärrar inte.
+     *
+     * @return list<array{account_ulid: string, bonuses: int}>
+     */
+    private function transferBonusesPerSender(): array
+    {
+        return DB::table('ownership_transfer')
+            ->join('account', 'account.id', '=', 'ownership_transfer.from_account_id')
+            ->whereNotNull('ownership_transfer.bonus_granted_at')
+            ->where('ownership_transfer.bonus_granted_at', '>=', now()->subMonths(12))
+            ->groupBy('account.id', 'account.ulid')
+            ->selectRaw('account.ulid as account_ulid, COUNT(*) as bonuses')
+            ->orderByDesc('bonuses')
+            ->orderBy('account.ulid')
+            ->get()
+            ->map(fn ($rad): array => [
+                'account_ulid' => (string) $rad->account_ulid,
+                'bonuses' => (int) $rad->bonuses,
             ])
             ->all();
     }

@@ -8,6 +8,7 @@ use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
+use App\Models\OwnershipTransfer;
 use App\Models\StoredFile;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
@@ -182,6 +183,7 @@ it('handle() returnerar samtliga mätvärden med rätt nycklar även när databa
         'container_clusters_per_registration_ip',
         'shared_stored_files',
         'largest_free_accounts_by_items',
+        'transfer_bonuses_per_sender',
     ]);
 
     // Talen är noll och listningarna tomma arrayer — inte saknade nycklar.
@@ -192,6 +194,7 @@ it('handle() returnerar samtliga mätvärden med rätt nycklar även när databa
     expect($rapport['metadata_per_free_account'])->toBe(['accounts' => 0, 'total_bytes' => 0, 'max_bytes' => 0, 'p90_bytes' => 0, 'median_bytes' => 0]);
     expect($rapport['items_per_free_account'])->toBe(['accounts' => 0, 'total_items' => 0, 'max_items' => 0, 'p90_items' => 0, 'median_items' => 0]);
     expect($rapport['largest_free_accounts_by_items'])->toBe([]);
+    expect($rapport['transfer_bonuses_per_sender'])->toBe([]);
     expect($rapport['accounts_per_registration_ip'])->toBe([]);
     expect($rapport['managed_access_breadth'])->toBe([]);
     expect($rapport['container_clusters_per_registration_ip'])->toBe([]);
@@ -720,4 +723,21 @@ it('jobbet är schemalagt dagligen 01:00 med call, inte command', function () {
     // Schemalagd som en closure (Schedule::call), inte som ett
     // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
+});
+
+it('transfer_bonuses_per_sender räknar utdelade bonusar per avsändare senaste tolv månaderna', function () {
+    $a = Account::factory()->create();
+    $b = Account::factory()->create();
+    $c = Account::factory()->create();
+
+    OwnershipTransfer::factory()->count(2)->create(['from_account_id' => $a->id, 'grants_bonus' => true, 'bonus_granted_at' => now()->subDays(10)]);
+    OwnershipTransfer::factory()->create(['from_account_id' => $b->id, 'grants_bonus' => true, 'bonus_granted_at' => now()->subMonths(11)]);
+    // Erbjöds men gavs inte, och gavs för länge sedan: räknas inte.
+    OwnershipTransfer::factory()->create(['from_account_id' => $b->id, 'grants_bonus' => true, 'bonus_granted_at' => null]);
+    OwnershipTransfer::factory()->create(['from_account_id' => $c->id, 'grants_bonus' => true, 'bonus_granted_at' => now()->subMonths(13)]);
+
+    expect((new ReportsAbuseSignals)->handle()['transfer_bonuses_per_sender'])->toBe([
+        ['account_ulid' => $a->ulid, 'bonuses' => 2],
+        ['account_ulid' => $b->ulid, 'bonuses' => 1],
+    ]);
 });
