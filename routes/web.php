@@ -38,6 +38,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\HelpSearchController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
@@ -362,6 +363,18 @@ foreach (['about', 'privacy', 'terms'] as $infoPage) {
 // M78 · issue 458: hjälpsidan har egna texter (lang/{locale}/help/*.md) och en
 // egen controller. Ruttnamnet står kvar, för Login.vue länkar till /help.
 Route::get('/help', [HelpController::class, 'index'])->name('info.help');
+
+// M81 · issue 466: sökningen, /help/search?q=…, som JSON (ADR-0094 § 5).
+// Rutten ligger utanför `auth` och `guest` som /help, så en besökare utan
+// konto kan söka. `throttle:help-search` är 60 sökningar i minuten per IP —
+// samma tak som issue 466 anger — men som en namngiven begränsare, eftersom
+// den ger 429 med API-höljet i stället för webbrutternas omdirigering till
+// ett formulär (App\Providers\AppServiceProvider). Rutten måste ligga
+// OVANFÖR `/help/{category}` nedan, annars fångar kategoriruttens enskilda
+// segment `search`.
+Route::get('/help/search', HelpSearchController::class)
+    ->middleware('throttle:help-search')
+    ->name('help.search');
 
 // M80 · issue 464: artikelsidan, /help/articles/{id}. Rutten ligger utanför
 // `auth` och `guest` som /help, och mönstret tar bara gemener, siffror och

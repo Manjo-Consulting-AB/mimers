@@ -7,10 +7,12 @@ use App\Http\Controllers\Mcp\AuthorizeController;
 use App\Http\Controllers\Mcp\Middleware\ApproveAgentConnection;
 use App\Http\Controllers\Mcp\Middleware\RequireS256CodeChallenge;
 use App\Listeners\RecordsScheduleHeartbeat;
+use App\Support\Api\ApiError;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Monitoring\QueryTracker;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureMailgunWebhookRateLimiting();
         $this->configureCalendarFeedRateLimiting();
         $this->configureRegistrationRateLimiting();
+        $this->configureHelpSearchRateLimiting();
         $this->configureScheduleHeartbeat();
         $this->configurePerformanceLogging();
         $this->configureMcp();
@@ -252,5 +255,30 @@ class AppServiceProvider extends ServiceProvider
     private function configureRegistrationRateLimiting(): void
     {
         RateLimiter::for('register', fn (Request $request) => Limit::perMinute(10)->by('register-ip:'.$request->ip()));
+    }
+
+    /**
+     * M81 · issue 466 · sökningens takt, `throttle:help-search`.
+     *
+     * Rutten svarar JSON från web.php och är inget formulär. Den inbyggda
+     * formen `throttle:60,1` kastar ThrottleRequestsException, som
+     * bootstrap/app.php (issue 53a § Beslut 6) gör om till en omdirigering
+     * tillbaka till ett formulär — men sökrutan har inget formulär att gå
+     * tillbaka till. En namngiven begränsare med en egen svarskropp ger i
+     * stället `429` med `auth.too_many_attempts`: middlewaret kastar
+     * HttpResponseException med svaret i handen, och API-höljet når klienten
+     * som vilket annat felsvar som helst (AGENTS.md § Felformat i API:et).
+     *
+     * Tröskeln är 60 per minut och IP — samma som issue 466 anger.
+     */
+    private function configureHelpSearchRateLimiting(): void
+    {
+        RateLimiter::for('help-search', fn (Request $request) => Limit::perMinute(60)
+            ->by('help-search-ip:'.$request->ip())
+            ->response(static fn (Request $request, array $headers): JsonResponse => ApiError::response(
+                'auth.too_many_attempts',
+                ['retry_after_seconds' => (int) ($headers['Retry-After'] ?? 0)],
+                429,
+            )->withHeaders($headers)));
     }
 }
