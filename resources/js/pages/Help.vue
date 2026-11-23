@@ -39,9 +39,18 @@ onMounted(() => {
         return;
     }
 
+    /*
+     * Bara kartans egna poster. `props.anchors[anchor]` hade annars gett en
+     * ärvd funktion för `#constructor`, `#toString` och `#__proto__`, och
+     * `router.visit(<funktion>)` kastar i stället för att lämna sidan i fred.
+     */
+    if (!Object.hasOwn(props.anchors, anchor)) {
+        return;
+    }
+
     const address = props.anchors[anchor];
 
-    if (!address) {
+    if (typeof address !== 'string') {
         return;
     }
 

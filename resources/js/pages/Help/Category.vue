@@ -42,7 +42,17 @@ const others = computed(() => props.articles.filter((article) => article.type !=
 const copied = ref(null);
 
 function openFromHash() {
-    const id = decodeURIComponent(window.location.hash.replace(/^#/, ''));
+    let id;
+
+    /*
+     * En trasig hash (`#%E0%A4%A`) kastar URIError. Det ska inte avbryta
+     * monteringen eller `hashchange`-lyssnaren, så hashen hoppas över.
+     */
+    try {
+        id = decodeURIComponent(window.location.hash.replace(/^#/, ''));
+    } catch {
+        return;
+    }
 
     if (!id) {
         return;
@@ -112,7 +122,7 @@ function copyLink(article) {
                 class="help-faq rounded-card border border-border bg-surface"
             >
                 <summary
-                    class="flex min-h-11 cursor-pointer items-center px-4 text-title text-ink"
+                    class="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-4 text-title text-ink"
                 >
                     {{ article.title }}
                 </summary>

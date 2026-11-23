@@ -48,7 +48,7 @@ class HelpController extends Controller
         );
 
         // Varje kategori och varje artikel får en post. Ett kategori-id och ett
-        // artikel-id kan aldrig krocka: de gamla ankkarna är unika tillsammans
+        // artikel-id kan aldrig krocka: de gamla ankarna är unika tillsammans
         // (provet i tests/Feature/Frontend/HjalpsidanTest.php).
         $anchors = [];
 

@@ -385,10 +385,12 @@ it('har kategorisidans ord i katalogen', function () {
  * flödet — att `/help#how-do-i-share-a-container` hamnar på kategorisidan med
  * frågan öppen — kräver en webbläsare och står under handprovet i PR:en.
  */
-it('skickar de gamla ankkarna vidare med en Inertia-visit', function () {
+it('skickar de gamla ankarna vidare med en Inertia-visit', function () {
     $kod = File::get(resource_path('js/pages/Help.vue'));
 
     expect($kod)->toContain('window.location.hash')
+        ->toContain('Object.hasOwn(props.anchors, anchor)')
+        ->toContain("typeof address !== 'string'")
         ->toContain('props.anchors')
         ->toContain('router.visit(address, { replace: true })');
 });
@@ -400,5 +402,6 @@ it('ritar frågorna som details och öppnar den som matchar ankaret', function (
         ->toContain(':id="article.id"')
         ->toContain('window.location.hash')
         ->toContain('hashchange')
+        ->toContain('try')
         ->toContain('target.open = true');
 });
