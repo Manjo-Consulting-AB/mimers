@@ -258,7 +258,7 @@ it('ger papperskorgen en egen del strax ovanför användarens rad', function () 
     // Posten: målet, ikonen ur den slutna listan, och prefixmatchningen.
     expect($sektioner)->toContain(
         "{ key: 'trash', href: '/trash', icon: 'trash', matchPrefix: true }",
-        "'trash': ['trash']",
+        "'trash': ['help', 'trash']",
         'section.matchPrefix === true && currentPath.value.startsWith(`${section.href}/`)',
     );
 
@@ -268,6 +268,12 @@ it('ger papperskorgen en egen del strax ovanför användarens rad', function () 
 
     // AppLayout ritar delen i bottenblocket, ovanför avdelaren.
     expect($layout)->toMatch('/<div class="mt-auto">\s*<ShellSections part="trash" \/>\s*<hr class="my-2 border-white\/10" \/>/');
+
+    // Hjälpraden står före papperskorgsraden, i listan och i delen.
+    expect(strpos($sektioner, "{ key: 'help', href: '/help', icon: 'help' }"))
+        ->toBeInt()
+        ->toBeLessThan(strpos($sektioner, "{ key: 'trash', href: '/trash'"));
+    expect(trans('ui.nav.help', [], 'en'))->toBe('Help');
 
     // Katalogen äger ordet, och det är papperskorgens eget.
     expect(trans('ui.nav.trash', [], 'en'))->toBe('Trash');

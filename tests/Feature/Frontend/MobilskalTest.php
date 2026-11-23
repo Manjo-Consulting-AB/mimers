@@ -179,6 +179,8 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         // Papperskorgen kom med M39 · issue 320
         // ([[ADR-0065 Den samlade papperskorgen]] § 1): raden står sist i
         // listan och ritas i sin egen del längst ned i båda ytorna.
+        // M78 · issue 458: hjälpraden står ovanför papperskorgen.
+        'help',
         'trash',
     ]);
 
