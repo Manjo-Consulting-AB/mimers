@@ -4,6 +4,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import TrashRow from '../../components/TrashRow.vue';
 import UiButton from '../../components/UiButton.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
@@ -92,14 +93,19 @@ function emptyTrash() {
     <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
 
-        <UiButton
-            v-if="canEmpty && entries.length > 0"
-            variant="danger"
-            :pending="pending"
-            @click="askEmpty"
-        >
-            {{ t('trash.empty_action') }}
-        </UiButton>
+        <span class="flex items-center gap-2">
+            <HelpLink context="trash" icon-only class="sm:hidden" />
+            <HelpLink context="trash" class="max-sm:hidden" />
+
+            <UiButton
+                v-if="canEmpty && entries.length > 0"
+                variant="danger"
+                :pending="pending"
+                @click="askEmpty"
+            >
+                {{ t('trash.empty_action') }}
+            </UiButton>
+        </span>
     </div>
     <p class="mt-1 text-sm text-slate-600">{{ t('trash.description') }}</p>
 

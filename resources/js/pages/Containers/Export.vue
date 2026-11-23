@@ -6,6 +6,7 @@ import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import BinderForm from '../../components/BinderForm.vue';
 import ExportRow from '../../components/ExportRow.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import { isOpenExport } from '../../components/exportPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
@@ -136,7 +137,14 @@ onUnmounted(() => {
 <template>
     <Head :title="t('export.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('export.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('export.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.export" icon-only class="sm:hidden" />
+            <HelpLink context="container.export" class="max-sm:hidden" />
+        </span>
+    </div>
 
     <!--
         Vad påsen innehåller, INNAN den beställs (Beslut 7): den som tar

@@ -5,6 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import InvitationForm from '../../components/InvitationForm.vue';
 import InvitationRow from '../../components/InvitationRow.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
@@ -162,7 +163,14 @@ const historyDate = (access) =>
 <template>
     <Head :title="t('sharing.title')" />
 
-    <h1 class="text-2xl font-semibold text-ink">{{ t('sharing.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold text-ink">{{ t('sharing.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.sharing" icon-only class="sm:hidden" />
+            <HelpLink context="container.sharing" class="max-sm:hidden" />
+        </span>
+    </div>
 
     <!--
         Den enda listan (issue 1250 § 1). Ägarkontot först, sedan en rad per

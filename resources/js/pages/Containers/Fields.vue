@@ -7,6 +7,7 @@ import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import FieldRow from '../../components/fields/FieldRow.vue';
 import FieldTypeSelect from '../../components/fields/FieldTypeSelect.vue';
 import FormField from '../../components/FormField.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import UiButton from '../../components/UiButton.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -198,7 +199,14 @@ const atLimitText = computed(() => t('container.fields.limit_reached', { limit: 
 <template>
     <Head :title="t('container.fields.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('container.fields.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('container.fields.heading') }}</h1>
+
+        <span class="flex items-center">
+            <HelpLink context="container.fields" icon-only class="sm:hidden" />
+            <HelpLink context="container.fields" class="max-sm:hidden" />
+        </span>
+    </div>
     <p class="mt-1 text-sm text-ink-muted">{{ t('container.fields.description') }}</p>
 
     <!-- Antalet mot gränsen. Det står för alla som når sidan — en läsare ska

@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -28,7 +29,14 @@ const { eventDate } = useRelativeDate();
 <template>
     <Head :title="t('agents.title')" />
 
-    <h2 class="text-2xl font-semibold">{{ t('agents.heading') }}</h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold">{{ t('agents.heading') }}</h2>
+
+        <span class="flex items-center">
+            <HelpLink context="account.agents" icon-only class="sm:hidden" />
+            <HelpLink context="account.agents" class="max-sm:hidden" />
+        </span>
+    </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('agents.intro') }}</p>
 
     <section v-if="agents.length === 0" class="mt-6 rounded border border-slate-300 p-4 text-sm">

@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import HelpLink from '../../components/HelpLink.vue';
 import TemplateRow from '../../components/templates/TemplateRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -47,7 +48,14 @@ const showsAccount = computed(() => accounts.value.length > 1);
 <template>
     <Head :title="t('settings.templates.title')" />
 
-    <h2 class="text-2xl font-semibold">{{ t('settings.templates.heading') }}</h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-2xl font-semibold">{{ t('settings.templates.heading') }}</h2>
+
+        <span class="flex items-center">
+            <HelpLink context="account.templates" icon-only class="sm:hidden" />
+            <HelpLink context="account.templates" class="max-sm:hidden" />
+        </span>
+    </div>
     <p class="mt-2 max-w-2xl text-sm text-slate-700">{{ t('settings.templates.description') }}</p>
 
     <p v-if="templates.length === 0" class="mt-6 text-sm text-slate-600">
