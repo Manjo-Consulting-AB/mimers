@@ -5,6 +5,7 @@ type: faq
 category: files-and-storage
 updated: "2026-11-22"
 order: 30
+featured: true
 context: [account.storage]
 keywords: []
 related: []

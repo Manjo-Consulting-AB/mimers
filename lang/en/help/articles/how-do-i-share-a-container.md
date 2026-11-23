@@ -5,6 +5,7 @@ type: faq
 category: sharing
 updated: "2026-11-22"
 order: 10
+featured: true
 context: [container.sharing]
 keywords: []
 related: []

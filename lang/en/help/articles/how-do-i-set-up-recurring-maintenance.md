@@ -5,6 +5,7 @@ type: faq
 category: tasks
 updated: "2026-11-22"
 order: 30
+featured: true
 context: [container.tasks]
 keywords: []
 related: []
