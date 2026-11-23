@@ -1,33 +1,64 @@
 <script setup>
-import { Head } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { onMounted } from 'vue';
 import AppLayout from '../layouts/AppLayout.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 defineOptions({ layout: AppLayout });
 
 /*
- * Hjälpsidan, /help — M78 · issue 458.
+ * Hjälpcentrets startsida, /help — M78 · issue 458, M80 · issue 461 och 462.
  *
- * Texterna är markdownfiler under lang/{locale}/help/ och ritas till HTML på
- * servern av App\Actions\Help\LoadHelpArticles. Sidan får en lista kategorier
- * i `categories`; varje kategori har en `slug`, en titel, en eventuell ingress
- * och frågor med ett eget ankare, så att en fråga kan länkas som
- * `/help#how-do-i-share-a-container`. Inertia scrollar själv till ankaret.
+ * Sidan är tills vidare en lista med kategorierna: titel, beskrivning och
+ * antal frågor, med en länk till `/help/{kategori}`. 465 gör den till en
+ * riktig startsida med kategorikort och populära artiklar.
  *
- * **Det andra undantaget från regeln om `v-html`**, efter itemets anteckning
- * (ItemNotes.vue, [[ADR-0066 Itemets anteckning]] § 2). Det är säkert av
- * samma skäl: HTML:en ritas på servern ur filer i repot med
- * `html_input => 'strip'` och kommer aldrig från användaren. Klienten ritar
- * aldrig markdown själv.
+ * **De gamla ankarna överlever här.** Texterna har tidigare legat på en enda
+ * sida, så `/help#how-do-i-share-a-container` och `/help#sharing` är adresser
+ * som kan stå i ett bokmärke. Fragmentet når aldrig servern och kan därför
+ * inte skickas vidare i en omdirigering — i stället skickar servern kartan
+ * `anchors`, varje ankare → sin adress, och sidan slår upp `location.hash` i
+ * den vid laddning och ber Inertia besöka adressen med `replace: true`
+ * ([[ADR-0094 Hjälpcentret]] § 3).
  *
- * Sidans egna ord (rubrik, undertitel, innehåll) slås upp ur `info.help.*` i
- * lang/{locale}/ui.php ([[ADR-0021 Frontendteknik]] § Beslut).
+ * Sidans egna ord slås upp ur `help.*` och `info.help.*` i lang/{locale}/ui.php
+ * ([[ADR-0021 Frontendteknik]] § Beslut). Kategoriernas titlar och
+ * beskrivningar kommer ur innehållet, inte ur lang/.
  */
-defineProps({
+const props = defineProps({
     categories: { type: Array, required: true },
+    anchors: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
+
+onMounted(() => {
+    const anchor = window.location.hash.slice(1);
+
+    if (!anchor) {
+        return;
+    }
+
+    const address = props.anchors[anchor];
+
+    if (!address) {
+        return;
+    }
+
+    router.visit(address, { replace: true });
+});
+
+/*
+ * Antalet frågor. `t()` pluraliserar inte — translate.js byter bara ut
+ * `:param` — så den tvågrenade formen ur `help.questions_count` delas här:
+ * första grenen för ett, andra för övriga. Saknas nyckeln returnerar `t()`
+ * nyckeln själv, och då finns ingen andra gren att välja.
+ */
+function questionsLabel(count) {
+    const [one, many] = t('help.questions_count').split('|');
+
+    return (count === 1 ? one : (many ?? one)).replace(':count', String(count));
+}
 </script>
 
 <template>
@@ -37,24 +68,17 @@ const { t } = useTranslations();
         <h1 class="text-3xl font-semibold">{{ t('info.help.title') }}</h1>
         <p class="mt-3 text-slate-600">{{ t('info.help.subtitle') }}</p>
 
-        <nav class="mt-8" :aria-label="t('info.help.contents')">
-            <h2 class="text-lg font-semibold">{{ t('info.help.contents') }}</h2>
-            <ul class="mt-2 space-y-1">
-                <li v-for="category in categories" :key="category.slug">
-                    <a :href="`#${category.slug}`" class="text-accent underline">{{ category.title }}</a>
-                </li>
-            </ul>
-        </nav>
-
-        <section v-for="category in categories" :id="category.slug" :key="category.slug" class="mt-12">
-            <h2 class="text-2xl font-semibold">{{ category.title }}</h2>
-
-            <div v-if="category.intro_html" class="help-content mt-3" v-html="category.intro_html" />
-
-            <div v-for="question in category.questions" :key="question.anchor" class="mt-8">
-                <h3 :id="question.anchor" class="text-lg font-semibold">{{ question.question }}</h3>
-                <div class="help-content mt-2" v-html="question.answer_html" />
-            </div>
-        </section>
+        <ul class="mt-8 space-y-3">
+            <li v-for="category in categories" :key="category.id">
+                <Link
+                    :href="`/help/${category.id}`"
+                    class="flex min-h-11 flex-col gap-1 rounded-control border border-border bg-surface p-4 outline-none hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <span class="text-lg font-semibold text-ink">{{ category.title }}</span>
+                    <span class="text-sm text-ink-muted">{{ category.description }}</span>
+                    <span class="text-meta text-ink-subtle">{{ questionsLabel(category.count) }}</span>
+                </Link>
+            </li>
+        </ul>
     </div>
 </template>
