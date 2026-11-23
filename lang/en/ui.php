@@ -5843,7 +5843,7 @@ return [
             // What the transfer covers, before it is sent (decision 2). Four
             // things in one sentence, and they are the four that actually
             // happen.
-            'notice' => 'All items follow along except the ones you exclude below. The space the container uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro on their first received ownership transfer.',
+            'notice' => 'All items follow along except the ones you exclude below. The space the container uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants. A recipient who doesn\'t have an account yet gets twelve months of Pro, if you pay for Pro yourself — up to two transfers a year.',
 
             // Two paths, exactly one to be filled in. The rule is tried by
             // `prohibits` in StoreOwnershipTransferRequest and is not
@@ -5881,6 +5881,12 @@ return [
 
         'history' => [
             'heading' => 'Earlier',
+        ],
+
+        // The sender's list of pending transfers: shown only when the
+        // transfer grants the bonus (`grants_bonus`).
+        'outgoing' => [
+            'pro' => 'The recipient gets twelve months of Pro.',
         ],
 
         'row' => [
@@ -5927,7 +5933,7 @@ return [
             'items' => ':following of :total follow along, :excluded excluded.',
             'retain' => 'The sender keeps access: :level.',
             'retain_none' => 'The sender keeps no access.',
-            'pro' => 'Twelve months of Pro are included — once per account, on the first ownership transfer you receive.',
+            'pro' => 'Twelve months of Pro are included.',
 
             // What happens to the space afterwards, and who owns it: whoever
             // receives the container takes over the usage too, and it is her

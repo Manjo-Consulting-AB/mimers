@@ -636,6 +636,16 @@ it('visar konsekvenserna innan knappen', function () {
 
     expect($kort)->toContain('transfer.card.pro');
     expect($kort)->toContain('transfer.card.final');
+
+    // Raden om Pro visas bara när bonusen gäller just det här ägarbytet.
+    expect($kort)->toContain('v-if="transfer.grants_bonus"');
+});
+
+it('visar raden om Pro i avsändarens lista bara när grants_bonus är sant', function () {
+    $sida = agarbytesvyKomponent('pages/Containers/Transfers.vue');
+
+    expect($sida)->toContain('v-if="transfer.grants_bonus"');
+    expect($sida)->toContain('transfer.outgoing.pro');
 });
 
 it('räknar bara undantag som fortfarande finns i containern', function () {
@@ -890,6 +900,7 @@ it('har ägarbytets nycklar och läser dem ur lang/', function () {
         'transfer.row.revoke',
         'transfer.inbox.empty',
         'transfer.card.pro',
+        'transfer.outgoing.pro',
         'transfer.card.quota',
         'transfer.card.final',
         'transfer.accept',
