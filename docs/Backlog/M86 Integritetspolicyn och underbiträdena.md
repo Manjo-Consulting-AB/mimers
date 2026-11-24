@@ -15,6 +15,8 @@ Två frågor följer av det och står i [[Tankar]]: om `/privacy` ska publiceras
 
 **Ordningen:** 479 och 480 bygger båda på 478 ([[M85 Om Mimers]]) och kan tas i valfri ordning. Issuerna är skapade i GitHub (#1619 och #1620) och sammanfattade här. GitHub-issuen är bindande.
 
+**489 lades till 2026-11-24, efter att M87 tagit 481–488**, ur feature request #1646: användarvillkoren på `/terms`, samma form som 479. Numret ligger därför utanför milstolpens sammanhängande intervall.
+
 ---
 
 ### 479. Integritetspolicyn på /privacy
@@ -44,3 +46,20 @@ Därtill får varje informationssida en `description` i `ui.php` som `Info.vue` 
 **Klart när:** `GET /subprocessors` ger `Info` med `page = subprocessors` och `200` för gäst och inloggad, och `route('info.subprocessors')` är `/subprocessors`; `body` ritar en `<table>` med raderna *Inleed*, *Mailgun* och *Sentry* och raden *Last updated: 23 November 2026*; tabellen har ingen rad för *Paddle*, `body` nämner aldrig *Resend* eller *Amazon SES*, och Paddle nämns under tabellen med en länk till `/privacy`; `info.subprocessors.title` är *Subprocessors* och varje informationssida har en `description`; `Info.vue` ritar `<meta name="description">` ur `info.<sida>.description`; inloggningssidans rad och sidfoten länkar till de fyra sidorna med texterna ur `auth.landing.links.*`; `/about`, `/privacy` och `/terms` ritar som förut; bygget och sviten är gröna.
 **Axlar:** `ambiguity` low · `blast_radius` contained · `risk_class` none
 **Beror på:** 478
+
+### 489. Användarvillkoren på /terms
+
+GitHub #1647. `lang/en/pages/terms.md` bär skribentens första utkast ur #1646 § *Full proposed page content*, ordagrant från `**Last updated: 24 November 2026**` till den avslutande raden `Sweden`. Ingen ny kod: `/terms` är redan en av de fyra informationssidorna, och `InfoPage` och `Info.vue` ritar filen. Designen — bredare behållare och 16 px brödtext — kommer av #1645 och ärvs av sig själv; issuen bygger inte på dagens `Info.vue`. Fem ändringar mot utkastet:
+
+1. `# Terms of Use` stryks, eftersom sidans `<h1>` kommer ur `info.terms.title`; de arton numrerade `##`-rubrikerna står kvar.
+2. *Contact form* länkas till `/contact` i § 2 och § 18, och den nakna adressraden i § 18 stryks. Ingen e-postadress eller postadress.
+3. Prisändringsmeningen i § 7 blir *We will always notify you by email at least one month before your next renewal.* Skribentens mening lät som att en löpande prenumerations pris kan ändras, vilket [[ADR-0086 Pro, Pro+ och grundarpris]] § 5 inte medger (Tony 2026-11-24).
+4. Raden *Corporate identity number* i `privacy.md` blir *Company registration number*, som i villkoren. Det är den enda ändringen i `privacy.md`.
+5. Allt annat står som skrivet. § 8 och § 9 är kontrollerade mot [[Planer och kvoter]] § Nedgradering och § Kontolivscykel och stämmer.
+
+Det som #1646 räknar upp utöver texten — `/contact`, vägen att rapportera olagligt innehåll och DSA före öppen beta, den juridiska granskningen och datumet *Last updated* — hör inte till issuen. Skribentens granskningsanteckningar får inte hamna på sidan. `/terms` ritar efteråt inte längre platshållaren, så de tre testerna som väntade `null` skrivs om.
+
+**Läs:** #1646 § Full proposed page content, #1645, `lang/en/pages/privacy.md`, `tests/Feature/Frontend/IntegritetspolicyTest.php`, [[Planer och kvoter]] § Nedgradering och § Kontolivscykel, [[ADR-0086 Pro, Pro+ och grundarpris]] § 5
+**Klart när:** `GET /terms` ger `Info` med `page = terms` och en `body` med de arton numrerade rubrikerna som `<h2>`, raden *Last updated: 24 November 2026* och ingen `<h1>`; `/terms` och `/privacy` säger *Company registration number: 556813-8464* och ingen säger *Corporate identity number*; § 7 har den nya meningen och inte *before the new price applies*; `body` innehåller *at least 18 years old*, *Merchant of Record*, *Malmö District Court*, planerna *Free*, *Pro* och *Pro+* samt länkarna till Paddles köparvillkor och återbetalningspolicyn; § 8:s borttagningsordning är en `<ol>` med fyra punkter; länkarna till `/privacy`, `/subprocessors` och `/contact` finns och varje *contact form* länkar till `/contact`; `body` har ingen `mailto:`, ingen e-postadress, ingen naken `https://mimers.app/contact` och varken *Legal review*, *Acceptance criteria*, *Product and policy decisions* eller *DSA*; gäst och inloggad får `200` med samma `body`; `InfosidorTest`, `OmsidanTest` och `UnderbitradenTest` väntar sig inte längre `null` för `/terms`; `/about` och `/subprocessors` ritar som förut, `/privacy` bortsett från orgnummerraden; bygget och sviten är gröna.
+**Axlar:** `ambiguity` low · `blast_radius` contained · `risk_class` none
+**Beror på:** #1645
