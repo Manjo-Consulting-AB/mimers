@@ -580,6 +580,7 @@ onBeforeUnmount(() => {
                     <Link href="/privacy" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.privacy') }}</Link>
                     <Link href="/terms" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.terms') }}</Link>
                     <Link href="/subprocessors" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.subprocessors') }}</Link>
+                    <Link href="/contact" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.contact') }}</Link>
                 </nav>
 
                 {{ t('common.footer', { year: page.props.app.year, version: page.props.app.version }) }}

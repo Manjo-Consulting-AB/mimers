@@ -51,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureRegistrationRateLimiting();
         $this->configureHelpSearchRateLimiting();
         $this->configureHelpFeedbackRateLimiting();
+        $this->configureContactRateLimiting();
         $this->configureScheduleHeartbeat();
         $this->configurePerformanceLogging();
         $this->configureMcp();
@@ -308,6 +309,36 @@ class AppServiceProvider extends ServiceProvider
             $limit = $user === null
                 ? Limit::perHour(20)->by('help-feedback-ip:'.$request->ip())
                 : Limit::perHour(60)->by('help-feedback-user:'.$user->getKey());
+
+            return $limit->response(static fn (Request $request, array $headers): JsonResponse => ApiError::response(
+                'auth.too_many_attempts',
+                ['retry_after_seconds' => (int) ($headers['Retry-After'] ?? 0)],
+                429,
+            )->withHeaders($headers));
+        });
+    }
+
+    /**
+     * M89 · [[ADR-0096 Kontaktformuläret]] § 6 · kontaktformulärets takt,
+     * `throttle:contact`.
+     *
+     * Två gränser, en per anropare: en gäst räknas per IP (5 i timmen), en
+     * inloggad per person (10 i timmen). Samma form som `help-feedback` och
+     * av samma skäl — personnyckeln gäller framför IP:n därför att flera
+     * personer kan dela en adress bakom NAT, och svarskroppen är API-höljet
+     * eftersom rutten svarar JSON och ytan översätter koden.
+     *
+     * Bara `POST /contact` bär begränsaren. Sidan själv är en läsning och
+     * ska inte kunna stängas av en full hink.
+     */
+    private function configureContactRateLimiting(): void
+    {
+        RateLimiter::for('contact', function (Request $request): Limit {
+            $user = $request->user();
+
+            $limit = $user === null
+                ? Limit::perHour(5)->by('contact-ip:'.$request->ip())
+                : Limit::perHour(10)->by('contact-user:'.$user->getKey());
 
             return $limit->response(static fn (Request $request, array $headers): JsonResponse => ApiError::response(
                 'auth.too_many_attempts',
