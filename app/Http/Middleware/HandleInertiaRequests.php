@@ -47,13 +47,13 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Tjugo nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Tjugosex nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
  * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
- * `containerCounts` är den femtonde och enda som är nullbar av ett skäl som
- * inte är "gäst" — se containerCounts().
+ * `containerCounts` och `containerMonthCosts` är de enda som är nullbara av
+ * ett skäl som inte är "gäst" — se respektive metod.
  *
  * **`today` och `timezone` kom med issue 137.** Frontenden ska inte räkna sin
  * egen dag ([[ADR-0044 Användarens dag]] § Beslut 4): servern skickar
@@ -303,6 +303,10 @@ class HandleInertiaRequests extends Middleware
             // Containerns två tal (issue 679) — se containerCounts() om varför
             // de är en delad prop och varför de är null utanför en container.
             'containerCounts' => fn (): ?array => $this->containerCounts($request),
+            // Containerns månadskostnader till hjälten (issue 475) — se
+            // containerMonthCosts() om varför de är en delad prop och varför
+            // de är null utanför en container.
+            'containerMonthCosts' => fn (): ?array => $this->containerMonthCosts($request),
             // Ritar containerns inställningsmeny raden *Agents*? (issue 1483)
             // Se containerAgentsAvailable() om varför den är en delad prop
             // och varför den är false utanför en container.
@@ -566,6 +570,46 @@ class HandleInertiaRequests extends Middleware
             'items' => $this->listItems->count($user, $container),
             'todos' => $this->listTodo->countForContainer($user, $container),
         ];
+    }
+
+    /**
+     * Månadens kostnader för containern i rutten, till hjälten — eller `null`
+     * utanför en container (issue 475).
+     *
+     * **En delad prop av samma skäl som `containerCounts` ovan.** Hjälten ritas
+     * på varje containervy — översikten, flikarna och itemvyerna — och en rad i
+     * varje kontroller hade varit samma lista att glömma som talen. Proppen är
+     * lat på samma sätt: Inertia utvärderar inte closuren vid en partiell
+     * omladdning som inte ber om den.
+     *
+     * **`null` utom när alla tre gäller**: `$request->user()` finns,
+     * `{container}`-parametern är en Container, och grinden `view` släpper in
+     * henne. Grinden är nödvändig av samma skäl som `containerCounts` anger:
+     * felsidan delar samma props, och en 403 på en främmande container får
+     * inte bära dess kostnader.
+     *
+     * **Beräkningen bor i App\Actions\Dashboard\HeroFigures**, samma
+     * `currentMonth()`, samma `ResolveItemScope::forContainers()` och samma
+     * `CostReport`-väg som dashboardens totaler (issue 474). Här prövas bara
+     * grinden; ingen summa formuleras i middlewaren, och mottagarens omfång
+     * gäller i actionen.
+     *
+     * @return list<array{currency: string, amount: int, count: int}>|null
+     */
+    private function containerMonthCosts(Request $request): ?array
+    {
+        $user = $request->user();
+        $container = $request->route('container');
+
+        if ($user === null || ! $container instanceof Container) {
+            return null;
+        }
+
+        if (! Gate::forUser($user)->allows('view', $container)) {
+            return null;
+        }
+
+        return $this->heroFigures->containerMonthCosts($user, $container);
     }
 
     /**
