@@ -43,3 +43,17 @@ Tonys beslut 2026-11-21, efter testarnas fynd samma dag och en mockup av dashboa
 ## Tillägg 2026-11-22
 
 *Tony 2026-11-22:* Hjälten ritas på alla sidor i AppLayout som saknar en egen hjälte: `/containers`, `/containers/create`, `/inbox`, `/tasks`, `/tasks/create`, `/documents`, `/history`, `/search`, `/trash`, `/notifications`, `/transfers` och inställningssidorna (en hjälte i SettingsLayout). Den är identisk med dashboardens: samma höjd, bild, brickor och donut. Bara rubriken och undertiteln skiljer sig, och hälsningen står bara på dashboarden. Rubriken står på samma höjd i bilden på varje sida, så att hjälten inte byter storlek och texten inte flyttar sig när man går mellan sidorna. Under `md:` är hjälten det låga bandet, och siffrorna står under det bara på dashboarden. Det ersätter den globala historikens beslut att inte ha någon hjälte (issue 272), och motiveringen att "en hjälte hade påstått att historiken var en container" gäller inte längre. Siffrorna räknas av en delad action och hämtas som en valfri propp, så att de bara räknas på sidor som visar dem. Byggs i issue 437 och 438.
+
+## Tillägg 2026-11-24
+
+*Tony 2026-11-24:* Hjälten svarar på två frågor, inte tre: *vad har jag lagt ut den här månaden?* och *hur mycket utrymme använder jag?*. Det ändrar § 1 och § 6 och byggs i issue 474–477.
+
+**1. Kostnadsdonuten blir en kompakt summering.** Kostnadsbrickorna och `CostDonut` i § 1 ersätts av `HeroCosts`: rubriken *Costs*, perioden *This month* och en rad per valuta med valutan utskriven. Summeringen har ingen donut, ingen förklaring, ingen nedbrytning per container, ingen länk och ingen knapp, och ingenting i den går att klicka på. Höjden beror bara på antalet valutor. Den ritas på dashboarden och på alla sidor med `AppHero`, och också i containerns hjälte med containerns månad. En länk in i rapporten övervägs först när Pro-rapporten för kontot finns; den fasta summeringen är fri enligt [[ADR-0038 Gränsen för Pro i kostnaderna]].
+
+**2. Hjälten får ett lagringskort som länkar till `/settings/storage`.** På sidorna med `AppHero` visar det kontots förbrukning av taket, med filer och text var för sig. Inne i en container — alla flikar och itemvyerna — visar containerns hjälte containerns andel av ägarkontots kvot, med kontots förbrukning som stapel och containerns andel som ett eget segment. Stapeln har ingen minsta bredd: en liten andel får synas knappt eller inte alls, och siffrorna bär beskedet. Dashboarden svarar fortfarande på *hur mycket använder jag?*, och `/settings/storage` svarar på *vad tar utrymmet, och vad kan jag göra åt det?*.
+
+**3. Kvotmodulen från issue 459 lämnar toppraden.** Den står kvar i mobilmenyn, där ingen hjälte visar siffror.
+
+**4. Under `md:` står brickorna, summeringen och lagringskortet under dashboardens band.** Det ändrar § 6. De andra sidorna lämnar telefonens listor i fred, som i dag.
+
+**5. [[ADR-0038 Gränsen för Pro i kostnaderna]] ändras inte.** De fasta summeringarna är fria, och tabellens rad om dashboardens donut gäller en yta som inte längre ritas.
