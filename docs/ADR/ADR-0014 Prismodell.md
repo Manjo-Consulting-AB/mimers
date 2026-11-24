@@ -1,6 +1,6 @@
 # ADR-0014 Prismodell
 
-**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · Merchant of record är Paddle, tillägg 2026-11-24 · [[ADR-index]]
 
 ## Kontext
 
@@ -59,3 +59,13 @@ Merchant of record valdes eftersom digitala tjänster till privatpersoner i EU s
 **Begränsa filstorlek och antal bilagor.** Valdes bort — hindrar ackumuleringen som skapar betalningsviljan.
 
 **Begränsa påminnelser på gratisnivån.** Valdes bort — sänker retentionen mer än det driver konvertering.
+
+## Tillägg 2026-11-24
+
+*Tony 2026-11-24, i #1600:* **Merchant of record är Paddle**, inte Lemon Squeezy. Valet i § Beslut (*Paddle eller Lemon Squeezy*) är därmed avgjort, och Lemon Squeezy är inte längre ett alternativ.
+
+**Köpet är ett avtal mellan köparen och Paddle**, på Paddles köparvillkor. Paddle står därför i policyns § 7 som merchant of record och inte som underbiträde, och finns inte i registret på `/subprocessors` ([[M86 Integritetspolicyn och underbiträdena]]).
+
+**Återbetalning inom 30 dagar** sker enligt `https://manjo.me/refund-policy.php`.
+
+Paddle finns inte i koden än. Policyn publiceras med § 7 som den är skriven eftersom betalflödet är på väg in; om det ska vänta på flödet är en öppen fråga i [[Tankar]]. Den öppna frågan i [[ADR-0086 Pro, Pro+ och grundarpris]] § Konsekvenser om *Paddle eller Lemon Squeezy* pekar hit.
