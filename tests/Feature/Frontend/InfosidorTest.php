@@ -19,9 +19,10 @@ use function Pest\Laravel\withoutVite;
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
  *
  * **Sedan M85 · issue 478 bär rutten också `body`.** Den kommer ur
- * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`, och bara /about
- * har en fil: /privacy och /terms ger `null` och ritar platshållaren som
- * förut. Innehållet i /abouts body prövas i OmsidanTest.
+ * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. /about och
+ * -- sedan M86 · issue 479 -- /privacy har en fil; /terms ger `null` och ritar
+ * platshållaren som förut. Innehållet i /abouts body prövas i OmsidanTest och
+ * i /privacys i IntegritetspolicyTest.
  *
  * Att sidan ritas i AppLayout och inte bär en enda sträng själv prövas av
  * GenomgangTest och SprakTest, som läser varje fil under resources/js; att
@@ -43,10 +44,10 @@ it('renderar Info för var och en av de tre sidorna för en gäst', function (st
             ->where('page', $sida)
         );
 
-    if ($sida === 'about') {
-        expect((string) $svar->inertiaProps()['body'])->not->toBe('');
-    } else {
+    if ($sida === 'terms') {
         expect($svar->inertiaProps()['body'])->toBeNull();
+    } else {
+        expect((string) $svar->inertiaProps()['body'])->not->toBe('');
     }
 })->with(['about', 'privacy', 'terms']);
 
