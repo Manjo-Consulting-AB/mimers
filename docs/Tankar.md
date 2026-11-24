@@ -32,6 +32,14 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Räcker *we do not knowingly allow* för 18-årsgränsen, eller ska registreringen fråga?** Policyn säger att Mimers är till för den som fyllt 18. Registreringen frågar inte efter ålder och har ingen ruta för det. Frågan är om formuleringen ensam bär, eller om registreringen ska få en bekräftelse (en ruta, eller en fråga om födelseår) — och i så fall vad Mimers gör med ett konto som visar sig tillhöra en minderårig. En bekräftelse är en ändring i [[Konton och åtkomst]], inte bara i texten. Restes 2026-11-24 ur #1600.
 
+- **Räcker påminnelsen om fristen i `privacy:list`?** Ett ärende om en begäran enligt art. 15–21 har en frist på en månad ([[ADR-0095 Integritetsbegäranden]] § 5), och den enda påminnelsen är att `privacy:list` sorterar de öppna ärendena på frist och visar dagar kvar eller *overdue* (§ 6). Det är Tonys beslut 2026-11-24 och räcker med ett fåtal ärenden och en handläggare. Frågan är om det räcker när ärendena blir fler eller handläggarna fler än en, eller om en daglig sammanställning behövs då. Restes 2026-11-24.
+
+- **Vilken grund har vi för att aldrig nämna den rättsliga spärren i ett svar på art. 15?** Spärren är bevis i en anmälan enligt DSA eller en myndighetsbegäran ([[ADR-0043 Tre loggar]] § Den rättsliga spärren), och att berätta för den som begär ut sina uppgifter att kontot är spärrat kan förstöra utredningen. [[ADR-0095 Integritetsbegäranden]] § 12 säger att den aldrig nämns. Vilken grund som bär det (art. 23, dataskyddslagen 2018:218) behöver prövas juridiskt innan `privacy:collect` används. Restes 2026-11-24.
+
+- **Behöver något jobb en dag fråga efter begränsningen?** Begränsningen enligt art. 18 är en markering på ärendet som ingen kod läser ([[ADR-0095 Integritetsbegäranden]] § 8). Ett jobb som skickar något till personen, till exempel veckosammanfattningen, eller mätningen kan en dag behöva fråga efter den. Frågan är när, och om markeringen då måste bli en kolumn på kontot eller personen. Restes 2026-11-24.
+
+- **Räcker händelsen `viewed` som åtkomstlogg för ärendena?** Säkerhetsloggen har ingen rad för att ett ärende lästs. Händelsen `viewed` finns bara i ärendet själv och försvinner med det, 36 månader efter avslutet ([[ADR-0095 Integritetsbegäranden]] § 3 och § 11). Frågan är om det räcker som bevis på vem som läst vad, eller om en rad utan namn i säkerhetsloggen behövs. Restes 2026-11-24.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.

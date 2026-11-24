@@ -416,6 +416,73 @@ Index: `(account_id, lifted_at)` — `covers()` läsväg.
 
 Ingen `deleted_at`: en rad tas aldrig bort. En hävd spärr lämnar sin rad kvar, för att en spärr en gång funnits är i sig en uppgift värd att bevara. Ingen yta i webben och inget API.
 
+## privacy_request
+
+Ett ärende om en begäran från en registrerad enligt art. 15–21. Personalen sköter det med `privacy:*`-kommandon, och det finns ingen yta i webben eller i API:et. Se [[ADR-0095 Integritetsbegäranden]] och [[Registerförteckning]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | |
+| ulid | CHAR(26) | Unikt index. Bilagornas sökväg på disken börjar med den |
+| reference | VARCHAR(11) | Unik. `PR-` och åtta tecken ur Crockfords base32, slumpade. Inget löpnummer, eftersom det hade läckt hur många begäranden vi fått |
+| type | VARCHAR(30) | CHECK: `access`, `rectification`, `erasure`, `restriction`, `portability`, `objection`, `consent_withdrawal`, `other` |
+| status | VARCHAR(30) | CHECK: `received`, `verification_required`, `under_assessment`, `in_progress`, `awaiting_requester`, `completed`, `partially_completed`, `rejected`, `closed` |
+| priority | VARCHAR(10) | CHECK: `low`, `normal`, `high`. Förval `normal` |
+| requester_name | VARCHAR(255) | Den som begär. Gallras med ärendet |
+| requester_email | VARCHAR(255) | Dit svaret går. Gallras med ärendet |
+| on_behalf_of | VARCHAR(255) NULL | Huvudmannen när ett ombud begär |
+| account_id, user_id | BIGINT UNSIGNED NULL | **Identifierare utan främmande nyckel**, som i `legal_hold`: ärendet överlever den radering det beställer. De sätts först när identiteten är prövad |
+| role | VARCHAR(20) | CHECK: `controller`, `processor`, `both`, `undetermined`. Förval `undetermined`; sätts av bedömningen |
+| assignee | VARCHAR(120) NULL | Handläggarens namn |
+| description | TEXT | Vad personen begär, med hennes egna ord |
+| received_at | TIMESTAMP | Dagen begäran kom in. Fristen räknas härifrån |
+| deadline_at | TIMESTAMP | `received_at` plus en kalendermånad (`addMonthsNoOverflow()`) plus `extended_months` |
+| extended_months | TINYINT UNSIGNED | Förval 0, högst 2 |
+| restriction_scope | TEXT NULL | Vilka uppgifter och vilka ändamål en begränsning gäller. En markering, läses inte av någon kod |
+| restricted_at, restriction_lifted_at | TIMESTAMP NULL | När begränsningen sattes och hävdes |
+| outcome_reason | TEXT NULL | Skälet till ett avslutat läge utom `completed` |
+| closed_at | TIMESTAMP NULL | `NULL` = ärendet är öppet. Gallringen räknar härifrån |
+| created_at, updated_at | | |
+
+Index: `(status, deadline_at)`, `(closed_at)`, `(account_id)` och `(user_id)`.
+
+Ingen `deleted_at`: gallringen raderar på riktigt, 36 kalendermånader efter `closed_at`, och aldrig ett öppet ärende. Ärendet skriver inget till `audit_log` eller `security_log`, och mätningen läser inte tabellen.
+
+## privacy_request_event
+
+Ärendets händelser: allt som hänt med det, i tidsordning. Se [[ADR-0095 Integritetsbegäranden]] § 3 och § 7.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: ingen rutt, ingen resurs och ingen vy identifierar en händelse |
+| privacy_request_id | BIGINT UNSIGNED | FK till `privacy_request`, `RESTRICT` |
+| kind | VARCHAR(30) | CHECK: `created`, `viewed`, `status_changed`, `assigned`, `verification`, `linked`, `assessment`, `action`, `communication`, `deadline_changed`, `note`, `attachment_added`, `attachment_removed`, `restriction_placed`, `restriction_lifted` |
+| actor | VARCHAR(120) | Handläggarens namn, ur `--by` |
+| body | TEXT NULL | Fritext, till exempel en anteckning eller ett skäl |
+| data | JSON | Det som hör till slaget: gamla och nya värden, metod och resultat, system och operation. Värdena kommer ur listorna i `config/privacy.php` |
+| created_at | | |
+
+Index: `(privacy_request_id, created_at)`.
+
+**Append-only.** Ingen `updated_at`, ingen `deleted_at`: en händelse som kan ändras är inget bevis. Den enda vägen in är `RecordPrivacyEvent`. Raderna försvinner bara med ärendet.
+
+## privacy_request_attachment
+
+En fil på ärendet: svaret som skickades, en sammanställning eller en fullmakt. Se [[ADR-0095 Integritetsbegäranden]] § 10.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | |
+| ulid | CHAR(26) | Unikt index |
+| privacy_request_id | BIGINT UNSIGNED | FK till `privacy_request`, `RESTRICT` |
+| original_name | VARCHAR(255) | Filnamnet när den lades till |
+| size_bytes | BIGINT UNSIGNED | |
+| sha256 | CHAR(64) | Räknas på servern, aldrig tagen från klienten |
+| added_by | VARCHAR(120) | Handläggarens namn |
+| created_at, updated_at | | |
+
+Filen ligger på disken `privacy` under `{ärendets ulid}/{bilagans ulid}`. Disken är `storage/app/private/privacy` med filer i läge `0600`, och den hör inte till den innehållsadresserade lagringen ([[Filer och lagring]]): ingen `stored_file`-rad, ingen kvot och ingen rutt som levererar filen.
+
 ## security_log
 
 Säkerhetsloggen: systemets anteckning om missbruk, intrång och olagligt innehåll. Den läses av oss, utom användarens egna inloggningar. Se [[ADR-0043 Tre loggar]] § Säkerhetsloggen.

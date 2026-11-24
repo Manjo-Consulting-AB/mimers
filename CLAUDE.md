@@ -22,6 +22,7 @@ Din issues **Läs**-lista är utgångspunkten. Tabellen här är för frågor so
 |---|---|
 | en tabell, kolumn eller index | rätt fil under `docs/Datamodell/` |
 | konton, användare, behörigheter, inbjudningar | `Konton och åtkomst.md` |
+| integritetsbegäranden, den registrerades rättigheter | `Konton och åtkomst.md` |
 | items, kategorier, taggar, relationer, utlåning | `Items och organisation.md` |
 | återkommande underhåll, förekomster, todo | `Scheman och uppgifter.md` |
 | uppladdning, hash, dedup, referensräkning | `Filer och lagring.md` |
