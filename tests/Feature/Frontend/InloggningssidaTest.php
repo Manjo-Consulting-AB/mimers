@@ -125,13 +125,16 @@ it('länkar glömt lösenord till magic link och registreringen', function () {
     );
 });
 
-it('länkar till de fyra informationssidorna', function () {
-    // Beslut 3: länkarna under kortet. Sidorna kommer med issue 202.
+it('länkar till informationssidorna', function () {
+    // Beslut 3: länkarna under kortet. Sidorna kommer med issue 202;
+    // *Subprocessors* kom med M86 · issue 480, efter *Terms of use*.
     $kod = inloggningskalla();
 
-    foreach (['/about', '/privacy', '/terms', '/help'] as $mål) {
+    foreach (['/about', '/privacy', '/terms', '/subprocessors', '/help'] as $mål) {
         expect(str_contains($kod, "href=\"{$mål}\""))->toBeTrue("Login.vue länkar inte till {$mål}");
     }
+
+    expect((int) strpos($kod, 'href="/terms"'))->toBeLessThan((int) strpos($kod, 'href="/subprocessors"'));
 });
 
 it('har engelska strängar för den nya sidan', function () {
