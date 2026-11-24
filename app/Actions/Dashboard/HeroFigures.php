@@ -72,6 +72,32 @@ final class HeroFigures
     }
 
     /**
+     * Månadens kostnader för EN container, som containerns hjälte ritar
+     * (issue 475).
+     *
+     * **Samma väg som `monthCosts()` ovan, med ett annat urval.** Månaden
+     * kommer ur `currentMonth()` — användarens lokala kalendermånad — och
+     * raderna ur `CostReport::monthForContainers()`, aldrig ur en egen `SUM`
+     * eller en egen månadsgräns. Omfånget löses upp för containern med samma
+     * `ResolveItemScope::forContainers()` som dashboarden använder, så
+     * mottagarens omfång gäller: en rad på ett item hon inte når räknas inte.
+     *
+     * **Ingen egen grind.** Anroparen har redan prövat `view` på containern —
+     * se HandleInertiaRequests::containerMonthCosts(); metoden räknar bara.
+     * Den är publik eftersom den delade proppen byggs i middlewaren och inte
+     * i den här klassen.
+     *
+     * @return list<array{currency: string, amount: int, count: int}>
+     */
+    public function containerMonthCosts(User $user, Container $container): array
+    {
+        $scopes = app()->build(ResolveItemScope::class)
+            ->forContainers($user, [$container->getKey()]);
+
+        return $this->report->monthForContainers($scopes, $this->currentMonth($user));
+    }
+
+    /**
      * Månadens kostnader över användarens containrar, som `totals`.
      *
      * Sedan issue 474 bär svaret bara totalerna: hjälten ritar en rad per

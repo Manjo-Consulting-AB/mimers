@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import HeroFrame from './HeroFrame.vue';
+import HeroCosts from './HeroCosts.vue';
 import UiStat from './UiStat.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -60,6 +61,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * står också bildbytet (ADR-0047 § Beslut). Hjälten läser därför ingen
  * `can`-flagga.
  *
+ * **Kostnadssummeringen står efter brickorna i samma rad** sedan issue 475.
+ * Den läser den delade proppen `containerMonthCosts` ur `page.props` —
+ * byggd i App\Http\Middleware\HandleInertiaRequests::containerMonthCosts()
+ * ur App\Actions\Dashboard\HeroFigures — och ritas med `HeroCosts` i formen
+ * `on-image`, med innevarande månads totaler för just den här containern
+ * (issue 474). `null` utanför en container, och utan kostnadsrader i månaden
+ * ritas ingenting. Summeringen är fast och fri
+ * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut — *Containerns
+ * kostnadssumma*): den går inte att klicka på och länkar inte till
+ * kostnadsfliken. Formen `large`/`compact` rör bara hjältens höjd, så
+ * summeringen ritas likadant på översikten och på de andra flikarna.
+ *
  * **Namnet är sidans `<h1>`.** Över `md:` är hjälten sidans huvud, och
  * översikten döljer sitt eget huvud där (se resources/js/pages/Containers/
  * Overview.vue) — rubriken ska finnas på varje bredd, och den här raden är den
@@ -87,6 +100,12 @@ const props = defineProps({
 const page = usePage();
 
 const counts = computed(() => page.props.containerCounts ?? null);
+
+/*
+ * Månadens totaler för containern, ur samma delade props. `null` utanför en
+ * container blir en tom lista, och `HeroCosts` ritar då ingenting.
+ */
+const monthCosts = computed(() => page.props.containerMonthCosts ?? []);
 
 const { t } = useTranslations();
 </script>
@@ -160,6 +179,18 @@ const { t } = useTranslations();
                     tone="on-image"
                 />
             </Link>
+
+            <!--
+                Månadens totaler för containern, efter brickorna — och utanför
+                länkarna. Summeringen är fast och fri (ADR-0038 § Beslut):
+                ingen klickhanterare och ingen väg till kostnadsfliken. Utan
+                rader ritas den inte alls.
+            -->
+            <HeroCosts
+                v-if="monthCosts.length"
+                :totals="monthCosts"
+                tone="on-image"
+            />
         </div>
     </HeroFrame>
 </template>
