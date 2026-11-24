@@ -26,6 +26,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **En adminsida för den som underhåller produkten.** Hjälprapporten ([[ADR-0094 Hjälpcentret]] § 9), missbruksrapporten och mätningen skrivs i dag till loggen och läses med `grep` över ssh. Frågan är när det behövs en sida i stället, och vilken behörighetsmodell den i så fall ska ha — det finns ingen adminroll i dag. Uppstod ur #1568, 2026-11-23.
 
+- **Kontaktsidan och kontaktformuläret.** Både #1594 och #1600 lovar en kontaktväg, men `/contact` finns inte: #1617 länkar *Get in touch* dit och #1600 hänvisar till formuläret i stället för en e-postadress, så ingen av dem kan publiceras förrän sidan finns. Det som inte är bestämt: vad formuläret ska fråga efter (namn, adress, ämne och fritext — och om integritetsärenden ska ha en egen väg), vart meddelandet går (e-post till en adress, eller ett ärende i en extern tjänst), och vilket skydd det ska ha mot skräp (honeypot och tidsfälla i formuläret, rate limit, eller en tjänst som Cloudflare Turnstile — som i så fall blir ett nytt underbiträde i [[Registerförteckning]]). Samma svep bör avgöra om Mimers ska ha en kontoexport: #1594:s text lovade först *a complete copy of your account*, och meningen ströks ur #1617 eftersom exporten bara gäller en container och PDF-pärmen. Frågan är om det ska finnas en kontoexport eller om container- och pärmexporten ska räcka. Restes 2026-11-24 ur #1594.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
