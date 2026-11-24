@@ -218,6 +218,31 @@ it('har toningen och talen i den låga hjälten', function () {
 });
 
 /*
+ * Klart när (issue 477): hjälten ritar lagringskortet efter brickorna och
+ * `HeroCosts` i båda formerna, men bara i containerkontexten.
+ *
+ * `storageQuota.container` är `null` för en gäst med bara en grant — hon får
+ * kontokontexten i `storageContext()` — och då ritas inget kort. Kortet läser
+ * proppen själv ur `page.props`, som talen, så hjälten frågar ingenting själv.
+ * Formen `large`/`compact` styr bara höjden, och kortet står utanför villkoret.
+ */
+it('ritar lagringskortet efter brickorna och HeroCosts i containerkontexten', function () {
+    $hjalten = hjalteHjalten();
+
+    expect($hjalten)->toContain("import HeroStorage from './HeroStorage.vue'")
+        ->toContain('page.props.storageQuota')
+        ->toMatch('#<HeroStorage\b[^>]*v-if="storageQuota\?\.container"#s')
+        ->toMatch('#<HeroStorage\b[^>]*tone="on-image"#s');
+
+    // Efter brickorna och kostnadssummeringen i sifferraden.
+    expect(strpos($hjalten, '<UiStat'))->toBeLessThan(strpos($hjalten, '<HeroStorage'))
+        ->and(strpos($hjalten, '<HeroCosts'))->toBeLessThan(strpos($hjalten, '<HeroStorage'));
+
+    // Formen styr bara minimal höjd; kortet står utanför `hero`-villkoret.
+    expect(substr_count($hjalten, 'hero ==='))->toBe(1);
+});
+
+/*
  * Klart när: brickorna är länkar.
  *
  * *Items* leder till containerns itemlista och *Open tasks* till fliken

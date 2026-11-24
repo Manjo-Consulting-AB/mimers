@@ -2306,9 +2306,9 @@ return [
 
     // The plan page, see issue 66a decisions 4–9 and [[Planer och kvoter]].
     //
-    // The storage quota module in the top bar and its panel (issue 459 · M79).
-    // All of it lives under `quota.*`; the same breakdown is drawn on
-    // /settings/storage.
+    // The storage quota module in the mobile menu and its panel (issue 459 ·
+    // M79). The heroes draw the storage card instead (issue 477). All of it
+    // lives under `quota.*`; the same breakdown is drawn on /settings/storage.
     'quota' => [
         'details' => 'Storage details',
         'used_of' => ':used of :limit',
