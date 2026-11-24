@@ -342,6 +342,43 @@
 }
 
 /*
+ * Informationssidornas egen typografi — M86 · GitHub #1645.
+ *
+ * `max-w-prose` (65 tecken) är lagom för löptext men för smalt för
+ * underbiträdestabellen med fyra kolumner, och `.help-content` delas med
+ * hjälpartiklarna (`Help/Article.vue`, `Help/Category.vue`), som behåller sin
+ * storlek. Därför en modifierare som bara `Info.vue` sätter: brödtexten
+ * flyttar ett steg upp från `--text-body` (14 px) till `1rem`, samma 16 px som
+ * `text-base`. Rubrikerna är satta i `em` och följer med av sig själva, och
+ * tabellcellerna ärver storleken.
+ *
+ * Tabellen behåller den delade regeln under `md:` — där skrollar den i
+ * sidled. Över brytpunkten tar den vanlig tabellayout i stället, så att
+ * cellerna bryter rader och ingen kolumn klipps.
+ */
+.help-content--wide {
+    font-size: 1rem;
+}
+
+/*
+ * Cellerna bryter mellan ord, inte inuti dem. `.help-content` sätter
+ * `overflow-wrap: anywhere` för löptextens skull, men i tabellen delade den
+ * *Provider* mitt i ordet på skrivbordsbredd. Ryms inte tabellen får den
+ * skrolla i stället — det är den delade regelns beteende under `md:`.
+ */
+.help-content--wide th,
+.help-content--wide td {
+    overflow-wrap: normal;
+}
+
+@media (min-width: 48rem) {
+    .help-content--wide table {
+        display: table;
+        overflow-x: visible;
+    }
+}
+
+/*
  * Hjälpcentrets utfällbara frågor — M80 · issue 462,
  * [[ADR-0094 Hjälpcentret]] § 3.
  *

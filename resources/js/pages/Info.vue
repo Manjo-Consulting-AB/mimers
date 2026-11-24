@@ -33,6 +33,13 @@ defineOptions({ layout: AppLayout });
  * ritar aldrig markdown själv. Klassen `help-content` ger typografin ur
  * resources/css/app.css.
  *
+ * **`help-content--wide` är sidans egen modifierare** (M86 · GitHub #1645): den
+ * lyfter brödtexten ett steg i typskalan och låter tabellerna bryta rader i
+ * stället för att skrolla i sidled på skrivbordsbredd. Den sätts bara här —
+ * hjälpartiklarna delar `help-content` och behåller sitt mått.
+ * `max-w-prose` (65 tecken) räckte till löptext men inte till
+ * underbiträdestabellens fyra kolumner, därför `max-w-5xl`.
+ *
  * Sidan ritas i AppLayout som Welcome.vue och är publik — både en gäst och en
  * inloggad når den.
  */
@@ -58,7 +65,7 @@ const { t } = useTranslations();
 
         <div
             v-if="body"
-            class="help-content mx-auto mt-6 max-w-prose text-left"
+            class="help-content help-content--wide mx-auto mt-6 max-w-5xl text-left"
             v-html="body"
         />
 
