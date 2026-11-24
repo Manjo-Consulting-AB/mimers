@@ -693,6 +693,7 @@ return [
                 'privacy' => 'Privacy policy',
                 'terms' => 'Terms of use',
                 'subprocessors' => 'Subprocessors',
+                'contact' => 'Contact',
                 'help' => 'Help',
             ],
         ],
@@ -6171,6 +6172,58 @@ return [
             'contents' => 'Contents',
         ],
         'placeholder' => 'This page is coming soon.',
+    ],
+
+    /*
+     * M89 · Kontaktformuläret — /contact, se
+     * [[ADR-0096 Kontaktformuläret]] § 1–3 och resources/js/pages/Contact.vue.
+     *
+     * **Ingen engelsk copy i vyn.** Etiketterna, hjälptexterna,
+     * bekräftelsen och felen står här, och vyn ritar dem med `t()`. Det
+     * gäller också kategorierna: nycklarna kommer ur
+     * App\Support\Contact\ContactCategory, etiketterna ur
+     * `contact.categories.<nyckel>`.
+     *
+     * `sent` är bekräftelsen för BÅDE ett riktigt ärende och en skräpträff —
+     * servern svarar likadant, så vyn behöver ingen egen gren.
+     *
+     * `errors.*` översätter felkoderna ur API-höljet: `validation.required`
+     * och de andra valideringskoderna, plus `auth.too_many_attempts` från
+     * begränsaren. `invalid` är reserven och visar aldrig en rå kod.
+     */
+    'contact' => [
+        'title' => 'Contact us',
+        'intro' => 'Send us a message and we will get back to you by email.',
+        'category' => 'Category',
+        'category_placeholder' => 'Choose a category',
+        'name' => 'Name',
+        'email' => 'Email address',
+        'message' => 'Message',
+        'message_help' => 'Tell us what you need help with. Do not include passwords or other secrets.',
+        'signed_in_as' => 'We will reply to :name at :email.',
+        'submit' => 'Send message',
+        'sent' => 'Thanks — your message has been sent. We will reply to you by email.',
+        'send_failed' => 'Your message could not be sent. Please try again in a moment.',
+        'categories' => [
+            'general' => 'General Inquiry',
+            'technical' => 'Technical Support',
+            'account' => 'Account & Access',
+            'billing' => 'Billing & Subscription',
+            'privacy' => 'Data & Privacy',
+            'features' => 'Features & Suggestions',
+            'sharing' => 'Sharing & Permissions',
+            'agents' => 'AI Agents',
+            'business' => 'Business & Partnerships',
+            'other' => 'Other',
+        ],
+        'errors' => [
+            'required' => 'This field is required.',
+            'email' => 'Enter a valid email address.',
+            'max' => 'Use at most :max characters.',
+            'category' => 'Choose one of the categories.',
+            'too_many' => 'Too many messages. Wait a moment and try again.',
+            'invalid' => 'Check the form and try again.',
+        ],
     ],
 
     /*

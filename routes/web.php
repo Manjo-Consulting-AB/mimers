@@ -14,6 +14,7 @@ use App\Http\Controllers\BinderController;
 use App\Http\Controllers\CalendarFeedController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerAgentController;
 use App\Http\Controllers\ContainerController;
@@ -369,6 +370,27 @@ foreach (['about', 'privacy', 'terms', 'subprocessors'] as $infoPage) {
         'body' => $pages->html($infoPage),
     ]))->name('info.'.$infoPage);
 }
+
+/*
+ * M89 · Kontaktformuläret, se App\Http\Controllers\ContactController och
+ * [[ADR-0096 Kontaktformuläret]] § 1–6.
+ *
+ * **Utanför `auth` och `guest`**, som informationssidorna ovan: /about och
+ * /privacy länkar hit, och både en gäst och en inloggad ska nå sidan. En
+ * plats i någon av grupperna hade skickat den ena parten vidare.
+ *
+ * **Två rutter, och bara POST bär begränsaren.** Sidan är en läsning;
+ * inskickningen är 5 i timmen per IP för en gäst och 10 per person för en
+ * inloggad (`throttle:contact` i App\Providers\AppServiceProvider). Rutten
+ * svarar JSON, så begränsaren ger API-höljet och inte den inbyggda
+ * omdirigeringen till ett formulär.
+ */
+Route::get('/contact', [ContactController::class, 'create'])
+    ->name('contact');
+
+Route::post('/contact', [ContactController::class, 'store'])
+    ->middleware('throttle:contact')
+    ->name('contact.store');
 
 // M78 · issue 458: hjälpsidan har egna texter (lang/{locale}/help/*.md) och en
 // egen controller. Ruttnamnet står kvar, för Login.vue länkar till /help.
