@@ -2319,6 +2319,15 @@ return [
         'loading' => 'Loading…',
         'files' => 'Files',
         'text' => 'Text',
+        // The storage card in the hero, see issue 476 · [[ADR-0090
+        // Dashboardens hjälte]] § Tillägg 2026-11-24. The heading names the
+        // question and `open` is the whole card's accessible name: the card
+        // is one link, so the name says where it goes rather than repeating
+        // the numbers inside it.
+        'card' => [
+            'heading' => 'Storage',
+            'open' => 'Open storage settings',
+        ],
         'largest_containers' => 'Largest containers',
         'largest_items' => 'Largest items',
         'largest_files' => 'Largest files',

@@ -7,6 +7,7 @@ import DashboardHero from '../components/DashboardHero.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import HeroCosts from '../components/HeroCosts.vue';
+import HeroStorage from '../components/HeroStorage.vue';
 import InfoPanel from '../components/InfoPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -88,9 +89,10 @@ defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
  * hjältebild eller standardbilden. Sedan issue 474 är summeringen `HeroCosts`
  * i stället för brickor och donut. Sidan ritar därför brickorna och
  * summeringen EN gång till under bandet, i ett block som bara syns under
- * `md:` — det är dit ADR-0090 § 6 flyttar dem på en telefon. Propparna och
- * talen är desamma som förut; hjälten får `stats` och `costs` och räknar
- * ingenting själv.
+ * `md:` — det är dit ADR-0090 § 6 flyttar dem på en telefon. Sedan issue 476
+ * står lagringskortet sist i samma block, efter brickorna och summeringen.
+ * Propparna och talen är desamma som förut; hjälten får `stats` och `costs`
+ * och räknar ingenting själv.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -156,6 +158,11 @@ const { t } = useTranslations();
             <DashboardStats :stats="props.stats" />
 
             <HeroCosts class="mt-8" :totals="props.costs.totals" />
+
+            <!-- Lagringskortet står sist under bandet, som i hjälten — och
+                 bara här, inte på de andra sidorna (ADR-0090 § Tillägg
+                 2026-11-24 punkt 4). -->
+            <HeroStorage class="mt-8" />
         </div>
 
         <!--
