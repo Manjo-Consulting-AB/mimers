@@ -340,22 +340,34 @@ it('ritar bara fält som har ett värde i itemets vy', function () {
         ->toContain('customFieldRows(props.item, props.locale)');
 });
 
-it('formaterar ett tal med användarens språk utan att tappa decimaler', function () {
+it('formaterar ett tal utan tusentalsavgränsare och utan att tappa decimaler', function () {
     $svar = json_decode(faltGrassnittNode(
         'const field = (value) => ({ id: "01AAAA", label: "Vikt", type: "number", value });'
         .'process.stdout.write(JSON.stringify({'
         .'en: m.formatFieldValue(field("12.500000"), "en"),'
-        .'sv: m.formatFieldValue(field("1234567.250000"), "sv-SE"),'
-        .'stort: m.formatFieldValue(field("99999999999999.999999"), "en")'
+        .'artal: m.formatFieldValue(field("1985.000000"), "en"),'
+        .'stort: m.formatFieldValue(field("99999999999999.999999"), "en"),'
+        .'miljon: m.formatFieldValue(field("1234567.250000"), "en"),'
+        .'negativt: m.formatFieldValue(field("-1985.500000"), "en"),'
+        .'sv: m.formatFieldValue(field("1234567.250000"), "sv-SE")'
         .'}));',
     ), true, 512, JSON_THROW_ON_ERROR);
 
-    expect($svar['en'])->toBe('12.5')
+    // Ett talfält är lika ofta ett årtal som ett belopp: 1985 skrivs som
+    // 1985, inte 1,985 — som med punkt som decimaltecken läses som knappt två.
+    expect($svar['artal'])->toBe('1985')
+        ->and($svar['miljon'])->toBe('1234567.25')
+        ->and($svar['negativt'])->toBe('-1985.5')
+        ->and($svar['en'])->toBe('12.5')
         // 14 heltalssiffror och 6 decimaler ryms inte i en Number; siffrorna
-        // läses därför aldrig som ett flyttal.
-        ->and($svar['stort'])->toBe('99,999,999,999,999.999999')
-        ->and($svar['sv'])->toBeString()
-        ->and($svar['sv'])->toContain('1');
+        // läses därför aldrig som ett flyttal och grupperas inte heller.
+        ->and($svar['stort'])->toBe('99999999999999.999999')
+        ->and($svar['sv'])->toContain('1234567');
+
+    // Inte heller det svenska språket lägger in en avgränsare mellan
+    // heltalssiffrorna — varken mellanslag, hårt mellanslag, smalt hårt
+    // mellanslag eller punkt.
+    expect(preg_match('/[0-9][\s\x{00A0}\x{202F}.][0-9]/u', $svar['sv']))->toBe(0);
 });
 
 it('ger datumfältet en datumväljare och talfältet bara tal', function () {
