@@ -19,8 +19,8 @@ use function Pest\Laravel\withoutVite;
  *
  * Filen prövar innehållet i `body`, att gäst och inloggad får samma svar,
  * `InfoPage`-klassens reserv och HTML-strippning, samt att komponenten ritar
- * `body` och inte har kopierat texten. Ruttnamnen, platshållaren för /terms
- * och rubrikerna prövas i InfosidorTest.
+ * `body` och inte har kopierat texten. Ruttnamnen och rubrikerna prövas i
+ * InfosidorTest.
  *
  * Hjälparna har prefixet `omsidan` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -133,7 +133,9 @@ it('ger en gäst och en inloggad samma body', function () {
 });
 
 it('ger null för en sida utan fil', function () {
-    expect((new InfoPage)->html('terms'))->toBeNull();
+    // Alla fyra informationssidorna har en fil sedan M86 · issue 489, så
+    // provet pekar på ett sidnamn som verkligen saknar fil.
+    expect((new InfoPage)->html('no-such-page'))->toBeNull();
 });
 
 it('faller tillbaka på engelskan när språkets fil saknas', function () {
