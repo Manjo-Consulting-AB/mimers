@@ -26,6 +26,12 @@ use Illuminate\Support\Facades\DB;
  * tabell att gallra, och `config('session.table')` kan peka på något annat
  * än `sessions`.
  *
+ * **Samma anslutning som Laravel.** `DatabaseSessionHandler` läser
+ * `session.connection` (från `SESSION_CONNECTION`), och när den är satt
+ * ligger raderna i en annan databas än standardanslutningen. Jobbet går
+ * därför mot `DB::connection(config('session.connection'))`; `null` ger
+ * standardanslutningen.
+ *
  * Schemaläggs i routes/console.php med `Schedule::call(...)` under namnet
  * `prune-sessions`, aldrig `Schedule::command(...)` eller
  * `->runInBackground()` — se AGENTS.md § Subprocesser i driftmiljön. Klassen
@@ -47,7 +53,8 @@ class PrunesExpiredSessions
             ->subMinutes((int) config('session.lifetime'))
             ->getTimestamp();
 
-        return DB::table(config('session.table'))
+        return DB::connection(config('session.connection'))
+            ->table(config('session.table'))
             ->where('last_activity', '<=', $cutoff)
             ->delete();
     }

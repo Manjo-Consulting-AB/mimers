@@ -3,6 +3,7 @@
 use App\Console\PrunesExpiredSessions;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 use function Pest\Laravel\artisan;
 
@@ -52,6 +53,48 @@ it('raderar en session äldre än session.lifetime och behåller en inom livslä
 
     expect(DB::table('sessions')->where('id', $gammal)->exists())->toBeFalse()
         ->and(DB::table('sessions')->where('id', $farsk)->exists())->toBeTrue();
+});
+
+it('gallrar den anslutning som session.connection pekar på', function () {
+    // En namngiven sqlite-anslutning räcker som bevis: den är en egen
+    // databas, så raden i standardanslutningen avslöjar om jobbet gick fel.
+    config([
+        'session.driver' => 'database',
+        'session.lifetime' => 120,
+        'session.table' => 'sessions',
+        'session.connection' => 'sessions_databas',
+        'database.connections.sessions_databas' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+        ],
+    ]);
+
+    Schema::connection('sessions_databas')->create('sessions', function ($tabell) {
+        $tabell->string('id')->primary();
+        $tabell->unsignedBigInteger('user_id')->nullable();
+        $tabell->string('ip_address', 45)->nullable();
+        $tabell->text('user_agent')->nullable();
+        $tabell->longText('payload');
+        $tabell->integer('last_activity')->index();
+    });
+
+    $gammal = str_repeat('g', 40);
+    gallraSession($gammal, now()->subMinutes(121)->getTimestamp());
+    DB::connection('sessions_databas')->table('sessions')->insert([
+        'id' => $gammal,
+        'user_id' => null,
+        'ip_address' => '203.0.113.7',
+        'user_agent' => 'Test',
+        'payload' => '',
+        'last_activity' => now()->subMinutes(121)->getTimestamp(),
+    ]);
+
+    expect((new PrunesExpiredSessions)->handle())->toBe(1);
+
+    expect(DB::connection('sessions_databas')->table('sessions')->count())->toBe(0)
+        ->and(DB::table('sessions')->where('id', $gammal)->exists())->toBeTrue();
 });
 
 it('gör ingenting och fäller inget fel när session.driver inte är database', function () {
