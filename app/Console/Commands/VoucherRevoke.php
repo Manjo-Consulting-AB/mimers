@@ -6,7 +6,7 @@ use App\Models\Voucher;
 use Illuminate\Console\Command;
 
 /**
- * `voucher:revoke {code}` — återkalla en inbjudningskod, se [[ADR-0055
+ * `voucher:revoke {voucher}` — återkalla en inbjudningskod, se [[ADR-0055
  * Inbjudningskoder och stängd registrering]] § 7.
  *
  * Återkallandet sätter `revoked_at`; raden raderas aldrig. Koden går
@@ -15,25 +15,29 @@ use Illuminate\Console\Command;
  * över vem som kom in på den ändras inte av att koden dras tillbaka. Det är
  * skillnaden mot att koden förbrukats: samma spärr, olika berättelse.
  *
- * Koden läses ur argumentet och hashas för uppslaget; den skrivs aldrig ut.
+ * Argumentet är vouchrans `ulid` — den som `voucher:list` visar. Koden visas
+ * bara en gång, vid skapandet, så det är ulid:en man har när en återkallning
+ * blir aktuell veckor senare. Koden accepteras fortfarande: ett argument som
+ * inte är en ulid slås upp som kod (hashas för uppslaget). Ingen av dem skrivs
+ * ut.
  * Ett återkallande av en redan återkallad kod är inte ett fel — kommandot
  * säger till och avslutar grönt, så en upprepad körning i en skriptad
  * sekvens inte ser ut som ett haveri.
  */
 class VoucherRevoke extends Command
 {
-    protected $signature = 'voucher:revoke {code : Koden som ska återkallas}';
+    protected $signature = 'voucher:revoke {voucher : Vouchrans ulid (ur voucher:list), eller koden}';
 
     protected $description = 'Återkalla en inbjudningskod.';
 
     public function handle(): int
     {
-        $code = $this->argumentText('code');
+        $key = $this->argumentText('voucher');
 
-        $voucher = $code === null ? null : Voucher::findByCode($code);
+        $voucher = $key === null ? null : $this->find($key);
 
         if ($voucher === null) {
-            $this->error('Ingen voucher med den koden.');
+            $this->error('Ingen voucher med den ulid:en eller koden.');
 
             return self::FAILURE;
         }
@@ -50,6 +54,17 @@ class VoucherRevoke extends Command
         $this->line('Koden är återkallad.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Slå upp på ulid först, därefter på kod. En kod är tolv tecken före
+     * normalisering och en ulid tjugosex, så de krockar inte i praktiken.
+     */
+    private function find(string $key): ?Voucher
+    {
+        return Voucher::query()->where('ulid', $key)->first()
+            ?? Voucher::query()->where('ulid', strtoupper($key))->first()
+            ?? Voucher::findByCode($key);
     }
 
     /**

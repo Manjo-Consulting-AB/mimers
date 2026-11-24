@@ -64,7 +64,7 @@ it('voucher:revoke gör koden oinlösbar', function () {
 
     expect(Voucher::findByCode($kod)?->isRedeemable())->toBeTrue();
 
-    $utgång = Artisan::call('voucher:revoke', ['code' => $kod]);
+    $utgång = Artisan::call('voucher:revoke', ['voucher' => $kod]);
 
     expect($utgång)->toBe(0);
 
@@ -72,6 +72,18 @@ it('voucher:revoke gör koden oinlösbar', function () {
 
     expect($återkallad?->isRedeemable())->toBeFalse();
     expect($återkallad?->revoked_at)->not->toBeNull();
+});
+
+it('voucher:revoke återkallar på ulid, som voucher:list visar', function () {
+    $kod = kommandonSkapa(['--label' => 'Mia Larsson']);
+    $voucher = Voucher::findByCode($kod);
+
+    expect($voucher)->not->toBeNull();
+
+    $utgång = Artisan::call('voucher:revoke', ['voucher' => $voucher?->ulid]);
+
+    expect($utgång)->toBe(0);
+    expect(Voucher::findByCode($kod)?->isRedeemable())->toBeFalse();
 });
 
 it('voucher:create nekar en okänd plan', function () {
@@ -92,7 +104,7 @@ it('voucher:create nekar noll dagar', function () {
 });
 
 it('voucher:revoke säger till när koden inte finns', function () {
-    $utgång = Artisan::call('voucher:revoke', ['code' => 'AAAA-BBBB-CCCC']);
+    $utgång = Artisan::call('voucher:revoke', ['voucher' => 'AAAA-BBBB-CCCC']);
 
     expect($utgång)->toBe(Command::FAILURE);
     expect(Artisan::output())->toContain('Ingen voucher');

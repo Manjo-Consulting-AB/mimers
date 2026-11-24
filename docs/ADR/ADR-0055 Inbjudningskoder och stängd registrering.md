@@ -85,8 +85,8 @@ Planen ges som i `GrantInternalPro`: en `subscription`-rad med kodens plan, stat
 
 Med Artisan över SSH, ingen administrationsyta:
 - `voucher:create --label= --plan=pro --days=365 --uses=1 --expires= --no-registration` skriver ut koden
-- `voucher:revoke {code}`
-- `voucher:list` visar etikett, plan, uttag och läge, aldrig koden
+- `voucher:revoke {voucher}` tar vouchrans `ulid` ur `voucher:list` — koden visas bara en gång och finns inte kvar när en återkallning blir aktuell. En kod accepteras också
+- `voucher:list` visar ulid, etikett, plan, uttag och läge, aldrig koden
 
 Kommandona körs för hand och schemaläggs inte; de berörs därför inte av att `proc_open` saknas. Förvalen är betans: Pro, 365 dagar, ett uttag och `grants_registration`.
 
