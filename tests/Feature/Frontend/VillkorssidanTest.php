@@ -258,6 +258,7 @@ it('ger en gäst och en inloggad samma body', function () {
  * Klart när: /about och /subprocessors ritar som förut. /privacys enda
  * ändring är orgnummerraden, som prövas ovan.
  */
+// vakt: regressionsvakt — /about och /subprocessors ska rita som förut, så provet är grönt på basen med flit.
 it('lämnar /about och /subprocessors orörda', function () {
     withoutVite();
 
