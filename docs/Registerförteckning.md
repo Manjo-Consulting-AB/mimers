@@ -27,6 +27,7 @@ Vilka personuppgifter systemet behandlar, var de bor, varför de finns, hur län
 | Felrapporter | Sentry, EU-regionen (projekten `mimers-php` och `mimers-js`) | Upptäcka och rätta fel som användaren aldrig ser. En rapport bär stackspår, rutt, release, miljö, webbläsare och OS samt användarens pseudonym (en HMAC av ULID:n med appens nyckel, som inte går att vända till personen utan nyckeln). Ingen IP-adress, e-postadress, kaka eller request-kropp skickas, [[ADR-0079 Övervakning]] § 1 | Sentrys lagringstid på planen, för närvarande 30 dagar på gratisnivån. Appen gallrar inte själv | Berättigat intresse, art. 6.1 f |
 | Återkopplingens fritext | `help_feedback` | Vad en inloggad skriver om en hjälpartikel, för att förbättra hjälptexterna. Raden bär också Ja/Nej, orsaken, artikelns id och språket, och binds till personen med `user_id` när hon är inloggad. En gästs rad saknar `user_id`, [[ADR-0094 Hjälpcentret]] § 7 | 90 dagar, gallras av `PrunesHelpFeedback`. **Raderas med personen** av `DeleteUser`, [[ADR-0045 Radering av konto och person]] § Beslut 3 | Berättigat intresse, art. 6.1 f |
 | Sökfrågor utan träff | `help_search_gap_daily` | Vad användare söker på i hjälpen när svaret inte finns, så att vi ser vilka texter som fattas. Frågan sparas **avidentifierad** — normaliserad, utan e-postadresser och med sifferföljder ersatta av `#` — och raden har ingen koppling till person, konto eller IP, [[ADR-0094 Hjälpcentret]] § 8 | 90 dagar, gallras av `PrunesHelpData` | Berättigat intresse, art. 6.1 f |
+| Supportärenden | Brevlådan `support@mimers.app` hos inleed, och mejlet i transit hos Mailgun | Svara den som skrivit via `/contact`. Mejlet bär kategori, namn, e-postadress och meddelandet, och för en inloggad även personens och kontots ULID. **Ingen IP-adress och ingen rad i databasen**, [[ADR-0096 Kontaktformuläret]]. Ett ärende i kategorin Data & Privacy blir dessutom ett integritetsärende, se raden ovan | Tolv månader efter det sista meddelandet i tråden. Raderas för hand i brevlådan, appen har inget att gallra | Berättigat intresse, art. 6.1 f |
 
 ## Användarens innehåll
 
@@ -50,6 +51,6 @@ Vem som behandlar personuppgifter för vår räkning. Förteckningen ovan säger
 
 | Biträde | Vad de behandlar | Var |
 |---|---|---|
-| inleed | Hela appens databas, filer och loggar: driften ligger på deras delade webbhotell, [[Pipeline]] | `prime5.inleed.net` |
+| inleed | Hela appens databas, filer och loggar: driften ligger på deras delade webbhotell, [[Pipeline]]. Dessutom brevlådan `support@mimers.app`, [[ADR-0096 Kontaktformuläret]] | `prime5.inleed.net` |
 | Mailgun | Mottagaradress och innehåll i de mejl appen skickar, [[ADR-0010 Notisarkitektur]] | EU-regionen (`api.eu.mailgun.net`) |
 | Sentry | Felrapporterna i raden ovan, [[ADR-0079 Övervakning]]. DPA:n är godkänd | EU-regionen (`de.sentry.io`) |
