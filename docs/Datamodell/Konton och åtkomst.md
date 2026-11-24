@@ -130,7 +130,7 @@ Unikheten mot `user.email` prövas **två gånger**: när begäran tas emot, och
 
 `confirmed_at` och inte `used_at`, som `magic_link_token` har: ett magic link är förbrukat av en inloggning, men ett adressbyte är inte förbrukat förrän adressen faktiskt skrivits om — kolumnen är kvittensen på att den skrivningen skedde.
 
-Ingen `deleted_at`: samma skäl som `magic_link_token`, en kortlivad säkerhetsartefakt och inte användarskapat innehåll.
+Ingen `deleted_at`: samma skäl som `magic_link_token`, en kortlivad säkerhetsartefakt och inte användarskapat innehåll. Raden gallras av `prune-account-changes` senast ett dygn efter att den blev obrukbar, [[Registerförteckning]].
 
 ## password_change
 
@@ -150,7 +150,7 @@ Ett nuvarande lösenord krävs **inte**, varken när kontot har ett eller inte: 
 
 `confirmed_at` och inte `used_at`, som `magic_link_token` har: samma skäl som `email_change` — ett lösenordsbyte är inte förbrukat förrän kolumnen faktiskt skrivits, och `confirmed_at` är kvittensen på att den skrivningen skedde.
 
-Ingen `deleted_at` och ingen automatisk gallring: samma avvägning som `email_change` — en kortlivad säkerhetsartefakt, inte användarskapat innehåll, och raden får sin frist den dag den blir ett problem.
+Ingen `deleted_at`: samma avvägning som `email_change` — en kortlivad säkerhetsartefakt, inte användarskapat innehåll. Raden gallras av `prune-account-changes` senast ett dygn efter att den blev obrukbar, [[Registerförteckning]].
 
 ## user_deletion
 

@@ -13,8 +13,10 @@ use App\Console\GeneratesDowngradeWarnings;
 use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
+use App\Console\PrunesExpiredAccountChanges;
 use App\Console\PrunesExpiredApiTokens;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PrunesExpiredSessions;
 use App\Console\PrunesHelpData;
 use App\Console\PrunesHelpFeedback;
 use App\Console\PrunesInAppNotifications;
@@ -458,6 +460,46 @@ Schedule::call(fn () => app(PrunesLogs::class)->handle())
 Schedule::call(fn () => app(PrunesExpiredApiTokens::class)->handle())
     ->daily()
     ->name('prune-expired-api-tokens');
+
+/*
+ * Issue 473 (M83) · Gallringen av kontoändringarna: `email_change` och
+ * `password_change` blir obrukbara efter en timme eller när de bekräftats,
+ * men raden låg annars kvar till personen raderas av DeleteUser — och
+ * `email_change` bär den nya adressen i klartext. Här tas de bort, se
+ * App\Console\PrunesExpiredAccountChanges, [[Registerförteckning]] och
+ * [[Konton och åtkomst]] § email_change och § password_change. Logiken bor i
+ * en vanlig klass, testad direkt i
+ * tests/Feature/Auth/GallraKontoandringarTest.php; det här är bara
+ * schemaläggningen. Kör i samma nattliga fönster som de andra gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(PrunesExpiredAccountChanges::class)->handle())
+    ->daily()
+    ->name('prune-account-changes');
+
+/*
+ * Issue 473 (M83) · Gallringen av utgångna inloggningssessioner: `sessions`
+ * bär `ip_address` och `user_agent`, och Laravel raderar en utgången session
+ * bara när sessionslotteriet slår till. Här tas varje rad bort vars
+ * `last_activity` är äldre än `session.lifetime`, så att
+ * [[Registerförteckning]] kan ange en fast frist. Se
+ * App\Console\PrunesExpiredSessions. Logiken bor i en vanlig klass, testad
+ * direkt i tests/Feature/Auth/GallraSessionerTest.php; det här är bara
+ * schemaläggningen. Lotteriet i config/session.php står kvar. Kör i samma
+ * nattliga fönster som de andra gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(PrunesExpiredSessions::class)->handle())
+    ->daily()
+    ->name('prune-sessions');
 
 /*
  * Issue 383 · Gallringen av `in_app`-rader: listan i appen visar 90 dagar,
