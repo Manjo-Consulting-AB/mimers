@@ -6,9 +6,9 @@
  *
  * Listorna här är de värden kolumnernas CHECK-villkor tillåter, samlade på
  * ett ställe så att koden aldrig stavar en sträng och en ny typ blir en
- * ändring i config, inte i varje kommando. Senare issuers listor — statusar
- * att flytta mellan, åtgärder, verifieringsmetoder — läggs här när de
- * byggs; den här filen bär bara det första ärendet.
+ * ändring i config, inte i varje kommando. Statusarna, verifieringens ämnen,
+ * metoder och resultat finns här; senare issuers listor — åtgärder,
+ * bedömningar — läggs hit när de byggs.
  *
  * `deadline_months` är fristen i art. 12.3: en kalendermånad från
  * mottagandet, räknad med addMonthsNoOverflow() (ADR-0095 § 5). Den är inte
@@ -46,8 +46,10 @@ return [
     | De öppna är `received`, `verification_required`, `under_assessment`,
     | `in_progress` och `awaiting_requester`. De avslutade är `completed`,
     | `partially_completed`, `rejected` och `closed`, där `closed` betyder
-    | avslutat utan sakprövning (ADR-0095 § 4). Uppdelningen i öppna och
-    | avslutade lägen kommer med kommandot som flyttar ärendet (issue 482).
+    | avslutat utan sakprövning (ADR-0095 § 4).
+    |
+    | `statuses` är summan av de två andra listorna och används för att pröva
+    | ett okänt värde; uppdelningen avgör vilka byten som är tillåtna.
     |
     */
 
@@ -57,6 +59,21 @@ return [
         'under_assessment',
         'in_progress',
         'awaiting_requester',
+        'completed',
+        'partially_completed',
+        'rejected',
+        'closed',
+    ],
+
+    'open_statuses' => [
+        'received',
+        'verification_required',
+        'under_assessment',
+        'in_progress',
+        'awaiting_requester',
+    ],
+
+    'closed_statuses' => [
         'completed',
         'partially_completed',
         'rejected',
@@ -73,6 +90,40 @@ return [
         'low',
         'normal',
         'high',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Verifieringen av identiteten och ett ombuds behörighet
+    |--------------------------------------------------------------------------
+    |
+    | Vad som prövades och hur — aldrig vad som visades. En verifiering är en
+    | händelse med `subject`, `method` och `result`, och ingen kopia av en
+    | identitetshandling sparas, varken som text eller som bilaga (ADR-0095
+    | § 2).
+    |
+    | Metoderna: svar från kontots adress, en begäran gjord inloggad,
+    | kompletterande uppgifter, fullmakt eller annat.
+    |
+    */
+
+    'verification_subjects' => [
+        'identity',
+        'authority',
+    ],
+
+    'verification_methods' => [
+        'account_email',
+        'signed_in_session',
+        'additional_information',
+        'power_of_attorney',
+        'other',
+    ],
+
+    'verification_results' => [
+        'verified',
+        'insufficient',
+        'failed',
     ],
 
     /*
