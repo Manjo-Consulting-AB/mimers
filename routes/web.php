@@ -83,6 +83,7 @@ use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
 use App\Support\Auth\BindsPasswordChangeThrottleToUser;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
+use App\Support\InfoPage;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -345,20 +346,27 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'logi
  * Issue 202 · Informationssidorna — /about, /privacy och /terms, plus /help. Inloggnings-
  * sidans nya design länkar hit (issue 203).
  *
- * **Tre rutter, en sida.** Adresserna skiljer sig åt men innehållet är det
- * samma — en rubrik och en mening — och bara rubriken skiljer dem åt. Sidan
- * `Info` får sin adress som prop och slår upp `info.<sida>.title` i
+ * **Tre rutter, en sida.** Adresserna skiljer sig åt men formen är densamma.
+ * Sidan `Info` får sin adress som prop och slår upp `info.<sida>.title` i
  * lang/{locale}/ui.php, så en fjärde sida är en rad i listan och en nyckel i
  * katalogen, inte en ny .vue-fil.
+ *
+ * **`body` är sidans text** (M85 · issue 478): `App\Support\InfoPage` läser
+ * `lang/{locale}/pages/{sida}.md` med engelskan som reserv och ritar den med
+ * `HelpMarkdown`, [[ADR-0094 Hjälpcentret]] § 4. Saknas filen blir `body`
+ * `null`, och då ritar sidan platshållaren som förut — det är därför `/privacy`
+ * och `/terms` är oförändrade och #1600 kan lägga till `privacy.md` utan ny
+ * kod. Listan, adresserna och ruttnamnen ändras inte av det.
  *
  * **Utanför `auth` och `guest`.** En informationssida ska nås av både en gäst
  * och en inloggad, och en plats i någon av grupperna hade skickat den ena
  * parten vidare. Samma form som `welcome` ovan.
- *
- * Texterna är platshållare; de riktiga skrivs i en senare runda.
  */
 foreach (['about', 'privacy', 'terms'] as $infoPage) {
-    Route::get('/'.$infoPage, fn () => Inertia::render('Info', ['page' => $infoPage]))->name('info.'.$infoPage);
+    Route::get('/'.$infoPage, fn (InfoPage $pages) => Inertia::render('Info', [
+        'page' => $infoPage,
+        'body' => $pages->html($infoPage),
+    ]))->name('info.'.$infoPage);
 }
 
 // M78 · issue 458: hjälpsidan har egna texter (lang/{locale}/help/*.md) och en

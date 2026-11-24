@@ -10,17 +10,30 @@ defineOptions({ layout: AppLayout });
  * sedan M78 · issue 458 en egen sida, Help.vue.
  *
  * EN sida för tre adresser: rutten skickar vilken sida det är i `page`-
- * proppen, och all text slås upp ur `info.<sida>.title` och
- * `info.placeholder` i lang/{locale}/ui.php. Ingen sträng bor här — samma
- * regel som resten av webben ([[ADR-0021 Frontendteknik]] § Beslut: webbens
- * text formuleras på servern ur lang/).
+ * proppen, och rubriken slås upp ur `info.<sida>.title` i
+ * lang/{locale}/ui.php. Ingen sträng bor här — samma regel som resten av
+ * webben ([[ADR-0021 Frontendteknik]] § Beslut: webbens text formuleras på
+ * servern ur lang/).
  *
- * Rubriken är det enda som skiljer sidorna åt; brödtexten är densamma på alla
- * tre tills de riktiga texterna skrivs. Sidan ritas i AppLayout som
- * Welcome.vue och är publik — både en gäst och en inloggad når den.
+ * **`body` är sidans text på markdown** (M85 · issue 478). Servern läser
+ * `lang/{locale}/pages/{sida}.md` och ritar den med `HelpMarkdown`, så det som
+ * kommer hit är redan HTML — [[ADR-0094 Hjälpcentret]] § 4. Saknas filen är
+ * `body` tom, och då ritas platshållaren ur `info.placeholder` som förut. Det
+ * är läget för /privacy och /terms tills deras texter skrivs (#1600).
+ *
+ * **`v-html` är samma undantag som i Help.vue, Category.vue och ItemNotes.vue**
+ * ([[ADR-0066 Itemets anteckning]] § 3). Förbudet i [[ADR-0057 Ikoner och
+ * typsnitt]] § 2 gäller ikonernas SVG och står kvar; här ritas bara HTML som
+ * servern har ritat enligt § 4, aldrig något användaren skickat, och klienten
+ * ritar aldrig markdown själv. Klassen `help-content` ger typografin ur
+ * resources/css/app.css.
+ *
+ * Sidan ritas i AppLayout som Welcome.vue och är publik — både en gäst och en
+ * inloggad når den.
  */
 defineProps({
     page: { type: String, required: true },
+    body: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -31,6 +44,13 @@ const { t } = useTranslations();
 
     <div class="py-12 text-center">
         <h1 class="text-3xl font-semibold">{{ t(`info.${page}.title`) }}</h1>
-        <p class="mt-3 text-slate-600">{{ t('info.placeholder') }}</p>
+
+        <div
+            v-if="body"
+            class="help-content mx-auto mt-6 max-w-prose text-left"
+            v-html="body"
+        />
+
+        <p v-else class="mt-3 text-slate-600">{{ t('info.placeholder') }}</p>
     </div>
 </template>

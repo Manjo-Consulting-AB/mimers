@@ -18,6 +18,11 @@ use function Pest\Laravel\withoutVite;
  * `info.<sida>.title`. Filen prövar serverns halva av det kontraktet —
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
  *
+ * **Sedan M85 · issue 478 bär rutten också `body`.** Den kommer ur
+ * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`, och bara /about
+ * har en fil: /privacy och /terms ger `null` och ritar platshållaren som
+ * förut. Innehållet i /abouts body prövas i OmsidanTest.
+ *
  * Att sidan ritas i AppLayout och inte bär en enda sträng själv prövas av
  * GenomgangTest och SprakTest, som läser varje fil under resources/js; att
  * rubriken faktiskt hamnar i <Head> och <h1> är komponentens halva och syns
@@ -31,12 +36,18 @@ use function Pest\Laravel\withoutVite;
 it('renderar Info för var och en av de tre sidorna för en gäst', function (string $sida) {
     withoutVite();
 
-    get('/'.$sida)
+    $svar = get('/'.$sida)
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Info')
             ->where('page', $sida)
         );
+
+    if ($sida === 'about') {
+        expect((string) $svar->inertiaProps()['body'])->not->toBe('');
+    } else {
+        expect($svar->inertiaProps()['body'])->toBeNull();
+    }
 })->with(['about', 'privacy', 'terms']);
 
 it('renderar Info också för en inloggad användare', function () {
