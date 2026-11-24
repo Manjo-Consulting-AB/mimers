@@ -168,7 +168,7 @@ it('nås av en gäst och av en inloggad med 200', function () {
         );
 });
 
-it('lämnar /about och /terms som förut', function () {
+it('renderar /about och /terms med body', function () {
     withoutVite();
 
     $about = get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
@@ -183,5 +183,5 @@ it('lämnar /about och /terms som förut', function () {
         ->where('page', 'terms')
     );
 
-    expect($terms->inertiaProps()['body'])->toBeNull();
+    expect((string) $terms->inertiaProps()['body'])->not->toBe('');
 });

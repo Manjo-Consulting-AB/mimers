@@ -15,7 +15,7 @@ This policy explains what personal data we process, why we process it, how long 
 The data controller for personal data that Mimers processes for its own purposes is:
 
 **Manjo Consulting AB**  
-Corporate identity number: 556813-8464  
+Company registration number: 556813-8464  
 VAT number: SE556813846401  
 Sweden
 

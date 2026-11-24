@@ -21,11 +21,11 @@ use function Pest\Laravel\withoutVite;
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
  *
  * **Sedan M85 · issue 478 bär rutten också `body`.** Den kommer ur
- * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. /about,
- * /privacy (M86 · issue 479) och /subprocessors (M86 · issue 480) har en fil;
- * /terms ger `null` och ritar platshållaren som förut. Innehållet i /abouts
- * body prövas i OmsidanTest, i /privacys i IntegritetspolicyTest och i
- * /subprocessors i UnderbitradenTest.
+ * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. Alla fyra har en
+ * fil sedan M86: /about (issue 478), /privacy (issue 479), /subprocessors
+ * (issue 480) och /terms (issue 489). Innehållet i /abouts body prövas i
+ * OmsidanTest, i /privacys i IntegritetspolicyTest, i /subprocessors i
+ * UnderbitradenTest och i /terms i VillkorssidanTest.
  *
  * Att sidan ritas i AppLayout och inte bär en enda sträng själv prövas av
  * GenomgangTest och SprakTest, som läser varje fil under resources/js; att
@@ -54,11 +54,7 @@ it('renderar Info för var och en av de fyra sidorna för en gäst', function (s
             ->where('page', $sida)
         );
 
-    if ($sida === 'terms') {
-        expect($svar->inertiaProps()['body'])->toBeNull();
-    } else {
-        expect((string) $svar->inertiaProps()['body'])->not->toBe('');
-    }
+    expect((string) $svar->inertiaProps()['body'])->not->toBe('');
 })->with(['about', 'privacy', 'terms', 'subprocessors']);
 
 it('renderar Info också för en inloggad användare', function () {

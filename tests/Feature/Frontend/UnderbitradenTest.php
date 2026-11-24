@@ -188,7 +188,7 @@ it('länkar de fyra juridiska sidorna från sidfoten med auth.landing.links.*', 
         ->and($sidfot)->toContain('hidden');
 });
 
-it('lämnar /about, /privacy och /terms som de var', function () {
+it('renderar /about, /privacy och /terms med body', function () {
     withoutVite();
 
     $about = get('/about')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
@@ -210,5 +210,5 @@ it('lämnar /about, /privacy och /terms som de var', function () {
         ->where('page', 'terms')
     );
 
-    expect($terms->inertiaProps()['body'])->toBeNull();
+    expect((string) $terms->inertiaProps()['body'])->not->toBe('');
 });
