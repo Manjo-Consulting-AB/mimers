@@ -68,9 +68,16 @@ class HelpFeedbackController extends Controller
             $row = new HelpFeedback;
             $row->article_id = $article;
             $row->locale = (string) app()->getLocale();
+        }
 
-            $user = $request->user();
-            $row->user_id = $user === null ? null : $user->getKey();
+        // Sessionen överlever inloggningen: en gäst som klickade Nej, följde
+        // länken *Log in to add a comment* och klickade Nej igen hittar sin
+        // gamla rad här. Utan den här raden behöll den sitt `user_id` null,
+        // och kommentaren hade överlevt DeleteUser (fynd 1 i granskningen).
+        $user = $request->user();
+
+        if ($user !== null && $row->user_id === null) {
+            $row->user_id = $user->getKey();
         }
 
         $row->helpful = $helpful;
@@ -124,6 +131,15 @@ class HelpFeedbackController extends Controller
             $comment = $request->input('comment');
 
             $row->comment = is_string($comment) && $comment !== '' ? $comment : null;
+
+            // Kommentaren är den inloggades ord, även om raden skapades medan
+            // hen var gäst. Knyts den inte till personen här överlever orden
+            // DeleteUser och står kvar tills gallringen tar dem (fynd 1).
+            $user = $request->user();
+
+            if ($user !== null && $row->user_id === null) {
+                $row->user_id = $user->getKey();
+            }
         }
 
         $row->save();

@@ -340,6 +340,59 @@ it('raderar personens rader men lämnar gästens kvar', function () {
 });
 
 /*
+ * Fynd 1 i granskningen: en gästs rad som personen loggar in och klickar Nej
+ * på igen — flödet ytan själv leder till — ska knytas till personen, och
+ * raderas då med hen.
+ */
+it('knyter en gästrad till personen som loggar in och klickar Nej igen', function () {
+    $url = '/help/articles/'.ATERKOPPLING_ARTIKEL.'/feedback';
+
+    $ulid = post($url, ['helpful' => false])->assertStatus(201)->json('ulid');
+
+    expect(DB::table('help_feedback')->where('ulid', $ulid)->value('user_id'))->toBeNull();
+
+    $person = User::factory()->create();
+
+    actingAs($person);
+
+    // Sidan har laddats om, så personen klickar Nej igen: samma session,
+    // samma rad.
+    post($url, ['helpful' => false])->assertOk()->assertJsonPath('ulid', $ulid);
+
+    patch('/help/feedback/'.$ulid, ['comment' => 'Lägg till ett exempel'])->assertOk();
+
+    expect((int) DB::table('help_feedback')->where('ulid', $ulid)->value('user_id'))
+        ->toBe($person->id);
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(DB::table('help_feedback')->where('ulid', $ulid)->exists())->toBeFalse();
+});
+
+/*
+ * Fynd 1, andra halvan: kommentaren knyter raden till personen även när
+ * `store()` inte har hunnit köra sedan inloggningen.
+ */
+it('knyter en gästrad till personen som kommenterar den', function () {
+    $ulid = post('/help/articles/'.ATERKOPPLING_ARTIKEL.'/feedback', ['helpful' => false])
+        ->assertStatus(201)
+        ->json('ulid');
+
+    $person = User::factory()->create();
+
+    actingAs($person);
+
+    patch('/help/feedback/'.$ulid, ['comment' => 'Lägg till ett exempel'])->assertOk();
+
+    expect((int) DB::table('help_feedback')->where('ulid', $ulid)->value('user_id'))
+        ->toBe($person->id);
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(DB::table('help_feedback')->where('ulid', $ulid)->exists())->toBeFalse();
+});
+
+/*
  * Klart när: källkodsprovet — Ja/Nej och orsak sparas utan knapp,
  * kommentaren bara via Save, och textfältet bara för en inloggad.
  */
