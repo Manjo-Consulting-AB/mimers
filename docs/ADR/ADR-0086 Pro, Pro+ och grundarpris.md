@@ -58,7 +58,7 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 - **Befintliga konton behöver ingen flytt.** Kontona i systemet har Pro och använder långt under 10 GB, så sänkningen av kvoten drabbar ingen.
 - Bonusen i `AcceptOwnershipTransfer` gör idag om en rad med annan plan till Pro. Med Pro+ skulle det sänka planen, så § 7 kräver en ändring i koden.
 - Grundaråret räknas från den dag betalflödet öppnar. Datumet bestäms när betalflödet byggs, och skrivs in här och i [[Planer och kvoter]].
-- Hur en voucher ger ett **pris** och inte bara en **period** (`duration_days`) bestäms när betalflödet byggs. Planraden finns redan, men kopplingen till Paddle eller Lemon Squeezy gör det inte.
+- Hur en voucher ger ett **pris** och inte bara en **period** (`duration_days`) bestäms när betalflödet byggs. Planraden finns redan, men kopplingen till Paddle gör det inte. Merchant of record är Paddle, inte Lemon Squeezy — se [[ADR-0014 Prismodell]] § Tillägg 2026-11-24.
 - Sidan om vart pengarna går (§ 6) ska finnas innan betalflödet öppnar. Vad den ska innehålla är en öppen fråga i [[Tankar]].
 - Den öppna frågan om prispunkt i [[Översikt]] är besvarad.
 
