@@ -688,11 +688,15 @@ it('hämtar agentraderingens meningar ur ui.php', function () {
  * strängen som SKA slås upp är högens namn och talens etiketter. Ett uppslag
  * som glider över till att omfatta artens namn syns då här.
  *
- * Sidan själv står med sedan issue 125: rubriken över donuten är hennes, och
- * en rubrik som glöms i katalogen renderas som `dashboard.costs.heading` —
+ * Sidan själv står med sedan issue 125: rubriken över kostnaderna är hennes,
+ * och en rubrik som glöms i katalogen renderas som `hero.costs.heading` —
  * `translate()` skriver nyckeln själv när uppslaget misslyckas. Donutens
  * legend har ingen nyckel alls: en tårtbit namnges av containerns eget namn,
  * som skrivs ordagrant och aldrig slås upp.
+ *
+ * `HeroCosts` kom med issue 474 och slår upp `hero.costs.*`; `CostDonut` står
+ * kvar med sin standardetikett `dashboard.costs.month` för en anropare som
+ * inte skickar en egen.
  *
  * Händelsepanelen kom med issue 126. Dess rubrik och tomma läge är panelens
  * egna, och raderna är historikflikens — `HistoryRow` slår upp
@@ -706,10 +710,13 @@ it('hämtar dashboardens strängar ur ui.php', function () {
     foreach ([
         'js/pages/Dashboard.vue',
         // Hjälten (issue 435) äger hälsningen, undertiteln och rubriken, och
-        // den delade formen (issue 437) äger kostnadsrubriken.
+        // `AppHero` formulerar inga egna strängar — den får dem som proppar.
+        // Den delade formen (issue 437) äger brickorna, och
+        // kostnadssummeringen (issue 474) äger `hero.costs.*`; `CostDonut` bär
+        // sin standardetikett.
         'js/components/DashboardHero.vue',
-        'js/components/AppHero.vue',
         'js/components/DashboardStats.vue',
+        'js/components/HeroCosts.vue',
         'js/components/ContainerCard.vue',
         'js/components/CostDonut.vue',
         'js/components/DashboardActivityPanel.vue',

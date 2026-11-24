@@ -33,7 +33,7 @@ use function Pest\Laravel\withoutVite;
  * 5. `heroFigures` är en optional propp: en vanlig sidladdning bär den inte,
  *    och en partiell omladdning räknar den ur samma action.
  * 6. Under `md:` är hjälten det låga bandet, och bara dashboarden ritar
- *    brickorna och donuten under det.
+ *    brickorna och kostnadssummeringen under det.
  * 7. `npm run build` och hela sviten är CI:s uppgift; formen prövas här.
  *
  * Hjälparna har prefixet `apphjalte` — Pest lägger alla testfiler i samma
@@ -119,7 +119,7 @@ function apphjalteKontext(): array
 
 /*
  * Klart när: "Över `md:` har alla elva sidor dashboardens hjälte, med samma
- * höjd, samma bild, samma brickor och samma donut. Bara rubriken och
+ * höjd, samma bild, samma brickor och samma kostnadssummering. Bara rubriken och
  * undertiteln skiljer sig."
  *
  * Provet läser formen ur sidorna: var och en ritar `AppHero` med sin egen
@@ -173,7 +173,7 @@ it('har undertitlarna ordagrant i ui.php', function () {
  *
  * Formen är `DashboardHero`s egen, flyttad ordagrant: ramen med båda höjderna,
  * bilden med fokuspunkt och zoom, textspalten och sifferraden med brickorna
- * före donuten. Hälsningsraden finns alltid — tom och `aria-hidden` utan
+ * före kostnadssummeringen. Hälsningsraden finns alltid — tom och `aria-hidden` utan
  * `greeting` — så att `<h1>` hamnar på samma plats.
  */
 it('ritar ramen, textspalten och sifferraden som dashboarden gjorde', function () {
@@ -188,8 +188,7 @@ it('ritar ramen, textspalten och sifferraden som dashboarden gjorde', function (
         ->toContain('v-else class="text-meta" aria-hidden="true"')
         ->toContain('v-if="props.greeting" class="text-meta"')
         ->toContain('<DashboardStats')
-        ->toContain('<CostDonut')
-        ->toContain("t('dashboard.costs.heading')");
+        ->toContain('<HeroCosts');
 
     // Sifferraden är dold under `md:` — det låga bandet (ADR-0090 § 6).
     expect($hjalten)->toMatch('/class="mt-2 hidden[^"]*md:flex"/');
@@ -201,10 +200,11 @@ it('ritar ramen, textspalten och sifferraden som dashboarden gjorde', function (
  * den hämtas, också för ett konto utan kostnader.
  *
  * Dashboarden skickar `stats` och `costs` som proppar, så hjälten har talen
- * redan och frågar aldrig. Skelettet ritar tre taltutor och en ring på 160 px,
- * alltså samma mått som den fyllda raden. Golvet på raden är kortets egen
- * höjd, så att en fylld rad utan kostnadskort inte är lägre än skelettet:
- * annars krympte ramen när talen kom (granskningsfynd 2026-11-22).
+ * redan och frågar aldrig. Skelettet ritar två taltutor med den försenade
+ * underraden och summeringens rubrik, period och en rad — samma mått som den
+ * fyllda raden. Golvet på raden är brickornas höjd, så att en fylld rad utan
+ * kostnadsrader inte är lägre än skelettet: annars krympte ramen när talen kom
+ * (granskningsfynd 2026-11-22).
  */
 it('hämtar siffrorna bara när de saknas och reserverar radens plats', function () {
     $hjalten = apphjalteUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
@@ -212,7 +212,7 @@ it('hämtar siffrorna bara när de saknas och reserverar radens plats', function
     expect($hjalten)->toContain("router.reload({ only: ['heroFigures'] })")
         ->toContain('if (! loaded.value)')
         ->toContain('v-if="!loaded"')
-        ->toContain('h-40 w-40');
+        ->toContain('min-w-32');
 
     // Omladdningen sker i `onMounted`, alltså på montering — inte på varje
     // rendering. Kroppen läses ut för sig så att en sträng någon annanstans i
@@ -223,9 +223,9 @@ it('hämtar siffrorna bara när de saknas och reserverar radens plats', function
     expect($montering[1])->toContain("router.reload({ only: ['heroFigures'] })")
         ->toContain('if (! loaded.value)');
 
-    // Raden har kortets höjd som golv — både fylld och tom — så att hjälten
-    // står stilla också när kontot saknar kostnadsrader.
-    expect($hjalten)->toContain('md:min-h-[194.5px]');
+    // Raden har brickornas höjd som golv — både fylld och tom — så att
+    // hjälten står stilla också när kontot saknar kostnadsrader.
+    expect($hjalten)->toContain('md:min-h-[102px]');
 
     // Hjälten tar sidans egna tal först — dashboarden gör därför ingen
     // begäran.
@@ -321,7 +321,8 @@ it('låter dashboarden behålla sina proppar ur samma action', function () {
 // --- under md --------------------------------------------------------------
 
 /*
- * Klart när: "Under `md:` är hjälten ett lågt band, och brickorna och donuten
+ * Klart när: "Under `md:` är hjälten ett lågt band, och brickorna och
+ * kostnadssummeringen
  * står under det bara på dashboarden."
  *
  * Sifferraden är `hidden … md:flex`, alltså osynlig under bandet. Bara

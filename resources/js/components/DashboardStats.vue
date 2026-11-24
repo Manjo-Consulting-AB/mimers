@@ -1,25 +1,21 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
 import UiStat from './UiStat.vue';
-import { formatAmount } from './CostDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Dashboardens brickor, se issue 124 och docs/Design/main.jpeg.
  *
- * **Brickorna är tre, inte mockupens fyra.** *Uppgifter* och *Underhåll* är
+ * **Brickorna är två, inte mockupens fyra.** *Uppgifter* och *Underhåll* är
  * samma tabell — `schedule` skiljer dem bara åt via `recurrence_type`
- * ([[ADR-0042 Designsystemet]] § Beslut). Här står containerbrickan,
- * uppgiftsbrickan och kostnadsbrickan.
+ * ([[ADR-0042 Designsystemet]] § Beslut). Här står containerbrickan och
+ * uppgiftsbrickan.
  *
- * **Kostnadsbrickan kom med issue 125** och ritas en gång PER VALUTA: en
- * månad med två valutor visar två belopp och aldrig en summa över dem
- * ([[ADR-0040 Underträdets summor]] § Konsekvenser). Beloppet är serverns
- * heltal i minsta valutaenhet, och `formatAmount` bor i CostDonut.vue för att
- * brickan och donuten ska visa samma tal med samma formatering — den hade
- * annars varit en andra sanning om vad ett belopp är. Underraden är månadens
- * namn, och månaden är serverns: sidan tar ingen parameter och en period i
- * querysträngen läses inte ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
+ * **Kostnadsbrickan lämnade raden med issue 474** ([[ADR-0090 Dashboardens
+ * hjälte]] § Tillägg 2026-11-24): månadens belopp ritas av `HeroCosts`, med
+ * valutan utskriven och utan donut. Den här komponenten räknar därför inga
+ * pengar alls och tar ingen `costs`-propp — talen den visar är containrar och
+ * uppgifter.
  *
  * **Komponenten räknar ingenting.** Talen kommer färdigräknade ur `stats`, som
  * App\Actions\Container\ListContainerSummaries fyllde ur samma svar som
@@ -38,8 +34,6 @@ import { useTranslations } from '../composables/useTranslations.js';
  * samma lista som talet är hämtat ur. Länken bor här och inte i UiStat, så att
  * containerns översikt kan använda samma tuta olänkad. Den röda *Overdue*-raden
  * står kvar utanför länken: den är en underrad till talet, inte en egen ingång.
- * Kostnadsbrickan länkas inte — det finns ingen sida för de totala kostnaderna
- * än.
  *
  * **Ingen sträng står i filen** (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `dashboard.stats.*`.
@@ -47,13 +41,10 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* `{ containers, tasks, overdue }` — talen brickorna visar. */
     stats: { type: Object, required: true },
-    /* Månadens summa per valuta: `[{currency, amount, count}]`. */
-    costs: { type: Array, required: true },
     /*
      * `on-image` när brickorna står i hjälten ovanpå en bild (issue 435 ·
      * [[ADR-0090 Dashboardens hjälte]] § 1). Formen skickas vidare till
-     * `UiStat`, som äger glaset och den vita texten; den här komponenten
-     * behöver bara veta att månadsraden också ska vara vit. Utan värde ritas
+     * `UiStat`, som äger glaset och den vita texten. Utan värde ritas
      * brickorna som förut, på ytan.
      */
     tone: { type: String, default: null },
@@ -89,26 +80,6 @@ const { t } = useTranslations();
 
             <p class="text-meta text-danger">
                 {{ t('dashboard.stats.overdue', { count: props.stats.overdue }) }}
-            </p>
-        </div>
-
-        <!--
-            Kostnaden. Ingen bricka alls för en månad utan kostnadsrader: det
-            finns inget belopp att visa, och en nolla utan valuta hade varit
-            ett påstående om något servern inte sade.
-        -->
-        <div v-for="cost in props.costs" :key="cost.currency" class="flex flex-col gap-1">
-            <UiStat
-                :value="formatAmount(cost.amount, cost.currency)"
-                :label="t('dashboard.stats.costs')"
-                :tone="props.tone"
-            />
-
-            <p
-                class="text-meta"
-                :class="props.tone === 'on-image' ? 'text-ink-on-accent' : 'text-ink-subtle'"
-            >
-                {{ t('dashboard.costs.month') }}
             </p>
         </div>
     </div>

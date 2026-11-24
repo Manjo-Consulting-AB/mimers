@@ -40,7 +40,8 @@ use function Pest\Laravel\withoutVite;
  * 5. **Frågekostnaden är konstant oberoende av antalet containrar** (issue 70
  *    § Beslut 2).
  * 6. **Brickorna är genvägar** (issue 654): container- och uppgiftsbrickan
- *    länkar till listan bakom talet, kostnadsbrickan gör det inte.
+ *    länkar till listan bakom talet. Kostnadsbrickan lämnade raden i issue
+ *    474 — månaden ritas av `HeroCosts`, utan ingång.
  *
  * Hjälparna har prefixet `bricka` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -589,22 +590,18 @@ it('länkar containerbrickan till containerlistan och uppgiftsbrickan till todo-
 });
 
 /*
- * Klart när: kostnadsbrickan länkas inte.
+ * Klart när (issue 474): kostnadsbrickorna lämnade `DashboardStats`.
  *
- * Det finns ingen sida för de totala kostnaderna än (issue 654 · Beslut 2), och
- * en länk dit hade varit ett löfte om en vy som inte finns. Provet läser
- * kostnadsblocket ur källan och letar efter en `<Link>` i det: blocket fångas
- * först, så ett mönster som slutat matcha ger ett tomt prov i stället för ett
- * tyst grönt.
+ * Månadens belopp ritas av `HeroCosts` med valutan utskriven
+ * ([[ADR-0090 Dashboardens hjälte]] § Tillägg 2026-11-24), så brickan bär
+ * varken en `costs`-propp, en kostnadsslinga eller en formatering av pengar.
+ * Provet läser källan: en propp som blir kvar hade gjort `AppHero` och
+ * `Dashboard.vue` skyldiga att skicka ett tal ingen ritar.
  */
-it('länkar inte kostnadsbrickan', function () {
+it('har inga kostnadsbrickor kvar i DashboardStats', function () {
     $brickor = File::get(resource_path('js/components/DashboardStats.vue'));
 
-    preg_match('/<div v-for="cost in props\.costs".*?<\/div>/s', $brickor, $kostnad);
-
-    expect($kostnad)->not->toBeEmpty('kostnadsblocket saknas i DashboardStats.vue');
-
-    $block = $kostnad[0] ?? '';
-
-    expect($block)->not->toContain('<Link');
+    expect($brickor)->not->toContain('props.costs');
+    expect($brickor)->not->toContain('formatAmount');
+    expect($brickor)->not->toContain("t('dashboard.stats.costs')");
 });

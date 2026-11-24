@@ -180,10 +180,10 @@ use Inertia\Middleware;
  * **`heroFigures` kom med M71 · issue 437** — hjältens siffror, se
  * App\Actions\Dashboard\HeroFigures och [[ADR-0090 Dashboardens hjälte]]
  * § Tillägg 2026-11-22. Proppen är den SJUNDE optionala och följer de sex
- * andras mönster: brickorna och donuten ritas bara på en sida som ritar
- * hjälten, och sidan hämtar dem med en partiell omladdning av just den här
- * nyckeln. En vanlig sidladdning bär dem aldrig, så talen räknas bara när de
- * visas.
+ * andras mönster: brickorna och kostnadssummeringen ritas bara på en sida som
+ * ritar hjälten, och sidan hämtar dem med en partiell omladdning av just den
+ * här nyckeln. En vanlig sidladdning bär dem aldrig, så talen räknas bara när
+ * de visas.
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
@@ -354,10 +354,10 @@ class HandleInertiaRequests extends Middleware
             // vanlig sidladdning ska inte bära den — se klassens docblock.
             'currencies' => Inertia::optional(fn (): array => Currencies::options(App::getLocale())),
             // Den sjunde optionala proppen, av samma skäl som de sex andra:
-            // hjältens brickor och donut behövs bara på en sida som ritar
-            // hjälten, och en vanlig sidladdning ska inte räkna dem — se
-            // heroFigures() och [[ADR-0090 Dashboardens hjälte]] § Tillägg
-            // 2026-11-22.
+            // hjältens brickor och kostnadssummering behövs bara på en sida
+            // som ritar hjälten, och en vanlig sidladdning ska inte räkna dem
+            // — se heroFigures() och [[ADR-0090 Dashboardens hjälte]]
+            // § Tillägg 2026-11-22.
             'heroFigures' => Inertia::optional(fn (): array => $this->heroFigures($request)),
             'locale' => fn (): string => App::getLocale(),
             // Webbläsarens Sentry (issue 388): DSN, miljö och release kommer
@@ -801,7 +801,7 @@ class HandleInertiaRequests extends Middleware
      * containrar — samma regel som `favorites()`, `recentVisits()` och
      * `itemTargets()` ovan.
      *
-     * @return array{stats: array{containers: int, tasks: int, overdue: int}, costs: array{totals: list<array<string, mixed>>, breakdown: list<array<string, mixed>>}}
+     * @return array{stats: array{containers: int, tasks: int, overdue: int}, costs: array{totals: list<array<string, mixed>>}}
      */
     private function heroFigures(Request $request): array
     {
@@ -810,7 +810,7 @@ class HandleInertiaRequests extends Middleware
         if ($user === null) {
             return [
                 'stats' => ['containers' => 0, 'tasks' => 0, 'overdue' => 0],
-                'costs' => ['totals' => [], 'breakdown' => []],
+                'costs' => ['totals' => []],
             ];
         }
 
