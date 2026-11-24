@@ -52,6 +52,31 @@ class ContactRequest extends FormRequest
     }
 
     /**
+     * Gästens namn blir en rad.
+     *
+     * Namnet går in i ämnet, i `Reply-To` och i mejlkroppen. En radbrytning
+     * där hade lagt en egen rad i kroppen — `x\nSigned in: yes` hade sett ut
+     * som en identitetsrad från servern, trots att gästen aldrig är inloggad.
+     * Etiketten `Not signed in — identity not verified.` är bara värd något om
+     * ingen annan rad kan säga motsatsen.
+     *
+     * En inloggads namn kommer ur `user` och rörs inte; ett `name` i kroppen
+     * läses aldrig för henne.
+     */
+    protected function prepareForValidation(): void
+    {
+        $name = $this->input('name');
+
+        if ($this->user() !== null || ! is_string($name)) {
+            return;
+        }
+
+        $this->merge([
+            'name' => (string) preg_replace('/\s+/u', ' ', trim($name)),
+        ]);
+    }
+
+    /**
      * @throws HttpResponseException
      */
     protected function failedValidation(Validator $validator): void

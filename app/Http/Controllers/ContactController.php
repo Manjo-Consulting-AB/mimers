@@ -97,9 +97,12 @@ class ContactController extends Controller
         try {
             $send->handle($category, $name, $email, (string) $request->validated('message'), $user);
         } catch (Throwable $exception) {
+            // Bara klassnamnet, aldrig undantagsobjektet: Monolog skriver ut
+            // meddelandet och stacktrace, och båda kan bära mottagarens adress
+            // eller anropets argument. Sentry läser samma post.
             Log::error('contact.send_failed', [
                 'category' => $category,
-                'exception' => $exception,
+                'exception_class' => $exception::class,
             ]);
 
             return ApiError::response('contact.send_failed', [], 503);

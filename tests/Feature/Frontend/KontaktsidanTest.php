@@ -300,11 +300,53 @@ it('svarar 503 contact.send_failed och loggar utan personuppgifter när mailern 
 
     $logg->shouldHaveReceived('error')
         ->once()
-        ->withArgs(fn (string $message, array $context): bool => $message === 'contact.send_failed'
-            && ($context['category'] ?? null) === 'general'
-            && ! array_key_exists('message', $context)
-            && ! array_key_exists('name', $context)
-            && ! array_key_exists('email', $context));
+        ->withArgs(function (string $message, array $context): bool {
+            if ($message !== 'contact.send_failed' || ($context['category'] ?? null) !== 'general') {
+                return false;
+            }
+
+            // Undantagsobjektet får aldrig följa med: Monolog skriver ut dess
+            // meddelande och stacktrace, och Sentry läser samma post.
+            if (array_key_exists('exception', $context)) {
+                return false;
+            }
+
+            if (($context['exception_class'] ?? null) !== RuntimeException::class) {
+                return false;
+            }
+
+            // Inget värde i kontexten får bära meddelandet, namnet eller adressen.
+            foreach ($context as $värde) {
+                if (! is_scalar($värde)) {
+                    return false;
+                }
+
+                foreach (['Hemligt meddelande', 'Gäst Person', 'gast@example.com'] as $känsligt) {
+                    if (str_contains((string) $värde, $känsligt)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        });
+});
+
+it('gör gästens namn till en rad så att kroppen inte kan förfalska identitetsrader', function () {
+    Mail::fake();
+
+    post('/contact', kontaktPayload([
+        'name' => "A\nSigned in: yes",
+        'message' => 'Hej',
+    ]))->assertOk();
+
+    Mail::assertSent(ContactMessageMail::class, function (ContactMessageMail $mail): bool {
+        $mail->assertDontSeeInText("\nSigned in: yes");
+        $mail->assertHasSubject('[testing] [Contact] General Inquiry — A Signed in: yes');
+        $mail->assertSeeInText('Name: A Signed in: yes');
+
+        return true;
+    });
 });
 
 it('prefixar ämnet med miljön utanför produktion', function () {
