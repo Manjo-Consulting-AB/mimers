@@ -382,8 +382,12 @@ class HandleInertiaRequests extends Middleware
      *
      * `usedBytes`, `limitBytes` och `percent` är ReadPlanUsage:s — filer plus
      * text ur `usage_counter`, `null` för ett obegränsat tak — och
-     * klienten räknar ingenting. `container` är containerns andel av kontot
-     * (ReadContainerStorageShare) i containerkontexten, annars `null`.
+     * klienten räknar ingenting. `fileBytes` och `textBytes` är de två
+     * kolumnerna var för sig, så att hjälten kan visa *Files* och *Text* utan
+     * en egen summering (issue 476 · [[ADR-0081 All lagrad data räknas mot
+     * kvoten]]). `barPercent` är stapelns bredd med två decimaler, så att en
+     * liten andel inte avrundas till noll. `container` är containerns andel av
+     * kontot (ReadContainerStorageShare) i containerkontexten, annars `null`.
      * `otherAccounts` är personens övriga konton, var och ett med sitt
      * förbrukade och sitt tak.
      *
@@ -402,12 +406,22 @@ class HandleInertiaRequests extends Middleware
         $storage = $this->readPlanUsage->handle($account)['usage']['storage'];
         $containerBytes = $container === null ? 0 : $this->readContainerStorageShare->handle($container);
         $limit = $storage['limitBytes'];
+        $usedBytes = (int) $storage['usedBytes'];
 
         return [
             'account' => ['ulid' => $account->ulid, 'name' => $account->name],
-            'usedBytes' => (int) $storage['usedBytes'],
+            'usedBytes' => $usedBytes,
+            'fileBytes' => (int) $storage['fileBytes'],
+            'textBytes' => (int) $storage['textBytes'],
             'limitBytes' => $storage['limitBytes'],
             'percent' => $storage['percent'],
+            // Stapelns bredd räknas här och inte i klienten, som containerns
+            // segment: två decimaler, så att 17 MB av 10 GB blir 0,17 och inte
+            // avrundas till 0. `null` för ett obegränsat tak — då ritas ingen
+            // stapel.
+            'barPercent' => is_int($limit) && $limit > 0
+                ? min(100.0, round($usedBytes / $limit * 100, 2))
+                : null,
             'container' => $container === null ? null : [
                 'ulid' => $container->ulid,
                 'name' => $container->name,

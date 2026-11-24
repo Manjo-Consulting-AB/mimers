@@ -4,6 +4,7 @@ import { router, usePage } from '@inertiajs/vue3';
 import DashboardStats from './DashboardStats.vue';
 import HeroCosts from './HeroCosts.vue';
 import HeroFrame from './HeroFrame.vue';
+import HeroStorage from './HeroStorage.vue';
 
 /*
  * Den delade hjälten, se issue 437 · [[ADR-0090 Dashboardens hjälte]]
@@ -42,6 +43,10 @@ import HeroFrame from './HeroFrame.vue';
  * eller `text-meta` ändras talet med dem — det är priset för att höjden ska
  * stå stilla.
  *
+ * **Lagringskortet står sist i sifferraden** (issue 476). Det läser den
+ * delade `storageQuota`, som redan finns vid första ritningen, och ritas
+ * därför i båda lägena — raden är lika hög före som efter att talen kommer.
+ *
  * **Under `md:` är hjälten det låga bandet** (ADR-0090 § 6): hälsningen och
  * rubriken står kvar inne i bilden, undertiteln och sifferraden är dolda. Bara
  * `Dashboard.vue` ritar brickorna och kostnadssummeringen under bandet; de
@@ -75,6 +80,14 @@ const figures = computed(() => page.props.heroFigures ?? null);
 const heroStats = computed(() => props.stats ?? figures.value?.stats ?? null);
 const heroCosts = computed(() => props.costs ?? figures.value?.costs ?? null);
 const loaded = computed(() => heroStats.value !== null && heroCosts.value !== null);
+
+/*
+ * Kontots lagring, ur samma delade propp som kvotmodulen (issue 476). Den
+ * finns redan vid första ritningen — den hämtas inte med `heroFigures` — så
+ * kortet står i raden både före och efter att talen kommer. Då byter hjälten
+ * aldrig höjd, och ett konto utan konto (en gäst) ritar inget kort.
+ */
+const storageQuota = computed(() => page.props.storageQuota ?? null);
 
 /*
  * Siffrorna räknas bara när de efterfrågas: en sida som ritar hjälten men inte
@@ -121,11 +134,12 @@ onMounted(() => {
         </div>
 
         <!--
-            Sifferraden: brickorna först och kostnadssummeringen efter dem,
-            som på dashboarden. `HeroCosts` ritar ingenting utan
-            kostnadsrader, så brickorna är då radens enda barn.
-            `md:min-h-[102px]` håller raden på brickornas höjd också när
-            summeringen saknas, så att ramen inte krymper när talen kommer.
+            Sifferraden: brickorna först, kostnadssummeringen efter dem och
+            lagringskortet sist (issue 474 och 476), som på dashboarden.
+            `HeroCosts` ritar ingenting utan kostnadsrader, så brickorna är
+            då radens enda barn. `md:min-h-[102px]` är radens golv — brickornas
+            höjd — och lagringskortet ritas i båda lägena, så att raden är
+            lika hög före som efter att `heroFigures` kommer.
         -->
         <div class="mt-2 hidden flex-wrap items-start gap-8 md:min-h-[102px] md:flex">
             <DashboardStats
@@ -177,6 +191,18 @@ onMounted(() => {
                     <span class="block text-meta font-semibold">&nbsp;</span>
                 </div>
             </div>
+
+            <!--
+                Lagringskortet står sist i raden (issue 476). Det ritas när
+                den delade `storageQuota` finns — den kommer med sidan och
+                inte med `heroFigures`, så kortet är på plats både före och
+                efter att talen hämtas och hjälten byter därför aldrig höjd
+                när de kommer.
+            -->
+            <HeroStorage
+                v-if="storageQuota"
+                tone="on-image"
+            />
         </div>
     </HeroFrame>
 </template>
