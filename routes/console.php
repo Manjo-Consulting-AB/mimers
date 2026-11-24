@@ -25,6 +25,7 @@ use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
 use App\Console\ReportsAbuseSignals;
+use App\Console\ReportsHelpUsage;
 use App\Console\SendsWeeklyDigest;
 use App\Console\SummarizesPerformance;
 use App\Console\TransfersOrphanedBilling;
@@ -541,6 +542,29 @@ Schedule::call(fn () => app(PrunesHelpData::class)->handle())
 Schedule::call(fn () => app(PrunesHelpFeedback::class)->handle())
     ->daily()
     ->name('prune-help-feedback');
+
+/*
+ * Issue 472 · Den nattliga hjälprapporten: läser hjälpens anonyma mätning och
+ * återkoppling och skriver en enda loggrad `help.report` — se
+ * App\Console\ReportsHelpUsage, config/help.php § report_* och
+ * [[ADR-0094 Hjälpcentret]] § 9. Ingen adminsida, ingen skrivning i
+ * databasen, inget larm. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Hjalp/HjalprapportenTest.php; det här är bara
+ * schemaläggningen.
+ *
+ * `->dailyAt('00:30')`, inte `->daily()`: de två hjälpgallringarna ovan kör
+ * 00:00, och rapporten ska läsa efter dem. Den ligger också efter dem i
+ * filen och före hjärtslagsloopen och `drain-queue`, som ska fortsätta ligga
+ * sist.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön.
+ */
+Schedule::call(fn () => app(ReportsHelpUsage::class)->handle())
+    ->dailyAt('00:30')
+    ->name('report-help-usage');
 
 /*
  * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]

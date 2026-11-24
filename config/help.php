@@ -28,6 +28,16 @@
  * ADR-0094 § 7): en rad *Was this helpful?* sparas i 90 dagar och raderas
  * sedan av App\Console\PrunesHelpFeedback. Frister räknas i dagar, som
  * mätningens ovan.
+ *
+ * `report_*` hör till den nattliga hjälprapporten (M82 · issue 472,
+ * ADR-0094 § 9). `report_window_days` är fönstret, `report_top_articles` är
+ * antalet mest visade artiklar, `report_search_gap_min` är tröskeln en
+ * sökfråga måste nå för att synas alls — samma femma som ADR-0079 § 4 och
+ * ADR-0094 § 9 — och `report_unhelpful_min` är minsta antal svar innan en
+ * artikel får en Nej-andel. `report_search_gaps_limit` och
+ * `report_unhelpful_limit` kapar listorna, i samma anda som
+ * config/missbruk.php § listing_limit: en rapport som skriver tvåtusen rader
+ * en natt är en rapport ingen läser.
  */
 
 return [
@@ -52,4 +62,16 @@ return [
     'unknown_context_daily_limit' => 1000,
 
     'feedback_retention_days' => 90,
+
+    'report_window_days' => 7,
+
+    'report_top_articles' => 10,
+
+    'report_search_gap_min' => 5,
+
+    'report_search_gaps_limit' => 25,
+
+    'report_unhelpful_min' => 5,
+
+    'report_unhelpful_limit' => 10,
 ];
