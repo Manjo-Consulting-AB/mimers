@@ -77,6 +77,80 @@ it('ritar vänsterkolumnen med fyra punkter bara från lg', function () {
     }
 });
 
+it('ritar en slumpad bild bakom vänsterkolumnen', function () {
+    // Issue 490. De tre sökvägarna står utskrivna i en konstant, och en av dem
+    // väljs med Math.random() exakt en gång när komponenten sätts upp — inte i
+    // en computed som kan räknas om och byta bild medan sidan står öppen.
+    $kod = inloggningskalla();
+
+    foreach ([
+        '/images/login/boat.webp',
+        '/images/login/caravan.webp',
+        '/images/login/cabin.webp',
+    ] as $sökväg) {
+        expect(str_contains($kod, "'{$sökväg}'"))->toBeTrue("{$sökväg} saknas i Login.vue");
+    }
+
+    expect(substr_count($kod, 'Math.random()'))->toBe(1, 'Slumpen dras inte exakt en gång i Login.vue');
+    expect(preg_match('/const\s+loginImage\s*=[^;]*Math\.random\(\)/', $kod))->toBe(
+        1,
+        'Login.vue väljer inte bilden i en konstant i setup',
+    );
+
+    // En bild, inte ett bildspel: ingen timer och ingen övertoning.
+    foreach (['setInterval', 'setTimeout', 'transition-opacity'] as $förbjuden) {
+        expect(str_contains($kod, $förbjuden))->toBeFalse("Login.vue innehåller {$förbjuden}");
+    }
+
+    // Exakt en <img>, och den är dekoration som ligger bakom texten:
+    // alt="" och aria-hidden, loading="lazy" så att telefonen inte hämtar
+    // den, och object-cover över hela kolumnen.
+    expect(substr_count($kod, '<img'))->toBe(1, 'Login.vue ritar inte exakt en <img>');
+
+    foreach ([
+        ':src="loginImage"',
+        'alt=""',
+        'aria-hidden="true"',
+        'loading="lazy"',
+        'decoding="async"',
+        'object-cover',
+        'absolute inset-0',
+        'bg-shell/70',
+        'overflow-hidden',
+    ] as $nål) {
+        expect(str_contains($kod, $nål))->toBeTrue("{$nål} saknas i Login.vue");
+    }
+
+    // Märket och textblocket ligger ovanpå bilden och slöjan.
+    expect(str_contains($kod, '<div class="relative">'))->toBeTrue(
+        'Textblocket i vänsterkolumnen ligger inte ovanpå bilden',
+    );
+});
+
+it('har de tre inloggningsbilderna i public', function () {
+    // Issue 490: bilderna ligger redan i repot, beskurna till 4:5 och
+    // konverterade till WebP. Provet vaktar att Login.vue inte pekar på filer
+    // som inte finns.
+    foreach (['boat.webp', 'caravan.webp', 'cabin.webp'] as $fil) {
+        expect(File::exists(public_path("images/login/{$fil}")))->toBeTrue(
+            "public/images/login/{$fil} saknas",
+        );
+    }
+});
+
+it('säger i docblocket att fotot ritas', function () {
+    // Beslut 6 i issue 203 sade att fotot inte ritas; sedan issue 490 gör det.
+    // Kommentarerna rensas bort i de andra proven, så den råa filen läses här.
+    $rå = File::get(resource_path('js/pages/Auth/Login.vue'));
+
+    expect(str_contains($rå, 'Fotot, raden *Används för* och rutan om molnlagringen ritas inte'))->toBeFalse(
+        'Docblocket säger fortfarande att fotot inte ritas',
+    );
+    expect(str_contains($rå, 'en slumpad bild av tre'))->toBeTrue(
+        'Docblocket säger inte att en slumpad bild av tre ritas',
+    );
+});
+
 it('behåller formulärets fält och beteende', function () {
     // Beslut 3: fälten, deras autocomplete, kodfältet och fokusmekanismen står
     // oförändrade — bara klasserna byter skepnad.

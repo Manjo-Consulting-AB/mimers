@@ -21,8 +21,9 @@ import { useErrorFocus } from './useErrorFocus.js';
  * **Vänsterkolumnen** (Beslut 2) är `hidden lg:flex` — på en telefon finns
  * bara kortet — och bär märket, rubriken, brödtexten och de fyra punkterna ur
  * `auth.landing.features.*`. Ikonerna är roller ur `UiIcon`.
- * Fotot, raden *Används för* och rutan om molnlagringen ritas inte: de har
- * ingen datakälla och byggs inte nu (Beslut 6).
+ * Fotot bakom texten ritas sedan issue 490 — en slumpad bild av tre, se
+ * `loginImages` nedan. Raden *Används för* och rutan om molnlagringen ritas
+ * fortfarande inte: de har ingen datakälla och byggs inte nu (Beslut 6).
  *
  * **Högerkolumnen** (Beslut 3) är dagens formulär i en ny ram. Fälten, deras
  * `id`, `name` och `autocomplete`, `useForm`, `submit()` och kodfältet när
@@ -138,6 +139,27 @@ const landingFeatures = [
     },
 ];
 
+/*
+ * De tre bilderna bakom vänsterkolumnen (issue 490). Sökvägarna är utskrivna
+ * och inte byggda ur en mapplista: filerna ligger färdiga i
+ * `public/images/login/` och refereras med absolut sökväg, som
+ * `/images/dashboard-hero.jpg` i AppHero.vue — inte via Vite.
+ */
+const loginImages = [
+    '/images/login/boat.webp',
+    '/images/login/caravan.webp',
+    '/images/login/cabin.webp',
+];
+
+/*
+ * En bild, slumpad en gång när komponenten sätts upp — inte ett bildspel.
+ * Slumpen står i `setup` och inte i en `computed`, så att den dras exakt en
+ * gång per sidladdning: en computed kan räknas om och hade då kunnat byta bild
+ * medan sidan står öppen. Sidan renderas inte på servern, så det finns ingen
+ * hydrering att hamna i otakt med.
+ */
+const loginImage = loginImages[Math.floor(Math.random() * loginImages.length)];
+
 const form = useForm({
     email: '',
     password: '',
@@ -189,11 +211,31 @@ function submit() {
             Vänsterkolumnen, se Beslut 2. `hidden lg:flex` — på en telefon är
             hela ytan kortet. Märket överst, allt annat tryckt mot botten av
             `justify-between`.
-        -->
-        <div class="hidden lg:flex lg:w-1/2 flex-col justify-between bg-shell text-white p-12">
-            <p class="text-lg font-semibold uppercase tracking-[0.3em]">{{ t('common.brand') }}</p>
 
-            <div>
+            Bilden (issue 490) ligger bakom texten: den enda `<img>` är
+            `absolute inset-0` med `object-cover`, och över den en slöja i
+            `bg-shell` som håller texten läsbar mot båtens ljusa himmel.
+            `bg-shell` står kvar på kolumnen, så ytan är mörk innan bilden
+            laddats. `loading="lazy"` gör att en telefon, där kolumnen aldrig
+            ritas, inte heller hämtar bilden. Bilden är dekoration: `alt=""`
+            och `aria-hidden="true"` — den säger ingenting som texten inte
+            redan säger.
+        -->
+        <div class="hidden lg:flex lg:w-1/2 flex-col justify-between relative overflow-hidden bg-shell text-white p-12">
+            <img
+                :src="loginImage"
+                alt=""
+                aria-hidden="true"
+                loading="lazy"
+                decoding="async"
+                class="absolute inset-0 h-full w-full object-cover"
+            >
+
+            <div class="absolute inset-0 bg-shell/70" aria-hidden="true"></div>
+
+            <p class="relative text-lg font-semibold uppercase tracking-[0.3em]">{{ t('common.brand') }}</p>
+
+            <div class="relative">
                 <p class="text-4xl font-semibold">
                     {{ t('auth.landing.heading') }}
                     <span class="text-sky-300">{{ t('auth.landing.heading_accent') }}</span>
