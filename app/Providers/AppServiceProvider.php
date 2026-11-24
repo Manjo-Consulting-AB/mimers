@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureCalendarFeedRateLimiting();
         $this->configureRegistrationRateLimiting();
         $this->configureHelpSearchRateLimiting();
+        $this->configureHelpFeedbackRateLimiting();
         $this->configureScheduleHeartbeat();
         $this->configurePerformanceLogging();
         $this->configureMcp();
@@ -280,5 +281,39 @@ class AppServiceProvider extends ServiceProvider
                 ['retry_after_seconds' => (int) ($headers['Retry-After'] ?? 0)],
                 429,
             )->withHeaders($headers)));
+    }
+
+    /**
+     * M82 · issue 471 · återkopplingens takt, `throttle:help-feedback`.
+     *
+     * Två gränser, en per anropare: en gäst räknas per IP (20 i timmen), en
+     * inloggad per person (60 i timmen). Personnyckeln gäller framför IP:n
+     * därför att flera personer kan dela en adress bakom NAT — samma skäl
+     * som uppladdningens begränsare. `$request->ip()` går att lita på tack
+     * vare `trustProxies` i bootstrap/app.php.
+     *
+     * Svarskroppen är API-höljet, som för sökningen: rutterna svarar JSON
+     * och ytan översätter koden. Den inbyggda 429-renderingen på webben
+     * omdirigerar till ett formulär, och det finns inget formulär här.
+     *
+     * `ThrottleWrites` hoppar över en rutt som redan har `throttle:...` i sin
+     * middleware (App\Http\Middleware\ThrottleWrites::hasOwnLimiter), så
+     * anropet räknas en gång och inte två.
+     */
+    private function configureHelpFeedbackRateLimiting(): void
+    {
+        RateLimiter::for('help-feedback', function (Request $request): Limit {
+            $user = $request->user();
+
+            $limit = $user === null
+                ? Limit::perHour(20)->by('help-feedback-ip:'.$request->ip())
+                : Limit::perHour(60)->by('help-feedback-user:'.$user->getKey());
+
+            return $limit->response(static fn (Request $request, array $headers): JsonResponse => ApiError::response(
+                'auth.too_many_attempts',
+                ['retry_after_seconds' => (int) ($headers['Retry-After'] ?? 0)],
+                429,
+            )->withHeaders($headers));
+        });
     }
 }

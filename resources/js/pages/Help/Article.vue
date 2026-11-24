@@ -2,6 +2,7 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import AppLayout from '../../layouts/AppLayout.vue';
+import HelpFeedback from '../../components/HelpFeedback.vue';
 import HelpSearchBox from '../../components/HelpSearchBox.vue';
 import { formatLocaleDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -230,6 +231,10 @@ onUnmounted(() => {
                 </li>
             </ul>
         </section>
+
+        <!-- *Was this helpful?* — M82 · issue 471, ADR-0094 § 7. Sist i
+             innehållet, före Previous/Next. -->
+        <HelpFeedback :article-id="article.id" class="mt-10" />
 
         <nav
             v-if="previous || next"

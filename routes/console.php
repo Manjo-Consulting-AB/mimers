@@ -16,6 +16,7 @@ use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredApiTokens;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PrunesHelpData;
+use App\Console\PrunesHelpFeedback;
 use App\Console\PrunesInAppNotifications;
 use App\Console\PrunesLogs;
 use App\Console\PrunesRegistrationIps;
@@ -521,6 +522,25 @@ Schedule::call(fn () => app(SummarizesPerformance::class)->handle())
 Schedule::call(fn () => app(PrunesHelpData::class)->handle())
     ->daily()
     ->name('prune-help-data');
+
+/*
+ * Issue 471 · Gallringen av hjälpens återkoppling: en rad *Was this helpful?*
+ * sparas i 90 dagar — se App\Console\PrunesHelpFeedback,
+ * config/help.php § feedback_retention_days och [[ADR-0094 Hjälpcentret]]
+ * § 7. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Hjalp/AterkopplingTest.php; det här är bara
+ * schemaläggningen. Kör i samma nattliga fönster som de andra
+ * gallringsjobben, före hjärtslagsloopen och `drain-queue` som ska ligga
+ * sist i filen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön.
+ */
+Schedule::call(fn () => app(PrunesHelpFeedback::class)->handle())
+    ->daily()
+    ->name('prune-help-feedback');
 
 /*
  * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]

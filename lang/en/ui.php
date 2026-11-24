@@ -6234,5 +6234,39 @@ return [
             'tip' => 'Tip',
             'warning' => 'Warning',
         ],
+        /*
+         * Återkopplingen på artikelsidan — M82 · issue 471, ADR-0094 § 7.
+         *
+         * `reasons` nycklas med orsakskoden, samma värden som
+         * App\Models\HelpFeedback::REASONS, så en ny orsak är en ny rad här.
+         * `error` nycklas med felkoden ur API-höljet, utom `generic` som är
+         * reserven: komponenten översätter koden och visar aldrig den råa.
+         * `privacy` säger att kommentaren sparas i 90 dagar — samma frist som
+         * config/help.php § feedback_retention_days.
+         */
+        'feedback' => [
+            'question' => 'Was this helpful?',
+            'yes' => 'Yes',
+            'no' => 'No',
+            'thanks' => 'Thanks for letting us know.',
+            'reasons' => [
+                'unclear' => 'Hard to understand',
+                'incomplete' => 'Something is missing',
+                'outdated' => "It's out of date",
+                'incorrect' => "It's wrong",
+                'missing' => "I couldn't find what I was looking for",
+            ],
+            'comment_label' => 'Anything we should add or fix? (optional)',
+            'save' => 'Save',
+            'privacy' => 'Your comment is stored for 90 days.',
+            'login_to_comment' => 'Log in to add a comment',
+            'error' => [
+                'generic' => 'Could not save your feedback. Try again.',
+                'invalid' => 'Check your answer and try again.',
+                'too_many' => 'Too many attempts. Wait a moment and try again.',
+                'comment_requires_login' => 'Log in to add a comment.',
+                'not_negative' => 'The reason and comment only apply to a No.',
+            ],
+        ],
     ],
 ];
