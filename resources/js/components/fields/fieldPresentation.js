@@ -18,12 +18,17 @@ import { formatDateOnly } from '../itemPresentation.js';
  * `formatDateOnly()` — samma hjälpare som de sex fasta datumen, så ett
  * datumfält aldrig flyttar sig för att användaren bor i en annan tidszon. Ett
  * tal är en DECIMAL(20,6)-sträng ur servern ([[ADR-0089 Egna fält på items]]
- * § Riktning 9) och formateras med användarens språk: gruppering och
- * decimaltecken ur `Intl`, men siffrorna själva läses aldrig som ett
- * flyttal. 14 heltalssiffror och 6 decimaler är 20 värdesiffror, och en
- * `Number` räcker bara till 15–16 — ett sådant tal hade tappat sina sista
- * decimaler på vägen till skärmen. Hel delen formateras (den ryms) och
- * decimalerna hängs på orörda.
+ * § Riktning 9) och formateras med användarens språk: decimaltecknet ur
+ * `Intl`, men siffrorna själva läses aldrig som ett flyttal och
+ * heltalsdelen grupperas inte. 14 heltalssiffror och 6 decimaler är 20
+ * värdesiffror, och en `Number` räcker bara till 15–16 — ett sådant tal hade
+ * tappat sina sista decimaler på vägen till skärmen. Heltalsdelen skrivs ut
+ * som den kom från servern, med inledande nollor borttagna, och decimalerna
+ * hängs på orörda. Ett talfält är lika ofta ett årtal, ett serienummer eller
+ * ett modellnummer som ett belopp, och `1,985` går med punkt som decimaltecken
+ * att läsa som knappt två. Systemet lägger därför inte till några tecken som
+ * användaren inte skrev, och fältet är `<input type="number">` som inte tar
+ * emot avgränsare.
  *
  * **Typen bestämmer inmatningen.** `fieldInputType()` är hela regeln:
  * talfältet är `<input type="number">` och tar därmed bara tal, datumfältet
@@ -110,8 +115,12 @@ export function fieldInputType(type) {
 }
 
 /**
- * Decimalsträngen med språkets gruppering och decimaltecken, utan att tappa
- * värdesiffror.
+ * Decimalsträngen med språkets decimaltecken, utan att tappa värdesiffror.
+ *
+ * Heltalsdelen grupperas inte: fältet kan lika gärna vara ett årtal som ett
+ * belopp, och användaren kan inte skriva någon avgränsare i ett
+ * `<input type="number">`. Siffrorna skrivs ut som de kom, med inledande
+ * nollor borttagna.
  *
  * @param {string} value
  * @param {string} locale
@@ -129,17 +138,15 @@ function formatDecimal(value, locale) {
 
     const [, sign, integer, fraction = ''] = match;
     const decimals = fraction.replace(/0+$/, '');
-
-    // Heltalsdelen ryms i en Number (14 siffror), decimalerna hängs på orörda.
-    const whole = new Intl.NumberFormat(locale, { useGrouping: true }).format(Number(sign + integer));
+    const whole = integer.replace(/^0+(?=\d)/, '');
 
     if (decimals === '') {
-        return whole;
+        return `${sign}${whole}`;
     }
 
     const separator = new Intl.NumberFormat(locale)
         .formatToParts(1.5)
         .find((part) => part.type === 'decimal')?.value ?? '.';
 
-    return `${whole}${separator}${decimals}`;
+    return `${sign}${whole}${separator}${decimals}`;
 }
