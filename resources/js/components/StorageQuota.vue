@@ -7,9 +7,15 @@ import { formatByteSize } from './attachmentPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Kvotmodulen i toppraden och längst ned i mobilmenyn, se issue 459 · M79.
+ * Kvotmodulen längst ned i mobilmenyn, se issue 459 · M79 och issue 477.
  * En smal stapel, en rad text under den och en knapp med ett inringat *i*
  * som öppnar StorageQuotaPanel.
+ *
+ * **Modulen finns bara i mobilmenyn.** Issue 477 tog bort den ur skalets
+ * topprad: hjältarna ritar i stället lagringskortet `HeroStorage` på
+ * dashboarden och i containern, och på en telefon ritas varken containerns
+ * hjälte eller `AppHero`:s sifferrad. Utan menyns instans hade kvoten alltså
+ * inte synts alls där — den står kvar med sin panel i flödet.
  *
  * **Talen är serverns** (`storageQuota`, App\Http\Middleware\
  * HandleInertiaRequests). Bytena formateras med `formatByteSize()` och
@@ -20,7 +26,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Kontexten kommer ur rutten**, inte ur sessionen. I containerkontexten
  * (`storageQuota.container`) står containerns andel i texten och ritas som
- * ett eget segment i en starkare ton i kontots stapel.
+ * ett eget segment i en starkare ton i kontots stapel — samma form som
+ * lagringskortets containerform.
  *
  * **Färgen går mot varning vid 80 % och mot fel vid 100 %**, med tokens ur
  * designsystemet. Ett obegränsat tak (`limitBytes` är `null`) ger bara texten.

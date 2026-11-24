@@ -8,7 +8,6 @@ import MobileMenu from '../components/MobileMenu.vue';
 import MobileTabBar from '../components/MobileTabBar.vue';
 import NotificationBell from '../components/NotificationBell.vue';
 import SearchField from '../components/SearchField.vue';
-import StorageQuota from '../components/StorageQuota.vue';
 import ShellContainerList from '../components/ShellContainerList.vue';
 import ShellSections from '../components/ShellSections.vue';
 import UserAvatar from '../components/UserAvatar.vue';
@@ -202,7 +201,6 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const page = usePage();
-const storageQuota = computed(() => page.props.storageQuota);
 const user = computed(() => page.props.auth.user);
 
 /* Sidans formulär i vyn nås genom samma räknare som plusknappens klick. */
@@ -483,9 +481,6 @@ onBeforeUnmount(() => {
                             tittar i. Över `md:` finns ingen flikrad, och det här är
                             samma knapp på samma plats i skalet.
                         -->
-                        <!-- Kvotmodulen (issue 459 · M79): kontots kvot, eller containerns andel. Dold under `md:`, där den står i mobilmenyn. -->
-                        <StorageQuota v-if="storageQuota" class="max-md:hidden" />
-
                         <CreateButton v-if="create" :create="create" @open="openCreateMenu" />
 
                         <SearchField v-if="user" />

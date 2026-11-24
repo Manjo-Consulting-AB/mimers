@@ -297,13 +297,54 @@ it('ger limitBytes och percent null för ett obegränsat tak', function () {
     expect($kvot['usedBytes'])->toBe(500);
 });
 
-it('ritar StorageQuota med v-if i toppraden och i mobilmenyn', function () {
+/*
+ * Klart när (issue 477): toppraden ritar ingen `StorageQuota`, och
+ * mobilmenyn ritar den med panelen som förut.
+ *
+ * Modulen flyttade ur skalets topprad när hjältarna fick lagringskortet. På
+ * en telefon ritas varken `AppHero` eller containerns hjälte, så utan menyns
+ * instans hade kvoten inte synts alls där. Menyns `<StorageQuota>` bär
+ * `inline` och sin egen `id-suffix`, så panelen ritas i flödet där.
+ */
+it('ritar StorageQuota bara i mobilmenyn, med panelen kvar', function () {
     $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
     $meny = File::get(resource_path('js/components/MobileMenu.vue'));
 
-    expect($layout)->toContain('<StorageQuota v-if="storageQuota"');
-    expect($meny)->toContain('<StorageQuota v-if="storageQuota"');
-    expect(strpos($layout, '<StorageQuota'))->toBeLessThan(strpos($layout, '<CreateButton v-if'));
+    expect($layout)->not->toContain('<StorageQuota')
+        ->and($layout)->not->toContain('StorageQuota.vue')
+        ->and($meny)->toContain('<StorageQuota v-if="storageQuota"')
+        ->and($meny)->toContain('inline')
+        ->and($meny)->toContain('id-suffix="menu"');
+});
+
+/*
+ * Klart när (issue 477): containerns hjälte ritar lagringskortet med
+ * containerns andel och kontots förbrukning av taket på översikten, på en
+ * annan flik och i itemvyn.
+ *
+ * `storageQuota.container` byggs ur `{container}`-parametern, så alla tre
+ * ytorna får samma andel utan en rad i respektive kontroller. Kortet läser
+ * proppen självt; här prövas talen den får.
+ */
+it('bär containerns lagring på översikten, på en annan flik och i itemvyn', function () {
+    [$konto, $agare] = kvotmodulKonto('owner');
+    $container = Container::factory()->for($konto, 'account')->create();
+    $item = kvotmodulItem($container);
+    kvotmodulBilaga($item, 300, $konto);
+    kvotmodulBilaga($container, 200, $konto);
+
+    foreach ([
+        "/containers/{$container->ulid}",
+        "/containers/{$container->ulid}/items",
+        "/containers/{$container->ulid}/items/{$item->ulid}",
+    ] as $url) {
+        $kvot = kvotmodulProps($agare, $url)['storageQuota'];
+
+        expect($kvot['container'])->not->toBeNull()
+            ->and($kvot['container']['ulid'])->toBe($container->ulid)
+            ->and($kvot['container']['bytes'])->toBe(500)
+            ->and($kvot['container']['percent'])->toBe(min(100.0, round(500 / $kvot['limitBytes'] * 100, 1)));
+    }
 });
 
 it('har varje quota-nyckel i katalogen', function () {

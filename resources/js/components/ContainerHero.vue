@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import HeroFrame from './HeroFrame.vue';
 import HeroCosts from './HeroCosts.vue';
+import HeroStorage from './HeroStorage.vue';
 import UiStat from './UiStat.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -107,6 +108,13 @@ const counts = computed(() => page.props.containerCounts ?? null);
  */
 const monthCosts = computed(() => page.props.containerMonthCosts ?? []);
 
+/*
+ * Lagringskortet ritas bara i containerkontexten. `storageQuota.container`
+ * är `null` för en gäst med bara en grant — hennes kontokontext saknar
+ * containerns andel — och då finns ingen lagring att visa i hjälten.
+ */
+const storageQuota = computed(() => page.props.storageQuota ?? null);
+
 const { t } = useTranslations();
 </script>
 
@@ -189,6 +197,19 @@ const { t } = useTranslations();
             <HeroCosts
                 v-if="monthCosts.length"
                 :totals="monthCosts"
+                tone="on-image"
+            />
+
+            <!--
+                Lagringskortet, efter brickorna och kostnadssummeringen. I
+                containerkontexten är huvudraden containerns andel av kontots
+                tak, medan stapeln och *Files* / *Text* gäller kontot. Utan
+                `storageQuota.container` — en gäst med bara en grant — ritas
+                inget kort. Det ritas i båda formerna, för `hero` styr bara
+                hjältens höjd.
+            -->
+            <HeroStorage
+                v-if="storageQuota?.container"
                 tone="on-image"
             />
         </div>

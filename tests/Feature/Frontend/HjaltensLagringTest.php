@@ -27,7 +27,11 @@ use function Pest\Laravel\actingAs;
  *    namn och en synlig fokusring.
  * 6. `<h1>` står på samma höjd och hjälten ändrar inte höjd när `heroFigures`
  *    kommer: kortet läser en propp som redan finns vid första ritningen.
- * 7. `/settings/storage` och toppradens kvotmodul ritar som förut.
+ * 7. `/settings/storage` ritar som förut, och kvotmodulen finns bara i
+ *    mobilmenyn sedan issue 477.
+ * 8. Containerformen (issue 477) säger containerns andel av kontots tak och
+ *    ritar den som ett eget segment med bredden `container.percent`, utan
+ *    minsta bredd.
  *
  * Källkodsproven läser formen, som GenomgangTest: komponenten ritas i
  * webbläsaren och går inte att rendera här. Kommentarerna rensas bort först,
@@ -223,6 +227,65 @@ it('ritar stapeln med barPercent och inget golv', function () {
     expect($kortet)->toMatch('/class="block h-2 rounded-pill"[^>]*:style="\{ width: `\$\{quota\.barPercent\}%` \}"/s');
 });
 
+// --- containerformen (issue 477) -------------------------------------------
+
+/*
+ * Klart när: containerformen säger containerns andel av kontots tak, och
+ * stapeln är kontots med containerns andel som ett eget segment.
+ *
+ * Huvudraden blir `quota.in_container` (eller `_unlimited` vid ett obegränsat
+ * tak) med containerns byte ur `storageQuota.container.bytes`, medan *Files*
+ * och *Text* fortfarande gäller kontot. Samma form som `StorageQuota`.
+ */
+it('säger containerns andel av kontots tak i containerformen', function () {
+    $kortet = hjallagringKort();
+
+    expect($kortet)->toContain("t('quota.in_container', { container, used: used.value, limit: limit.value })")
+        ->toContain("t('quota.in_container_unlimited', { container, used: used.value })")
+        ->toContain('formatByteSize(quota.value.container.bytes)');
+
+    // Underraden gäller kontot i båda formerna: ingen containerbytes där.
+    expect($kortet)->toContain('formatByteSize(quota.fileBytes)')
+        ->toContain('formatByteSize(quota.textBytes)');
+});
+
+/*
+ * Klart när: containerns segment har bredden `storageQuota.container.percent`
+ * och ingen minsta bredd.
+ *
+ * Bredden är serverns `percent`, ordagrant — ingen `Math.max`, ingen egen
+ * klass som ger segmentet en minsta bredd. Det ritas bara i containerformen,
+ * ovanpå kontots stapel i en starkare ton.
+ */
+it('ritar containerns segment med container.percent och utan golv', function () {
+    $kortet = hjallagringKort();
+
+    expect($kortet)->toContain('const containerWidth = computed(() => quota.value?.container?.percent ?? 0)')
+        ->toContain(':style="{ width: `${containerWidth}%` }"');
+
+    // Spåret är relativt, och segmentet är absolut placerat ovanpå kontots.
+    expect($kortet)->toMatch('#class="relative h-2 w-full overflow-hidden rounded-pill"#')
+        ->and($kortet)->toMatch('#<span\s+v-if="inContainer"\s+class="absolute left-0 top-0 block h-2 rounded-pill"[^>]*:style="\{ width: `\$\{containerWidth\}%` \}"#s');
+
+    expect($kortet)->not->toContain('Math.max')
+        ->and($kortet)->not->toContain('Math.min');
+});
+
+/*
+ * Klart när: hela kortet är länken till `/settings/storage` också i
+ * containerformen.
+ *
+ * Det är samma rot-`<Link>` i båda formerna — formen byter bara texten och
+ * segmentet — så en container når lagringssidan på samma sätt som ett konto.
+ */
+it('länkar till /settings/storage också i containerformen', function () {
+    $kortet = hjallagringKort();
+
+    expect($kortet)->toContain('<Link')
+        ->toContain('href="/settings/storage"')
+        ->toContain('v-if="quota"');
+});
+
 /*
  * Klart när: hela kortet är en länk till `/settings/storage`, med ett
  * tillgängligt namn och en synlig fokusring.
@@ -293,10 +356,10 @@ it('ritar kortet under bandet bara på dashboarden', function () {
     expect(strpos($sida, '<HeroStorage'))
         ->toBeGreaterThan(strpos($sida, '<DashboardStats'));
 
-    // Ingen annan fil ritar kortet själv: bara hjälten, dashboarden och
-    // komponenten själv nämner den.
+    // Ingen annan fil ritar kortet själv: bara hjälten, dashboarden,
+    // containerns hjälte och komponenten själv nämner den.
     foreach (File::allFiles(resource_path('js')) as $fil) {
-        if (in_array($fil->getFilename(), ['AppHero.vue', 'Dashboard.vue', 'HeroStorage.vue'], true)) {
+        if (in_array($fil->getFilename(), ['AppHero.vue', 'ContainerHero.vue', 'Dashboard.vue', 'HeroStorage.vue'], true)) {
             continue;
         }
 
@@ -305,18 +368,18 @@ it('ritar kortet under bandet bara på dashboarden', function () {
 });
 
 /*
- * Klart när: `/settings/storage` och toppradens kvotmodul ritar som förut.
+ * Klart när (issue 476, uppdaterat i 477): `/settings/storage` ritar som
+ * förut, och kvotmodulen står kvar i mobilmenyn medan hjälten bär kortet.
  *
- * Kortet länkar till sidan och ersätter inte den; modulen i toppraden och
- * mobilmenyn står kvar tills issue 477 tar bort den ur toppraden. Provet
- * läser att ingen av dem har fått `HeroStorage`.
+ * Issue 477 tog bort modulen ur skalets topprad; menyns instans med panelen är
+ * kvar, och kortet länkar till sidan utan att ersätta den.
  */
-it('lämnar lagringssidan och kvotmodulen orörda', function () {
+it('lämnar lagringssidan och kvotmodulen i mobilmenyn orörda', function () {
     $layout = hjallagringUtanKommentarer(File::get(resource_path('js/layouts/AppLayout.vue')));
     $meny = hjallagringUtanKommentarer(File::get(resource_path('js/components/MobileMenu.vue')));
     $sidan = hjallagringUtanKommentarer(File::get(resource_path('js/pages/Settings/Storage.vue')));
 
-    expect($layout)->toContain('<StorageQuota')
+    expect($layout)->not->toContain('<StorageQuota')
         ->and($meny)->toContain('<StorageQuota')
         ->and($sidan)->not->toContain('<HeroStorage');
 

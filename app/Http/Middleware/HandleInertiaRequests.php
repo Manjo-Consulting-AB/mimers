@@ -331,8 +331,9 @@ class HandleInertiaRequests extends Middleware
             // saker med olika kostnad. Namnet byttes i stället för att
             // kapslas in under märket, så att en partiell omladdning av
             // `notifications` (385) bara hämtar siffran — inte tjugo rader.
-            // Kvotmodulen i toppraden (issue 459 · M79) och dess uppdelning —
-            // se storageContext() om varför kontexten kommer ur rutten.
+            // Kvotmodulen längst ned i mobilmenyn (issue 459 · M79) och
+            // hjältarnas lagringskort (issue 477), med sin uppdelning — se
+            // storageContext() om varför kontexten kommer ur rutten.
             'storageQuota' => fn (): ?array => $this->storageQuota($request),
             'storageBreakdown' => Inertia::optional(fn (): ?array => $this->storageBreakdown($request)),
             'notificationList' => Inertia::optional(fn (): array => $this->notifications($request)),
@@ -377,8 +378,8 @@ class HandleInertiaRequests extends Middleware
     }
 
     /**
-     * Kvotmodulens tal i toppraden, eller `null` för en gäst och för någon
-     * utan konto (issue 459 · M79).
+     * Kvotmodulens tal i mobilmenyn och hjältarnas lagringskort, eller `null`
+     * för en gäst och för någon utan konto (issue 459 · M79 och issue 477).
      *
      * `usedBytes`, `limitBytes` och `percent` är ReadPlanUsage:s — filer plus
      * text ur `usage_counter`, `null` för ett obegränsat tak — och
@@ -387,9 +388,9 @@ class HandleInertiaRequests extends Middleware
      * en egen summering (issue 476 · [[ADR-0081 All lagrad data räknas mot
      * kvoten]]). `barPercent` är stapelns bredd med två decimaler, så att en
      * liten andel inte avrundas till noll. `container` är containerns andel av
-     * kontot (ReadContainerStorageShare) i containerkontexten, annars `null`.
-     * `otherAccounts` är personens övriga konton, var och ett med sitt
-     * förbrukade och sitt tak.
+     * kontot (ReadContainerStorageShare) i containerkontexten, annars `null`;
+     * hjälten ritar sin containerform bara när den finns. `otherAccounts` är
+     * personens övriga konton, var och ett med sitt förbrukade och sitt tak.
      *
      * @return array<string, mixed>|null
      */
