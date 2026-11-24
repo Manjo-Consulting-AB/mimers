@@ -316,6 +316,7 @@ function submit() {
                 <Link href="/about" class="text-meta text-ink-subtle hover:underline">{{ t('auth.landing.links.about') }}</Link>
                 <Link href="/privacy" class="text-meta text-ink-subtle hover:underline">{{ t('auth.landing.links.privacy') }}</Link>
                 <Link href="/terms" class="text-meta text-ink-subtle hover:underline">{{ t('auth.landing.links.terms') }}</Link>
+                <Link href="/subprocessors" class="text-meta text-ink-subtle hover:underline">{{ t('auth.landing.links.subprocessors') }}</Link>
                 <Link href="/help" class="text-meta text-ink-subtle hover:underline">{{ t('auth.landing.links.help') }}</Link>
             </nav>
         </div>

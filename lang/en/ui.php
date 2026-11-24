@@ -692,6 +692,7 @@ return [
                 'about' => 'About Mimers',
                 'privacy' => 'Privacy policy',
                 'terms' => 'Terms of use',
+                'subprocessors' => 'Subprocessors',
                 'help' => 'Help',
             ],
         ],
@@ -6148,9 +6149,22 @@ return [
      * Nycklarna följer adresserna i routes/web.php.
      */
     'info' => [
-        'about' => ['title' => 'About Mimers'],
-        'privacy' => ['title' => 'Privacy policy'],
-        'terms' => ['title' => 'Terms of use'],
+        'about' => [
+            'title' => 'About Mimers',
+            'description' => 'What Mimers is, why it exists and who builds it.',
+        ],
+        'privacy' => [
+            'title' => 'Privacy policy',
+            'description' => 'How Manjo Consulting AB processes personal data in Mimers.',
+        ],
+        'terms' => [
+            'title' => 'Terms of use',
+            'description' => 'The terms for using Mimers.',
+        ],
+        'subprocessors' => [
+            'title' => 'Subprocessors',
+            'description' => 'The service providers that process personal data on behalf of Mimers.',
+        ],
         'help' => [
             'title' => 'Help',
             'subtitle' => 'Answers to common questions about Mimers.',

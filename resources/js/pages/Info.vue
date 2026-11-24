@@ -6,10 +6,11 @@ import { useTranslations } from '../composables/useTranslations.js';
 defineOptions({ layout: AppLayout });
 
 /*
- * Informationssidorna — /about, /privacy och /terms, se issue 202. /help har
- * sedan M78 · issue 458 en egen sida, Help.vue.
+ * Informationssidorna — /about, /privacy, /terms och /subprocessors, se issue
+ * 202 och M86 · issue 480. /help har sedan M78 · issue 458 en egen sida,
+ * Help.vue.
  *
- * EN sida för tre adresser: rutten skickar vilken sida det är i `page`-
+ * EN sida för fyra adresser: rutten skickar vilken sida det är i `page`-
  * proppen, och rubriken slås upp ur `info.<sida>.title` i
  * lang/{locale}/ui.php. Ingen sträng bor här — samma regel som resten av
  * webben ([[ADR-0021 Frontendteknik]] § Beslut: webbens text formuleras på
@@ -19,7 +20,11 @@ defineOptions({ layout: AppLayout });
  * `lang/{locale}/pages/{sida}.md` och ritar den med `HelpMarkdown`, så det som
  * kommer hit är redan HTML — [[ADR-0094 Hjälpcentret]] § 4. Saknas filen är
  * `body` tom, och då ritas platshållaren ur `info.placeholder` som förut. Det
- * är läget för /privacy och /terms tills deras texter skrivs (#1600).
+ * är läget för /terms tills dess text skrivs.
+ *
+ * **`<meta name="description">` kommer ur `info.<sida>.description`**
+ * (M86 · issue 480). `head-key` gör att Inertia byter ut taggen när man går
+ * mellan sidorna i stället för att lägga en andra bredvid.
  *
  * **`v-html` är samma undantag som i Help.vue, Category.vue och ItemNotes.vue**
  * ([[ADR-0066 Itemets anteckning]] § 3). Förbudet i [[ADR-0057 Ikoner och
@@ -40,7 +45,13 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <Head :title="t(`info.${page}.title`)" />
+    <Head :title="t(`info.${page}.title`)">
+        <meta
+            name="description"
+            :content="t(`info.${page}.description`)"
+            head-key="description"
+        >
+    </Head>
 
     <div class="py-12 text-center">
         <h1 class="text-3xl font-semibold">{{ t(`info.${page}.title`) }}</h1>

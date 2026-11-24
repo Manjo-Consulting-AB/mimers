@@ -568,7 +568,20 @@ onBeforeUnmount(() => {
                 <slot />
             </main>
 
+            <!--
+                Sidfoten — bara över `md:`. Raden med de juridiska sidorna kom
+                med M86 · issue 480 och läser samma `auth.landing.links.*` som
+                inloggningssidans rad, så ingen nyckel dubbleras. Under `md:`
+                ritas ingen sidfot, och inloggningssidans rad syns på mobilen.
+            -->
             <footer class="hidden border-t border-slate-200 py-4 text-center text-xs text-slate-600 md:block">
+                <nav class="mb-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+                    <Link href="/about" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.about') }}</Link>
+                    <Link href="/privacy" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.privacy') }}</Link>
+                    <Link href="/terms" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.terms') }}</Link>
+                    <Link href="/subprocessors" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.subprocessors') }}</Link>
+                </nav>
+
                 {{ t('common.footer', { year: page.props.app.year, version: page.props.app.version }) }}
             </footer>
         </div>

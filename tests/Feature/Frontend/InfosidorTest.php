@@ -1,6 +1,6 @@
 <?php
 
-// rott-pa-basen: omdöpt testfall (fyra sidor blir tre); /help-delen prövas i HjalpsidanTest, som är rött på basen.
+// rott-pa-basen: omdöpta testfall (tre sidor blir fyra); /help-delen prövas i HjalpsidanTest, som är rött på basen.
 
 use App\Models\User;
 use Inertia\Testing\AssertableInertia;
@@ -10,31 +10,34 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 202 · Informationssidorna — /about, /privacy och /terms. /help ritas
- * sedan M78 · issue 458 av Help.vue och prövas i HjalpsidanTest.
+ * Issue 202 · Informationssidorna — /about, /privacy, /terms och
+ * /subprocessors. /help ritas sedan M78 · issue 458 av Help.vue och prövas i
+ * HjalpsidanTest.
  *
- * Tre adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
+ * Fyra adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
  * vilken sida det är i `page`-proppen och komponenten slår upp rubriken ur
  * `info.<sida>.title`. Filen prövar serverns halva av det kontraktet —
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
  *
  * **Sedan M85 · issue 478 bär rutten också `body`.** Den kommer ur
- * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. /about och
- * -- sedan M86 · issue 479 -- /privacy har en fil; /terms ger `null` och ritar
- * platshållaren som förut. Innehållet i /abouts body prövas i OmsidanTest och
- * i /privacys i IntegritetspolicyTest.
+ * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. /about,
+ * /privacy (M86 · issue 479) och /subprocessors (M86 · issue 480) har en fil;
+ * /terms ger `null` och ritar platshållaren som förut. Innehållet i /abouts
+ * body prövas i OmsidanTest, i /privacys i IntegritetspolicyTest och i
+ * /subprocessors i UnderbitradenTest.
  *
  * Att sidan ritas i AppLayout och inte bär en enda sträng själv prövas av
  * GenomgangTest och SprakTest, som läser varje fil under resources/js; att
  * rubriken faktiskt hamnar i <Head> och <h1> är komponentens halva och syns
- * inte här.
+ * inte här. Beskrivningen i <Head> prövas i UnderbitradenTest, som äger
+ * `info.<sida>.description`.
  *
  * **Publika rutter.** Både en gäst och en inloggad ska nå dem, så de ligger
  * utanför både `auth` och `guest` (routes/web.php): en plats i någon av
  * grupperna hade skickat den ena parten vidare.
  */
 
-it('renderar Info för var och en av de tre sidorna för en gäst', function (string $sida) {
+it('renderar Info för var och en av de fyra sidorna för en gäst', function (string $sida) {
     withoutVite();
 
     $svar = get('/'.$sida)
@@ -49,7 +52,7 @@ it('renderar Info för var och en av de tre sidorna för en gäst', function (st
     } else {
         expect((string) $svar->inertiaProps()['body'])->not->toBe('');
     }
-})->with(['about', 'privacy', 'terms']);
+})->with(['about', 'privacy', 'terms', 'subprocessors']);
 
 it('renderar Info också för en inloggad användare', function () {
     withoutVite();
@@ -68,6 +71,7 @@ it('har en titel för varje sida och en platshållartext', function () {
         'about' => 'About Mimers',
         'privacy' => 'Privacy policy',
         'terms' => 'Terms of use',
+        'subprocessors' => 'Subprocessors',
         'help' => 'Help',
     ];
 
@@ -78,8 +82,8 @@ it('har en titel för varje sida och en platshållartext', function () {
     expect(trans('ui.info.placeholder', [], 'en'))->toBe('This page is coming soon.');
 });
 
-it('namnger rutterna info.about, info.privacy, info.terms och info.help', function () {
-    foreach (['about', 'privacy', 'terms', 'help'] as $sida) {
+it('namnger rutterna info.about, info.privacy, info.terms, info.subprocessors och info.help', function () {
+    foreach (['about', 'privacy', 'terms', 'subprocessors', 'help'] as $sida) {
         expect(route('info.'.$sida, [], false))->toBe('/'.$sida);
     }
 });
