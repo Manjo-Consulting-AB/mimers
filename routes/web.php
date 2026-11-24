@@ -38,6 +38,7 @@ use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\HelpFeedbackController;
 use App\Http\Controllers\HelpSearchController;
 use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\InboxController;
@@ -396,6 +397,28 @@ Route::get('/help/articles/{article}', [HelpController::class, 'article'])
 Route::get('/help/context/{context}', [HelpController::class, 'context'])
     ->name('help.context')
     ->where('context', '[a-z][a-z_.]*[a-z]');
+
+// M82 · issue 471: återkopplingen, *Was this helpful?* (ADR-0094 § 7).
+// Rutterna ligger utanför `auth` och `guest` som de andra /help-sidorna: en
+// gäst svarar Ja eller Nej lika väl som en inloggad, och bara kommentaren
+// kräver ett konto — den regeln bor i kontrollern och inte i en grind.
+//
+// `throttle:help-feedback` är 20 i timmen per IP för en gäst och 60 i timmen
+// per person för en inloggad (App\Providers\AppServiceProvider). En egen
+// begränsare och inte den inbyggda formen `throttle:60,1`: rutterna svarar
+// JSON, och den inbyggda 429-renderingen omdirigerar till ett formulär som
+// inte finns här. `ThrottleWrites` hoppar över rutter som redan har en
+// `throttle:`-middleware, så anropet räknas en gång.
+//
+// POST-rutten ligger ovanför `{category}` som varje annan /help/-rutt.
+Route::post('/help/articles/{article}/feedback', [HelpFeedbackController::class, 'store'])
+    ->middleware('throttle:help-feedback')
+    ->name('help.feedback.store')
+    ->where('article', '[a-z0-9-]+');
+
+Route::patch('/help/feedback/{ulid}', [HelpFeedbackController::class, 'update'])
+    ->middleware('throttle:help-feedback')
+    ->name('help.feedback.update');
 
 // M80 · issue 462: kategorisidan, /help/{kategori}. Rutten ligger utanför
 // `auth` och `guest` som /help, och dess mönster tar bara gemener, siffror och

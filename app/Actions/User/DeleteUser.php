@@ -593,6 +593,16 @@ class DeleteUser
 
         DB::table('dismissed_tip')->where('user_id', $userId)->delete();
         DB::table('overview_panel')->where('user_id', $userId)->delete();
+
+        // Hjälpens återkoppling (M82 · issue 471,
+        // [[ADR-0094 Hjälpcentret]] § 7, [[Konton och åtkomst]]
+        // § help_feedback). Raden är personens egna ord om en artikel och
+        // bär `ON DELETE RESTRICT` mot `user`, så den måste bort innan
+        // personraden. En gästs rader har `user_id` null och står kvar —
+        // de ägs av ingen person och gallras efter 90 dagar av
+        // App\Console\PrunesHelpFeedback.
+        DB::table('help_feedback')->where('user_id', $userId)->delete();
+
         DB::table('email_change')->where('user_id', $userId)->delete();
         DB::table('password_change')->where('user_id', $userId)->delete();
 

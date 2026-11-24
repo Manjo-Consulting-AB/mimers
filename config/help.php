@@ -23,6 +23,11 @@
  * att ingen kan fylla tabellerna genom att spruta frågor eller sammanhang:
  * högst 1000 nya rader per dag vardera. En rad som redan finns räknas upp
  * även när taket är nått.
+ *
+ * `feedback_retention_days` är fristen för återkopplingen (M82 · issue 471,
+ * ADR-0094 § 7): en rad *Was this helpful?* sparas i 90 dagar och raderas
+ * sedan av App\Console\PrunesHelpFeedback. Frister räknas i dagar, som
+ * mätningens ovan.
  */
 
 return [
@@ -45,4 +50,6 @@ return [
     'search_gap_daily_limit' => 1000,
 
     'unknown_context_daily_limit' => 1000,
+
+    'feedback_retention_days' => 90,
 ];
