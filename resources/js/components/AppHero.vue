@@ -1,10 +1,9 @@
 <script setup>
 import { computed, onMounted } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
-import CostDonut from './CostDonut.vue';
 import DashboardStats from './DashboardStats.vue';
+import HeroCosts from './HeroCosts.vue';
 import HeroFrame from './HeroFrame.vue';
-import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Den delade hjälten, se issue 437 · [[ADR-0090 Dashboardens hjälte]]
@@ -15,8 +14,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Ramen, textspalten och sifferraden ritas exakt som `DashboardHero` gjorde
  * före utbrytningen** (ADR-0090 § 1 och 6): `HeroFrame` med
  * `min-h-32 md:min-h-56`, hälsningen, `<h1>` och undertiteln i samma spalt,
- * och brickorna före donuten i samma rad. Den som ändrar det ena ser det
- * andra — därför en komponent och inte tolv kopior.
+ * och brickorna före kostnadssummeringen i samma rad. Den som ändrar det ena
+ * ser det andra — därför en komponent och inte tolv kopior.
  *
  * **Hälsningen är dashboardens.** Utan `greeting` står en tom rad med samma
  * typografi och höjd, `aria-hidden="true"`, så att `<h1>` hamnar på samma
@@ -32,20 +31,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Medan svaret är på väg ritas ett skelett med samma mått som den fyllda
  * raden, så att hjälten inte ändrar höjd.
  *
- * **Sifferraden har ett fast golv: kostnadskortets höjd.** Ett konto utan
- * kostnadsrader ritar inget kort, och då består raden bara av brickorna.
- * Utan ett golv hade ramen krympt när `heroFigures` kom — skelettet
- * reserverar donuten, men den fyllda raden hade inte gjort det. Klassen
- * `md:min-h-[194.5px]` är kortets egen höjd: rubriken (15 px × 1,5 =
- * 22,5 px) + `mt-3` (12 px) + ringen (`h-40`, 160 px). Raden är därför lika
- * hög fylld som tom, och en dashboard utan kostnader ritar samma hjälte som
- * en med. Ändras `text-title` eller ringens mått ändras talet med dem — det
- * är priset för att höjden ska stå stilla.
+ * **Sifferraden har ett fast golv: brickornas höjd.** `HeroCosts` ritar
+ * ingenting utan kostnadsrader och är med en valuta lägre än brickorna, så
+ * raden är lika hög för ett konto med en valuta som för ett utan. Klassen
+ * `md:min-h-[102px]` är brickornas egen höjd: `UiStat`s `py-3` (24 px) +
+ * rubriken (`text-heading`, 24 px × 1,5 = 36 px) + etiketten (`text-meta`,
+ * 12 px × 1,5 = 18 px) + ramen (2 px) = 80 px, och uppgiftskolumnens
+ * underrad (`gap-1` 4 px + 18 px) gör raden 102 px. Skelettet har samma
+ * mått, så ramen står stilla när `heroFigures` kommer. Ändras `text-heading`
+ * eller `text-meta` ändras talet med dem — det är priset för att höjden ska
+ * stå stilla.
  *
  * **Under `md:` är hjälten det låga bandet** (ADR-0090 § 6): hälsningen och
  * rubriken står kvar inne i bilden, undertiteln och sifferraden är dolda. Bara
- * `Dashboard.vue` ritar brickorna och donuten under bandet; de andra sidorna
- * lämnar telefonens listor i fred.
+ * `Dashboard.vue` ritar brickorna och kostnadssummeringen under bandet; de
+ * andra sidorna lämnar telefonens listor i fred.
  */
 const props = defineProps({
     /* Rubriken, färdigformulerad av sidan — nyckeln är sidans egen. */
@@ -59,12 +59,11 @@ const props = defineProps({
     greeting: { type: String, default: null },
     /* `{ containers, tasks, overdue }` — dashboardens egen propp. */
     stats: { type: Object, default: null },
-    /* Månadens kostnader, `{ totals, breakdown }` — dashboardens egen propp. */
+    /* Månadens kostnader, `{ totals }` — dashboardens egen propp. */
     costs: { type: Object, default: null },
 });
 
 const page = usePage();
-const { t } = useTranslations();
 
 /* Personens hjältebild, ur den delade proppen (issue 434). */
 const hero = computed(() => page.props.auth?.user?.hero ?? null);
@@ -122,41 +121,32 @@ onMounted(() => {
         </div>
 
         <!--
-            Sifferraden: brickorna till vänster och kostnadskortet med donuten
-            till höger, som på dashboarden. Finns inga kostnader ritas inget
-            kort, och brickorna fyller raden — de är då radens enda barn.
-            `md:min-h-[194.5px]` håller raden på kostnadskortets höjd också
-            när kortet saknas, så att ramen inte krymper när talen kommer.
+            Sifferraden: brickorna först och kostnadssummeringen efter dem,
+            som på dashboarden. `HeroCosts` ritar ingenting utan
+            kostnadsrader, så brickorna är då radens enda barn.
+            `md:min-h-[102px]` håller raden på brickornas höjd också när
+            summeringen saknas, så att ramen inte krymper när talen kommer.
         -->
-        <div class="mt-2 hidden flex-wrap items-start gap-8 md:min-h-[194.5px] md:flex">
+        <div class="mt-2 hidden flex-wrap items-start gap-8 md:min-h-[102px] md:flex">
             <DashboardStats
                 v-if="loaded"
                 class="md:flex-1"
                 :stats="heroStats"
-                :costs="heroCosts.totals"
                 tone="on-image"
             />
 
-            <section v-if="loaded && heroCosts.totals.length" class="md:flex-1">
-                <h2 class="text-title font-semibold text-ink-on-accent">
-                    {{ t('dashboard.costs.heading') }}
-                </h2>
-
-                <div class="mt-3">
-                    <CostDonut
-                        :totals="heroCosts.totals"
-                        :breakdown="heroCosts.breakdown"
-                        :slice-href="(ulid) => `/containers/${ulid}`"
-                        tone="on-image"
-                    />
-                </div>
-            </section>
+            <HeroCosts
+                v-if="loaded"
+                :totals="heroCosts.totals"
+                tone="on-image"
+            />
 
             <!--
                 Skelettet medan `heroFigures` hämtas. Måtten är den fyllda
-                radens — tre taltutor, den försenade underraden och en ring på
-                160 px — så att hjälten inte byter höjd när talen kommer.
-                Raden är pynt och döljs för skärmläsare.
+                radens — två taltutor med den försenade underraden och
+                summeringens rubrik, period och en rad — så att hjälten inte
+                byter höjd när talen kommer. Raden är pynt och döljs för
+                skärmläsare.
             -->
             <div v-if="!loaded" class="flex flex-wrap items-start gap-4 md:flex-1" aria-hidden="true">
                 <div class="flex min-w-32 flex-col rounded-card border border-glass-border bg-glass px-4 py-3">
@@ -172,26 +162,21 @@ onMounted(() => {
 
                     <p class="text-meta">&nbsp;</p>
                 </div>
-
-                <div class="flex flex-col gap-1">
-                    <div class="flex min-w-32 flex-col rounded-card border border-glass-border bg-glass px-4 py-3">
-                        <span class="block text-heading font-semibold">&nbsp;</span>
-                        <span class="block text-meta">&nbsp;</span>
-                    </div>
-
-                    <p class="text-meta">&nbsp;</p>
-                </div>
             </div>
 
-            <section v-if="!loaded" class="md:flex-1" aria-hidden="true">
-                <h2 class="text-title font-semibold text-ink-on-accent">
-                    {{ t('dashboard.costs.heading') }}
-                </h2>
+            <div
+                v-if="!loaded"
+                class="min-w-32 rounded-card border border-glass-border bg-glass px-4 py-3"
+                aria-hidden="true"
+            >
+                <h2 class="text-title font-semibold">&nbsp;</h2>
+                <p class="text-meta">&nbsp;</p>
 
-                <div class="mt-3">
-                    <div class="h-40 w-40 rounded-pill border border-glass-border bg-glass"></div>
+                <div class="mt-2 flex items-baseline justify-between gap-4">
+                    <span class="block text-meta">&nbsp;</span>
+                    <span class="block text-meta font-semibold">&nbsp;</span>
                 </div>
-            </section>
+            </div>
         </div>
     </HeroFrame>
 </template>

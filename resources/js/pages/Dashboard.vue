@@ -2,11 +2,11 @@
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
 import ContainerCard from '../components/ContainerCard.vue';
-import CostDonut from '../components/CostDonut.vue';
 import DashboardActivityPanel from '../components/DashboardActivityPanel.vue';
 import DashboardHero from '../components/DashboardHero.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
+import HeroCosts from '../components/HeroCosts.vue';
 import InfoPanel from '../components/InfoPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -45,10 +45,9 @@ defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
  * aldrig slås upp (samma linje som Containers/Overview.vue).
  *
  * **Kostnaderna kom med issue 125**, som sin egen propp: `costs` bär månadens
- * totalsumma per valuta och nedbrytningen per container. Brickan får bara
- * summorna och donuten båda, och ingen av dem räknar något själv. Panelen ritas
- * bara när månaden har någon kostnadsrad alls — en rubrik över en tom ring är
- * en yta som påstår att det finns något att visa.
+ * totalsumma per valuta. Sedan issue 474 ritas den av `HeroCosts` — rubriken
+ * *Costs*, perioden *This month* och en rad per valuta — och ingen donut.
+ * Varken summeringen eller brickorna räknar något själva.
  *
  * **Händelserna kom med issue 126**, som sin egen propp: `events` bär de fem
  * senaste raderna ur händelseloggen över alla användarens konton, ur
@@ -85,11 +84,13 @@ defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
  * **Översta raden ritas i en hjälte sedan issue 435** ([[ADR-0090
  * Dashboardens hjälte]] § 1 och 6): `<h1>` och den gamla raden med brickorna
  * och kostnadskortet är ersatta av `DashboardHero`, som ritar hälsningen,
- * rubriken, undertiteln, brickorna och donuten inne i personens hjältebild
- * eller standardbilden. Sidan ritar därför brickorna och donuten EN gång till
- * under bandet, i ett block som bara syns under `md:` — det är dit ADR-0090
- * § 6 flyttar dem på en telefon. Propparna och talen är desamma som förut;
- * hjälten får `stats` och `costs` och räknar ingenting själv.
+ * rubriken, undertiteln, brickorna och kostnadssummeringen inne i personens
+ * hjältebild eller standardbilden. Sedan issue 474 är summeringen `HeroCosts`
+ * i stället för brickor och donut. Sidan ritar därför brickorna och
+ * summeringen EN gång till under bandet, i ett block som bara syns under
+ * `md:` — det är dit ADR-0090 § 6 flyttar dem på en telefon. Propparna och
+ * talen är desamma som förut; hjälten får `stats` och `costs` och räknar
+ * ingenting själv.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -102,7 +103,7 @@ const props = defineProps({
     stats: { type: Object, required: true },
     /* Korten, grupperade på art: `[{ kind, containers }]`. */
     containerGroups: { type: Array, required: true },
-    /* Månadens kostnader: `{ totals: [{currency, amount, count}], breakdown: [...] }`. */
+    /* Månadens kostnader: `{ totals: [{currency, amount, count}] }`. */
     costs: { type: Object, required: true },
     /* Högst fem rader ur händelseloggen, nyast först. */
     events: { type: Array, required: true },
@@ -145,27 +146,16 @@ const { t } = useTranslations();
     -->
     <div class="flex flex-col lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
         <!--
-            Under `md:` står brickorna och donuten under hjältebandet
-            (ADR-0090 § 6). Blocket är dolt över `md:`, för där ritar
-            `DashboardHero` samma saker inne i bilden. Source-ordningen gör
-            att det står först i flexkolumnen, utan `order` (Beslut 3).
+            Under `md:` står brickorna och kostnadssummeringen under
+            hjältebandet (ADR-0090 § 6 och tillägget 2026-11-24). Blocket är
+            dolt över `md:`, för där ritar `DashboardHero` samma saker inne i
+            bilden. Source-ordningen gör att det står först i flexkolumnen,
+            utan `order` (Beslut 3).
         -->
         <div class="mt-8 md:hidden">
-            <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
+            <DashboardStats :stats="props.stats" />
 
-            <section v-if="props.costs.totals.length" class="mt-8">
-                <h2 class="text-title font-semibold text-ink">
-                    {{ t('dashboard.costs.heading') }}
-                </h2>
-
-                <div class="mt-3">
-                    <CostDonut
-                        :totals="props.costs.totals"
-                        :breakdown="props.costs.breakdown"
-                        :slice-href="(ulid) => `/containers/${ulid}`"
-                    />
-                </div>
-            </section>
+            <HeroCosts class="mt-8" :totals="props.costs.totals" />
         </div>
 
         <!--

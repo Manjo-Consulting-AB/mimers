@@ -58,6 +58,16 @@ return [
             'transfers' => 'Ownership transfers waiting for your answer.',
             'settings' => 'Your profile, plan and preferences.',
         ],
+        // The compact cost summary in the hero, see issue 474 · [[ADR-0090
+        // Dashboardens hjälte]] § Tillägg 2026-11-24 ·
+        // resources/js/components/HeroCosts.vue. The heading names the
+        // question and `month` fixes the period: the month is the server's,
+        // so it is not a choice the reader can change
+        // ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
+        'costs' => [
+            'heading' => 'Costs',
+            'month' => 'This month',
+        ],
     ],
 
     // The currency field's own words, see issue 1253 · [[ADR-0078 Valutor ur
@@ -5268,18 +5278,13 @@ return [
         ],
 
         // The tiles, see issue 124. Two of the mockup's four: *Tasks* and
-        // *Maintenance* are the same table, and the cost tile is issue 125.
+        // *Maintenance* are the same table. The cost tile left with issue 474,
+        // when `HeroCosts` took over the month's amounts.
         // `overdue` is the sub-line under the task count and carries the rows
         // the server sorted into the overdue group — the client compares no
         // date, and a browser with a wrong clock cannot move a row into it.
         // No pluralisation (issue 52 decision 4), so the strings read the same
         // at one as at twelve.
-        //
-        // The cost tile (issue 125) is drawn once per currency the month has,
-        // so `costs` is its label and the sub-line is `costs.month` below —
-        // the same two lines the task tile has, in the same order. The mockup
-        // prints *this month* above *costs*; the name line is the tile's own
-        // and sits where `UiStat` puts a label, under the number.
         'stats' => [
             'containers' => 'Containers',
             // M24 · issue 702 § Beslut 2: same word as the container's tile
@@ -5287,21 +5292,21 @@ return [
             // (issue 697). The sub-line stays *Overdue: :count*.
             'tasks' => 'Tasks due',
             'overdue' => 'Overdue: :count',
-            'costs' => 'Costs',
         ],
 
-        // The cost panel and the donut, see issue 125. The month is the
-        // server's and not the reader's: the page takes no parameter, and a
-        // month that could be chosen would be a question — and a question is
-        // Pro ([[ADR-0038 Gränsen för Pro i kostnaderna]]). `month` therefore
-        // states which period the numbers belong to, and it is the same
-        // sentence under the tile and inside the donut.
+        // The donut's centre label, see issue 125. The month is the server's
+        // and not the reader's: the page takes no parameter, and a month that
+        // could be chosen would be a question — and a question is Pro
+        // ([[ADR-0038 Gränsen för Pro i kostnaderna]]). `month` therefore
+        // states which period the numbers belong to. Since issue 474 the
+        // dashboard's hero draws `hero.costs.month` instead; this string
+        // survives as `CostDonut`'s default label for a caller that does not
+        // pass one.
         //
         // There is no legend string: a slice is named by the container's own
         // name, which is the user's word and is printed verbatim, never looked
         // up here (the same rule as `containers.others` above).
         'costs' => [
-            'heading' => 'Costs',
             'month' => 'This month',
         ],
 

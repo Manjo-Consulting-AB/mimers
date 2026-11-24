@@ -573,7 +573,8 @@ it('har samma proppar som före rutnätet', function () {
  * omslag som formulerar hälsningen, rubriken och undertiteln och skickar in
  * dashboardens egna tal. Provet läser båda: att hjälten läser `hero` ur den
  * delade proppen (issue 434), ger ramen standardbildens adress som fallback
- * och ritar brickorna och donuten i ramens slot — och att dashboardens omslag
+ * och ritar brickorna och kostnadssummeringen i ramens slot — och att
+ * dashboardens omslag
  * skickar sina proppar vidare så att hjälten inte gör en egen begäran.
  */
 it('ritar översta raden i personens hjälte eller i standardbilden', function () {
@@ -583,7 +584,7 @@ it('ritar översta raden i personens hjälte eller i standardbilden', function (
         ->toContain('src="/images/dashboard-hero.jpg"')
         ->toContain('<HeroFrame')
         ->toContain('<DashboardStats')
-        ->toContain('<CostDonut');
+        ->toContain('<HeroCosts');
 
     $omslaget = panelvyUtanKommentarer(File::get(resource_path('js/components/DashboardHero.vue')));
 

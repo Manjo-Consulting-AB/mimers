@@ -55,7 +55,7 @@ final class HeroFigures
      * @param  array{stats: array{containers: int, tasks: int, overdue: int}, groups: list<array<string, mixed>>}|null  $summaries
      * @return array{
      *     stats: array{containers: int, tasks: int, overdue: int},
-     *     costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     *     costs: array{totals: list<array{currency: string, amount: int, count: int}>}
      * }
      */
     public function handle(User $user, Request $request, ?array $summaries = null): array
@@ -67,15 +67,19 @@ final class HeroFigures
 
         return [
             'stats' => $summaries['stats'],
-            'costs' => $this->monthCosts($user),
+            'costs' => ['totals' => $this->monthCosts($user)],
         ];
     }
 
     /**
-     * Månadens kostnader över användarens containrar, som `{totals,
-     * breakdown}` — underlaget för den tredje brickan och donuten.
+     * Månadens kostnader över användarens containrar, som `totals`.
      *
-     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     * Sedan issue 474 bär svaret bara totalerna: hjälten ritar en rad per
+     * valuta och ingen nedbrytning, och nedbrytningen ska därför inte räknas
+     * för en yta som inte visar den ([[ADR-0090 Dashboardens hjälte]]
+     * § Tillägg 2026-11-24).
+     *
+     * @return list<array{currency: string, amount: int, count: int}>
      */
     private function monthCosts(User $user): array
     {

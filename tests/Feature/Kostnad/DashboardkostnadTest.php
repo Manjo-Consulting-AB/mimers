@@ -10,7 +10,6 @@ use App\Support\Access\ItemScope;
 use App\Support\Cost\CostReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
@@ -22,10 +21,10 @@ use function Pest\Laravel\withoutVite;
  * Issue 125 · Kostnaderna på dashboarden, se
  * App\Http\Controllers\DashboardController,
  * App\Support\Cost\CostReport::monthForContainers(),
- * resources/js/components/CostDonut.vue,
- * resources/js/components/DashboardStats.vue och lang/en/ui.php.
+ * resources/js/components/HeroCosts.vue och lang/en/ui.php.
  *
- * Filen bevisar den tredje brickan och donuten, och de två är samma radmängd:
+ * Filen bevisar månadens kostnadssummering — sedan issue 474 bara totalerna,
+ * ritade som en rad per valuta:
  *
  * 1. **Perioden är innevarande kalendermånad och servern bestämmer den**
  *    ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut: en fast summering
@@ -35,9 +34,9 @@ use function Pest\Laravel\withoutVite;
  *    midnatt den första: samma ögonblick är två olika månader för två
  *    användare, och raden följer med dem.
  * 3. **Valutorna summeras aldrig ihop** ([[ADR-0040 Underträdets summor]]
- *    § Konsekvenser): två valutor ger två belopp och två ringar.
+ *    § Konsekvenser): två valutor ger två belopp.
  * 4. **Omfånget gäller** ([[ADR-0028 Åtkomst på itemnivå]]): en rad på ett
- *    item mottagaren inte når syns varken i brickan eller i donuten.
+ *    item mottagaren inte når syns inte i totalen.
  * 5. **Frågekostnaden är konstant** oberoende av antalet containrar — samma
  *    mätning som DashboardbrickorTest gör, och samma skäl: `summaryFor
  *    Containers()` och `monthForContainers()` frågar flera containers i EN
@@ -125,41 +124,14 @@ function kostnadMottagare(Container $container, Item $item): User
 /**
  * `costs`-proppen ur svaret.
  *
- * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}
+ * @return array{totals: list<array{currency: string, amount: int, count: int}>}
  */
 function kostnadProps(TestResponse $svar): array
 {
-    /** @var array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>} $kostnader */
+    /** @var array{totals: list<array{currency: string, amount: int, count: int}>} $kostnader */
     $kostnader = $svar->inertiaProps()['costs'];
 
     return $kostnader;
-}
-
-/**
- * Nedbrytningen som container-ULID → belopp i $valuta, sorterad på ULID.
- *
- * Sorterad därför att serverns ordning är NAMN stigande (formatGroups) och
- * containrarnas namn är slumpade av fabriken: provet ska jämföra bitarna och
- * deras belopp, inte en ordning som beror på slumpen.
- *
- * @param  list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>  $bitar
- * @return array<string, int>
- */
-function kostnadPerUlid(array $bitar, string $valuta): array
-{
-    $belopp = [];
-
-    foreach ($bitar as $bit) {
-        foreach ($bit['totals'] as $total) {
-            if ($total['currency'] === $valuta) {
-                $belopp[$bit['key']['ulid']] = $total['amount'];
-            }
-        }
-    }
-
-    ksort($belopp);
-
-    return $belopp;
 }
 
 /**
@@ -191,7 +163,7 @@ function kostnadFrågor(Closure $anrop): int
 // --- månaden ---------------------------------------------------------------
 
 /*
- * Klart när: brickan visar summan av innevarande månads kostnadsrader per
+ * Klart när: summeringen visar summan av innevarande månads kostnadsrader per
  * valuta, och en rad från förra månaden räknas inte.
  *
  * Provet lägger raderna kring månadsskiftet i användarens tidzon och jämför
@@ -220,7 +192,7 @@ it('summerar innevarande månad och lämnar förra månaden utanför', function 
         ->toBe([['currency' => 'SEK', 'amount' => 2250, 'count' => 2]]);
 });
 
-it('visar inget belopp och ingen ring för en månad utan kostnadsrader', function () {
+it('visar inget belopp för en månad utan kostnadsrader', function () {
     withoutVite();
 
     [$konto, $anvandare] = kostnadKonto();
@@ -230,7 +202,7 @@ it('visar inget belopp och ingen ring för en månad utan kostnadsrader', functi
 
     $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
 
-    expect(kostnadProps($svar))->toBe(['totals' => [], 'breakdown' => []]);
+    expect(kostnadProps($svar))->toBe(['totals' => []]);
 });
 
 /*
@@ -323,110 +295,16 @@ it('ignorerar en period i querysträngen', function () {
         ->and(kostnadProps($med)['totals'])->toBe([['currency' => 'SEK', 'amount' => 2000, 'count' => 1]]);
 });
 
-// --- donuten ---------------------------------------------------------------
-
-/*
- * Klart när: donuten har en tårtbit per container med kostnader.
- *
- * Bitarna är de containrar som BÄR kostnadsrader den här månaden: en container
- * utan rader blir ingen bit alls, och en container vars rader ligger i en
- * annan månad blir ingen heller. Att bitarna alltid summerar till totalen
- * bredvid är samma egenskap, och den prövas ordagrant.
- */
-it('ger en tårtbit per container med kostnader och lämnar de andra utanför', function () {
-    withoutVite();
-
-    [$konto, $anvandare] = kostnadKonto();
-
-    $båten = kostnadPärm($konto);
-    $bilen = kostnadPärm($konto);
-    $tomma = kostnadPärm($konto);
-
-    $idag = Carbon::now('Europe/Stockholm')->toDateString();
-
-    kostnadRad(kostnadItem($båten, 'Motorn'), 1200, $idag);
-    kostnadRad(kostnadItem($bilen, 'Däcken'), 800, $idag);
-    kostnadRad(kostnadItem($bilen, 'Oljan'), 100, $idag);
-    // Tom container: ett item utan kostnadsrader.
-    kostnadItem($tomma, 'Ingenting');
-
-    $kostnader = kostnadProps(actingAs($anvandare)->get('/dashboard')->assertOk());
-
-    expect(kostnadPerUlid($kostnader['breakdown'], 'SEK'))
-        ->toBe([$båten->ulid => 1200, $bilen->ulid => 900]);
-
-    // Bitarnas summa är totalen — samma Builder, samma radmängd.
-    expect(array_sum(kostnadPerUlid($kostnader['breakdown'], 'SEK')))
-        ->toBe($kostnader['totals'][0]['amount']);
-
-    // Bitens nyckel bär containerns namn, och det är användarens eget ord.
-    // Serverns ordning är namn stigande, som för rapportens grupper.
-    $namn = [$bilen->name, $båten->name];
-    sort($namn);
-
-    expect(array_column(array_column($kostnader['breakdown'], 'key'), 'name'))->toBe($namn);
-});
-
-/*
- * Klart när: donuten har en tårtbit per container i FALLANDE belopp, och
- * anroparen bär länkarna.
- *
- * Ordningen är en ritregel och bor därför i komponenten: den är PER VALUTA —
- * en container som är störst i kronor behöver inte vara störst i euro — och
- * serverns nedbrytning är en lista per container, inte en per valuta. Provet
- * binder regeln till filen, som länkprovet i DashboardbrickorTest: ett `sort()`
- * som försvinner ur CostDonut.vue faller här och inte först i webbläsaren.
- *
- * Länkarna är anroparens (issue 1119 · [[ADR-0038 Gränsen för Pro i
- * kostnaderna]] § Beslut): komponenten har propparna `sliceHref` och `href`,
- * båda med `default: null`, och bygger ingen adress själv. Dashboarden skickar
- * `slice-href` — legendraden leder till containerns översikt — men inte
- * `:href=`: ringen på dashboarden länkar inte till något.
- */
-it('ritar bitarna i fallande belopp och låter anroparen bära länkarna', function () {
-    withoutVite();
-
-    $donut = File::get(resource_path('js/components/CostDonut.vue'));
-
-    expect($donut)->toContain('sort((a, b) => b.amount - a.amount)')
-        ->toContain("t('dashboard.costs.month')")
-        // Ringen är inline-SVG, utan nytt beroende.
-        ->toContain('<svg')
-        // En ring per valuta.
-        ->toContain('v-for="donut in donuts"')
-        // Legenden bär identiteten: namn och belopp som text per bit.
-        ->toContain('{{ arc.name }}')
-        ->toContain('{{ arc.text }}');
-
-    // Länkarna är anroparens: två valfria proppar, och ingen egen rutt.
-    expect($donut)->toContain('sliceHref: { type: Function, default: null }')
-        ->toContain('href: { type: String, default: null }');
-    expect($donut)->not->toContain('<a ');
-    expect($donut)->not->toContain('@click');
-    expect($donut)->not->toContain('router');
-
-    // Dashboarden bär legendlänkarna men ingen ringlänk.
-    $dashboard = File::get(resource_path('js/pages/Dashboard.vue'));
-
-    preg_match('/<CostDonut\b.*?\/>/s', $dashboard, $anrop);
-
-    expect($anrop)->not->toBeEmpty();
-    expect($anrop[0])->toContain(':slice-href="(ulid) => `/containers/${ulid}`"');
-    expect($anrop[0])->not->toContain(':href=');
-});
-
 // --- valutorna -------------------------------------------------------------
 
 /*
- * Klart när: två valutor ger två belopp och två donuts, aldrig en summa.
+ * Klart när: två valutor ger två belopp, aldrig en summa.
  *
  * [[ADR-0040 Underträdets summor]] § Konsekvenser: en summa över flera valutor
- * grupperas och summeras aldrig ihop. Provet prövar båda ytorna: `totals` bär
- * två poster, och nedbrytningen bär samma container en gång per valuta — den
- * enda summa som finns är den per valuta, och 1 000 + 250 000 hade varit ett
- * tal ingen växelkurs ligger bakom.
+ * grupperas och summeras aldrig ihop. `totals` bär en post per valuta, och
+ * 1 000 + 250 000 hade varit ett tal ingen växelkurs ligger bakom.
  */
-it('håller valutorna åtskilda i både brickan och donuten', function () {
+it('håller valutorna åtskilda i summeringen', function () {
     withoutVite();
 
     [$konto, $anvandare] = kostnadKonto();
@@ -445,20 +323,12 @@ it('håller valutorna åtskilda i både brickan och donuten', function () {
         ['currency' => 'EUR', 'amount' => 1000, 'count' => 1],
         ['currency' => 'SEK', 'amount' => 250000, 'count' => 1],
     ]);
-
-    // Samma container bär båda valutorna, var för sig.
-    expect($kostnader['breakdown'])->toHaveCount(1)
-        ->and($kostnader['breakdown'][0]['totals'])->toBe([
-            ['currency' => 'EUR', 'amount' => 1000, 'count' => 1],
-            ['currency' => 'SEK', 'amount' => 250000, 'count' => 1],
-        ]);
 });
 
 // --- omfånget --------------------------------------------------------------
 
 /*
- * Klart när: en rad på ett item utanför mottagarens omfång räknas varken i
- * brickan eller i donuten.
+ * Klart när: en rad på ett item utanför mottagarens omfång räknas inte.
  *
  * Det är läckagetestet, och det gäller en summa mer än någon annan yta: en
  * total som är för hög avslöjar att det finns rader mottagaren inte ser, utan
@@ -485,8 +355,7 @@ it('räknar inte in en rad utanför mottagarens omfång', function () {
     $svar = actingAs($mottagare)->get('/dashboard')->assertOk();
     $kostnader = kostnadProps($svar);
 
-    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]])
-        ->and(array_sum(kostnadPerUlid($kostnader['breakdown'], 'SEK')))->toBe(1000);
+    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]]);
 
     expect($svar->getContent())->not->toContain('999999')
         ->and($svar->getContent())->not->toContain('Hemlig motor');
@@ -495,15 +364,14 @@ it('räknar inte in en rad utanför mottagarens omfång', function () {
 // --- friheten --------------------------------------------------------------
 
 /*
- * Klart när: en användare på gratisnivån ser brickan och donuten.
+ * Klart när: en användare på gratisnivån ser kostnadssummeringen.
  *
  * Ingen plangrind läggs på den här ytan: en fast summering är fri
  * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut), och det är samma
  * gräns som CostSummaryController drar. Kontot i provet har ingen
- * prenumeration — det är hela beviset — och svaret bär både totalen och
- * nedbrytningen.
+ * prenumeration — det är hela beviset — och svaret bär totalen.
  */
-it('visar brickan och donuten för en gratisanvändare', function () {
+it('visar kostnadssummeringen för en gratisanvändare', function () {
     withoutVite();
 
     [$konto, $anvandare] = kostnadKonto();
@@ -515,8 +383,7 @@ it('visar brickan och donuten för en gratisanvändare', function () {
 
     $kostnader = kostnadProps(actingAs($anvandare)->get('/dashboard')->assertOk());
 
-    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 4200, 'count' => 1]])
-        ->and($kostnader['breakdown'])->toHaveCount(1);
+    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 4200, 'count' => 1]]);
 });
 
 // --- frågekostnaden --------------------------------------------------------
@@ -525,10 +392,10 @@ it('visar brickan och donuten för en gratisanvändare', function () {
  * Klart när: frågekostnaden är konstant oberoende av antalet containrar.
  *
  * Containrarna läggs i NYA containers med items och kostnadsrader, ett
- * värstingfall för en summering per container. `monthForContainers()` frågar
- * alla containers i EN grupperad fråga med containernamnet i samma join, och
- * omfånget värms i ETT anrop genom `ResolveItemScope::forContainers()` —
- * samma grepp som CostSummaryController och samma skäl (issue 70 § Beslut 2).
+ * värstingfall för en summering över flera containers. `monthForContainers()`
+ * frågar alla containers i EN grupperad fråga, och omfånget värms i ETT anrop
+ * genom `ResolveItemScope::forContainers()` — samma grepp som
+ * CostSummaryController och samma skäl (issue 70 § Beslut 2).
  */
 it('kostar ett konstant antal frågor oberoende av antalet containrar', function () {
     withoutVite();
@@ -549,7 +416,7 @@ it('kostar ett konstant antal frågor oberoende av antalet containrar', function
     Carbon::setTestNow(now());
 
     $medEn = kostnadFrågor(function () {
-        get('/dashboard')->assertOk()->assertInertia(fn ($page) => $page->has('costs.breakdown', 1));
+        get('/dashboard')->assertOk()->assertInertia(fn ($page) => $page->has('costs.totals', 1));
     });
 
     // Nio containers till, var och en med ett item och en kostnadsrad.
@@ -559,7 +426,7 @@ it('kostar ett konstant antal frågor oberoende av antalet containrar', function
     }
 
     $medTio = kostnadFrågor(function () {
-        get('/dashboard')->assertOk()->assertInertia(fn ($page) => $page->has('costs.breakdown', 10));
+        get('/dashboard')->assertOk()->assertInertia(fn ($page) => $page->has('costs.totals', 1));
     });
 
     expect($medTio)->toBe($medEn);
@@ -618,9 +485,7 @@ it('räknar varje containers omfång för sig över månaden', function () {
         $andra->id => ItemScope::unrestricted('read'),
     ], $månad);
 
-    expect($svar['totals'])->toBe([['currency' => 'SEK', 'amount' => 12000, 'count' => 3]]);
-
-    // Båda containrarna bär rader och blir var sin bit — och den begränsade
-    // bär sitt eget omfångs belopp, inte grannens.
-    expect(kostnadPerUlid($svar['breakdown'], 'SEK'))->toBe([$ena->ulid => 1000, $andra->ulid => 11000]);
+    // Den begränsade containern bär sitt eget omfångs belopp (1 000) och den
+    // obegränsade hela sitt (11 000) — 12 000, inte 19 000.
+    expect($svar)->toBe([['currency' => 'SEK', 'amount' => 12000, 'count' => 3]]);
 });

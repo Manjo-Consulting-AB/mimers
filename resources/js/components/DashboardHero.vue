@@ -27,7 +27,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* `{ containers, tasks, overdue }` — talen brickorna visar. */
     stats: { type: Object, required: true },
-    /* Månadens kostnader, `{ totals, breakdown }`, som på sidan. */
+    /* Månadens kostnader, `{ totals }`, som på sidan. */
     costs: { type: Object, required: true },
 });
 

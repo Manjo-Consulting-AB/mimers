@@ -16,8 +16,9 @@ use Illuminate\Support\Facades\File;
  * propparna, panelerna och talen står still — bara var sakerna hamnar prövas
  * här. Ordningen under `lg:` och den oberoende kolumnen prövas formellt i
  * issue 252 § Beslut 2 och 3. Sedan issue 435 · [[ADR-0090 Dashboardens
- * hjälte]] § 1 och 6 är den översta raden en hjälte, och brickorna och donuten
- * står inne i den över `md:` men under bandet på en telefon.
+ * hjälte]] § 1 och 6 är den översta raden en hjälte, och brickorna och
+ * kostnadssummeringen står inne i den över `md:` men under bandet på en
+ * telefon.
  *
  * Hjälparna har prefixet `dashboardlayout` — Pest lägger alla testfiler i
  * samma namnrymd när hela sviten körs.
@@ -84,13 +85,13 @@ function dashboardlayoutPosition(string $markup, string $nål): int
 
 /*
  * Klart när (issue 435): hjälten är sidans översta rad, och brickorna och
- * donuten står inne i den över `md:`.
+ * kostnadssummeringen står inne i den över `md:`.
  *
  * Den översta raden ritas av `DashboardHero` sedan [[ADR-0090 Dashboardens
  * hjälte]] § 1, och den ritas före containergrupperna. Inne i hjälten står
- * brickorna före donuten, precis som i den gamla raden.
+ * brickorna före summeringen, precis som i den gamla raden (issue 474).
  */
-it('ställer hjälten överst och donuten inne i den före containergrupperna', function () {
+it('ställer hjälten överst och summeringen inne i den före containergrupperna', function () {
     $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
     $hjalten = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/AppHero.vue')));
 
@@ -99,10 +100,10 @@ it('ställer hjälten överst och donuten inne i den före containergrupperna', 
 
     expect($hjalte)->toBeLessThan($containrarna);
 
-    // Hjälten ritar brickorna och donuten i samma ordning som den gamla
-    // raden: brickorna först, donuten efter dem.
+    // Hjälten ritar brickorna och summeringen i samma ordning som den gamla
+    // raden: brickorna först, summeringen efter dem.
     expect(dashboardlayoutPosition($hjalten, '<DashboardStats'))
-        ->toBeLessThan(dashboardlayoutPosition($hjalten, '<CostDonut'));
+        ->toBeLessThan(dashboardlayoutPosition($hjalten, '<HeroCosts'));
 });
 
 /*
@@ -140,7 +141,8 @@ it('lägger containrarna och panelerna i var sin kolumn', function () {
 
 /*
  * Klart när (ADR-0090 § 6): under `md:` är hjälten ett lågt band med
- * hälsningen och rubriken, och brickorna och donuten står under det.
+ * hälsningen och rubriken, och brickorna och kostnadssummeringen står under
+ * det.
  *
  * Ramen bär båda höjderna — `min-h-32` under `md:` och `min-h-56` över — och
  * sifferraden är `hidden … md:flex`: den ritas bara i den breda formen.
@@ -161,7 +163,7 @@ it('gör hjälten till ett lågt band under md med siffrorna under', function ()
         ->and((string) $sifferraden)->toContain('hidden')
         ->and((string) $sifferraden)->toContain('md:flex');
 
-    // Och sidan ritar brickorna och donuten under bandet, bara under md.
+    // Och sidan ritar brickorna och summeringen under bandet, bara under md.
     $mobilraden = dashboardlayoutRamKlasser($sida, 'DashboardStats');
     expect($mobilraden)->not->toBeNull('sidan ritar inga brickor under hjälten')
         ->and((string) $mobilraden)->toContain('md:hidden');
@@ -170,30 +172,27 @@ it('gör hjälten till ett lågt band under md med siffrorna under', function ()
         ->toBeLessThan(dashboardlayoutPosition($sida, '<DashboardStats'));
 });
 
-// --- kostnadskortet --------------------------------------------------------
+// --- kostnadssummeringen ---------------------------------------------------
 
 /*
- * Klart när: "utan kostnader ritas inget kostnadskort" — villkoret på
- * `costs.totals.length` står kvar, i både hjälten och mobilraden.
+ * Klart när (issue 474): utan kostnadsrader ritas ingen `HeroCosts`, inte
+ * heller rubriken.
  *
- * Kortet ritas bara när månaden har någon kostnadsrad, och donuten ligger
- * inuti grenen: en tom ring under en rubrik är en yta som påstår att det finns
- * något att visa (issue 125). Att villkoret står före donuten i källan bevisar
- * att det gäller den.
+ * Villkoret bor i `HeroCosts` självt — `v-if="props.totals.length"` på roten
+ * — så både hjälten och mobilraden får samma tomma läge utan en egen gren. En
+ * rubrik över inga rader är en yta som påstår att det finns något att visa.
  */
-it('ritar inget kostnadskort utan kostnader', function () {
-    foreach ([
-        // Hjälten ritar kortet när talen är hämtade och månaden har rader.
-        'js/components/AppHero.vue' => 'v-if="loaded && heroCosts.totals.length"',
-        // Sidans mobilrad har talen som proppar och ritar som förut.
-        'js/pages/Dashboard.vue' => 'v-if="props.costs.totals.length"',
-    ] as $fil => $villkor) {
+it('ritar ingen kostnadssummering utan kostnader', function () {
+    $summeringen = dashboardlayoutUtanKommentarer(File::get(resource_path('js/components/HeroCosts.vue')));
+
+    expect($summeringen)->toContain('v-if="props.totals.length"');
+
+    foreach (['js/components/AppHero.vue', 'js/pages/Dashboard.vue'] as $fil) {
         $kod = dashboardlayoutUtanKommentarer(File::get(resource_path($fil)));
 
-        expect($kod)->toContain($villkor);
-
-        expect(dashboardlayoutPosition($kod, $villkor))
-            ->toBeLessThan(dashboardlayoutPosition($kod, '<CostDonut'));
+        // Ingen egen rubrik och ingen donut kvar på ytan.
+        expect($kod)->not->toContain("t('dashboard.costs.heading')");
+        expect($kod)->not->toContain('<CostDonut');
     }
 });
 
