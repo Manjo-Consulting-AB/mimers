@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import UiStat from './UiStat.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -24,16 +25,22 @@ import { useTranslations } from '../composables/useTranslations.js';
  * todo-vyns — serverns datum, aldrig klientens klocka.
  *
  * **Brickan är `UiStat`**, som containerns översikt använder den (issue 99):
- * ett tal och ett ord, ingen egen räkning och ingen form på nytt. UiStat bär
- * två rader och ingen underrad, så den försenade raden står BREDVID tutan och
- * inte inuti den — UiStat ligger utanför den här issuen ruta, och en tredje
- * rad i en delad yta är ett beslut om designsystemet och inte om dashboarden.
+ * ett tal och ett ord, ingen egen räkning och ingen form på nytt. Sedan issue
+ * #1651 har `UiStat` en standardslot under etiketten, och den försenade raden
+ * ritas INUTI tutan som en underrad — den första underraden i en taltuta, ett
+ * medvetet beslut om designsystemet ([[ADR-0042 Designsystemet]] § Beslut).
+ * Utan slotinnehåll ritas `UiStat` exakt som förut.
+ *
+ * **Brickorna fyller radens höjd** (issue #1651): `UiStat` får `h-full` och
+ * fyller länken, som sträcks till hjälte-radens höjd. Uppgiftsbrickan med den
+ * försenade raden är den högsta, och raden sträcker de andra till samma höjd.
  *
  * **Brickorna är genvägar** (fynd från testarna 2026-10-03, issue 654):
  * containerbrickan leder till `/containers` och uppgiftsbrickan till `/tasks` —
  * samma lista som talet är hämtat ur. Länken bor här och inte i UiStat, så att
  * containerns översikt kan använda samma tuta olänkad. Den röda *Overdue*-raden
- * står kvar utanför länken: den är en underrad till talet, inte en egen ingång.
+ * ligger inuti uppgiftsbrickans länk: den är en underrad till talet i samma
+ * ruta, inte en egen ingång.
  *
  * **Ingen sträng står i filen** (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `dashboard.stats.*`.
@@ -54,33 +61,42 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <div class="flex flex-wrap items-start gap-4">
+    <div class="flex flex-wrap gap-4">
         <Link
             href="/containers"
             class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
             <UiStat
+                class="h-full"
                 :value="props.stats.containers"
                 :label="t('dashboard.stats.containers')"
                 :tone="props.tone"
             />
         </Link>
 
-        <div class="flex flex-col gap-1">
-            <Link
-                href="/tasks"
-                class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        <Link
+            href="/tasks"
+            class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        >
+            <UiStat
+                class="h-full"
+                :value="props.stats.tasks"
+                :label="t('dashboard.stats.tasks')"
+                :tone="props.tone"
             >
-                <UiStat
-                    :value="props.stats.tasks"
-                    :label="t('dashboard.stats.tasks')"
-                    :tone="props.tone"
-                />
-            </Link>
-
-            <p class="text-meta text-danger">
-                {{ t('dashboard.stats.overdue', { count: props.stats.overdue }) }}
-            </p>
-        </div>
+                <!--
+                    Den försenade underraden ligger inuti uppgiftsbrickans
+                    ruta och inuti länken till `/tasks` (issue #1651). Vid noll
+                    ritas ingen rad alls — inte en tom och inte en med noll.
+                -->
+                <p
+                    v-if="props.stats.overdue > 0"
+                    class="mt-1 flex items-center gap-1 text-meta text-danger"
+                >
+                    <UiIcon name="overdue" :size="16" />
+                    {{ t('dashboard.stats.overdue', { count: props.stats.overdue }) }}
+                </p>
+            </UiStat>
+        </Link>
     </div>
 </template>
