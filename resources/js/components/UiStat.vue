@@ -23,6 +23,13 @@
  * `tone="on-image"` är formen för en taltuta ovanpå ett foto: glaset ur
  * [[ADR-0057 Ikoner och typsnitt]] § 6 — `--color-glass` med
  * `--color-glass-border` — och texten i `--color-ink-on-accent`.
+ *
+ * **Standardsloten under etiketten kom med issue #1651.** Den ger en plats för
+ * en underrad inuti rutan — den första underraden i en taltuta, ett medvetet
+ * beslut om designsystemet ([[ADR-0042 Designsystemet]] § Beslut). Det är en
+ * slot och ingen ny propp: den som inte fyller den får exakt samma markup som
+ * förut, så `ContainerHero`, `Containers/Overview` och `Containers/Costs` ritas
+ * oförändrade.
  */
 import { computed } from 'vue';
 import UiIcon from './UiIcon.vue';
@@ -63,5 +70,8 @@ const toneClasses = computed(() => TONES[props.tone] ?? TONES.surface);
         <span v-else class="text-heading font-semibold" :class="toneClasses.value">{{ value }}</span>
 
         <span class="text-meta" :class="toneClasses.label">{{ label }}</span>
+
+        <!-- Valfri underrad inuti rutan (issue #1651). Tom slot ritar inget. -->
+        <slot />
     </div>
 </template>

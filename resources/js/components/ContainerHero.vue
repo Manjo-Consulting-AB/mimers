@@ -161,14 +161,17 @@ const { t } = useTranslations();
         <!--
             Talen, i båda formerna, bara när den delade proppen finns. Varje taltuta är en länk — samma grepp
             som dashboardens brickor (issue 654): *Items* till itemlistan,
-            *Open tasks* till uppgiftsfliken.
+            *Open tasks* till uppgiftsfliken. Raden sträcker alla fyra
+            widgetarna — brickorna, `HeroCosts` och `HeroStorage` — till den
+            högsta, så de är lika höga (issue #1651).
         -->
-        <div v-if="counts" class="mt-2 flex flex-wrap gap-4">
+        <div v-if="counts" class="mt-2 flex flex-wrap items-stretch gap-4">
             <Link
                 :href="`/containers/${container.ulid}/items`"
                 class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 <UiStat
+                    class="h-full"
                     :value="counts.items"
                     :label="t('container.overview.items')"
                     icon="item"
@@ -181,6 +184,7 @@ const { t } = useTranslations();
                 class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 <UiStat
+                    class="h-full"
                     :value="counts.todos"
                     :label="t('container.overview.todos')"
                     icon="task"

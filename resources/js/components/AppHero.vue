@@ -30,18 +30,24 @@ import HeroStorage from './HeroStorage.vue';
  * hjälten hämtar den med en partiell omladdning av just den nyckeln när den
  * saknas — samma mönster som `ItemTargetPicker` använder för `itemTargets`.
  * Medan svaret är på väg ritas ett skelett med samma mått som den fyllda
- * raden, så att hjälten inte ändrar höjd.
+ * raden, så att raden står stilla medan talen hämtas.
  *
- * **Sifferraden har ett fast golv: brickornas höjd.** `HeroCosts` ritar
- * ingenting utan kostnadsrader och är med en valuta lägre än brickorna, så
- * raden är lika hög för ett konto med en valuta som för ett utan. Klassen
- * `md:min-h-[102px]` är brickornas egen höjd: `UiStat`s `py-3` (24 px) +
- * rubriken (`text-heading`, 24 px × 1,5 = 36 px) + etiketten (`text-meta`,
- * 12 px × 1,5 = 18 px) + ramen (2 px) = 80 px, och uppgiftskolumnens
- * underrad (`gap-1` 4 px + 18 px) gör raden 102 px. Skelettet har samma
- * mått, så ramen står stilla när `heroFigures` kommer. Ändras `text-heading`
- * eller `text-meta` ändras talet med dem — det är priset för att höjden ska
- * stå stilla.
+ * **Sifferraden sträcker sina barn till radens höjd** (issue #1651). Alla
+ * widgetar i raden — containerbrickan, uppgiftsbrickan, `HeroCosts` och
+ * `HeroStorage` — blir lika höga som den högsta som ritas just då. Ingenting
+ * växer i sidled (`md:flex-1` är borta): *Costs* och *Storage* står direkt
+ * efter brickorna, som i containerns hjälte. Höjden följer innehållet och har
+ * inget tak — *Costs* ritar en rad per valuta, den försenade raden i
+ * uppgiftsbrickan och en lång lagringsrad gör raden högre.
+ *
+ * **`md:min-h-[102px]` är radens golv, inte dess tak.** Det är brickornas egen
+ * höjd: `UiStat`s `py-3` (24 px) + rubriken (`text-heading`, 24 px × 1,5 =
+ * 36 px) + etiketten (`text-meta`, 12 px × 1,5 = 18 px) + ramen (2 px) = 80
+ * px, och den försenade underraden i uppgiftsbrickan (`gap-1` 4 px + 18 px)
+ * gör raden 102 px. Golvet håller raden minst så hög som brickorna, men
+ * begränsar aldrig höjden uppåt. Skelettet bär en valutarad, så med flera
+ * valutor växer hjälten när `heroFigures` kommer — det är väntat och ska inte
+ * motverkas.
  *
  * **Lagringskortet står sist i sifferraden** (issue 476). Det läser den
  * delade `storageQuota`, som redan finns vid första ritningen, och ritas
@@ -134,17 +140,17 @@ onMounted(() => {
         </div>
 
         <!--
-            Sifferraden: brickorna först, kostnadssummeringen efter dem och
-            lagringskortet sist (issue 474 och 476), som på dashboarden.
-            `HeroCosts` ritar ingenting utan kostnadsrader, så brickorna är
-            då radens enda barn. `md:min-h-[102px]` är radens golv — brickornas
-            höjd — och lagringskortet ritas i båda lägena, så att raden är
-            lika hög före som efter att `heroFigures` kommer.
+            Sifferraden: brickorna först, kostnadssummeringen direkt efter dem
+            och lagringskortet sist (issue 474, 476 och #1651), som i containerns
+            hjälte. `items-stretch` gör alla barn lika höga som den högsta;
+            ingenting växer i sidled, så *Costs* och *Storage* står bredvid
+            brickorna och inte längst till höger. `md:min-h-[102px]` är radens
+            golv — brickornas höjd — och aldrig ett tak. `HeroCosts` ritar
+            ingenting utan kostnadsrader, så brickorna är då radens enda barn.
         -->
-        <div class="mt-2 hidden flex-wrap items-start gap-8 md:min-h-[102px] md:flex">
+        <div class="mt-2 hidden flex-wrap items-stretch gap-4 md:min-h-[102px] md:flex">
             <DashboardStats
                 v-if="loaded"
-                class="md:flex-1"
                 :stats="heroStats"
                 tone="on-image"
             />
@@ -157,24 +163,22 @@ onMounted(() => {
 
             <!--
                 Skelettet medan `heroFigures` hämtas. Måtten är den fyllda
-                radens — två taltutor med den försenade underraden och
-                summeringens rubrik, period och en rad — så att hjälten inte
-                byter höjd när talen kommer. Raden är pynt och döljs för
-                skärmläsare.
+                radens — två taltutor, varav uppgiftsbrickan bär den försenade
+                raden INUTI rutan som en tredje rad, samt summeringens rubrik,
+                period och en rad — så att hjälten inte byter höjd när talen
+                kommer. Blockets barn sträcks till radens höjd, som de fyllda
+                brickorna. Raden är pynt och döljs för skärmläsare.
             -->
-            <div v-if="!loaded" class="flex flex-wrap items-start gap-4 md:flex-1" aria-hidden="true">
+            <div v-if="!loaded" class="flex flex-wrap items-stretch gap-4" aria-hidden="true">
                 <div class="flex min-w-32 flex-col rounded-card border border-glass-border bg-glass px-4 py-3">
                     <span class="block text-heading font-semibold">&nbsp;</span>
                     <span class="block text-meta">&nbsp;</span>
                 </div>
 
-                <div class="flex flex-col gap-1">
-                    <div class="flex min-w-32 flex-col rounded-card border border-glass-border bg-glass px-4 py-3">
-                        <span class="block text-heading font-semibold">&nbsp;</span>
-                        <span class="block text-meta">&nbsp;</span>
-                    </div>
-
-                    <p class="text-meta">&nbsp;</p>
+                <div class="flex min-w-32 flex-col rounded-card border border-glass-border bg-glass px-4 py-3">
+                    <span class="block text-heading font-semibold">&nbsp;</span>
+                    <span class="block text-meta">&nbsp;</span>
+                    <span class="block text-meta">&nbsp;</span>
                 </div>
             </div>
 
