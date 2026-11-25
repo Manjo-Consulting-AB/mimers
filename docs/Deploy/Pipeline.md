@@ -298,7 +298,7 @@ on:
   workflow_dispatch:
 ```
 
-**Varför `main` och inte per PR** (Tonys beslut 2026-11-25): en körning per PR hade lagt en tung körning på varje PR i ett läge där SQLite fångar nästan allt. Vid push till `main` får vi ändå besked innan en release, och det gör oss redo för flytten till en egen VPS. `workflow_dispatch` finns för att köra sviten för hand.
+**Varför `main` och inte per PR** (Tonys beslut 2026-11-25): vid push till `main` får vi ändå besked innan en release, och det gör oss redo för flytten till en egen VPS. `workflow_dispatch` finns för att köra sviten för hand.
 
 Jobbet blockerar ingenting: det är inget krav för en merge eller en utrullning, och ett rött resultat är ett fynd att följa upp. `migreringar.yml` står kvar och körs för PR:er som rör en migrering.
 

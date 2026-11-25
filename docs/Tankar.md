@@ -28,6 +28,7 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 - Testsviten körde mot sqlite i minnet, produktionen mot MariaDB 11.4 → hela sviten mot MariaDB vid push till `main`, [[Pipeline]] § `.github/workflows/mariadb.yml`, issue 504.
 - Om `AcceptInvitation` ska läsa nivån med ett uttryckligt lås i stället för `refresh()` → ja, issue 505 i [[M92 Relationer i papperskorgen och MariaDB-sviten]].
 - Vilken åtkomst till servern en agent ska ha → ingen, [[ADR-0027 Agentisolering under utveckling]] § Tillägg 2026-11-25.
+
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
 
 - Vad sidan om vart pengarna går ska innehålla → [[ADR-0086 Pro, Pro+ och grundarpris]] § Tillägg 2026-11-25: sidan byggs inte, pengarna går till att driva tjänsten.
