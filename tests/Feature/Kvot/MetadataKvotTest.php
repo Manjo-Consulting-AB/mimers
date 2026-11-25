@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: provet gäller kvoten, inte inboxen; den andra halvan flyttas till en vanlig container och är grön även utan implementationen.
+
 use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
@@ -323,8 +325,8 @@ it('nedgraderingsförhandsvisningen räknar med summan av filer och text', funct
     expect($användning['downgrade']['overBytes'])->toBe(200);
 });
 
-it('ett konto över gränsen kan lösa ut sin inbox, men nekas ett item med text i den', function () {
-    [$konto, $användare] = textKvotKonto(1000, filer: 1000);
+it('ett konto över gränsen kan lösa ut sin inbox, men nekas ett item med text i en vanlig container', function () {
+    [$konto, $användare, , $container] = textKvotKonto(1000, filer: 1000);
 
     $inbox = app(ResolveInbox::class)->handle($användare);
 
@@ -334,7 +336,7 @@ it('ett konto över gränsen kan lösa ut sin inbox, men nekas ett item med text
     $fångad = null;
     try {
         app(CreateItem::class)->handle(
-            $inbox->container, $konto, $användare, new Item(['name' => 'Text']), null, collect(), null,
+            $container, $konto, $användare, new Item(['name' => 'Text']), null, collect(), null,
         );
     } catch (ApiException $e) {
         $fångad = $e;

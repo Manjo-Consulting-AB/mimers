@@ -1071,6 +1071,11 @@ return [
 
         'generic' => 'Something went wrong. Try again in a moment.',
 
+        // Issue 1689 · ADR-0054 § 2: the inbox does not carry items, with or without a parent.
+        'item' => [
+            'inbox_not_allowed' => 'Items cannot be added to the inbox.',
+        ],
+
         'rate_limit' => [
             'writes_exceeded' => "You're making changes faster than we allow. Try again in :seconds seconds.",
         ],
