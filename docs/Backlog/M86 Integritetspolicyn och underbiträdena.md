@@ -17,6 +17,8 @@ Två frågor följer av det och står i [[Tankar]]: om `/privacy` ska publiceras
 
 **489 lades till 2026-11-24, efter att M87 tagit 481–488**, ur feature request #1646: användarvillkoren på `/terms`, samma form som 479. Numret ligger därför utanför milstolpens sammanhängande intervall.
 
+**494 lades till 2026-11-25** av samma skäl: `/terms` och `/privacy` länkade till Mail Shields återbetalningspolicy på `manjo.me`, och Mimers ska ha en egen på `/refund-policy`.
+
 ---
 
 ### 479. Integritetspolicyn på /privacy
@@ -63,3 +65,18 @@ Det som #1646 räknar upp utöver texten — `/contact`, vägen att rapportera o
 **Klart när:** `GET /terms` ger `Info` med `page = terms` och en `body` med de arton numrerade rubrikerna som `<h2>`, raden *Last updated: 24 November 2026* och ingen `<h1>`; `/terms` och `/privacy` säger *Company registration number: 556813-8464* och ingen säger *Corporate identity number*; § 7 har den nya meningen och inte *before the new price applies*; `body` innehåller *at least 18 years old*, *Merchant of Record*, *Malmö District Court*, planerna *Free*, *Pro* och *Pro+* samt länkarna till Paddles köparvillkor och återbetalningspolicyn; § 8:s borttagningsordning är en `<ol>` med fyra punkter; länkarna till `/privacy`, `/subprocessors` och `/contact` finns och varje *contact form* länkar till `/contact`; `body` har ingen `mailto:`, ingen e-postadress, ingen naken `https://mimers.app/contact` och varken *Legal review*, *Acceptance criteria*, *Product and policy decisions* eller *DSA*; gäst och inloggad får `200` med samma `body`; `InfosidorTest`, `OmsidanTest` och `UnderbitradenTest` väntar sig inte längre `null` för `/terms`; `/about` och `/subprocessors` ritar som förut, `/privacy` bortsett från orgnummerraden; bygget och sviten är gröna.
 **Axlar:** `ambiguity` low · `blast_radius` contained · `risk_class` none
 **Beror på:** #1645
+
+### 494. Återbetalningspolicyn på /refund-policy
+
+GitHub #1668. `/terms` och `/privacy` länkade till `https://manjo.me/refund-policy.php`. Den sidan är Mail Shields och nämner Lifetime-köp, sticky addresses, inbjudningsbonusar och `support@manjo.me`. Efteråt är `/refund-policy` en femte informationssida, `lang/en/pages/refund-policy.md`, med texten ordagrant ur #1668, och båda sidorna länkar dit. Tonys beslut 2026-11-25:
+
+1. **Samma garanti som Mail Shield**: full återbetalning inom 30 dagar från varje betalning, utan skäl, för årsabonnemangen på Pro och Pro+, för varje förnyelse och för grundarpriset.
+2. **Kontaktvägen är formuläret på `/contact`** med kategorin *Billing & Subscription*. Ingen e-postadress.
+3. **Mail Shields allmänna text om hur återbetalningen går till står kvar.** Det gäller Paddle som *Merchant of Record*, kvittolänken och paddle.net. Det som bara gäller Mail Shield ersätts med Mimers regler: [[Planer och kvoter]] § Nedgradering, [[ADR-0086 Pro, Pro+ och grundarpris]] § 2 om grundarpriset och [[ADR-0045 Radering av konto och person]] om att en radering inte ger återbetalning.
+
+Sidan nämner **Manage billing**, som `privacy.md` § 7 redan gör. Knappen finns inte än, och att den måste byggas när Paddle kopplas på står i [[Tankar]]. Länken *Refund policy* läggs till i sidfoten och på inloggningssidan.
+
+**Läs:** #1668, `lang/en/pages/terms.md`, `lang/en/pages/privacy.md` § 7, blocket för informationssidorna i `routes/web.php`, `tests/Feature/Frontend/VillkorssidanTest.php`
+**Klart när:** `GET /refund-policy` ger `Info` med `page = refund-policy`, fem `<h2>`, raden *Last updated: 25 November 2026* och ingen `<h1>`, med `200` för gäst och inloggad; `body` länkar till `/contact`, `/terms`, `/privacy` och paddle.net men har ingen `mailto:`, ingen e-postadress, inget `manjo.me` och varken *Lifetime*, *sticky*, *Regular* eller *Mail Shield*; `/terms` och `/privacy` länkar till `/refund-policy` och inte längre till `manjo.me`; länken finns i sidfoten och på inloggningssidan; bygget och sviten är gröna.
+**Axlar:** `ambiguity` low · `blast_radius` contained · `risk_class` none
+**Beror på:** —

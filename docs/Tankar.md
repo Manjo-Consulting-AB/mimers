@@ -40,6 +40,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Räcker händelsen `viewed` som åtkomstlogg för ärendena?** Säkerhetsloggen har ingen rad för att ett ärende lästs. Händelsen `viewed` finns bara i ärendet själv och försvinner med det, 36 månader efter avslutet ([[ADR-0095 Integritetsbegäranden]] § 3 och § 11). Frågan är om det räcker som bevis på vem som läst vad, eller om en rad utan namn i säkerhetsloggen behövs. Restes 2026-11-24.
 
+- **Manage billing måste byggas när Paddle kopplas på.** `/privacy` § 7 och `/refund-policy` § 4 ([[M86 Integritetspolicyn och underbiträdena]] issue 494) säger att prenumerationen sägs upp med **Manage billing** på profilen. Knappen finns inte, eftersom Paddle inte finns i koden ([[ADR-0014 Prismodell]] § Tillägg 2026-11-24). När betalflödet byggs måste profilen få knappen, så att texterna inte lovar något som inte finns. Annars måste texterna ändras. Det som inte är bestämt: om knappen leder till Paddles kundportal eller till en egen vy, och var på profilen den ska stå. Restes 2026-11-25.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
