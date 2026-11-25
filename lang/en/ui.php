@@ -692,7 +692,6 @@ return [
                 'privacy' => 'Privacy policy',
                 'terms' => 'Terms of use',
                 'refund_policy' => 'Refund policy',
-                'subprocessors' => 'Subprocessors',
                 'contact' => 'Contact',
                 'help' => 'Help',
             ],

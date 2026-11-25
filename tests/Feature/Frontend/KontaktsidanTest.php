@@ -370,18 +370,19 @@ it('prefixar ämnet med miljön utanför produktion', function () {
     expect($mail->envelope()->subject)->toBe('[Contact] General Inquiry — Gäst Person');
 });
 
-it('lägger Contact-länken efter Subprocessors i sidfoten och på inloggningssidan', function () {
+it('lägger Contact-länken sist i raden i sidfoten och efter Refund policy', function () {
     $layout = kontaktKalla('js/layouts/AppLayout.vue');
     // Länkarna under kortet bor sedan issue 1671 i skalet som /login och
-    // /register delar.
+    // /register delar. Subprocessors-länken före Contact togs bort i issue
+    // 1674, så Contact följer nu direkt på Refund policy.
     $login = kontaktKalla('js/components/AuthSplitLayout.vue');
 
     foreach (['js/layouts/AppLayout.vue' => $layout, 'js/components/AuthSplitLayout.vue' => $login] as $fil => $kod) {
         expect($kod)->toContain('href="/contact"')
             ->and($kod)->toContain("t('auth.landing.links.contact')");
 
-        expect((int) strpos($kod, 'href="/subprocessors"'))
-            ->toBeLessThan((int) strpos($kod, 'href="/contact"'), "{$fil} lägger Contact före Subprocessors");
+        expect((int) strpos($kod, 'href="/refund-policy"'))
+            ->toBeLessThan((int) strpos($kod, 'href="/contact"'), "{$fil} lägger Contact före Refund policy");
     }
 
     // Sidfoten har ingen Help-länk; inloggningssidan har den efter Contact.

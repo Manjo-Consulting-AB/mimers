@@ -22,9 +22,10 @@ use function Pest\Laravel\withoutVite;
  * Filen äger också de två ytorna som inte är sidan själv: beskrivningen i
  * `<head>` (som Info.vue ritar ur `info.<sida>.description`) och raden med de
  * juridiska länkarna i inloggningssidan och sidfoten. Båda raderna läser
- * `auth.landing.links.*`, så provet prövar att nycklarna finns och att de
- * fyra adresserna står i sidfoten — att inloggningssidan har dem prövas också
- * av InloggningssidaTest.
+ * `auth.landing.links.*`, så provet prövar att nycklarna finns och att
+ * adresserna står i sidfoten — att inloggningssidan har dem prövas också av
+ * InloggningssidaTest. Länken till `/subprocessors` togs bort ur båda raderna
+ * i issue 1674; `/privacy` länkar redan dit.
  *
  * Hjälparna har prefixet `underbitraden` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -145,11 +146,30 @@ it('har titeln Subprocessors och en beskrivning per informationssida', function 
     }
 
     // Raden på inloggningssidan och i sidfoten delar nycklarna — ingen egen
-    // kopia under en annan nyckel.
-    expect(trans('ui.auth.landing.links.subprocessors', [], 'en'))->toBe('Subprocessors')
+    // kopia under en annan nyckel. `auth.landing.links.subprocessors` togs
+    // bort i issue 1674, när länken försvann ur båda raderna. En saknad nyckel
+    // ger nyckeln själv tillbaka, och det är beviset på att den är borta.
+    expect(trans('ui.auth.landing.links.subprocessors', [], 'en'))->toBe('ui.auth.landing.links.subprocessors')
         ->and(trans('ui.auth.landing.links.about', [], 'en'))->toBe('About Mimers')
         ->and(trans('ui.auth.landing.links.privacy', [], 'en'))->toBe('Privacy policy')
         ->and(trans('ui.auth.landing.links.terms', [], 'en'))->toBe('Terms of use');
+});
+
+/*
+ * Klart när: `/subprocessors` svarar fortfarande 200 och `/privacy` länkar
+ * dit. Länken i policyn bor i `lang/en/pages/privacy.md`, utanför den här
+ * issnens ruta, och ritas oförändrad — provet vaktar att den finns kvar nu
+ * när raden under kortet inte längre bär den.
+ */
+it('låter /privacy länka vidare till /subprocessors', function () {
+    withoutVite();
+
+    $svar = get('/privacy')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Info')
+        ->where('page', 'privacy')
+    );
+
+    expect((string) $svar->inertiaProps()['body'])->toContain('href="/subprocessors"');
 });
 
 it('ritar <meta name="description"> ur info.<sida>.description i Info.vue', function () {
@@ -166,7 +186,7 @@ it('ritar <meta name="description"> ur info.<sida>.description i Info.vue', func
         ->and($head[0] ?? '')->toContain('head-key="description"');
 });
 
-it('länkar de fyra juridiska sidorna från sidfoten med auth.landing.links.*', function () {
+it('länkar de juridiska sidorna från sidfoten med auth.landing.links.*', function () {
     $kod = underbitradenKalla('layouts/AppLayout.vue');
 
     preg_match('/<footer\b.*?<\/footer>/s', $kod, $fot);
@@ -175,10 +195,15 @@ it('länkar de fyra juridiska sidorna från sidfoten med auth.landing.links.*', 
 
     expect($sidfot)->not->toBe('', 'AppLayout.vue har ingen <footer>');
 
-    foreach (['about' => '/about', 'privacy' => '/privacy', 'terms' => '/terms', 'subprocessors' => '/subprocessors'] as $nyckel => $adress) {
+    foreach (['about' => '/about', 'privacy' => '/privacy', 'terms' => '/terms', 'refund_policy' => '/refund-policy', 'contact' => '/contact'] as $nyckel => $adress) {
         expect($sidfot)->toContain('<Link href="'.$adress.'"')
             ->and($sidfot)->toContain("auth.landing.links.{$nyckel}");
     }
+
+    // /subprocessors nås via /privacy och har ingen egen rad i sidfoten
+    // (issue 1674).
+    expect($sidfot)->not->toContain('href="/subprocessors"')
+        ->and($sidfot)->not->toContain('auth.landing.links.subprocessors');
 
     // Raden står ovanför copyrightraden, som issuen säger.
     expect(strpos($sidfot, 'auth.landing.links.about'))->toBeLessThan(strpos($sidfot, 'common.footer'));

@@ -210,19 +210,22 @@ it('länkar glömt lösenord till magic link och registreringen', function () {
 
 it('länkar till informationssidorna', function () {
     // Beslut 3: länkarna under kortet. Sidorna kommer med issue 202;
-    // *Subprocessors* kom med M86 · issue 480, efter *Terms of use*, och
-    // *Contact* med M89 — efter *Subprocessors* och före *Help*.
+    // *Contact* kom med M89 — efter *Refund policy* och före *Help*.
     // *Refund policy* (M86) står direkt efter *Terms of use*.
+    // *Subprocessors* togs bort ur raden i issue 1674 — /privacy länkar dit.
     $kod = inloggningskalla();
 
-    foreach (['/about', '/privacy', '/terms', '/refund-policy', '/subprocessors', '/contact', '/help'] as $mål) {
+    foreach (['/about', '/privacy', '/terms', '/refund-policy', '/contact', '/help'] as $mål) {
         expect(str_contains($kod, "href=\"{$mål}\""))->toBeTrue("Login.vue länkar inte till {$mål}");
     }
 
     expect((int) strpos($kod, 'href="/terms"'))->toBeLessThan((int) strpos($kod, 'href="/refund-policy"'));
-    expect((int) strpos($kod, 'href="/refund-policy"'))->toBeLessThan((int) strpos($kod, 'href="/subprocessors"'));
-    expect((int) strpos($kod, 'href="/subprocessors"'))->toBeLessThan((int) strpos($kod, 'href="/contact"'));
+    expect((int) strpos($kod, 'href="/refund-policy"'))->toBeLessThan((int) strpos($kod, 'href="/contact"'));
     expect((int) strpos($kod, 'href="/contact"'))->toBeLessThan((int) strpos($kod, 'href="/help"'));
+
+    expect(str_contains($kod, 'href="/subprocessors"'))->toBeFalse(
+        'Subprocessors-länken står kvar under kortet — /privacy länkar dit (issue 1674)',
+    );
 });
 
 it('har engelska strängar för den nya sidan', function () {
