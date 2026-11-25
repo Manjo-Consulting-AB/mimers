@@ -21,6 +21,7 @@ use App\Console\PrunesHelpData;
 use App\Console\PrunesHelpFeedback;
 use App\Console\PrunesInAppNotifications;
 use App\Console\PrunesLogs;
+use App\Console\PrunesPrivacyRequests;
 use App\Console\PrunesRegistrationIps;
 use App\Console\PurgesExpiredExports;
 use App\Console\PurgesExpiredStoredFiles;
@@ -607,6 +608,26 @@ Schedule::call(fn () => app(PrunesHelpFeedback::class)->handle())
 Schedule::call(fn () => app(ReportsHelpUsage::class)->handle())
     ->dailyAt('00:30')
     ->name('report-help-usage');
+
+/*
+ * Issue 487 (M87) · Gallringen av integritetsärendena: ett avslutat ärende
+ * sparas i 36 kalendermånader efter `closed_at` och tas sedan bort med
+ * filer, bilagor och händelser — se App\Console\PrunesPrivacyRequests,
+ * config/privacy.php § retention_months och [[ADR-0095 Integritetsbegäranden]]
+ * § 11. Den rättsliga spärren går före, och ett öppet ärende gallras aldrig.
+ * Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Integritet/GallringTest.php; det här är bara schemaläggningen.
+ * Kör i samma nattliga fönster som de andra gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
+ * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
+ * driftmiljön. Posten ligger före `drain-queue`, som ska fortsätta ligga sist
+ * i filen.
+ */
+Schedule::call(fn () => app(PrunesPrivacyRequests::class)->handle())
+    ->daily()
+    ->name('prune-privacy-requests');
 
 /*
  * Issue 389 · Hjärtslag till Sentrys cron-övervakning, [[ADR-0079 Övervakning]]
