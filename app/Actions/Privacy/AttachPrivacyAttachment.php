@@ -58,8 +58,10 @@ class AttachPrivacyAttachment
      * @param  string  $actor  Handläggarens namn ur `--by`.
      *
      * @throws InvalidArgumentException när sökvägen inte är en läsbar vanlig
-     *                                  fil eller filen är för stor; ingenting
-     *                                  har då skrivits.
+     *                                  fil, när filen eller kopian är för stor
+     *                                  eller när kopian skiljer sig från
+     *                                  filen som lästes först; varken rad
+     *                                  eller fil finns då kvar.
      */
     public function handle(
         PrivacyRequest $request,
@@ -84,12 +86,6 @@ class AttachPrivacyAttachment
             );
         }
 
-        $hash = hash_file('sha256', $path);
-
-        if ($hash === false) {
-            throw new InvalidArgumentException("Hashen för {$path} kunde inte räknas.");
-        }
-
         // ULID:n måste finnas innan filen skrivs: sökvägen på disken slutar
         // med den. HasUlid fyller bara i ett tomt värde, så den som sätts
         // här står kvar.
@@ -97,13 +93,44 @@ class AttachPrivacyAttachment
         $attachment->ulid = (string) Str::ulid();
         $attachment->privacy_request_id = $request->getKey();
         $attachment->original_name = basename($path);
-        $attachment->size_bytes = $size;
-        $attachment->sha256 = $hash;
         $attachment->added_by = $actor;
 
         $storagePath = $request->ulid.'/'.$attachment->ulid;
 
         $this->copy($path, $storagePath);
+
+        // Hashen och storleken räknas på kopian som faktiskt ligger på
+        // disken — aldrig på källfilen. Ändras källan mellan den första
+        // avläsningen och kopieringen är det kopian som gäller, och den
+        // vägras: hashen är beviset på att filen på disken är den som lades
+        // till.
+        try {
+            [$storedSize, $storedHash] = $this->inspectStoredCopy($storagePath);
+        } catch (Throwable $e) {
+            $this->deleteQuietly($storagePath);
+
+            throw $e;
+        }
+
+        if ($storedSize > $max) {
+            $this->deleteQuietly($storagePath);
+
+            throw new InvalidArgumentException(
+                "Filen är större än gränsen på {$max} byte."
+            );
+        }
+
+        if ($storedSize !== $size) {
+            $this->deleteQuietly($storagePath);
+
+            throw new InvalidArgumentException(
+                "Filen ändrades under kopieringen: kopian är {$storedSize} byte, "
+                ."den första avläsningen {$size} byte."
+            );
+        }
+
+        $attachment->size_bytes = $storedSize;
+        $attachment->sha256 = $storedHash;
 
         try {
             return DB::transaction(function () use ($request, $attachment, $actor): PrivacyRequestAttachment {
@@ -126,9 +153,48 @@ class AttachPrivacyAttachment
         } catch (Throwable $e) {
             // Raden finns inte (eller rullades tillbaka). Filen får inte
             // ligga kvar utan rad — ingen gallring känner den.
-            Storage::disk(self::DISK)->delete($storagePath);
+            $this->deleteQuietly($storagePath);
 
             throw $e;
+        }
+    }
+
+    /**
+     * Läser tillbaka kopian från disken och räknar storleken och SHA-256 på
+     * bytena som faktiskt ligger där. Strömmen läses bit för bit, så en fil
+     * på 25 MB går inte genom minnet.
+     *
+     * @return array{0: int, 1: string} Storlek i byte och hexdigest.
+     */
+    private function inspectStoredCopy(string $storagePath): array
+    {
+        $stream = Storage::disk(self::DISK)->readStream($storagePath);
+
+        if ($stream === null) {
+            throw new RuntimeException('Kopian kunde inte läsas tillbaka från disken privacy.');
+        }
+
+        $hash = hash_init('sha256');
+
+        try {
+            $storedSize = hash_update_stream($hash, $stream);
+        } finally {
+            fclose($stream);
+        }
+
+        return [$storedSize, hash_final($hash)];
+    }
+
+    /**
+     * Tar bort en fil utan att en misslyckad borttagning döljer felet som
+     * ledde hit. Disken har `throw => true`, så `delete` kan självt kasta.
+     */
+    private function deleteQuietly(string $storagePath): void
+    {
+        try {
+            Storage::disk(self::DISK)->delete($storagePath);
+        } catch (Throwable) {
+            // Kopian ligger kvar; felet som ledde hit är det som ska ut.
         }
     }
 

@@ -22,8 +22,10 @@ use InvalidArgumentException;
  * hunnit halvvägs — och raden tas bort ändå. Motsatta ordningen hade lämnat
  * en fil utan rad, som ingen gallring känner.
  *
- * Filen, händelsen och borttagningen av raden sker i EN transaktion. Faller
- * skrivningen ligger raden kvar och ett nytt försök kan ta bort den.
+ * Filen, händelsen och borttagningen av raden sker i EN transaktion, och
+ * raden läses med `lockForUpdate()`: två samtidiga anrop ska bara skriva
+ * `attachment_removed` en gång. Faller skrivningen ligger raden kvar och ett
+ * nytt försök kan ta bort den.
  */
 class DetachPrivacyAttachment
 {
@@ -63,19 +65,24 @@ class DetachPrivacyAttachment
             throw new InvalidArgumentException('--reason måste anges: skälet till att bilagan tas bort.');
         }
 
-        $attachment = $request->attachments()
-            ->where('ulid', $attachmentUlid)
-            ->first();
+        return DB::transaction(function () use ($request, $attachmentUlid, $reason, $actor): PrivacyRequestAttachment {
+            // Raden läses om och låses inne i transaktionen: två samtidiga
+            // privacy:detach på samma bilaga ska bara skriva
+            // attachment_removed en gång. Den som kommer sist hittar ingen
+            // rad och avbryter.
+            $attachment = $request->attachments()
+                ->where('ulid', $attachmentUlid)
+                ->lockForUpdate()
+                ->first();
 
-        if ($attachment === null) {
-            throw new InvalidArgumentException(
-                "Ingen bilaga med ULID {$attachmentUlid} på ärendet."
-            );
-        }
+            if ($attachment === null) {
+                throw new InvalidArgumentException(
+                    "Ingen bilaga med ULID {$attachmentUlid} på ärendet."
+                );
+            }
 
-        $storagePath = $request->ulid.'/'.$attachment->ulid;
+            $storagePath = $request->ulid.'/'.$attachment->ulid;
 
-        return DB::transaction(function () use ($request, $attachment, $storagePath, $reason, $actor): PrivacyRequestAttachment {
             Storage::disk(self::DISK)->delete($storagePath);
 
             $this->recordEvent->handle(

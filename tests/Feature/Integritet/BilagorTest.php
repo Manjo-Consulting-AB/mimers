@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Privacy\AttachPrivacyAttachment;
+use App\Actions\Privacy\RecordPrivacyEvent;
 use App\Models\Account;
 use App\Models\PrivacyRequest;
 use App\Models\PrivacyRequestAttachment;
@@ -213,6 +215,128 @@ it('vägrar en fil över gränsen utan rad och fil', function () {
 
 it('har 25 MB som förval för bilagans storlek', function () {
     expect(config('privacy.attachment_max_bytes'))->toBe(25 * 1024 * 1024);
+});
+
+/*
+ * Hashen och storleken är beviset på kopian: de räknas på bytena som
+ * faktiskt ligger på disken, inte på källfilen. Disken lurar fram en kopia
+ * med annat innehåll än källan — samma längd, så gränsen och
+ * storlekskontrollen passerar.
+ */
+it('räknar hashen och storleken på kopian som ligger på disken', function () {
+    $ärende = bilagorArende();
+    $källa = bilagorKalla('svar.txt', 'ABCDE');
+
+    $disk = Storage::disk('privacy');
+    $spion = Mockery::mock($disk)->makePartial();
+    $spion->shouldReceive('writeStream')->andReturnUsing(function (string $väg) use ($disk): bool {
+        $disk->put($väg, 'FGHIJ');
+
+        return true;
+    });
+    Storage::set('privacy', $spion);
+
+    [$utgång] = bilagorKor('privacy:attach', [
+        'reference' => $ärende->reference,
+        'path' => $källa,
+    ], ['--by' => 'Anna Handläggare']);
+
+    expect($utgång)->toBe(Command::SUCCESS);
+
+    $bilaga = PrivacyRequestAttachment::query()->sole();
+
+    expect($bilaga->size_bytes)->toBe(5)
+        ->and($bilaga->sha256)->toBe(hash('sha256', 'FGHIJ'))
+        ->and(Storage::disk('privacy')->get($ärende->ulid.'/'.$bilaga->ulid))->toBe('FGHIJ');
+});
+
+/*
+ * Källfilen kan växa mellan storlekskontrollen och kopieringen. Gränsen
+ * prövas därför mot de skrivna byten: kopian tas bort och ingen rad skrivs.
+ */
+it('vägrar när kopian växte förbi gränsen efter kontrollen', function () {
+    config(['privacy.attachment_max_bytes' => 8]);
+
+    $ärende = bilagorArende();
+    $källa = bilagorKalla('svar.txt', '12345');
+
+    $disk = Storage::disk('privacy');
+    $spion = Mockery::mock($disk)->makePartial();
+    $spion->shouldReceive('writeStream')->andReturnUsing(function (string $väg) use ($disk): bool {
+        $disk->put($väg, '123456789');
+
+        return true;
+    });
+    Storage::set('privacy', $spion);
+
+    [$utgång, $utdata] = bilagorKor('privacy:attach', [
+        'reference' => $ärende->reference,
+        'path' => $källa,
+    ], ['--by' => 'Anna Handläggare']);
+
+    expect($utgång)->toBe(Command::FAILURE);
+    expect($utdata)->toContain('gränsen');
+
+    expect(PrivacyRequestAttachment::query()->count())->toBe(0);
+    expect(Storage::disk('privacy')->allFiles())->toBe([]);
+});
+
+/*
+ * Ändras källfilen mellan den första avläsningen och kopieringen stämmer
+ * inte storleken. Kopian gäller och vägras — kvar blir varken rad eller fil.
+ */
+it('vägrar när kopian inte är lika stor som filen som lästes först', function () {
+    $ärende = bilagorArende();
+    $källa = bilagorKalla('svar.txt', '12345');
+
+    $disk = Storage::disk('privacy');
+    $spion = Mockery::mock($disk)->makePartial();
+    $spion->shouldReceive('writeStream')->andReturnUsing(function (string $väg) use ($disk): bool {
+        $disk->put($väg, '123');
+
+        return true;
+    });
+    Storage::set('privacy', $spion);
+
+    [$utgång, $utdata] = bilagorKor('privacy:attach', [
+        'reference' => $ärende->reference,
+        'path' => $källa,
+    ], ['--by' => 'Anna Handläggare']);
+
+    expect($utgång)->toBe(Command::FAILURE);
+    expect($utdata)->toContain('kopieringen');
+
+    expect(PrivacyRequestAttachment::query()->count())->toBe(0);
+    expect(Storage::disk('privacy')->allFiles())->toBe([]);
+});
+
+/*
+ * En städning som själv kastar (disken har `throw => true`) får inte dölja
+ * felet som ledde dit. Samma regel som i StoreAttachment.
+ */
+it('låter det ursprungliga felet gå före en städning som kastar', function () {
+    $ärende = bilagorArende();
+    $källa = bilagorKalla('svar.txt', 'Svaret');
+
+    $spion = Mockery::mock(Storage::disk('privacy'))->makePartial();
+    $spion->shouldReceive('delete')->andThrow(new RuntimeException('disken vägrar'));
+    Storage::set('privacy', $spion);
+
+    $händelser = Mockery::mock(RecordPrivacyEvent::class);
+    $händelser->shouldReceive('handle')
+        ->andThrow(new RuntimeException('ursprungliga felet'));
+    app()->instance(RecordPrivacyEvent::class, $händelser);
+
+    $fångad = null;
+
+    try {
+        app(AttachPrivacyAttachment::class)->handle($ärende, $källa, 'Anna Handläggare');
+    } catch (Throwable $e) {
+        $fångad = $e;
+    }
+
+    expect($fångad)->toBeInstanceOf(RuntimeException::class)
+        ->and($fångad?->getMessage())->toBe('ursprungliga felet');
 });
 
 /*
