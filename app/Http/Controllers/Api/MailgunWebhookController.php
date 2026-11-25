@@ -109,22 +109,23 @@ class MailgunWebhookController extends Controller
     private function handle(array $data): void
     {
         $eventData = $data['event-data'] ?? [];
-        $event = $eventData['event'] ?? null;
+        $event = is_string($eventData['event'] ?? null) ? $eventData['event'] : null;
         $recipient = $eventData['recipient'] ?? null;
+        $severity = is_string($eventData['severity'] ?? null) ? $eventData['severity'] : null;
 
         switch ($event) {
             case 'failed':
-                if (($eventData['severity'] ?? null) === 'permanent') {
-                    $this->suppress($recipient, EmailSuppression::REASON_HARD_BOUNCE);
+                if ($severity === 'permanent') {
+                    $this->suppress($recipient, EmailSuppression::REASON_HARD_BOUNCE, $event, $severity);
                 }
                 break;
 
             case 'complained':
-                $this->suppress($recipient, EmailSuppression::REASON_SPAM_COMPLAINT);
+                $this->suppress($recipient, EmailSuppression::REASON_SPAM_COMPLAINT, $event, $severity);
                 break;
 
             case 'unsubscribed':
-                $this->suppress($recipient, EmailSuppression::REASON_UNSUBSCRIBE);
+                $this->suppress($recipient, EmailSuppression::REASON_UNSUBSCRIBE, $event, $severity);
                 break;
 
             default:
@@ -138,10 +139,27 @@ class MailgunWebhookController extends Controller
      * Upsert i stället för create: webhookar levereras om, och samma händelse
      * kommer två gånger oftare än man tror (Beslut 4). Adressen normaliseras
      * här — 33a:s normalize() ska anropas, inte upprepas (Att se upp med).
+     *
+     * Supportadressen spärras aldrig ([[ADR-0096 Kontaktformuläret]] § 8): en
+     * full brevlåda eller ett kort avbrott hos inleed får inte stänga
+     * kontaktformuläret för gott. I stället loggas händelsen på felnivå —
+     * loggraden är signalen att Mailguns egen spärrlista kan behöva rensas för
+     * hand, eftersom appen inte styr den. Jämförelsen sker före skrivningen,
+     * utan hänsyn till skiftläge, och gäller bara de händelser som annars
+     * hade skrivit en rad: en temporär studs undertrycker ändå ingen.
      */
-    private function suppress(mixed $email, string $reason): void
+    private function suppress(mixed $email, string $reason, ?string $event = null, ?string $severity = null): void
     {
         if (! is_string($email) || $email === '') {
+            return;
+        }
+
+        if ($this->isSupportAddress($email)) {
+            Log::error('mailgun.support_address_failed', [
+                'event' => $event,
+                'severity' => $severity,
+            ]);
+
             return;
         }
 
@@ -149,5 +167,23 @@ class MailgunWebhookController extends Controller
             ['email' => EmailSuppression::normalize($email)],
             ['reason' => $reason],
         );
+    }
+
+    /**
+     * Är adressen supportadressen? Skiftlägesokänsligt via samma
+     * normalize() som tabellen använder, så att `Support@Mimers.app` träffar
+     * samma brevlåda som `support@mimers.app` ([[ADR-0096 Kontaktformuläret]]
+     * § 8). En tom eller saknad konfiguration ger ingen träff — då finns
+     * ingen adress att skydda.
+     */
+    private function isSupportAddress(string $email): bool
+    {
+        $supportAddress = config('support.address');
+
+        if (! is_string($supportAddress) || $supportAddress === '') {
+            return false;
+        }
+
+        return EmailSuppression::normalize($email) === EmailSuppression::normalize($supportAddress);
     }
 }

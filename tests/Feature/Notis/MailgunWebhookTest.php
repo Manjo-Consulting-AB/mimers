@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\EmailSuppression;
+use Illuminate\Support\Facades\Log;
 
 use function Pest\Laravel\postJson;
 
@@ -75,7 +76,10 @@ function mailgunPayload(string $event, ?string $severity = null, string $recipie
 }
 
 beforeEach(function () {
-    config(['notiser.mailgun.webhook_signing_key' => 'hemlig-nyckel']);
+    config([
+        'notiser.mailgun.webhook_signing_key' => 'hemlig-nyckel',
+        'support.address' => 'support@mimers.app',
+    ]);
 });
 
 it('en begäran utan signatur-objekt avvisas', function () {
@@ -212,4 +216,56 @@ it('en kropp utan event-data avvisas', function () {
 
     $response->assertStatus(422);
     expect($response->json('error.code'))->toBe('validation.failed');
+});
+
+/*
+ * Issue 491 · Supportadressen spärras aldrig, se
+ * [[ADR-0096 Kontaktformuläret]] § 8. En full brevlåda eller ett kort
+ * avbrott hos inleed får inte stänga kontaktformuläret för gott: i stället
+ * för en rad i `email_suppression` loggas händelsen på felnivå, som en
+ * signal att rensa Mailguns egen spärrlista för hand.
+ */
+
+it('spärrar aldrig supportadressen', function (string $event, ?string $severity) {
+    $logg = Log::spy();
+
+    $response = postJson('/api/webhooks/mailgun', mailgunPayload($event, $severity, recipient: 'support@mimers.app'));
+
+    $response->assertStatus(200);
+    expect(EmailSuppression::count())->toBe(0);
+
+    $logg->shouldHaveReceived('error')
+        ->withArgs(function (string $meddelande, array $kontext) use ($event, $severity): bool {
+            return $meddelande === 'mailgun.support_address_failed'
+                && $kontext['event'] === $event
+                && ($kontext['severity'] ?? null) === $severity;
+        })
+        ->once();
+})->with([
+    'hård studs' => ['failed', 'permanent'],
+    'spamanmälan' => ['complained', null],
+    'avanmälan' => ['unsubscribed', null],
+]);
+
+it('jämför supportadressen utan hänsyn till skiftläge', function () {
+    $logg = Log::spy();
+
+    $response = postJson('/api/webhooks/mailgun', mailgunPayload('failed', 'permanent', recipient: 'Support@Mimers.app'));
+
+    $response->assertStatus(200);
+    expect(EmailSuppression::count())->toBe(0);
+
+    $logg->shouldHaveReceived('error')
+        ->withArgs(fn (string $meddelande): bool => $meddelande === 'mailgun.support_address_failed')
+        ->once();
+});
+
+it('en temporär studs för supportadressen varken spärrar eller larmar', function () {
+    $logg = Log::spy();
+
+    $response = postJson('/api/webhooks/mailgun', mailgunPayload('failed', 'temporary', recipient: 'support@mimers.app'));
+
+    $response->assertStatus(200);
+    expect(EmailSuppression::count())->toBe(0);
+    $logg->shouldNotHaveReceived('error');
 });
