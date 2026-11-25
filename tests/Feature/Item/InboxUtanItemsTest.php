@@ -2,6 +2,7 @@
 
 use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Item\CreateItem;
+use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Container;
 use App\Models\Item;
@@ -42,13 +43,29 @@ it('nekar ett barn under inboxens item på webben och skapar inget', function ()
         'name' => 'Barn i inkorgen',
         'account' => $konto->ulid,
         'parent' => $inboxItem->ulid,
-    ])->assertSessionHasErrors();
+    ])->assertSessionHasErrors(['child' => 'Items cannot be added to the inbox.']);
 
     expect(Item::where('name', 'Barn i inkorgen')->exists())->toBeFalse();
 });
 
 it('CreateItem kastar item.inbox_not_allowed för en inbox', function () {
     [$konto, $anvandare] = kontoMedMedlem();
+    $inbox = app(ResolveInbox::class)->handle($anvandare)->container;
+
+    $fangad = null;
+    try {
+        app(CreateItem::class)->handle($inbox, $konto, $anvandare, new Item(['name' => 'X']), null, collect(), null);
+    } catch (ApiException $e) {
+        $fangad = $e;
+    }
+
+    expect($fangad?->errorCode())->toBe('item.inbox_not_allowed');
+});
+
+it('CreateItem nekar en inbox innan kvoten prövas, även för ett konto över gränsen', function () {
+    sättPlangräns('free', 'storage_bytes', 1000);
+    [$konto, $anvandare] = kontoMedMedlem();
+    (new AdjustUsage)->handle($konto->id, bytesDelta: 1000);
     $inbox = app(ResolveInbox::class)->handle($anvandare)->container;
 
     $fangad = null;
