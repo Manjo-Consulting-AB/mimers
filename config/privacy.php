@@ -359,4 +359,22 @@ return [
         'container_export',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Bilagorna
+    |--------------------------------------------------------------------------
+    |
+    | Största filen som `privacy:attach` tar emot (ADR-0095 § 10). En bilaga
+    | är ett svar, en sammanställning eller en fullmakt — inte en
+    | innehållssamling — och gränsen håller disken och den mänskliga
+    | hanteringen rimlig. Förvalet är 25 MB; en större fil vägras och
+    | lämnar varken rad eller fil.
+    |
+    | Bilagorna räknas inte mot någon kvot och hör inte till den
+    | innehållsadresserade lagringen. Gränsen är den enda storleksregeln.
+    |
+    */
+
+    'attachment_max_bytes' => (int) env('PRIVACY_ATTACHMENT_MAX_BYTES', 25 * 1024 * 1024),
+
 ];

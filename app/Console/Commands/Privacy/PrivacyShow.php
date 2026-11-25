@@ -103,6 +103,24 @@ class PrivacyShow extends Command
 
         $this->line("Beskrivning: {$request->description}");
 
+        // Bilagorna listas som rader — ulid, namn, storlek och när de lades
+        // till. Innehållet läses på servern och sökvägen på disken skrivs
+        // aldrig ut (ADR-0095 § 10).
+        $this->line('Bilagor:');
+
+        if ($resultat['attachments']->isEmpty()) {
+            $this->line('    Inga.');
+        } else {
+            foreach ($resultat['attachments'] as $bilaga) {
+                $this->line(
+                    '    '.$bilaga->ulid
+                    ." · {$bilaga->original_name}"
+                    ." · {$bilaga->size_bytes} byte"
+                    .' · '.$bilaga->created_at->format('Y-m-d H:i')
+                );
+            }
+        }
+
         $this->line('Händelser:');
 
         foreach ($resultat['events'] as $event) {

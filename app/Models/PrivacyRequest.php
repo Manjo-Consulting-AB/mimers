@@ -253,6 +253,18 @@ class PrivacyRequest extends Model
     }
 
     /**
+     * Bilagorna på ärendet — svaret som skickades, en sammanställning eller
+     * en fullmakt (ADR-0095 § 10). Filerna ligger på disken `privacy`;
+     * raden bär namn, storlek och hash.
+     *
+     * @return HasMany<PrivacyRequestAttachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(PrivacyRequestAttachment::class);
+    }
+
+    /**
      * Kontot ärendet gäller, när kopplingen gjorts. Kolumnen saknar främmande
      * nyckel (se migrationen), så relationen kan peka på ett raderat konto —
      * det är avsiktligt: ärendet överlever raderingen.

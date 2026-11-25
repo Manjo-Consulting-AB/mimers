@@ -78,6 +78,33 @@ return [
             'report' => false,
         ],
 
+        // M87 · Integritetsbegäranden. Bilagorna på ett ärende — svaret som
+        // skickades, en sammanställning eller en fullmakt — och ingenting
+        // annat ([[ADR-0095 Integritetsbegäranden]] § 10). Disken är egen
+        // därför att bilagorna inte hör till den innehållsadresserade
+        // lagringen: ingen stored_file-rad, ingen kvot, ingen dedup och ingen
+        // rutt som levererar filen. Filen ligger under
+        // `{ärendets ulid}/{bilagans ulid}`, utan filändelse.
+        //
+        // Filer `0600` och kataloger `0700` som på disken `files`, men med
+        // privat synlighet: bara appens egen användare (PHP, kontots
+        // användare) ska nå dem. Webbservern behöver aldrig gå igenom
+        // katalogen, eftersom ingen rutt läser den — därför `0700` och inte
+        // `files`-diskens `0711`. `throw => true`: en misslyckad skrivning
+        // får aldrig bli ett tyst `false` som ändå skapar en databasrad.
+        'privacy' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/privacy'),
+            'visibility' => 'private',
+            'directory_visibility' => 'private',
+            'permissions' => [
+                'file' => ['public' => 0644, 'private' => 0600],
+                'dir' => ['public' => 0711, 'private' => 0700],
+            ],
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
