@@ -1,6 +1,6 @@
 # ADR-0027 Agentisolering under utveckling
 
-**Status:** Antagen 2026-08-31 · [[ADR-index]]
+**Status:** Antagen 2026-08-31 · Serveråtkomst, tillägg 2026-11-25 · [[ADR-index]]
 
 ## Kontext
 
@@ -41,3 +41,13 @@ Eftersom CI:s tester kör mot sqlite utan externa tjänster skulle en eventuell 
 **Docker bara för DeepSeek-batchagenter.** Inte avfärdat, men prematurt — varken en incident eller en batchvolym som motiverar det finns än. Sparas som det första steget om eskaleringströskeln ovan nås.
 
 **Lättare sandboxing än Docker** (t.ex. `firejail` eller `bubblewrap` runt agentens bash-process). Inte utforskat i det här beslutet. Kan vara en rimlig mellanväg om en permissions-denylist visar sig otillräcklig men en full container känns som överdrivet — värt att undersöka då, inte nu.
+
+## Tillägg 2026-11-25
+
+Tonys beslut 2026-11-25, på frågan *Vilken åtkomst till servern ska en agent ha?* ur [[Tankar]]:
+
+**4. En agent har ingen åtkomst till servern hos inleed, varken till staging eller produktion.**
+
+Frågan restes 2026-09-03, när staging stod i underhållsläge efter issue #136. Tony bedömer att det inte var ett problem i sig: att staging går ner är ingen olycka, det är vad staging är till för. Ingen av de tre skisserade formerna behövs — en `command=`-begränsad nyckel, en `workflow_dispatch` som lånar utrullningens secrets, eller ingen åtkomst — och den sista gäller alltså. Varför en nyckel på servern är en risk står i [[Pipeline]] § En röjd nyckel.
+
+Frågan tas upp igen bara om ett verkligt behov uppstår, till exempel vid flytten till en egen VPS.

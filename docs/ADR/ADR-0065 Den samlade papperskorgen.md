@@ -1,6 +1,6 @@
 # ADR-0065 Den samlade papperskorgen
 
-**Status:** Antagen 2026-10-18 · Ändrar issue 62b § Beslut 1 och 8: `/trash/containers` leder till `/trash`, och papperskorgen nås ur skalet och inte bara ur containerlistan · Containerns egen papperskorg (issue 62a) står kvar · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ändrar issue 62b § Beslut 1 och 8: `/trash/containers` leder till `/trash`, och papperskorgen nås ur skalet och inte bara ur containerlistan · Containerns egen papperskorg (issue 62a) står kvar · [[ADR-index]] · Relationer, tillägg 2026-11-25
 
 Tonys beslut 2026-10-18, efter `docs/Design/findings/trash_20261018_170118.png`.
 
@@ -80,3 +80,10 @@ Att läsa vem som raderade ur loggen i stället för att lägga till en kolumn p
 **Två kryssrutor för slagen.** Valdes bort: med två kryssrutor kan ingen vara ikryssad, och en tom lista som valt läge är ingen hjälp. Tony valde växeln.
 
 **Kategorier och taggar på `/trash`.** Valdes bort av Tony. De hör till containerns papperskorg.
+
+## Tillägg 2026-11-25
+
+Tonys beslut 2026-11-25: en borttagen relation mjukraderas och hamnar i papperskorgen. Se [[ADR-0097 Borttagna relationer i papperskorgen]].
+
+- **§ 2** får ett fjärde slag, **relationer**. Raden syns för den som har `update` på båda ändarna, och bara när båda ändarna är levande.
+- **§ 6** får ett femte läge i växeln, *Relations*, efter *Containers*.

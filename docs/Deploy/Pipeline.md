@@ -287,6 +287,21 @@ on:
 
 Att filtret inte kan blockera en merge på en check som aldrig rapporterades beror på att repot saknar branch protection (se § Branch protection): kön läser `gh pr checks`, som bara bedömer de workflows som faktiskt startade. Skulle branch protection någon gång slås på måste den här checken läggas upp som *required* med en tom motsvarighet, annars fastnar varje PR som inte rör en migrering.
 
+## `.github/workflows/mariadb.yml`
+
+Kör hela testsviten mot `mariadb:11.4`, den version produktionen kör. `ci.yml` kör SQLite i minnet, och grön CI bevisar därför inte att schemat och frågorna fungerar på MariaDB. Skillnaderna som kan bita är bland annat `CHAR(26)` med längdkontroll, CHECK-villkor, främmande nycklar och jämförelser som skiljer på versaler. `migreringar.yml` bevisar bara `up()`; den här kör alla tester. Issue 504.
+
+```yaml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+```
+
+**Varför `main` och inte per PR** (Tonys beslut 2026-11-25): en körning per PR hade lagt en tung körning på varje PR i ett läge där SQLite fångar nästan allt. Vid push till `main` får vi ändå besked innan en release, och det gör oss redo för flytten till en egen VPS. `workflow_dispatch` finns för att köra sviten för hand.
+
+Jobbet blockerar ingenting: det är inget krav för en merge eller en utrullning, och ett rött resultat är ett fynd att följa upp. `migreringar.yml` står kvar och körs för PR:er som rör en migrering.
+
 ## `.github/workflows/audit.yml`
 
 Beroendegranskningen (issue 1046). Kör `composer audit --locked --no-interaction` och `npm audit` mot låsfilerna. Flödet startar på tre sätt:
