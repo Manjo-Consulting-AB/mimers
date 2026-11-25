@@ -91,14 +91,15 @@ class ItemsCreate extends McpTool
             ? $container->items()->where('ulid', $args['parent'])->firstOrFail()
             : null;
 
-        // Samma två grindar som REST: `create` på föräldern när itemet får
-        // en, annars `create` container-brett (ContainerPolicy::createItem).
-        // Det senare nekar en inkorg — den är en plats, inte en pärm — och
-        // det gör verktyget också: en agent får inte lägga rotitems i inkorgen.
-        if ($parent === null && $container->isInbox()) {
+        // Inkorgen är en plats, inte en pärm: den bär inga items, varken som
+        // rotitem eller som barn under inkorgens eget item (issue 1689,
+        // ADR-0054 § 2). Prövas före behörighetsgrinden.
+        if ($container->isInbox()) {
             throw new McpToolException('agent.forbidden');
         }
 
+        // Samma grindar som REST: `create` på föräldern när itemet får en,
+        // annars `create` container-brett (ContainerPolicy::createItem).
         $this->requireLevel(
             $agent,
             AccessLevel::CREATE,

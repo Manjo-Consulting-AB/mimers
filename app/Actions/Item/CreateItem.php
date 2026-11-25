@@ -4,6 +4,7 @@ namespace App\Actions\Item;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Field\SyncItemFieldValues;
+use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Category;
@@ -81,6 +82,13 @@ class CreateItem
         ?Item $child = null,
         array $fields = [],
     ): Item {
+        // Inboxen bär inga items ([[ADR-0054 Inboxen]] § 2, issue 1689), varken på
+        // toppnivån eller under inboxens eget item. Prövas före allt annat, så
+        // ingenting skrivs och kvoten inte hinner nekas först.
+        if ($container->isInbox()) {
+            throw ApiException::make('item.inbox_not_allowed', [], 403);
+        }
+
         DB::transaction(function () use ($container, $account, $actor, $item, $category, $tags, $parent, $child, $fields): void {
             $item->container_id = $container->id;
             $item->category_id = $category?->id;

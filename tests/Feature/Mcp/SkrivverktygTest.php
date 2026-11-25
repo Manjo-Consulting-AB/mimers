@@ -363,7 +363,7 @@ it('sparar anteckningen genom UpdateItemNotes och lämnar inte tillbaka texten',
         ->and($item->refresh()->notes)->toBe('Servad i höstas, igen');
 });
 
-it('avvisar rotitems i en inkorg men tillåter ett barn under inkorgens item', function () {
+it('nekar både rotitem och barn i en inkorg', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
 
     $inboxItem = app(ResolveInbox::class)->handle($anvandare);
@@ -371,18 +371,18 @@ it('avvisar rotitems i en inkorg men tillåter ett barn under inkorgens item', f
 
     mcpSlaPaI($agent, $inbox);
 
-    // Samma regel som ContainerPolicy::createItem: inkorgen är en plats,
-    // inte en pärm, och ett rotitem får inte läggas i den.
+    // Inkorgen bär inga items (ADR-0054 § 2, issue 1689): varken ett rotitem
+    // eller ett barn under inkorgens item.
     expect(mcpFel(mcpVerktyg($token, 'items_create', [
         'container' => $inbox->ulid,
         'name' => 'Rotitem i inkorgen',
     ]))['code'])->toBe('agent.forbidden');
 
-    mcpResultat(mcpVerktyg($token, 'items_create', [
+    expect(mcpFel(mcpVerktyg($token, 'items_create', [
         'container' => $inbox->ulid,
         'name' => 'Barn till inkorgens item',
         'parent' => $inboxItem->ulid,
-    ]));
+    ]))['code'])->toBe('agent.forbidden');
 
-    expect(Item::query()->where('name', 'Barn till inkorgens item')->where('container_id', $inbox->id)->exists())->toBeTrue();
+    expect(Item::query()->where('container_id', $inbox->id)->whereIn('name', ['Rotitem i inkorgen', 'Barn till inkorgens item'])->exists())->toBeFalse();
 });
