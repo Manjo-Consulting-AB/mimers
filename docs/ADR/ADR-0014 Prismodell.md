@@ -68,4 +68,6 @@ Merchant of record valdes eftersom digitala tjänster till privatpersoner i EU s
 
 **Återbetalning inom 30 dagar** sker enligt `https://manjo.me/refund-policy.php`.
 
+*Tony 2026-11-25:* Mimers får en egen återbetalningspolicy på `/refund-policy` ([[M86 Integritetspolicyn och underbiträdena]] issue 494). Sidan på `manjo.me` är Mail Shields. Garantin är densamma, 30 dagar från varje betalning utan skäl, och gäller även förnyelser och grundarpriset. Kontaktvägen är formuläret på `/contact`.
+
 Paddle finns inte i koden än. Policyn publiceras med § 7 som den är skriven eftersom betalflödet är på väg in; om det ska vänta på flödet är en öppen fråga i [[Tankar]]. Den öppna frågan i [[ADR-0086 Pro, Pro+ och grundarpris]] § Konsekvenser om *Paddle eller Lemon Squeezy* pekar hit.
