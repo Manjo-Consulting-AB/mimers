@@ -1,6 +1,6 @@
 # ADR-0086 Pro, Pro+ och grundarpris
 
-**Status:** Antagen 2026-11-18 · Ersätter konsumentnivåerna och ägarbytets bonus i [[ADR-0014 Prismodell]]; B2B-delen där gäller oförändrad · § 7 ersatt av [[ADR-0093 Ägarbytets bonus till nya kunder]] 2026-11-22 · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Ersätter konsumentnivåerna och ägarbytets bonus i [[ADR-0014 Prismodell]]; B2B-delen där gäller oförändrad · § 7 ersatt av [[ADR-0093 Ägarbytets bonus till nya kunder]] 2026-11-22 · § 6 upphävd 2026-11-25 · [[ADR-index]]
 
 Tonys beslut 2026-11-18.
 
@@ -32,7 +32,7 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 
 **5. Vi lovar att priset inte höjs för befintliga kunder.** En löpande prenumeration behåller sitt pris. Prisändringar gäller bara nya prenumerationer. § 4 är det tekniska stödet för löftet.
 
-**6. Vi är öppna med vart pengarna går.** En offentlig sida förklarar i klartext vad priset betalar för: lagring i Sverige och Frankrike, backup, support och utveckling. Den förklarar också vad vi inte gör: inga annonser, ingen försäljning av data. Sidan upprepar löftet i § 5 och att export och påminnelser är fria på alla nivåer.
+**6. Vi är öppna med vart pengarna går.** En offentlig sida förklarar i klartext vad priset betalar för: lagring i Sverige och Frankrike, backup, support och utveckling. Den förklarar också vad vi inte gör: inga annonser, ingen försäljning av data. Sidan upprepar löftet i § 5 och att export och påminnelser är fria på alla nivåer. *Upphävd 2026-11-25, se § Tillägg 2026-11-25.*
 
 *Ersatt av ADR-0093 2026-11-22: bonusen ges bara till nya kunder och förlänger aldrig en plan.*
 
@@ -42,7 +42,7 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 
 **Grundarpriset ger det låga priset utan att låsa affären vid det.** 19 € ligger nära de 10 € som ADR-0014 valde bort, eftersom intäkten inte bär supporten. Om priset vore 19 € för alla och måste höjas senare, skulle det se ut precis som det Evernote kritiseras för. Ett listpris på 39 € som ligger fast, och en tydlig rabatt för dem som kommer tidigt, ger samma generositet till de första kunderna utan det problemet. Det passar också hur produkten ska marknadsföras det första året: de tidiga användarna belönas för att de tog en chans.
 
-**Girighet uppfattas sällan utifrån prisnivån.** Det som uppfattas som girigt är prishöjningar efter att kunden låst in sig, data som hålls som gisslan och gränser som kommer som en överraskning. Det andra och tredje är redan hanterat: export och påminnelser är gratis, fristen är tre månader och användaren väljer själv vad som ska bort, och kvoten förklaras med ett meddelande. Det första hanteras av § 5. Öppenheten i § 6 gör mer för förtroendet än tio euro hit eller dit.
+**Girighet uppfattas sällan utifrån prisnivån.** Det som uppfattas som girigt är prishöjningar efter att kunden låst in sig, data som hålls som gisslan och gränser som kommer som en överraskning. Det andra och tredje är redan hanterat: export och påminnelser är gratis, fristen är tre månader och användaren väljer själv vad som ska bort, och kvoten förklaras med ett meddelande. Det första hanteras av § 5. Öppenheten i § 6 gör mer för förtroendet än tio euro hit eller dit. *(Upphävd 2026-11-25, se § Tillägg 2026-11-25.)*
 
 **Ett för lågt pris är en risk för ett arkiv.** Den som lägger in tio års dokumentation är mest rädd för att tjänsten läggs ner. Ett pris som uppenbart bär driften är en del av löftet.
 
@@ -59,7 +59,7 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 - Bonusen i `AcceptOwnershipTransfer` gör idag om en rad med annan plan till Pro. Med Pro+ skulle det sänka planen, så § 7 kräver en ändring i koden.
 - Grundaråret räknas från den dag betalflödet öppnar. Datumet bestäms när betalflödet byggs, och skrivs in här och i [[Planer och kvoter]].
 - Hur en voucher ger ett **pris** och inte bara en **period** (`duration_days`) bestäms när betalflödet byggs. Planraden finns redan, men kopplingen till Paddle gör det inte. Merchant of record är Paddle, inte Lemon Squeezy — se [[ADR-0014 Prismodell]] § Tillägg 2026-11-24.
-- Sidan om vart pengarna går (§ 6) ska finnas innan betalflödet öppnar. Vad den ska innehålla är en öppen fråga i [[Tankar]].
+- Sidan om vart pengarna går (§ 6) byggs inte, se § Tillägg 2026-11-25.
 - Den öppna frågan om prispunkt i [[Översikt]] är besvarad.
 
 ## Alternativ
@@ -71,3 +71,7 @@ Pro och Pro+ har samma funktioner. Det enda som skiljer dem är utrymmet. Funkti
 **Grundarpriset till de N första kunderna.** Valdes bort: det kräver en räknare och ett tal, och ett datum är lättare att marknadsföra. Inbjudningskoderna i § 3 ger den riktade varianten när den behövs.
 
 **Pro+ för 49 € med 50 GB.** Valdes bort: steget från Pro blir bara 10 €, och då får Pro+ en stor del av de kunder som hade klarat sig med Pro.
+
+## Tillägg 2026-11-25
+
+*Tony 2026-11-25:* **§ 6 upphävs.** Sidan om vart pengarna går byggs inte. Pengarna går till att driva tjänsten. Löftet i § 5 och att export och påminnelser är fria på alla nivåer står kvar, och det finns i övrigt i produktens texter. Frågan i [[Tankar]] om vad sidan skulle innehålla är därmed avgjord.

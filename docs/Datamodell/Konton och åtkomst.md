@@ -46,6 +46,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | notifications_read_at | TIMESTAMP NULL | Klockans oläst, se [[M19 Dashboarden]] § 127. Antalet olästa är raderna i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att klockan aldrig öppnats och att alla räknas. En tidsstämpel här och ingen `read_at` per notisrad: `notification` är outboxen, och klockan är ingen kanal ([[ADR-0010 Notisarkitektur]] § Beslut). Sätts av `POST /notifications/read` |
 | notifications_cleared_at | TIMESTAMP NULL | Klockans rensning, se issue 647. Panellistan filtreras på rader i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att ingenting rensats och att allt visas. En tidsstämpel och ingen DELETE — `notification` är outboxen och raderna står kvar ([[ADR-0010 Notisarkitektur]] § Beslut) — och siffran styrs alltjämt av `notifications_read_at`. Sätts av `POST /notifications/clear`, som sätter båda |
 | show_upcoming_tasks | BOOLEAN NOT NULL DEFAULT TRUE | Växeln på todo-listan, se [[M21 Uppgifterna i vardagen]] § 134. `TRUE` visar alla synliga uppgifter — dagens beteende — och `FALSE` bara det som är aktuellt nu: försenat och i dag. Valet följer personen och inte webbläsaren, och läses av `App\Actions\Schedule\ListTodo`; `ScheduleOccurrence::scopeDueTodayOrEarlier()` är villkoret. Sätts av `PUT /settings/tasks` |
+| terms_accepted_at | TIMESTAMP NULL | När personen kryssade i rutan för 18 år och villkoren vid registreringen. `NULL` = registrerad före rutan. Se [[M91 Villkoren och den rättsliga spärren]] issue 499 |
 | avatar_attachment_id | FK → attachment NULL, `RESTRICT` | Profilbilden, en av personens **egna** bilagor (en rad i `attachment` vars `user_id` är den här personen). Att den är egen upprätthålls i `SetUserAvatar`, som för `container.cover_attachment_id`. Se [[ADR-0076 Profilbilden]] |
 | avatar_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten |
 | avatar_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten |
@@ -409,6 +410,7 @@ Den rättsliga spärren. Ett konto är spärrat när det har en rad utan `lifted
 | account_id | BIGINT UNSIGNED | **Identifierare utan främmande nyckel**, samma avvägning som `audit_log`: raden överlever kontot — annars hade varje konto som någonsin varit spärrat fällt kontoraderingen för alltid — och den får aldrig kaskadraderas, för spärren är just det bevis som ska bevaras |
 | case_number | VARCHAR(120) | Ärendenumret |
 | reason | TEXT | Varför spärren sattes |
+| confidential | BOOLEAN NOT NULL DEFAULT false | `true` = en myndighet har ålagt tystnad. Bara då utelämnas spärren ur svaret på art. 15 ([[ADR-0095 Integritetsbegäranden]] § 12). Se [[M91 Villkoren och den rättsliga spärren]] issue 501 |
 | lifted_at | TIMESTAMP NULL | `NULL` = spärren gäller. Att häva är att sätta den här, inte att städa |
 | created_at, updated_at | | `created_at` är när spärren sattes — ingen egen `held_at`; `updated_at` rör sig när den hävs |
 
