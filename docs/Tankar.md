@@ -14,16 +14,14 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **En adminsida för den som underhåller produkten.** Hjälprapporten ([[ADR-0094 Hjälpcentret]] § 9), missbruksrapporten och mätningen skrivs i dag till loggen och läses med `grep` över ssh. Frågan är när det behövs en sida i stället, och vilken behörighetsmodell den i så fall ska ha — det finns ingen adminroll i dag. Uppstod ur #1568, 2026-11-23.
 
-- **Ska Mimers ha en kontoexport?** #1594:s text lovade först *a complete copy of your account*, och meningen ströks ur #1617 eftersom exporten bara gäller en container och PDF-pärmen. Frågan är om det ska finnas en kontoexport eller om container- och pärmexporten ska räcka. Restes 2026-11-24 ur #1594, tillsammans med kontaktformuläret som nu är avgjort.
-
 - **Räcker påminnelsen om fristen i `privacy:list`?** Ett ärende om en begäran enligt art. 15–21 har en frist på en månad ([[ADR-0095 Integritetsbegäranden]] § 5), och den enda påminnelsen är att `privacy:list` sorterar de öppna ärendena på frist och visar dagar kvar eller *overdue* (§ 6). Det är Tonys beslut 2026-11-24 och räcker med ett fåtal ärenden och en handläggare. Frågan är om det räcker när ärendena blir fler eller handläggarna fler än en, eller om en daglig sammanställning behövs då. Restes 2026-11-24.
 
 - **Behöver något jobb en dag fråga efter begränsningen?** Begränsningen enligt art. 18 är en markering på ärendet som ingen kod läser ([[ADR-0095 Integritetsbegäranden]] § 8). Ett jobb som skickar något till personen, till exempel veckosammanfattningen, eller mätningen kan en dag behöva fråga efter den. Frågan är när, och om markeringen då måste bli en kolumn på kontot eller personen. Restes 2026-11-24.
 
-- **Räcker händelsen `viewed` som åtkomstlogg för ärendena?** Säkerhetsloggen har ingen rad för att ett ärende lästs. Händelsen `viewed` finns bara i ärendet själv och försvinner med det, 36 månader efter avslutet ([[ADR-0095 Integritetsbegäranden]] § 3 och § 11). Frågan är om det räcker som bevis på vem som läst vad, eller om en rad utan namn i säkerhetsloggen behövs. Restes 2026-11-24.
-
 ## Avgjort och flyttat
 
+- Ska Mimers ha en kontoexport? → ja, [[ADR-0098 Kontoexporten]].
+- Räcker händelsen `viewed` som åtkomstlogg för ärendena? → ja, [[ADR-0095 Integritetsbegäranden]] § Tillägg 2026-11-25.
 - Relationer som tas bort gick inte att få tillbaka → [[ADR-0097 Borttagna relationer i papperskorgen]].
 - Testsviten körde mot sqlite i minnet, produktionen mot MariaDB 11.4 → hela sviten mot MariaDB vid push till `main`, [[Pipeline]] § `.github/workflows/mariadb.yml`, issue 504.
 - Om `AcceptInvitation` ska läsa nivån med ett uttryckligt lås i stället för `refresh()` → ja, issue 505 i [[M92 Relationer i papperskorgen och MariaDB-sviten]].
