@@ -24,6 +24,7 @@ use App\Mcp\Tools\FieldsDelete;
 use App\Mcp\Tools\FieldsList;
 use App\Mcp\Tools\FieldsUpdate;
 use App\Mcp\Tools\HistoryList;
+use App\Mcp\Tools\InboxGet;
 use App\Mcp\Tools\ItemsCreate;
 use App\Mcp\Tools\ItemsDelete;
 use App\Mcp\Tools\ItemsGet;
@@ -90,6 +91,7 @@ class MimersServer extends Server
         CostsUpdate::class,
         CostsDelete::class,
         HistoryList::class,
+        InboxGet::class,
         ItemsCreate::class,
         ItemsGet::class,
         ItemsMove::class,

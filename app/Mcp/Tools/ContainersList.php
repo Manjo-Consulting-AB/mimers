@@ -61,7 +61,9 @@ class ContainersList extends McpTool
             $containers = Container::query()->with('account')->whereIn('id', $chunk)->orderBy('id')->get();
 
             foreach ($containers as $container) {
-                if (! $gate->reaches($agent, $container)) {
+                // Inboxen syns i ingen lista över containrar (ADR-0054 § 2);
+                // inbox_get är vägen dit.
+                if ($container->isInbox() || ! $gate->reaches($agent, $container)) {
                     continue;
                 }
 
@@ -73,9 +75,7 @@ class ContainersList extends McpTool
                 $rows[] = [
                     'ulid' => $container->ulid,
                     'name' => $container->name,
-                    'owned_by_user' => $container->inbox_user_id !== null
-                        ? (int) $container->inbox_user_id === (int) $agent->user_id
-                        : in_array((int) $container->account_id, $accountIds, true),
+                    'owned_by_user' => in_array((int) $container->account_id, $accountIds, true),
                 ];
                 $lastId = (int) $container->id;
             }

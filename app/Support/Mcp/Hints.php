@@ -12,7 +12,7 @@ namespace App\Support\Mcp;
  */
 final class Hints
 {
-    public const EMPTY_CONTAINERS = 'No containers are available to this agent. This does not mean Mimers is empty: the user enables the agent on /settings/agents and in each container\'s settings.';
+    public const EMPTY_CONTAINERS = 'No containers are available to this agent. This does not mean Mimers is empty: the user enables the agent on /settings/agents and in each container\'s settings. An empty list does not rule out the user\'s inbox: inbox_get reaches it when the user has switched this agent on there.';
 
     private const TABLE = [
         'agent.paused' => 'This agent is paused by the user. Stop and tell the user to resume it on /settings/agents.',
@@ -20,6 +20,7 @@ final class Hints
         'auth.forbidden' => 'The account is temporarily locked for writing, not a permission this agent lacks. Reading still works. Tell the user to resolve the account\'s billing or plan; do not retry.',
         'agent.move_widens_access' => 'This move would give more people access. Ask the user to make it in the app.',
         'agent.copy_widens_access' => 'You have read content that some people who can see this target cannot. Ask the user to make this change in the app, or search with the container filter before writing here.',
+        'inbox.not_enabled' => 'The user has not switched this agent on in their inbox. Ask the user to do it on /settings/agents.',
         'agent.rate_limited' => 'Too many requests. Wait retry_after_seconds before calling again.',
         'agent.delete_limit' => 'The agent has reached its limit for deletions. Stop deleting and tell the user.',
         'agent.create_containers_not_allowed' => 'The user has not let this agent create containers. Ask the user to allow it on /settings/agents.',
