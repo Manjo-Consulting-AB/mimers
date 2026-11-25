@@ -17,8 +17,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Ytan är kommandon, inte en sida (ADR-0095 § 1): ärendet skapas av
  * App\Actions\Privacy\OpenPrivacyRequest, läses av
- * App\Actions\Privacy\ShowPrivacyRequest och flyttas av senare issuers
- * actions. Ingen rutt, ingen resurs och inget MCP-verktyg läser tabellen.
+ * App\Actions\Privacy\ShowPrivacyRequest, flyttas av
+ * App\Actions\Privacy\ChangePrivacyRequestStatus och fördelas av
+ * App\Actions\Privacy\AssignPrivacyRequest. Ingen rutt, ingen resurs och
+ * inget MCP-verktyg läser tabellen.
  *
  * **`reference` genereras och sätts explicit** av OpenPrivacyRequest och står
  * därför utanför `#[Fillable]`, tillsammans med `ulid` som HasUlid fyller i.
@@ -33,6 +35,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Ärendet skriver inget till `audit_log` eller `security_log` (ADR-0095
  * § 3). Händelserna bor i privacy_request_event.
+ *
+ * Relationerna kan ge null: `account_id` och `user_id` är valfria och kan
+ * peka på ett konto eller en person som raderats sedan kopplingen gjordes.
+ *
+ * @property-read Account|null $account
+ * @property-read User|null $user
  */
 #[Fillable([
     'type',
@@ -67,10 +75,64 @@ class PrivacyRequest extends Model
     public const STATUS_RECEIVED = 'received';
 
     /**
+     * Identiteten eller ett ombuds behörighet måste prövas innan ärendet
+     * handläggs vidare — se RecordPrivacyVerification och ADR-0095 § 2.
+     */
+    public const STATUS_VERIFICATION_REQUIRED = 'verification_required';
+
+    /**
+     * Ärendet prövas: vilken typ av behandling det gäller och vilken roll
+     * Mimers har (ADR-0095 § 7).
+     */
+    public const STATUS_UNDER_ASSESSMENT = 'under_assessment';
+
+    /**
+     * Begäran verkställs.
+     */
+    public const STATUS_IN_PROGRESS = 'in_progress';
+
+    /**
+     * Handläggaren väntar på kompletterande uppgifter från den registrerade.
+     */
+    public const STATUS_AWAITING_REQUESTER = 'awaiting_requester';
+
+    /**
+     * Begäran bifölls fullt ut. Det enda avslutade läge som inte kräver ett
+     * skäl, eftersom bifallet är sitt eget svar (ADR-0095 § 4).
+     */
+    public const STATUS_COMPLETED = 'completed';
+
+    /**
+     * Begäran bifölls delvis.
+     */
+    public const STATUS_PARTIALLY_COMPLETED = 'partially_completed';
+
+    /**
+     * Begäran avslogs.
+     */
+    public const STATUS_REJECTED = 'rejected';
+
+    /**
+     * Ärendet avslutades utan sakprövning: begäran återkallades, var en
+     * dubblett eller gick inte att knyta till en identitet (ADR-0095 § 4).
+     */
+    public const STATUS_CLOSED = 'closed';
+
+    /**
+     * Låg prioritet, satt av handläggaren när ärendet fördelas.
+     */
+    public const PRIORITY_LOW = 'low';
+
+    /**
      * Förvalet för ett nytt ärende. Prioriteten sätts av handläggaren när
-     * ärendet fördelas (issue 482).
+     * ärendet fördelas.
      */
     public const PRIORITY_NORMAL = 'normal';
+
+    /**
+     * Hög prioritet, satt av handläggaren när ärendet fördelas.
+     */
+    public const PRIORITY_HIGH = 'high';
 
     /**
      * Rollen är obestämd till bedömningen avgör om Mimers är
@@ -115,6 +177,17 @@ class PrivacyRequest extends Model
             'restriction_lifted_at' => 'datetime',
             'closed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Är statusen ett avslutat läge? Uppdelningen i öppna och avslutade
+     * lägen bor i config/privacy.php, som också bär den fullständiga listan;
+     * en ändring där slår igenom i ChangePrivacyRequestStatus utan att
+     * actionen stavar en status.
+     */
+    public static function isClosedStatus(string $status): bool
+    {
+        return in_array($status, (array) config('privacy.closed_statuses'), true);
     }
 
     /**
