@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use Carbon\Carbon;
 use Database\Factories\PrivacyRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -188,6 +189,22 @@ class PrivacyRequest extends Model
     public static function isClosedStatus(string $status): bool
     {
         return in_array($status, (array) config('privacy.closed_statuses'), true);
+    }
+
+    /**
+     * Den URSPRUNGLIGA fristen: mottagandet plus `deadline_months`, utan
+     * förlängning. Det är den `privacy:extend` prövar emot — en förlängning
+     * efter den vägras, också när fristen redan förlängts, eftersom den
+     * registrerade ska ha beskedet inom den första månaden (ADR-0095 § 5).
+     *
+     * `deadline_at` är den gällande fristen och kan ha flyttats av en
+     * förlängning eller av `privacy:deadline`; den här metoden rör den inte.
+     */
+    public function originalDeadline(): Carbon
+    {
+        return $this->received_at->copy()
+            ->startOfDay()
+            ->addMonthsNoOverflow((int) config('privacy.deadline_months'));
     }
 
     /**
