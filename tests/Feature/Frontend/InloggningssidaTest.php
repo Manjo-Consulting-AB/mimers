@@ -37,11 +37,19 @@ function inloggningUtanKommentarer(string $kod): string
 }
 
 /**
- * Login.vue som markup, utan kommentarer.
+ * Login.vue och skalet den ritar i, som markup och utan kommentarer.
+ *
+ * Sedan issue 1671 bor vänsterkolumnen, bilden, FlashMessage och länkarna
+ * under kortet i `components/AuthSplitLayout.vue`, delat med /register; Login.vue
+ * bär kortets innehåll. Proven läser de två filerna som en källa — det är
+ * sidan som användaren ser, oavsett var raden står.
  */
 function inloggningskalla(): string
 {
-    return inloggningUtanKommentarer(File::get(resource_path('js/pages/Auth/Login.vue')));
+    return inloggningUtanKommentarer(
+        File::get(resource_path('js/pages/Auth/Login.vue'))
+        .File::get(resource_path('js/components/AuthSplitLayout.vue')),
+    );
 }
 
 it('ritar inloggningen utan AppLayout och med FlashMessage', function () {
@@ -55,7 +63,8 @@ it('ritar inloggningen utan AppLayout och med FlashMessage', function () {
 
     // Flashmeddelandet följer ändå med, samma komponent som AppLayout lägger i
     // innehållsytan: ett "status" ur sessionen ska inte tappas på vägen in.
-    expect($kod)->toContain("import FlashMessage from '../../components/FlashMessage.vue'");
+    expect($kod)->toContain("import FlashMessage from './FlashMessage.vue'");
+    expect($kod)->toContain("import AuthSplitLayout from '../../components/AuthSplitLayout.vue'");
     expect($kod)->toContain('<FlashMessage');
 });
 
@@ -141,7 +150,7 @@ it('har de tre inloggningsbilderna i public', function () {
 it('säger i docblocket att fotot ritas', function () {
     // Beslut 6 i issue 203 sade att fotot inte ritas; sedan issue 490 gör det.
     // Kommentarerna rensas bort i de andra proven, så den råa filen läses här.
-    $rå = File::get(resource_path('js/pages/Auth/Login.vue'));
+    $rå = File::get(resource_path('js/components/AuthSplitLayout.vue'));
 
     expect(str_contains($rå, 'Fotot, raden *Används för* och rutan om molnlagringen ritas inte'))->toBeFalse(
         'Docblocket säger fortfarande att fotot inte ritas',
@@ -244,4 +253,29 @@ it('namnger inga fordon i landningstexten enligt ADR-0033', function () {
         0,
         "auth.landing.body namnger ett fordon: {$brödtext}",
     );
+});
+
+it('ritar registreringen i samma skal som inloggningen', function () {
+    // Issue 1671. /register är en egen helsida i samma två kolumner som
+    // /login: samma skal, utan AppLayout, och fälten kvar som de var.
+    $register = inloggningUtanKommentarer(File::get(resource_path('js/pages/Auth/Register.vue')));
+    $login = inloggningUtanKommentarer(File::get(resource_path('js/pages/Auth/Login.vue')));
+
+    foreach (['Login.vue' => $login, 'Register.vue' => $register] as $fil => $kod) {
+        expect(str_contains($kod, "import AuthSplitLayout from '../../components/AuthSplitLayout.vue'"))->toBeTrue(
+            "{$fil} importerar inte det delade skalet",
+        );
+        expect(str_contains($kod, '<AuthSplitLayout>'))->toBeTrue("{$fil} ritar inte det delade skalet");
+        expect(str_contains($kod, 'AppLayout'))->toBeFalse("{$fil} ritar AppLayout");
+    }
+
+    foreach ([
+        'name="voucher_code"',
+        'name="name"',
+        'name="email"',
+        'name="password"',
+        'autocomplete="new-password"',
+    ] as $nål) {
+        expect(str_contains($register, $nål))->toBeTrue("{$nål} saknas i Register.vue");
+    }
 });
