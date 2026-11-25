@@ -1,6 +1,6 @@
 # ADR-0087 MCP-server för agenter
 
-**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · Tillägg 2026-11-25 · [[ADR-index]]
 
 Tonys beslut 2026-11-18, efter en diskussion samma dag. De nitton riktningarna nedan är de som bestämdes.
 
@@ -109,6 +109,8 @@ Text som andra har skrivit kan innehålla instruktioner till agenten. Servern ka
 - *Lagras i databasen,* inte i cachen. En tömd cache får inte släppa spärren.
 - *Kvar:* det agenten har fått från andra källor än Mimers, och det den minns efter fönstret, täcks inte. Användaren kan alltid göra samma skrivning själv i appen.
 
+*Undantaget är inboxen, se § Tillägg 2026-11-25: agenten i inboxen.*
+
 ### Riktning 11, nedgradering (Tony 2026-11-18)
 
 Bygger på [[Planer och kvoter]] § subscription och § Nedgradering.
@@ -210,6 +212,34 @@ Bygger på AGENTS.md § Felformat i API:et.
 - *Kraven uppfylls redan när det byggs:* OAuth (Riktning 5), annotationer på varje verktyg (Riktning 9), en integritetspolicy som täcker det agenten läser (villkoren, fråga 3), ett testkonto åt granskarna (`testkonto:skapa`, Riktning 17), en hjälpsida för användare och en kontaktadress för support. Hjälpsidan och supportadressen är det som inte redan finns med. Kraven läses om när ansökan görs, eftersom de kan ha ändrats.
 - *Gratiskonton.* OAuth-godkännandet säger att MCP kräver Pro och länkar till uppgraderingen. Ett gratiskonto kan inte godkänna anslutningen, så att ingen får en anslutning som bara ger `plan.mcp_unavailable`.
 - *ChatGPT:s katalog* följer samma ordning.
+
+## Tillägg 2026-11-25: agenten i inboxen
+
+En agent som ansluter via MCP kan arbeta i containrar men inte i inboxen. Verktygen klarar inboxen redan, eftersom `ResolveAgentAccess::isOwnContainer` behandlar den som användarens egen och `ItemAudience` räknar bara `inbox_user_id`, men rättigheterna sätts på `/containers/{container}/agents` och dit leder ingen väg, eftersom inboxen är dold ([[ADR-0054 Inboxen]] § 2). Dessutom tar verktygen för uppgifter och bilagor ett items ULID, och inboxens item går bara att hitta med verktyg i gruppen `items`.
+
+**Tonys beslut (2026-11-25):**
+
+1. Agenten slås på i inboxen på `/settings/agents`.
+2. Bara grupperna `schedules` och `files`. Inboxen tar bara emot uppgifter och bilagor ([[ADR-0054 Inboxen]] § 4), så fler grupper har inget att göra där.
+3. Förvalet är av, som för allt annat (Riktning 6). Användaren måste slå på det.
+4. Kopieringsspärren mjukas upp för just inboxen. Det som agenten läser där räknas inte.
+5. Agenten ska kunna flytta saker ur inboxen till ett riktigt item för att kunna göra sitt jobb, även när målet är en delad container.
+6. Inboxen ska inte bära items. Koden släpper i dag igenom ett barn under inboxens item på alla tre vägarna (webben, REST och MCP), eftersom `ItemPolicy::create` på föräldern ger ägaren `create`. Det stängs i `CreateItem` och hör till [[ADR-0054 Inboxen]] § 2 (issue 498, #1689).
+
+**Utformat av Claude:**
+
+- Agentens sida får avsnittet *Inbox* med en väljare per grupp, och val sparas direkt.
+- `ApplyAgentContainerGrants` skriver bara `schedules` och `files` för en inbox, oavsett väg in. `/containers/{inbox}/agents` svarar 404.
+- Verktyget `inbox_get` ger inboxens item och, med `files`, dess bilagor. När agenten inte är påslagen ger det felet `inbox.not_enabled` med en `hint`. `containers_list` hoppar över inboxen.
+- Verktygen `inbox_tasks_process` (gruppen `schedules`) och `inbox_attachments_process` (gruppen `files`) bearbetar inboxen genom samma actions som appen, `ProcessInboxTask` och `ProcessInboxAttachments`. De kräver `delete` i gruppen på inboxen och `create` på målet, som i appen ([[ADR-0054 Inboxen]] § 6).
+
+**Inboxen är undantagen från kopieringsspärren** (Riktning 10, Tony 2026-11-25). Det som agenten läser ur inboxen räknas inte i snittet, så en agent som läst inboxen kan skriva i en delad container. Skälet är att inboxen bara är användarens, och hela idén är att hon och hennes agenter fångar filer och uppgifter där för att hantera dem senare. Vill hon att agenten flyttar något därifrån är det hennes sak. Det som agenten läser utanför inboxen räknas som förut, och en skrivning till inboxen prövas som förut.
+
+**Risken som accepteras:** någon med åtkomst till en delad container kan skriva en instruktion där om att kopiera inboxens innehåll hit, och en agent som följer den stoppas inte av spärren. Tony accepterar det (2026-11-25). Inboxen är en plats för saker som ännu inte har en hemvist, och användaren väljer själv om agenten ska nå den.
+
+**Bearbetningen prövas varken mot flyttspärren eller kopieringsspärren** (Riktning 10). Flyttspärren gäller items som får en ny förälder, och här lämnar ett schema eller en bilaga en plats som bara användaren når. Verktygen tar ingen fritext, bara ULID:er, en lista och ett datum, så inget som agenten läst någon annanstans kan följa med.
+
+Byggs som issue 495 (#1685), 496 (#1686) och 497 (#1688) i [[M90 Agenten i inboxen]]. Issue 498 (#1689) hör till ADR-0054, inte hit.
 
 ## Frågorna från diskussionen och var de besvaras
 

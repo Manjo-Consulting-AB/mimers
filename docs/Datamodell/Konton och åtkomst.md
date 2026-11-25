@@ -545,6 +545,8 @@ Var agenten får göra det, en ögonblicksbild från containerns inställningar.
 
 UNIQUE `(agent_id, container_id, group)`.
 
+För en inbox (`container.inbox_user_id`) finns rader bara i grupperna `schedules` och `files`, och de skrivs från `/settings/agents` i stället för från containerns inställningar ([[ADR-0087 MCP-server för agenter]] § Tillägg 2026-11-25: agenten i inboxen).
+
 ### agent_read_audience
 
 Snittet av de personer som når allt agenten har läst under fönstret. Ligger i databasen, aldrig i cachen. Se Riktning 10, *Kopiering*.
