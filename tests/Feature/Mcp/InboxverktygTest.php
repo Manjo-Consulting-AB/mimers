@@ -10,6 +10,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
+use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 
@@ -183,11 +184,20 @@ it('tar inte med inboxen i containers_list, även med rader där', function () {
     expect(array_column($rader, 'name'))->toBe(['Verkstan']);
 });
 
-it('avvisar en pausad agent och ett konto utan Pro i inbox_get', function () {
+it('avvisar en pausad agent i inbox_get', function () {
     [$agent, $token] = mcpAgentMedToken();
     inboxRaderFor($agent, ['schedules' => 'write']);
 
     $agent->forceFill(['paused_at' => now()])->save();
 
     expect(mcpFel(mcpVerktyg($token, 'inbox_get'))['code'])->toBe('agent.paused');
+});
+
+it('avvisar ett konto utan Pro eller Pro+ i inbox_get', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    inboxRaderFor($agent, ['schedules' => 'write']);
+
+    Subscription::query()->where('account_id', $agent->account_id)->delete();
+
+    expect(mcpFel(mcpVerktyg($token, 'inbox_get'))['code'])->toBe('plan.mcp_unavailable');
 });
