@@ -521,6 +521,26 @@
         }
     },
     {
+        "name": "inbox_attachments_process",
+        "parameters": {
+            "attachments": {
+                "type": "array"
+            },
+            "target": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "attachments",
+            "target"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "inbox_get",
         "parameters": [],
         "required": [],
@@ -528,6 +548,32 @@
             "destructiveHint": false,
             "idempotentHint": true,
             "readOnlyHint": true
+        }
+    },
+    {
+        "name": "inbox_tasks_process",
+        "parameters": {
+            "due_at": {
+                "type": "string"
+            },
+            "gtd_list": {
+                "type": "string"
+            },
+            "schedule": {
+                "type": "string"
+            },
+            "target": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "schedule",
+            "target"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
         }
     },
     {
