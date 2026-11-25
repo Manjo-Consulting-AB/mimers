@@ -108,6 +108,7 @@ Text som andra har skrivit kan innehålla instruktioner till agenten. Servern ka
 - *Undantaget är `containers_list`.* Containernamnen räknas inte. Annars skulle orienteringen som varje session börjar med stänga varje skrivning i delade containrar, och ett containernamn väger lätt.
 - *Lagras i databasen,* inte i cachen. En tömd cache får inte släppa spärren.
 - *Kvar:* det agenten har fått från andra källor än Mimers, och det den minns efter fönstret, täcks inte. Användaren kan alltid göra samma skrivning själv i appen.
+
 *Undantaget är inboxen, se § Tillägg 2026-11-25: agenten i inboxen.*
 
 ### Riktning 11, nedgradering (Tony 2026-11-18)
