@@ -1,6 +1,6 @@
 # ADR-0014 Prismodell
 
-**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · Merchant of record är Paddle, tillägg 2026-11-24 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · Merchant of record är Paddle, tillägg 2026-11-24 · Billing och nedläggning, tillägg 2026-11-25 · [[ADR-index]]
 
 ## Kontext
 
@@ -70,4 +70,12 @@ Merchant of record valdes eftersom digitala tjänster till privatpersoner i EU s
 
 *Tony 2026-11-25:* Mimers får en egen återbetalningspolicy på `/refund-policy` ([[M86 Integritetspolicyn och underbiträdena]] issue 494). Sidan på `manjo.me` är Mail Shields. Garantin är densamma, 30 dagar från varje betalning utan skäl, och gäller även förnyelser och grundarpriset. Kontaktvägen är formuläret på `/contact`.
 
-Paddle finns inte i koden än. Policyn publiceras med § 7 som den är skriven eftersom betalflödet är på väg in; om det ska vänta på flödet är en öppen fråga i [[Tankar]]. Den öppna frågan i [[ADR-0086 Pro, Pro+ och grundarpris]] § Konsekvenser om *Paddle eller Lemon Squeezy* pekar hit.
+Paddle finns inte i koden än. Policyn publiceras med § 7 som den är skriven eftersom betalflödet är på väg in; se § Tillägg 2026-11-25. Den öppna frågan i [[ADR-0086 Pro, Pro+ och grundarpris]] § Konsekvenser om *Paddle eller Lemon Squeezy* pekar hit.
+
+## Tillägg 2026-11-25
+
+*Tony 2026-11-25:* sex frågor ur [[Tankar]] är avgjorda. Två av dem gäller den här ADR:en.
+
+**1. Billing väntar på avtalet med Paddle.** Allt som gäller billing väntar tills avtalet är signerat. Då pekar **Manage billing** på kundens portal hos Paddle, och Mimers bygger ingen egen vy till en början. `/privacy` publiceras med § 7 som den är skriven: ingen kan betala innan flödet finns, och texterna säger redan *or through Paddle*. Knappen byggs när Paddle kopplas på, och ingen backlog-issue skrivs förrän avtalet är signerat.
+
+**2. Nedläggning.** Läggs Mimers ned stängs tjänsten för nya kunder, och gällande prenumerationer får löpa ut innan den stängs. Måste den stängas innan en betald period är slut återbetalas den oanvända delen **proportionellt från dag ett**. Skälet: en trappa som ger mindre än den proportionella delen gäller inte mot en konsument, och Mimers följer konsumentlagen till punkt och pricka. Byggs som issue 500 (#1692) i [[M91 Villkoren och den rättsliga spärren]].

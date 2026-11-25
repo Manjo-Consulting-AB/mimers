@@ -96,6 +96,8 @@ Spärren stoppar:
 
 **Spärren syns inte för användaren.** Allt fungerar som vanligt för användaren, och det som raderas hamnar i papperskorgen och försvinner ur vyerna som vanligt. Det enda som ändras är att det inte gallras. Att visa spärren kunde varna den som är föremål för en utredning.
 
+**Spärren kan vara tystnadsbelagd.** När en myndighet kräver tystnad sätts spärren med `--confidential`, eller markeras i efterhand med `legal-hold:confidential`. I appen syns ingen spärr; i svaret på art. 15 syns bara de som inte är tystnadsbelagda, se [[ADR-0095 Integritetsbegäranden]] § 12.
+
 **Spärren sätts och hävs bara från serverns kommandorad**, med ett ärendenummer och en anledning. Varje åtgärd skriver en rad i säkerhetsloggen. Spärren har ingen yta i webben. Den som kan sätta den ska inte kunna göra det av misstag.
 
 **En hävd spärr lämnar sin rad kvar.** Den hävs genom att `lifted_at` sätts, och raden i `legal_hold` tas aldrig bort. Att en spärr en gång funnits är i sig en uppgift värd att bevara.

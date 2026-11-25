@@ -1,6 +1,6 @@
 # ADR-0095 Integritetsbegäranden
 
-**Status:** Antagen 2026-11-24 · Bygger vidare på [[ADR-0043 Tre loggar]], [[ADR-0045 Radering av konto och person]] och [[ADR-0094 Hjälpcentret]] § 9 (ingen adminroll) · [[ADR-index]]
+**Status:** Antagen 2026-11-24 · Bygger vidare på [[ADR-0043 Tre loggar]], [[ADR-0045 Radering av konto och person]] och [[ADR-0094 Hjälpcentret]] § 9 (ingen adminroll) · Spärren i § 12, tillägg 2026-11-25 · [[ADR-index]]
 
 Tonys beslut 2026-11-24 om hur Mimers tar emot, prövar och dokumenterar begäranden från registrerade, efter feature request #1595. Kodarbetet ligger i [[M87 Integritetsbegäranden]].
 
@@ -91,7 +91,7 @@ Den rättsliga spärren på ärendets konto går före gallringen ([[ADR-0043 Tr
 
 ### 12. Insamlingen
 
-Automatiska hanterare läggs till ett i taget som egna kommandon som skriver en bilaga och en händelse, utan att livscykeln ändras. Den första är `privacy:collect` för art. 15, som sammanställer de uppgifter i databasen som binds till personen (issue 488, **förslag, inte beslutat**). Den rättsliga spärren nämns aldrig i det som lämnas ut. Grunden för det är en öppen fråga i [[Tankar]].
+Automatiska hanterare läggs till ett i taget som egna kommandon som skriver en bilaga och en händelse, utan att livscykeln ändras. Den första är `privacy:collect` för art. 15, som sammanställer de uppgifter i databasen som binds till personen (issue 488, **förslag, inte beslutat**). Spärren och dess rader i säkerhetsloggen tas med i svaret på art. 15, utom när spärren är tystnadsbelagd (`legal_hold.confidential`), alltså när en myndighet ålagt tystnad. Bara då finns en grund i lag (art. 23) att hålla inne uppgiften. `reason` lämnas aldrig ut. *Beslut 3, Tony 2026-11-25, issue 501 (#1693) i [[M91 Villkoren och den rättsliga spärren]].*
 
 ## Alternativ som valts bort
 
