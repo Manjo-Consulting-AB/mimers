@@ -379,6 +379,46 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Insamlingen för artikel 15
+    |--------------------------------------------------------------------------
+    |
+    | `privacy:collect` sammanställer de uppgifter i databasen som Mimers är
+    | personuppgiftsansvarig för om personen ärendet är kopplat till
+    | (ADR-0095 § 12). Nycklarna i filen är raderna i
+    | [[Registerförteckning]] som binds till en person.
+    |
+    | `collection_categories` är kategorierna händelsen `action` antecknar
+    | som `exported` — de av `data_categories` ovan som sammanställningen
+    | tar med. Innehållet, felrapporterna, mejlen, backuperna och
+    | serverloggarna står utanför (ADR-0095 § 9).
+    |
+    | `collection_not_included` skrivs som listan `not_included` i filen, så
+    | att handläggaren ser vad som återstår att hämta för hand. Värdena är
+    | namnen ur `systems` ovan. Den rättsliga spärren nämns aldrig i filen
+    | ([[ADR-0043 Tre loggar]] § Den rättsliga spärren).
+    |
+    */
+
+    'collection_categories' => [
+        'profile',
+        'account',
+        'sessions',
+        'security_log',
+        'audit_log',
+        'agents',
+        'help_feedback',
+    ],
+
+    'collection_not_included' => [
+        'user_content',
+        'sentry',
+        'mailgun',
+        'backups',
+        'server_logs',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Bilagorna
     |--------------------------------------------------------------------------
     |

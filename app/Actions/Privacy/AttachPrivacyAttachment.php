@@ -35,6 +35,13 @@ use Throwable;
  * `stored_file`, ingen dedup, ingen kvot och ingen rutt som levererar den.
  * Ett avslutat ärende tar fortfarande emot bilagor — svaret arkiveras ofta
  * efter avslutet — så actionen prövar inte statusen.
+ *
+ * **`handleContents()` är samma väg för ett innehåll som redan finns i
+ * minnet.** `privacy:collect` genererar sin sammanställning som en sträng
+ * och får aldrig skriva den till en temporär fil först (ADR-0095 § 12):
+ * bilagan ska bara finnas på disken `privacy`, och en kvarglömd tempfil är
+ * en kopia ingen gallring känner. Raden, händelsen `attachment_added` och
+ * hash-kontrollen är desamma som för en källfil.
  */
 class AttachPrivacyAttachment
 {
@@ -86,31 +93,94 @@ class AttachPrivacyAttachment
             );
         }
 
+        return $this->store(
+            request: $request,
+            originalName: basename($path),
+            expectedSize: $size,
+            actor: $actor,
+            write: fn (string $storagePath) => $this->copy($path, $storagePath),
+        );
+    }
+
+    /**
+     * Lägger ett innehåll som redan finns i minnet på ärendet.
+     *
+     * Samma rad, händelse och hash-kontroll som `handle()`, men utan en
+     * källfil: innehållet skrivs direkt till disken `privacy`. Det är vägen
+     * för `privacy:collect`, som aldrig får lämna en temporär kopia efter
+     * sig (ADR-0095 § 12).
+     *
+     * @throws InvalidArgumentException när innehållet är större än gränsen;
+     *                                  ingenting har då skrivits.
+     */
+    public function handleContents(
+        PrivacyRequest $request,
+        string $originalName,
+        string $contents,
+        string $actor,
+    ): PrivacyRequestAttachment {
+        $max = (int) config('privacy.attachment_max_bytes');
+        $size = strlen($contents);
+
+        if ($size > $max) {
+            throw new InvalidArgumentException(
+                "Filen är större än gränsen på {$max} byte."
+            );
+        }
+
+        return $this->store(
+            request: $request,
+            originalName: $originalName,
+            expectedSize: $size,
+            actor: $actor,
+            write: fn (string $storagePath) => $this->writeContents($storagePath, $contents),
+        );
+    }
+
+    /**
+     * Skriver filen på disken, kontrollerar kopian och skriver raden och
+     * händelsen i EN transaktion. Skrivningen är en callable, så att en
+     * källfil och ett innehåll i minnet går samma väg genom kontrollerna.
+     *
+     * @param  callable(string): void  $write
+     *
+     * @throws InvalidArgumentException när kopian blev för stor eller skiljer
+     *                                  sig från det som skulle skrivas.
+     */
+    private function store(
+        PrivacyRequest $request,
+        string $originalName,
+        int $expectedSize,
+        string $actor,
+        callable $write,
+    ): PrivacyRequestAttachment {
         // ULID:n måste finnas innan filen skrivs: sökvägen på disken slutar
         // med den. HasUlid fyller bara i ett tomt värde, så den som sätts
         // här står kvar.
         $attachment = new PrivacyRequestAttachment;
         $attachment->ulid = (string) Str::ulid();
         $attachment->privacy_request_id = $request->getKey();
-        $attachment->original_name = basename($path);
+        $attachment->original_name = $originalName;
         $attachment->added_by = $actor;
 
         $storagePath = $request->ulid.'/'.$attachment->ulid;
 
-        $this->copy($path, $storagePath);
-
         // Hashen och storleken räknas på kopian som faktiskt ligger på
-        // disken — aldrig på källfilen. Ändras källan mellan den första
-        // avläsningen och kopieringen är det kopian som gäller, och den
+        // disken — aldrig på källan. Ändras källan mellan den första
+        // avläsningen och skrivningen är det kopian som gäller, och den
         // vägras: hashen är beviset på att filen på disken är den som lades
         // till.
         try {
+            $write($storagePath);
+
             [$storedSize, $storedHash] = $this->inspectStoredCopy($storagePath);
         } catch (Throwable $e) {
             $this->deleteQuietly($storagePath);
 
             throw $e;
         }
+
+        $max = (int) config('privacy.attachment_max_bytes');
 
         if ($storedSize > $max) {
             $this->deleteQuietly($storagePath);
@@ -120,12 +190,12 @@ class AttachPrivacyAttachment
             );
         }
 
-        if ($storedSize !== $size) {
+        if ($storedSize !== $expectedSize) {
             $this->deleteQuietly($storagePath);
 
             throw new InvalidArgumentException(
                 "Filen ändrades under kopieringen: kopian är {$storedSize} byte, "
-                ."den första avläsningen {$size} byte."
+                ."den första avläsningen {$expectedSize} byte."
             );
         }
 
@@ -195,6 +265,20 @@ class AttachPrivacyAttachment
             Storage::disk(self::DISK)->delete($storagePath);
         } catch (Throwable) {
             // Kopian ligger kvar; felet som ledde hit är det som ska ut.
+        }
+    }
+
+    /**
+     * Skriv ett innehåll som redan ligger i minnet direkt till disken.
+     * `throw => true` på disken gör en misslyckad skrivning till ett
+     * undantag i stället för ett tyst `false`.
+     */
+    private function writeContents(string $storagePath, string $contents): void
+    {
+        $written = Storage::disk(self::DISK)->put($storagePath, $contents);
+
+        if ($written === false) {
+            throw new RuntimeException('Filen kunde inte skrivas till disken privacy.');
         }
     }
 
