@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Actions\Agent\ApplyAgentContainerGrants;
+use App\Actions\Agent\DisableAgentInContainer;
 use App\Actions\Agent\DisconnectAgent;
+use App\Actions\Agent\EnableAgentInContainer;
 use App\Actions\Agent\RenameAgent;
 use App\Actions\Agent\ResolveAgentAccount;
 use App\Actions\Agent\SetAgentPaused;
 use App\Actions\Agent\UpdateAgentAccountGrants;
+use App\Actions\Inbox\ResolveInbox;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\AgentContainerGrant;
@@ -19,6 +23,7 @@ use App\Support\Agent\AgentLevels;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -75,6 +80,7 @@ class AgentController extends Controller
 
         $containerCounts = AgentContainerGrant::query()
             ->whereIn('agent_id', $agents->pluck('id'))
+            ->whereNotIn('container_id', Container::query()->whereNotNull('inbox_user_id')->select('id'))
             ->select('agent_id', DB::raw('COUNT(DISTINCT container_id) as total'))
             ->groupBy('agent_id')
             ->pluck('total', 'agent_id');
@@ -100,6 +106,7 @@ class AgentController extends Controller
 
         $containers = Container::query()
             ->whereIn('id', $agent->containerGrants()->select('container_id'))
+            ->whereNull('inbox_user_id')
             ->orderBy('name')
             ->get();
 
@@ -124,6 +131,7 @@ class AgentController extends Controller
                 'level' => $levels[$group->value] ?? null,
             ])->all(),
             'levels' => AccessLevel::LADDER,
+            'inbox' => $this->inboxProp($agent, $levels),
             'containers' => $containers->map(fn (Container $container): array => [
                 'ulid' => $container->ulid,
                 'name' => $container->name,
@@ -182,6 +190,71 @@ class AgentController extends Controller
         );
 
         return back();
+    }
+
+    /**
+     * Slår agenten på eller av i användarens inbox (issue 1685). Inboxen löses
+     * (och skapas om den saknas) med ResolveInbox; sedan går skrivningen
+     * genom samma actions som en container. Bara `schedules` och `files`
+     * tas emot, och ApplyAgentContainerGrants upprepar spärren.
+     */
+    public function inbox(
+        Request $request,
+        Agent $agent,
+        ResolveInbox $resolveInbox,
+        EnableAgentInContainer $enable,
+        DisableAgentInContainer $disable,
+    ): RedirectResponse {
+        $this->ensureOwn($request, $agent);
+
+        $data = $request->validate([
+            'levels' => ['required', 'array'],
+            'levels.*' => ['nullable', 'string', Rule::in(AccessLevel::LADDER)],
+        ]);
+
+        foreach (array_keys($data['levels']) as $group) {
+            abort_unless(in_array($group, ApplyAgentContainerGrants::INBOX_GROUPS, true), 422);
+        }
+
+        $user = $request->user();
+        $container = $resolveInbox->handle($user)->container;
+
+        $levels = [];
+
+        foreach (ApplyAgentContainerGrants::INBOX_GROUPS as $group) {
+            $levels[$group] = $data['levels'][$group] ?? null;
+        }
+
+        if (array_filter($levels) === []) {
+            $disable->handle($agent, $container, $user);
+        } else {
+            $enable->handle($agent, $container, $user, $levels);
+        }
+
+        return back();
+    }
+
+    /**
+     * @param  Collection<string, string>  $accountLevels
+     * @return array{levels: array<string, string|null>, limits: array<string, string|null>}
+     */
+    private function inboxProp(Agent $agent, $accountLevels): array
+    {
+        $inbox = Container::query()->where('inbox_user_id', $agent->user_id)->first();
+
+        $saved = $inbox === null
+            ? collect()
+            : $agent->containerGrants()->where('container_id', $inbox->id)->pluck('level', 'group');
+
+        $levels = [];
+        $limits = [];
+
+        foreach (ApplyAgentContainerGrants::INBOX_GROUPS as $group) {
+            $levels[$group] = $saved[$group] ?? null;
+            $limits[$group] = $accountLevels[$group] ?? null;
+        }
+
+        return ['levels' => $levels, 'limits' => $limits];
     }
 
     public function pause(Request $request, Agent $agent, SetAgentPaused $setPaused): RedirectResponse
