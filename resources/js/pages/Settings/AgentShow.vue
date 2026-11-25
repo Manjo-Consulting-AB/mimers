@@ -33,6 +33,9 @@ const props = defineProps({
     /* Nivåerna, lägst först. */
     levels: { type: Array, required: true },
 
+    /* `{levels: {schedules, files}, limits: {schedules, files}}` — inboxens nivåer och kontots gränser. */
+    inbox: { type: Object, required: true },
+
     /* `{ulid, name, url}` */
     containers: { type: Array, required: true },
 
@@ -60,6 +63,18 @@ function setLevel(group, level) {
 }
 
 /* Switchen för allt: högsta nivån på, eller gruppen av. */
+/* Inboxen sparas direkt; en begäran bär båda grupperna så att den andra behålls. */
+function setInboxLevel(group, level) {
+    const levels = { ...props.inbox.levels, [group]: level === '' ? null : level };
+    router.put(`${base}/inbox`, { levels }, { preserveScroll: true });
+}
+
+/* Nivåerna upp till gränsen, lägst först. */
+function inboxOptions(group) {
+    const limit = props.inbox.limits[group];
+    return limit === null ? [] : props.levels.slice(0, props.levels.indexOf(limit) + 1);
+}
+
 function setAll(group, on) {
     setLevel(group, on ? props.levels[props.levels.length - 1] : '');
 }
@@ -151,6 +166,30 @@ function disconnect() {
             <UiCheckbox id="create-containers" :model-value="agent.createContainers" @update:model-value="setCreateContainers" />
             <label for="create-containers" class="inline-flex min-h-11 items-center">{{ t('agents.create_containers') }}</label>
         </div>
+    </section>
+
+    <section class="mt-8">
+        <h3 class="text-lg font-semibold">{{ t('agents.inbox_heading') }}</h3>
+        <p class="mt-1 text-sm text-slate-700">{{ t('agents.inbox_intro') }}</p>
+
+        <ul class="mt-4 flex flex-col gap-3">
+            <li v-for="group in ['schedules', 'files']" :key="group" class="rounded border border-slate-300 p-3">
+                <label :for="`inbox-${group}`" class="text-sm font-medium">{{ t(`agents.group.${group}`) }}</label>
+                <div class="mt-1">
+                    <select
+                        :id="`inbox-${group}`"
+                        :value="inbox.levels[group] ?? ''"
+                        :disabled="inbox.limits[group] === null"
+                        class="min-h-11 rounded border border-slate-300 bg-white px-3"
+                        @change="setInboxLevel(group, $event.target.value)"
+                    >
+                        <option value="">{{ t('agents.level_none') }}</option>
+                        <option v-for="level in inboxOptions(group)" :key="level" :value="level">{{ t(`agents.level.${level}`) }}</option>
+                    </select>
+                </div>
+                <p v-if="inbox.limits[group] === null" class="mt-1 text-sm text-slate-700">{{ t('agents.inbox_locked') }}</p>
+            </li>
+        </ul>
     </section>
 
     <section class="mt-8">

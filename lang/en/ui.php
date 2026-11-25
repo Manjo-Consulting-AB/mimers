@@ -2195,6 +2195,10 @@ return [
         ],
         'pause_label' => 'Pause this agent',
         'pause_hint' => 'While paused, every call from the agent is refused. Permissions and connection stay.',
+        // Issue 1685: the agent's rights in the person's inbox.
+        'inbox_heading' => 'Inbox',
+        'inbox_intro' => 'Your inbox takes tasks and attachments only. A choice is saved at once. The agent has no access to the inbox until you switch it on.',
+        'inbox_locked' => 'Switch this group on under Permissions first.',
         'containers_heading' => 'Containers where the agent is switched on',
         'containers_empty' => 'The agent is not switched on in any container. Do that in a container\'s settings.',
         'events_heading' => 'Latest events',

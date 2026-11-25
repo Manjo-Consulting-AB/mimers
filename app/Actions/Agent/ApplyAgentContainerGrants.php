@@ -28,6 +28,15 @@ use InvalidArgumentException;
 class ApplyAgentContainerGrants
 {
     /**
+     * Grupperna en inbox tar emot: uppgifter och bilagor ([[ADR-0054 Inboxen]]
+     * § 4). Agenten får aldrig en rad för någon annan grupp i en inbox, vilken
+     * väg in det än är (issue 1685).
+     *
+     * @var list<string>
+     */
+    public const INBOX_GROUPS = ['schedules', 'files'];
+
+    /**
      * @param  array<string, string|null>|null  $levels  grupp => nivå; null = allt upp till kontots nivå
      * @param  string|null  $ceiling  ägarens tak i containern (issue 408); `null` ger inga rader
      * @return array<string, string> det som sparades, grupp => nivå
@@ -46,6 +55,10 @@ class ApplyAgentContainerGrants
             $rows = [];
 
             foreach (AgentGroup::cases() as $group) {
+                if ($container->isInbox() && ! in_array($group->value, self::INBOX_GROUPS, true)) {
+                    continue;
+                }
+
                 $accountLevel = $account[$group->value] ?? null;
                 $wanted = $levels === null ? $accountLevel : ($levels[$group->value] ?? null);
                 $level = $wanted === null ? null : AgentLevels::min($wanted, $accountLevel, $ceiling);

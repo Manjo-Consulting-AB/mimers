@@ -57,7 +57,10 @@ class ContainerAgentController extends Controller
      */
     public static function available(?User $user, Container $container): bool
     {
-        return AgentController::available($user)
+        // En inbox är dold och har ingen inställningssida: agenten slås på
+        // från agentens egen sida (issue 1685).
+        return ! $container->isInbox()
+            && AgentController::available($user)
             && AgentLevels::planIncludesMcp($container->account);
     }
 

@@ -1109,6 +1109,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/settings/agents/{agent}/grants', [AgentController::class, 'grants'])
         ->name('settings.agents.grants');
 
+    Route::put('/settings/agents/{agent}/inbox', [AgentController::class, 'inbox'])
+        ->name('settings.agents.inbox');
+
     Route::put('/settings/agents/{agent}/pause', [AgentController::class, 'pause'])
         ->name('settings.agents.pause');
 
