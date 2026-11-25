@@ -383,6 +383,11 @@ it('lägger Contact-länken sist i raden i sidfoten och efter Refund policy', fu
 
         expect((int) strpos($kod, 'href="/refund-policy"'))
             ->toBeLessThan((int) strpos($kod, 'href="/contact"'), "{$fil} lägger Contact före Refund policy");
+
+        // Subprocessors-länken togs bort i issue 1674, så Contact följer nu
+        // direkt på Refund policy. Raden är det som gör provet rött på basen —
+        // ordningen ovan höll även med länken kvar emellan.
+        expect($kod)->not->toContain('href="/subprocessors"');
     }
 
     // Sidfoten har ingen Help-länk; inloggningssidan har den efter Contact.

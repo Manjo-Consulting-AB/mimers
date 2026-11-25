@@ -161,6 +161,9 @@ it('har titeln Subprocessors och en beskrivning per informationssida', function 
  * issnens ruta, och ritas oförändrad — provet vaktar att den finns kvar nu
  * när raden under kortet inte längre bär den.
  */
+// /privacy-länken är oförändrad av issue 1674. Provet vaktar att den finns
+// kvar nu när raderna inte bär den, inte att den tillkom med PR:en.
+// vakt: regressionsvakt för en länk issue 1674 lämnar orörd
 it('låter /privacy länka vidare till /subprocessors', function () {
     withoutVite();
 
