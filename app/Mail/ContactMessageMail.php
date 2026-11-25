@@ -30,6 +30,11 @@ use Illuminate\Support\Carbon;
  *
  * Kontots ULID slås upp av App\Actions\Contact\SendContactMessage och kommer
  * hit färdigt, så mailet självt frågar aldrig databasen.
+ *
+ * **Ett Data & Privacy-ärende bär sin referens** (ADR-0096 § 7): ämnet får
+ * ` — PR-XXXXXXXX` efter namnet och kroppen en rad `Privacy request:`. Det är
+ * samma referens som `privacy:show` slår upp, så handläggaren hittar ärendet
+ * ur mejlet.
  */
 class ContactMessageMail extends Mailable
 {
@@ -42,11 +47,17 @@ class ContactMessageMail extends Mailable
         public readonly ?string $accountUlid,
         public readonly string $contentLocale,
         public readonly Carbon $sentAt,
+        public readonly ?string $privacyReference = null,
     ) {}
 
     public function envelope(): Envelope
     {
         $subject = '[Contact] '.ContactCategory::label($this->category).' — '.$this->name;
+
+        if ($this->privacyReference !== null) {
+            $subject .= ' — '.$this->privacyReference;
+        }
+
         $environment = (string) app()->environment();
 
         if ($environment !== 'production') {
@@ -74,6 +85,7 @@ class ContactMessageMail extends Mailable
                 'accountUlid' => $this->accountUlid,
                 'locale' => $this->contentLocale,
                 'sentAt' => $this->sentAt->copy()->utc()->toIso8601String(),
+                'privacyReference' => $this->privacyReference,
                 'body' => $this->message,
             ],
         );

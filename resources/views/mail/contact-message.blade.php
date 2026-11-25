@@ -1,4 +1,7 @@
 Category: {!! $categoryLabel !!} ({!! $category !!})
+@if ($privacyReference !== null)
+Privacy request: {!! $privacyReference !!}
+@endif
 Name: {!! $name !!}
 Email: {!! $email !!}
 @if ($signedIn)

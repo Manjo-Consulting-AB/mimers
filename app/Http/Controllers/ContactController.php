@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Contact\DetectTrappedContact;
 use App\Actions\Contact\SendContactMessage;
+use App\Actions\Privacy\OpenPrivacyRequest;
 use App\Http\Requests\ContactRequest;
 use App\Support\Api\ApiError;
 use App\Support\Contact\ContactCategory;
@@ -41,9 +42,26 @@ use Throwable;
  * så ett undantag från mailern blir ett felsvar i stället för ett tystnat
  * köjobb. Felet loggas med `contact.send_failed` och kategorin, men utan
  * meddelandets text, namnet och adressen.
+ *
+ * **Data & Privacy öppnar även ett integritetsärende** (ADR-0096 § 7): en
+ * inskickning i kategorin `privacy` anropar App\Actions\Privacy\
+ * OpenPrivacyRequest med typen `other` innan mejlet skickas, och referensen
+ * följer med mailet. Ärendet skrivs i en egen, avslutad transaktion — ett
+ * mailerfel lämnar det därför kvar, som beviset på att begäran kom in. Ingen
+ * annan kategori, och ingen skräpträff, når den vägen.
  */
 class ContactController extends Controller
 {
+    /** Kategorin som också öppnar ett integritetsärende. */
+    private const PRIVACY_CATEGORY = 'privacy';
+
+    /**
+     * Avsändaren på ärendets `created`-händelse. Formuläret har ingen
+     * handläggare — det är servern som tar emot — så händelsen namnger
+     * intaget i stället för en person.
+     */
+    private const CONTACT_FORM_ACTOR = 'Kontaktformuläret';
+
     /**
      * Sidan. Kategorierna kommer i ADR-0096:s ordning ur
      * App\Support\Contact\ContactCategory, och `rendered_at` är serverns
@@ -70,6 +88,7 @@ class ContactController extends Controller
         ContactRequest $request,
         DetectTrappedContact $detectTrapped,
         SendContactMessage $send,
+        OpenPrivacyRequest $openPrivacyRequest,
     ): JsonResponse {
         $user = $request->user();
         $category = (string) $request->validated('category');
@@ -94,8 +113,27 @@ class ContactController extends Controller
             $email = $user->email;
         }
 
+        $message = (string) $request->validated('message');
+        $privacyReference = null;
+
+        // Ärendet öppnas före mejlet och i sin egen transaktion: misslyckas
+        // sändningen står raden kvar som bevis på att begäran togs emot
+        // (ADR-0096 § 7). Fel härifrån fångas inte som ett mailerfel — det
+        // är inte mejlet som brustit.
+        if ($category === self::PRIVACY_CATEGORY) {
+            $privacyReference = $openPrivacyRequest->handle(
+                type: 'other',
+                requesterName: $name,
+                requesterEmail: $email,
+                description: $name.' <'.$email.'>'."\n\n".$message,
+                actor: self::CONTACT_FORM_ACTOR,
+                accountUlid: $user?->accounts()->first()?->ulid,
+                userUlid: $user?->ulid,
+            )->reference;
+        }
+
         try {
-            $send->handle($category, $name, $email, (string) $request->validated('message'), $user);
+            $send->handle($category, $name, $email, $message, $user, $privacyReference);
         } catch (Throwable $exception) {
             // Bara klassnamnet, aldrig undantagsobjektet: Monolog skriver ut
             // meddelandet och stacktrace, och båda kan bära mottagarens adress

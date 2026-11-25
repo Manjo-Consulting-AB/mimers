@@ -25,12 +25,17 @@ use Illuminate\Support\Facades\Mail;
  */
 final class SendContactMessage
 {
+    /**
+     * @param  string|null  $privacyReference  Ärendets `PR-`-referens, när
+     *                                         kategorin är `privacy`.
+     */
     public function handle(
         string $category,
         string $name,
         string $email,
         string $message,
         ?User $user,
+        ?string $privacyReference = null,
     ): void {
         Mail::to((string) config('support.address'))->send(new ContactMessageMail(
             category: $category,
@@ -41,6 +46,7 @@ final class SendContactMessage
             accountUlid: $user?->accounts()->first()?->ulid,
             contentLocale: (string) app()->getLocale(),
             sentAt: now(),
+            privacyReference: $privacyReference,
         ));
     }
 }
