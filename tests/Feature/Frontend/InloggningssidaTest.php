@@ -212,13 +212,15 @@ it('länkar till informationssidorna', function () {
     // Beslut 3: länkarna under kortet. Sidorna kommer med issue 202;
     // *Subprocessors* kom med M86 · issue 480, efter *Terms of use*, och
     // *Contact* med M89 — efter *Subprocessors* och före *Help*.
+    // *Refund policy* (M86) står direkt efter *Terms of use*.
     $kod = inloggningskalla();
 
-    foreach (['/about', '/privacy', '/terms', '/subprocessors', '/contact', '/help'] as $mål) {
+    foreach (['/about', '/privacy', '/terms', '/refund-policy', '/subprocessors', '/contact', '/help'] as $mål) {
         expect(str_contains($kod, "href=\"{$mål}\""))->toBeTrue("Login.vue länkar inte till {$mål}");
     }
 
-    expect((int) strpos($kod, 'href="/terms"'))->toBeLessThan((int) strpos($kod, 'href="/subprocessors"'));
+    expect((int) strpos($kod, 'href="/terms"'))->toBeLessThan((int) strpos($kod, 'href="/refund-policy"'));
+    expect((int) strpos($kod, 'href="/refund-policy"'))->toBeLessThan((int) strpos($kod, 'href="/subprocessors"'));
     expect((int) strpos($kod, 'href="/subprocessors"'))->toBeLessThan((int) strpos($kod, 'href="/contact"'));
     expect((int) strpos($kod, 'href="/contact"'))->toBeLessThan((int) strpos($kod, 'href="/help"'));
 });

@@ -162,7 +162,8 @@ it('länkar Paddles köparvillkor och återbetalningspolicyn', function () {
     $body = villkorssidanKropp();
 
     expect($body)->toContain('href="https://www.paddle.com/legal/checkout-buyer-terms"')
-        ->and($body)->toContain('href="https://manjo.me/refund-policy.php"');
+        ->and($body)->toContain('href="/refund-policy"')
+        ->and($body)->not->toContain('manjo.me/refund-policy.php');
 });
 
 /*

@@ -15,17 +15,18 @@ use function Pest\Laravel\withoutVite;
  * /subprocessors. /help ritas sedan M78 · issue 458 av Help.vue och prövas i
  * HjalpsidanTest.
  *
- * Fyra adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
+ * Fem adresser ritas av EN sida (resources/js/pages/Info.vue): rutten skickar
  * vilken sida det är i `page`-proppen och komponenten slår upp rubriken ur
  * `info.<sida>.title`. Filen prövar serverns halva av det kontraktet —
  * adressen, komponenten, proppen, ruttnamnen och att texterna finns.
  *
  * **Sedan M85 · issue 478 bär rutten också `body`.** Den kommer ur
- * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. Alla fyra har en
+ * `App\Support\InfoPage` och `lang/{locale}/pages/{sida}.md`. Alla fem har en
  * fil sedan M86: /about (issue 478), /privacy (issue 479), /subprocessors
- * (issue 480) och /terms (issue 489). Innehållet i /abouts body prövas i
- * OmsidanTest, i /privacys i IntegritetspolicyTest, i /subprocessors i
- * UnderbitradenTest och i /terms i VillkorssidanTest.
+ * (issue 480), /terms (issue 489) och /refund-policy. Innehållet i /abouts
+ * body prövas i OmsidanTest, i /privacys i IntegritetspolicyTest, i
+ * /subprocessors i UnderbitradenTest, i /terms i VillkorssidanTest och i
+ * /refund-policy i AterbetalningspolicynTest.
  *
  * Att sidan ritas i AppLayout och inte bär en enda sträng själv prövas av
  * GenomgangTest och SprakTest, som läser varje fil under resources/js; att
@@ -44,7 +45,7 @@ use function Pest\Laravel\withoutVite;
  * `help-content`, ska rita i `var(--text-body)` som förut.
  */
 
-it('renderar Info för var och en av de fyra sidorna för en gäst', function (string $sida) {
+it('renderar Info för var och en av de fem sidorna för en gäst', function (string $sida) {
     withoutVite();
 
     $svar = get('/'.$sida)
@@ -55,7 +56,7 @@ it('renderar Info för var och en av de fyra sidorna för en gäst', function (s
         );
 
     expect((string) $svar->inertiaProps()['body'])->not->toBe('');
-})->with(['about', 'privacy', 'terms', 'subprocessors']);
+})->with(['about', 'privacy', 'terms', 'subprocessors', 'refund-policy']);
 
 it('renderar Info också för en inloggad användare', function () {
     withoutVite();
@@ -75,6 +76,7 @@ it('har en titel för varje sida och en platshållartext', function () {
         'privacy' => 'Privacy policy',
         'terms' => 'Terms of use',
         'subprocessors' => 'Subprocessors',
+        'refund-policy' => 'Refund policy',
         'help' => 'Help',
     ];
 
@@ -85,8 +87,8 @@ it('har en titel för varje sida och en platshållartext', function () {
     expect(trans('ui.info.placeholder', [], 'en'))->toBe('This page is coming soon.');
 });
 
-it('namnger rutterna info.about, info.privacy, info.terms, info.subprocessors och info.help', function () {
-    foreach (['about', 'privacy', 'terms', 'subprocessors', 'help'] as $sida) {
+it('namnger rutterna info.about, info.privacy, info.terms, info.subprocessors, info.refund-policy och info.help', function () {
+    foreach (['about', 'privacy', 'terms', 'subprocessors', 'refund-policy', 'help'] as $sida) {
         expect(route('info.'.$sida, [], false))->toBe('/'.$sida);
     }
 });

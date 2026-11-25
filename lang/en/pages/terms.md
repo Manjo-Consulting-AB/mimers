@@ -116,7 +116,7 @@ Subscriptions renew automatically unless cancelled. You can cancel your subscrip
 
 When you cancel, your paid features remain available until the end of the current paid subscription period, unless your account is suspended or terminated under these Terms.
 
-Refunds are handled in accordance with applicable law and the relevant payment terms. Manjo Consulting AB's refund policy is available at [manjo.me/refund-policy.php](https://manjo.me/refund-policy.php).
+Refunds are handled in accordance with applicable law and the relevant payment terms. Our [refund policy](/refund-policy) describes the 30-day money-back guarantee and how to ask for a refund.
 
 We will always notify you by email at least one month before your next renewal.
 

@@ -112,7 +112,8 @@ it('beskriver Paddle som Merchant of Record med köparvillkor, Manage billing oc
     expect($body)->toContain('Merchant of Record')
         ->and($body)->toContain('href="https://www.paddle.com/legal/checkout-buyer-terms"')
         ->and($body)->toContain('Manage billing')
-        ->and($body)->toContain('href="https://manjo.me/refund-policy.php"')
+        ->and($body)->toContain('href="/refund-policy"')
+        ->and($body)->not->toContain('manjo.me/refund-policy.php')
         ->and($body)->toContain('described separately from our subprocessor list');
 });
 

@@ -344,10 +344,10 @@ Route::delete('/settings/overview-panels', [OverviewPanelController::class, 'des
 Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('welcome');
 
 /*
- * Issue 202 · Informationssidorna — /about, /privacy, /terms och /subprocessors,
- * plus /help. Inloggningssidans nya design länkar hit (issue 203).
+ * Issue 202 · Informationssidorna — /about, /privacy, /terms, /subprocessors och
+ * /refund-policy, plus /help. Inloggningssidans nya design länkar hit (issue 203).
  *
- * **Fyra rutter, en sida.** Adresserna skiljer sig åt men formen är densamma.
+ * **Fem rutter, en sida.** Adresserna skiljer sig åt men formen är densamma.
  * Sidan `Info` får sin adress som prop och slår upp `info.<sida>.title` i
  * lang/{locale}/ui.php, så en fjärde sida är en rad i listan och en nyckel i
  * katalogen, inte en ny .vue-fil.
@@ -364,7 +364,7 @@ Route::get('/', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'logi
  * och en inloggad, och en plats i någon av grupperna hade skickat den ena
  * parten vidare. Samma form som `welcome` ovan.
  */
-foreach (['about', 'privacy', 'terms', 'subprocessors'] as $infoPage) {
+foreach (['about', 'privacy', 'terms', 'subprocessors', 'refund-policy'] as $infoPage) {
     Route::get('/'.$infoPage, fn (InfoPage $pages) => Inertia::render('Info', [
         'page' => $infoPage,
         'body' => $pages->html($infoPage),

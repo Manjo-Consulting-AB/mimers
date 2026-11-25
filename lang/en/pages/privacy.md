@@ -154,7 +154,7 @@ If we change the price of a subscription, we tell you by email before the change
 
 **Refunds**
 
-You can get your money back within 30 days of a payment. The details are in our [refund policy](https://manjo.me/refund-policy.php).
+You can get your money back within 30 days of a payment. The details are in our [refund policy](/refund-policy).
 
 ## 8. Service notifications and communications
 
