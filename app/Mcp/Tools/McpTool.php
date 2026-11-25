@@ -161,7 +161,7 @@ abstract class McpTool extends Tool
      * Flera items i samma svar bidrar med SITT snitt — personerna som når
      * allt svaret lämnade ut. Ett tomt svar noterar ingenting: det finns
      * ingen mängd att snitta mot, och en tom mängd hade stängt varje
-     * skrivning.
+     * skrivning. Det gäller också ett svar som bara bestod av inboxens items.
      *
      * @param  list<Item>  $items  de items svaret lämnade ut
      */
@@ -185,7 +185,11 @@ abstract class McpTool extends Tool
         foreach ($collection as $item) {
             $container = $item->container;
 
-            if ($container !== null) {
+            // Inboxen är undantagen: den är användarens egen och bara hennes,
+            // så det agenten läser där stänger inga skrivningar (Riktning 10,
+            // Tony 2026-11-25). Undantaget sitter här och i
+            // ReadsContainers::noteContainerRead, inte i ItemAudience.
+            if ($container !== null && ! $container->isInbox()) {
                 $audiences[] = $audience->forItem($container, $item);
             }
         }

@@ -521,6 +521,16 @@
         }
     },
     {
+        "name": "inbox_get",
+        "parameters": [],
+        "required": [],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
         "name": "items_create",
         "parameters": {
             "category": {

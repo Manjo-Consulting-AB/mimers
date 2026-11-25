@@ -44,6 +44,12 @@ abstract class ReadsContainers extends McpTool
      */
     protected function noteContainerRead(Agent $agent, Container $container): void
     {
+        // Inboxen är användarens egen och räknas inte i snittet, se
+        // [[ADR-0087 MCP-server för agenter]] Riktning 10 (Tony 2026-11-25).
+        if ($container->isInbox()) {
+            return;
+        }
+
         app(ReadAudience::class)->note($agent, app(ItemAudience::class)->forContainer($container));
     }
 }
