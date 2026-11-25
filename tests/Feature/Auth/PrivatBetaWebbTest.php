@@ -69,6 +69,7 @@ it('invite_only utan kod nekas', function () {
     config(['konton.registration' => 'invite_only']);
 
     $svar = from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'utan-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -92,6 +93,7 @@ it('invite_only med giltig kod skapar kontot med pro', function () {
         ->handle('pro', 365, 1, true, 'Testare', null);
 
     from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'med-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -111,6 +113,7 @@ it('en ogiltig kod nekas och skapar ingenting', function () {
     config(['konton.registration' => 'invite_only']);
 
     $svar = from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'ogiltig-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -130,6 +133,7 @@ it('en förbrukad kod nekas', function () {
     ['code' => $kod] = app(GenerateVoucher::class)->handle('pro', 365, 1, true, null, null);
 
     from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Första Personen',
         'email' => 'forsta@example.com',
         'password' => 'giltigt-losenord',
@@ -137,6 +141,7 @@ it('en förbrukad kod nekas', function () {
     ])->assertRedirect(route('login.create'));
 
     $andra = from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Andra Personen',
         'email' => 'andra@example.com',
         'password' => 'giltigt-losenord',
@@ -158,6 +163,7 @@ it('en containerinbjudan i sessionen släpper in utan kod och ger free', functio
     withSession([InvitationResponseController::SESSION_KEY => $token])
         ->from('/register')
         ->post('/register', [
+            'terms_accepted' => true,
             'name' => 'Inbjuden Person',
             'email' => 'inbjuden@example.com',
             'password' => 'giltigt-losenord',
@@ -182,6 +188,7 @@ it('en inbjudan till en annan adress släpper inte in', function () {
     $svar = withSession([InvitationResponseController::SESSION_KEY => $token])
         ->from('/register')
         ->post('/register', [
+            'terms_accepted' => true,
             'name' => 'Objuden Person',
             'email' => 'objuden@example.com',
             'password' => 'giltigt-losenord',
@@ -197,6 +204,7 @@ it('läget open släpper in utan kod', function () {
     config(['konton.registration' => 'open']);
 
     from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Öppen Person',
         'email' => 'oppen@example.com',
         'password' => 'giltigt-losenord',
@@ -215,6 +223,7 @@ it('ett tomt kodfält behandlas som ingen kod', function () {
     config(['konton.registration' => 'invite_only']);
 
     from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Tomt Fält',
         'email' => 'tomt-falt@example.com',
         'password' => 'giltigt-losenord',
@@ -226,6 +235,7 @@ it('ett tomt kodfält behandlas som ingen kod', function () {
     config(['konton.registration' => 'open']);
 
     from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Tomt Fält',
         'email' => 'tomt-falt@example.com',
         'password' => 'giltigt-losenord',

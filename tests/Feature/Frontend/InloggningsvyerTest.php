@@ -126,6 +126,7 @@ it('registrerar en besökare, loggar inte in henne och skickar henne till inlogg
 
     from('/register')
         ->post('/register', [
+            'terms_accepted' => true,
             'name' => 'Ny Person',
             'email' => 'ny-vy@example.com',
             'password' => 'giltigt-losenord',
@@ -145,6 +146,7 @@ it('svarar likadant för en upptagen e-postadress och ger inget fältfel', funct
     followingRedirects()
         ->from('/register')
         ->post('/register', [
+            'terms_accepted' => true,
             'name' => 'Redan Registrerad',
             'email' => 'upptagen-vy@example.com',
             'password' => 'giltigt-losenord',
@@ -172,6 +174,7 @@ it('ger inget e-postfel i sessionen när e-postadressen är upptagen', function 
     // sessionspåsen konsumerar flashdata, så en omdirigering som följs efter
     // den läsningen renderar Auth/Register utan `errors.email`.
     $svar = from('/register')->post('/register', [
+        'terms_accepted' => true,
         'name' => 'Redan Registrerad',
         'email' => 'upptagen-vy@example.com',
         'password' => 'giltigt-losenord',

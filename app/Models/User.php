@@ -151,6 +151,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'totp_secret' => 'encrypted',
             'totp_confirmed_at' => 'datetime',
             'last_active_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
             'notifications_read_at' => 'datetime',
             'notifications_cleared_at' => 'datetime',
             'show_upcoming_tasks' => 'boolean',

@@ -38,6 +38,7 @@ it('skapar en användare med ett eget personkonto som ägare vid webbregistrerin
     Notification::fake();
 
     $response = postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'ny@example.com',
         'password' => 'giltigt-losenord',
@@ -67,6 +68,7 @@ it('skapar en användare med ett eget personkonto som ägare vid API-registrerin
     Notification::fake();
 
     $response = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Api Person',
         'email' => 'api-ny@example.com',
         'password' => 'giltigt-losenord',
@@ -98,6 +100,7 @@ it('svarar webbregistrering med redan upptagen e-post som en ny adress — ingen
     User::factory()->create(['email' => 'upptagen@example.com']);
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Redan Registrerad',
         'email' => 'upptagen@example.com',
         'password' => 'giltigt-losenord',
@@ -109,6 +112,7 @@ it('svarar API-registrering med redan upptagen e-post som en ny adress — 202 v
     User::factory()->create(['email' => 'upptagen-api@example.com']);
 
     $response = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Redan Registrerad',
         'email' => 'upptagen-api@example.com',
         'password' => 'giltigt-losenord',
@@ -122,6 +126,7 @@ it('rör inte accounts-tabellen när adressen redan finns', function () {
     User::factory()->create(['email' => 'finns-redan@example.com']);
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Redan Registrerad',
         'email' => 'finns-redan@example.com',
         'password' => 'giltigt-losenord',
@@ -134,6 +139,7 @@ it('registrering sparar användarens namn', function () {
     Notification::fake();
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Anna Andersson',
         'email' => 'anna@example.com',
         'password' => 'giltigt-losenord',
@@ -148,6 +154,7 @@ it('registrering döper personkontot till användarens namn', function () {
     Notification::fake();
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Bertil Berg',
         'email' => 'bertil@example.com',
         'password' => 'giltigt-losenord',
@@ -162,6 +169,7 @@ it('registrering döper personkontot till användarens namn', function () {
 
 it('registrering utan namn avvisas', function () {
     $response = postJson('/api/register', [
+        'terms_accepted' => true,
         'email' => 'utan-namn@example.com',
         'password' => 'giltigt-losenord',
     ]);
@@ -173,6 +181,7 @@ it('registrering utan namn avvisas', function () {
 
 it('registrering med tomt namn avvisas', function () {
     $response = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => '',
         'email' => 'tomt-namn@example.com',
         'password' => 'giltigt-losenord',

@@ -52,7 +52,7 @@ class RegistersOrNotifies
                     return null;
                 }
 
-                $created = $this->creator->handle($name, $email, $password, $ip);
+                $created = $this->creator->handle($name, $email, $password, $ip, now());
 
                 if ($voucher !== null) {
                     $this->redeemVoucher->handle($voucher, $created->accounts()->firstOrFail(), $created);

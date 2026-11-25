@@ -709,6 +709,10 @@ return [
             'password_hint' => 'At least eight characters.',
             'login' => 'Already have an account? Log in',
 
+            // Issue 1691 · M91. Länkarna skrivs [text](url) och ritas av Register.vue.
+            'terms' => 'I am 18 or older and accept the [Terms of Use](/terms). I have read the [Privacy Policy](/privacy).',
+            'terms_required' => 'Confirm that you are 18 or older and accept the Terms.',
+
             /*
              * Issue 263 · inbjudningskoden, se [[ADR-0055 Inbjudningskoder
              * och stängd registrering]] § 2, § 3 och § 8.

@@ -4,6 +4,7 @@ namespace App\Actions\Auth;
 
 use App\Models\Account;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -39,15 +40,23 @@ class CreatesUserWithPersonalAccount
      *                                       null. `?string` för att värdet FÅR vara null,
      *                                       inte för att det får utelämnas — en request utan
      *                                       pålitlig IP ska inte hindra en registrering.
+     * @param  Carbon|null  $termsAcceptedAt  När rutan för 18 år och villkoren
+     *                                        kryssades i. Bara registreringen anger den; utan
+     *                                        argument lämnas kolumnen NULL (issue 1691).
      */
-    public function handle(string $name, string $email, string $password, ?string $registrationIp): User
+    public function handle(string $name, string $email, string $password, ?string $registrationIp, ?Carbon $termsAcceptedAt = null): User
     {
-        return DB::transaction(function () use ($name, $email, $password, $registrationIp): User {
-            $user = User::query()->create([
+        return DB::transaction(function () use ($name, $email, $password, $registrationIp, $termsAcceptedAt): User {
+            // terms_accepted_at ligger utanför #[Fillable]; sätts här, i
+            // samma INSERT, och bara när anroparen angett tidpunkten
+            // (issue 1691).
+            $user = new User([
                 'name' => $name,
                 'email' => $email,
                 'password_hash' => $password,
             ]);
+            $user->terms_accepted_at = $termsAcceptedAt;
+            $user->save();
 
             // account.locale, timezone och unit_system samlas inte in vid
             // registrering (formuläret tar bara namn, e-post och lösenord).

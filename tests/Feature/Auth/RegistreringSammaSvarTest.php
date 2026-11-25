@@ -34,6 +34,7 @@ function sammaSvarUppgifter(string $email, array $extra = []): array
         'name' => 'Ny Person',
         'email' => $email,
         'password' => 'giltigt-losenord',
+        'terms_accepted' => true,
     ], $extra);
 }
 

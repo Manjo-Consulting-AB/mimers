@@ -53,6 +53,7 @@ it('ger inte en intern användare Pro vid webbregistrering', function () {
     config(['konton.registration' => 'open']);
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Tony',
         'email' => 'tony@manjo.me',
         'password' => 'giltigt-losenord',
@@ -71,6 +72,7 @@ it('ger inte en intern användare Pro vid API-registrering', function () {
     config(['konton.registration' => 'open']);
 
     postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Tony',
         'email' => 'tony@manjo.me',
         'password' => 'giltigt-losenord',

@@ -64,6 +64,7 @@ it('webbregistrering sparar requestens IP på kontot', function () {
     withServerVariables(['REMOTE_ADDR' => '203.0.113.10']);
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Webb Person',
         'email' => 'webb-ip@example.com',
         'password' => 'giltigt-losenord',
@@ -79,6 +80,7 @@ it('API-registrering sparar requestens IP på kontot', function () {
     withServerVariables(['REMOTE_ADDR' => '203.0.113.11']);
 
     postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Api Person',
         'email' => 'api-ip@example.com',
         'password' => 'giltigt-losenord',
@@ -96,6 +98,7 @@ it('en IPv6-adress i full längd lagras oavkortad', function () {
     withServerVariables(['REMOTE_ADDR' => $ipv6]);
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Ipv6 Person',
         'email' => 'ipv6@example.com',
         'password' => 'giltigt-losenord',
@@ -148,6 +151,7 @@ it('Account::toArray() och API-svaret innehåller inte registration_ip', functio
     withServerVariables(['REMOTE_ADDR' => '203.0.113.13']);
 
     $response = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Serialisering Person',
         'email' => 'serialisering@example.com',
         'password' => 'giltigt-losenord',

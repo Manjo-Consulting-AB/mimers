@@ -62,6 +62,7 @@ it('ger ett nyregistrerat konto en valuta utan att fråga efter den', function (
     Notification::fake();
 
     postJson('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'valuta@example.com',
         'password' => 'giltigt-losenord',

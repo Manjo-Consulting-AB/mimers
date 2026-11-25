@@ -265,6 +265,7 @@ it('en ny registrering med samma adress ger ett konto utan de gamla containrarna
     app(DeleteUser::class)->handle($person);
 
     post('/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'efterverkan@exempel.se',
         'password' => 'hast-och-bil-2026',
