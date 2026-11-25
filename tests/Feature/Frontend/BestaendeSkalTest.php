@@ -160,6 +160,21 @@ it('ingen av de nitton sidorna bär AppLayout i mallen', function () {
 });
 
 /*
+ * Klart när: `Register.vue` ritas i det delade gästskalet och inte i AppLayout
+ * (issue 1671). Registreringen hör inte till de nitton sidorna: den delar
+ * tvåkolumnsskalet med inloggningen.
+ */
+it('Register.vue ritas i det delade gästskalet och inte i AppLayout', function () {
+    expect(bestaendeSkalSidor())->not->toContain('Auth/Register.vue');
+
+    $kod = bestaendeSkalKod('js/pages/Auth/Register.vue');
+
+    expect($kod)
+        ->toContain('<AuthSplitLayout>')
+        ->not->toContain('AppLayout');
+});
+
+/*
  * Klart när: `plusknappens mål följer med som layoutprop` — `Dashboard.vue` och
  * `Containers/Index.vue` bär målet i en pilfunktion med exakt en parameter
  * (Beslut 2).
