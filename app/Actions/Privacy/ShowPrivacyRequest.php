@@ -3,6 +3,7 @@
 namespace App\Actions\Privacy;
 
 use App\Models\PrivacyRequest;
+use App\Models\PrivacyRequestAttachment;
 use App\Models\PrivacyRequestEvent;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\Collection;
  * Tidsordningen sorteras på `created_at` och sedan `id`: tidsstämpeln har
  * sekundprecision, och två händelser skrivna i samma sekund ska ändå komma i
  * den ordning de skrevs.
+ *
+ * Bilagorna följer med som rader — ulid, namn, storlek och när de lades till
+ * — aldrig innehållet och aldrig sökvägen på disken (ADR-0095 § 10).
  */
 class ShowPrivacyRequest
 {
@@ -26,7 +30,11 @@ class ShowPrivacyRequest
     ) {}
 
     /**
-     * @return array{request: PrivacyRequest, events: Collection<int, PrivacyRequestEvent>}
+     * @return array{
+     *     request: PrivacyRequest,
+     *     events: Collection<int, PrivacyRequestEvent>,
+     *     attachments: Collection<int, PrivacyRequestAttachment>
+     * }
      */
     public function handle(PrivacyRequest $request, string $actor): array
     {
@@ -40,6 +48,9 @@ class ShowPrivacyRequest
             'request' => $request,
             'events' => $request->events()
                 ->orderBy('created_at')
+                ->orderBy('id')
+                ->get(),
+            'attachments' => $request->attachments()
                 ->orderBy('id')
                 ->get(),
         ];
