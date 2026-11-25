@@ -132,10 +132,33 @@ return [
     |--------------------------------------------------------------------------
     |
     | En kalendermånad från mottagandet, se art. 12.3 och ADR-0095 § 5.
-    | Förlängningen med högst två månader (issue 483) räknas ovanpå den här.
+    | `deadline_months` är grundfristen; förlängningen räknas ovanpå den.
     |
     */
 
     'deadline_months' => (int) env('PRIVACY_DEADLINE_MONTHS', 1),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Förlängningen och omräkningen
+    |--------------------------------------------------------------------------
+    |
+    | Art. 12.3 tillåter en förlängning med högst två månader sammanlagt, och
+    | `privacy:extend` förlänger i steg om en eller två månader
+    | (`extension_months`). `max_extension_months` är taket på summan, inte på
+    | ett enskilt steg: 1 + 1 går, 2 + 1 går inte (ADR-0095 § 5).
+    |
+    | En förlängning efter den URSPRUNGLIGA fristen vägras — mottagandet plus
+    | `deadline_months`, utan förlängning — eftersom den registrerade ska ha
+    | beskedet inom den första månaden. `privacy:deadline` räknar i stället om
+    | fristen från en ny dag, till exempel den dag kompletterande uppgifter
+    | kom in, och behöver inget tak här: den nya fristen är alltid dagen plus
+    | `deadline_months` plus den förlängning som redan beviljats.
+    |
+    */
+
+    'extension_months' => [1, 2],
+
+    'max_extension_months' => 2,
 
 ];
