@@ -20,6 +20,10 @@ use InvalidArgumentException;
  * `completed`, skäl för att öppna igen, inget byte mellan två avslutade
  * lägen — bor i App\Actions\Privacy\ChangePrivacyRequestStatus, som prövar
  * dem innan något skrivs.
+ *
+ * **Att avsluta häver ingen begränsning.** En begränsning kan gälla efter
+ * att ärendet avgjorts (ADR-0095 § 8), så kommandot skriver en varning när
+ * ett ärende med gällande begränsning flyttas till ett avslutat läge.
  */
 class PrivacyStatus extends Command
 {
@@ -77,6 +81,15 @@ class PrivacyStatus extends Command
 
         if ($request->closed_at !== null) {
             $this->line('Avslutat: '.$request->closed_at->format('Y-m-d'));
+        }
+
+        // Avslutet rör inte begränsningen. Handläggaren ska veta att den
+        // fortsätter gälla tills den hävs för sig (ADR-0095 § 8).
+        if (PrivacyRequest::isClosedStatus($request->status) && $request->hasActiveRestriction()) {
+            $this->warn(
+                'Varning: ärendet har en gällande begränsning. Att avsluta ärendet häver den inte; '
+                .'den hävs med privacy:unrestrict.'
+            );
         }
 
         return self::SUCCESS;

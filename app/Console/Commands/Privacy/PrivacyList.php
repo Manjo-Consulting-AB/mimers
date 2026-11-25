@@ -21,12 +21,18 @@ use Illuminate\Console\Command;
  *
  * `--all` tar med de avslutade ärendena, och `--status=` visar bara en
  * status — också en avslutad sådan, utan att `--all` behövs.
+ *
+ * `--restricted` visar ärenden med en gällande begränsning, också avslutade:
+ * en begränsning kan gälla efter att ärendet avgjorts, och att avsluta häver
+ * den inte (ADR-0095 § 8). Då står kolumnen *scope* med — det är
+ * driftinstruktionen — men fortfarande inte namn eller e-postadress.
  */
 class PrivacyList extends Command
 {
     protected $signature = 'privacy:list
                             {--all : Ta med de avslutade ärendena}
-                            {--status= : Visa bara ärenden med den statusen}';
+                            {--status= : Visa bara ärenden med den statusen}
+                            {--restricted : Visa bara ärenden med gällande begränsning}';
 
     protected $description = 'Visa integritetsärendena med den närmaste fristen först.';
 
@@ -41,8 +47,19 @@ class PrivacyList extends Command
         }
 
         $query = PrivacyRequest::query();
+        $restricted = (bool) $this->option('restricted');
 
-        if ($status !== null) {
+        if ($restricted) {
+            // En begränsning kan gälla efter att ärendet avgjorts, så
+            // urvalet på öppna statusar hoppas över. --status= kan
+            // fortfarande snäva in listan.
+            $query->whereNotNull('restricted_at')
+                ->whereNull('restriction_lifted_at');
+
+            if ($status !== null) {
+                $query->where('status', $status);
+            }
+        } elseif ($status !== null) {
             // En uttrycklig status går före --all: den som frågar efter
             // `completed` vill se dem, oavsett om de räknas som avslutade.
             $query->where('status', $status);
@@ -61,17 +78,31 @@ class PrivacyList extends Command
             return self::SUCCESS;
         }
 
+        $kolumner = ['Referens', 'Typ', 'Status', 'Prioritet', 'Handläggare', 'Frist', 'Dagar kvar'];
+
+        if ($restricted) {
+            $kolumner[] = 'Scope';
+        }
+
         $this->table(
-            ['Referens', 'Typ', 'Status', 'Prioritet', 'Handläggare', 'Frist', 'Dagar kvar'],
-            $ärenden->map(fn (PrivacyRequest $ärende): array => [
-                $ärende->reference,
-                $ärende->type,
-                $ärende->status,
-                $ärende->priority,
-                $ärende->assignee ?? '—',
-                $ärende->deadline_at->format('Y-m-d'),
-                $this->daysLeft($ärende),
-            ])->all(),
+            $kolumner,
+            $ärenden->map(function (PrivacyRequest $ärende) use ($restricted): array {
+                $rad = [
+                    $ärende->reference,
+                    $ärende->type,
+                    $ärende->status,
+                    $ärende->priority,
+                    $ärende->assignee ?? '—',
+                    $ärende->deadline_at->format('Y-m-d'),
+                    $this->daysLeft($ärende),
+                ];
+
+                if ($restricted) {
+                    $rad[] = $ärende->restriction_scope;
+                }
+
+                return $rad;
+            })->all(),
         );
 
         return self::SUCCESS;

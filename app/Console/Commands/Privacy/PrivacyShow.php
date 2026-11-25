@@ -16,11 +16,12 @@ use Illuminate\Console\Command;
  * schemaläggs aldrig — åtkomsten till ärendena är åtkomsten till servern
  * (ADR-0095 § 1).
  *
- * Två rader i utskriften är varningar till handläggaren och syns aldrig för
- * den registrerade: *Legal hold active* överst när ärendets konto omfattas av
- * en gällande spärr ([[ADR-0043 Tre loggar]] § Den rättsliga spärren), och
- * *Self-service is not a complete response* under en `self_service`-händelse
- * (ADR-0095 § 9).
+ * Några rader i utskriften är varningar till handläggaren och syns aldrig för
+ * den registrerade: *Restriction active* med sin omfattning högst upp när en
+ * begränsning gäller (ADR-0095 § 8), *Legal hold active* när ärendets konto
+ * omfattas av en gällande spärr ([[ADR-0043 Tre loggar]] § Den rättsliga
+ * spärren), och *Self-service is not a complete response* under en
+ * `self_service`-händelse (ADR-0095 § 9).
  *
  * Logiken bor i App\Actions\Privacy\ShowPrivacyRequest, testad direkt.
  */
@@ -58,10 +59,18 @@ class PrivacyShow extends Command
 
         $resultat = $show->handle($request, $by);
 
+        // Begränsningen är driftinstruktionen och står överst: den som läser
+        // ärendet ska veta vilka uppgifter som inte får användas, och för
+        // vilka ändamål, medan den gäller (ADR-0095 § 8). Den ändrar inget i
+        // appen.
+        if ($request->hasActiveRestriction()) {
+            $this->line("Restriction active: {$request->restriction_scope}");
+        }
+
         // Den rättsliga spärren syns för handläggaren och aldrig för den
-        // registrerade (ADR-0043 § Den rättsliga spärren). Raden står överst:
-        // den som läser ärendet ska veta att gallringen står still innan hen
-        // tolkar resten.
+        // registrerade (ADR-0043 § Den rättsliga spärren). Raden står före
+        // ärendets uppgifter: den som läser ärendet ska veta att gallringen
+        // står still innan hen tolkar resten.
         if ($request->account !== null && LegalHold::covers($request->account)) {
             $this->line('Legal hold active');
         }
