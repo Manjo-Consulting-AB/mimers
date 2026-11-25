@@ -1,6 +1,6 @@
 # ADR-0054 Inboxen
 
-**Status:** Antagen 2026-10-05 · Ändrar [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2 · Bygger på [[ADR-0053 Flytt och kopiering]] och [[ADR-0028 Åtkomst på itemnivå]] · [[ADR-index]]
+**Status:** Antagen 2026-10-05 · Ändrar [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2 · Bygger på [[ADR-0053 Flytt och kopiering]] och [[ADR-0028 Åtkomst på itemnivå]] · Tillägg 2026-11-25 (agenter och items) · [[ADR-index]]
 
 Tonys beslut 2026-10-05, efter genomgången av uppgifterna på staging (v0.20.0).
 
@@ -28,7 +28,8 @@ Ett personkonto kan ha fler medlemmar, och regel 1 i [[ADR-0028 Åtkomst på ite
 
 - `Container::scopeAccessibleBy()` utesluter varje inbox. Inboxen nås bara genom sina egna ytor. Den syns därför inte i containerlistan, sidopanelen, sökningens containerfilter, dashboardens kort, kartan eller någon annan lista över containrar.
 - `ContainerPolicy` och `ItemPolicy` släpper bara igenom `inbox_user_id` för en inbox, med `view`, `create`, `update` och `delete` på innehållet. En inbox kan inte delas, överlåtas, döpas om, raderas, exporteras som container eller få en bild.
-- Inget nytt item kan skapas i en inbox, och inga relationer kan läggas på dess item.
+- Inget nytt item kan skapas i en inbox, och inga relationer kan läggas på dess item. Det gäller också ett barn under inboxens item. Regeln sitter i `CreateItem`, eftersom `ItemPolicy::create` på inboxens item också släpper in uppgifter och bilagor och därför inte kan neka (Tony 2026-11-25, issue 498).
+- Användarens egna agenter når inboxen när användaren slagit på dem, och bara i grupperna `schedules` och `files`, se [[ADR-0087 MCP-server för agenter]] § Tillägg 2026-11-25: agenten i inboxen. Ingen annans agent når den.
 
 Ändringen ligger i åtkomstlagret och prövas därefter.
 
