@@ -252,6 +252,19 @@ it('menyn ritas inte för en inboxuppgift', function () {
         ->and($villkor)->toContain('isDone');
 });
 
+/*
+ * Klart när: menyknappen står vid radens högerkant även när raden bryts.
+ * Raden är `flex-wrap`; utan `ml-auto` hamnar `<details>` längst till vänster
+ * på en egen rad och den `right-0`-förankrade panelen växer ut ur skärmen.
+ */
+it('radmenyns details bär ml-auto', function () {
+    $vy = File::get(resource_path('js/components/TodoRow.vue'));
+
+    preg_match('/<details\b[^>]*class="([^"]*)"/s', $vy, $träff);
+    expect($träff)->not->toBeEmpty('radmenyn (details) saknas i TodoRow.vue');
+    expect(explode(' ', $träff[1]))->toContain('ml-auto');
+});
+
 // --- Beslut 3: flytten -----------------------------------------------------
 
 /*

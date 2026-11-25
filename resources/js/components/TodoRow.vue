@@ -740,7 +740,7 @@ function toggleProgress() {
              avbockad rad. Servern prövar samma grind på nytt. -->
         <details
             v-if="movable && entry.can.move && ! entry.in_inbox && ! isDone"
-            class="relative shrink-0"
+            class="relative ml-auto shrink-0"
         >
             <summary
                 :aria-label="t('todo.row_menu')"
