@@ -163,14 +163,19 @@ Relationer mellan items: manualen hör till regulatorn, garderoben innehåller f
 | id | | |
 | from_item_id, to_item_id | FK | |
 | relation | VARCHAR(20) | `parent` \| `child` \| `sibling` |
+| ulid | CHAR(26) UNIQUE | |
+| deleted_at | TIMESTAMP NULL | Papperskorgen |
+| agent_id, agent_deletion_batch | | Agentmärkningen, som på `item` |
 
 UNIQUE `(from_item_id, to_item_id, relation)`.
+
+En borttagen relation mjukraderas och ligger i papperskorgen tills den gallras. UNIQUE gäller även mjukraderade rader, så en ny länk för samma par raderar den gamla hårt först. En flytt till ny förälder och gallringen av ett item raderar hårt. Se [[ADR-0097 Borttagna relationer i papperskorgen]].
 
 Lagra relationen **en gång** och härled motsatsen vid läsning — skriver du både `A parent B` och `B child A` får du förr eller senare två rader som säger olika saker. `sibling` är symmetrisk; normalisera till lägst id först så att samma par inte kan lagras två gånger.
 
 Cykelkontroll krävs för `parent`/`child`. Se motsvarande resonemang i [[Scheman och uppgifter]].
 
-**`parent`/`child` bär behörighet, `sibling` gör det inte.** En åtkomst som pekar på ett item når även itemets ättlingar via `parent`/`child`, transitivt och aldrig uppåt. `sibling` är symmetrisk och hade därför spridit behörighet åt båda håll utan gräns — motorn `sibling` masten skulle ha delat masten på köpet. Att lägga till ett barn utvidgar alltså en befintlig delning, vilket delningsvyn måste visa. Att **ändra** en länk kräver `write` i båda ändar, annars kan en mottagare länka in ett item hon inte får se. Se [[ADR-0028 Åtkomst på itemnivå]].
+**`parent`/`child` bär behörighet, `sibling` gör det inte.** En åtkomst som pekar på ett item når även itemets ättlingar via `parent`/`child`, transitivt och aldrig uppåt. `sibling` är symmetrisk och hade därför spridit behörighet åt båda håll utan gräns — motorn `sibling` masten skulle ha delat masten på köpet. En mjukraderad länk bär ingen behörighet. Att lägga till ett barn utvidgar alltså en befintlig delning, vilket delningsvyn måste visa. Att **ändra** en länk kräver `write` i båda ändar, annars kan en mottagare länka in ett item hon inte får se. Se [[ADR-0028 Åtkomst på itemnivå]].
 
 ## favorite
 
