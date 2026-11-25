@@ -129,6 +129,32 @@ function insamlingData(PrivacyRequest $arende): array
     return json_decode(insamlingFil($arende), true, flags: JSON_THROW_ON_ERROR);
 }
 
+/**
+ * Alla nycklar som heter `id` eller slutar på `_id`, djupt i strukturen, med
+ * sina värden. Sökningen är strukturell: en kort siffra som råkar stå i en
+ * tidpunkt ska inte fällas.
+ *
+ * @return list<array{0: string, 1: mixed}>
+ */
+function insamlingIdNycklar(mixed $varde): array
+{
+    if (! is_array($varde)) {
+        return [];
+    }
+
+    $fynd = [];
+
+    foreach ($varde as $nyckel => $barn) {
+        if (is_string($nyckel) && ($nyckel === 'id' || str_ends_with($nyckel, '_id'))) {
+            $fynd[] = [$nyckel, $barn];
+        }
+
+        $fynd = array_merge($fynd, insamlingIdNycklar($barn));
+    }
+
+    return $fynd;
+}
+
 /*
  * Klart när: privacy:collect på ett verifierat ärende ger en bilaga med en
  * nyckel per källa ovan och en lista not_included, och en händelse action
@@ -175,18 +201,19 @@ it('sammanställer en nyckel per källa, not_included och händelsen action', fu
     ]);
 
     expect($data['user']['email'])->toBe($person->email)
+        ->and($data['user'])->not->toHaveKey('id')
         ->and($data['account'][0]['ulid'])->toBe($konto->ulid)
+        ->and($data['account'][0])->not->toHaveKey('id')
         ->and($data['account'][0]['registration_ip'])->toBe('203.0.113.7')
         ->and($data['account'][0]['account_user']['role'])->toBe('owner')
-        ->and($data['not_included'])->toBe(config('privacy.collection_not_included'));
-
-    expect($data['not_included'])->toContain(
-        'user_content',
-        'sentry',
-        'mailgun',
-        'backups',
-        'server_logs',
-    );
+        ->and($data['account'][0]['account_user'])->not->toHaveKey('id')
+        ->and($data['not_included'])->toBe([
+            'user_content',
+            'sentry',
+            'mailgun',
+            'backups',
+            'server_logs',
+        ]);
 
     $handelse = PrivacyRequestEvent::query()
         ->where('kind', 'action')
@@ -326,8 +353,10 @@ it('lämnar aldrig hemligheterna eller andras innehåll i filen', function () {
     expect($data['security_log'][0])->not->toHaveKey('ip_group');
     expect($data['security_log'][0]['meta'])->toBe(['enhet' => 'Firefox']);
 
-    // Händelseloggen bär bara handling, tid och agent.
-    expect(array_keys($data['audit_log'][0]))->toBe(['action', 'created_at', 'agent_id']);
+    // Händelseloggen bär bara handling, tid och agent — agenten som `ulid`
+    // under `agent`, aldrig som löpnummer.
+    expect(array_keys($data['audit_log'][0]))->toBe(['action', 'created_at', 'agent'])
+        ->and($data['audit_log'][0]['agent'])->toBeNull();
 
     // Ändringsraderna bär tidpunkterna och den nya adressen — inget mer.
     expect($data['email_change'][0])->toHaveKey('new_email');
@@ -340,6 +369,53 @@ it('lämnar aldrig hemligheterna eller andras innehåll i filen', function () {
     expect($data['notification'][0])->not->toHaveKey('payload');
     expect($data['notification'][0]['deliveries'][0]['channel'])->toBe('in_app');
     expect($data['notification'][0]['deliveries'][0])->toHaveKey('read_at');
+});
+
+/*
+ * Klart när (fynd 4): filen lämnas ut till den registrerade, så inget
+ * löpnummer får följa med (AGENTS.md § Databaskonventioner). Raden
+ * identifieras av sin `ulid`, och en meningsfull främmande nyckel av den
+ * refererade radens `ulid` under ett namn utan `_id`. Provet söker
+ * strukturellt efter nycklarna, inte efter siffran som sträng: en kort siffra
+ * kan dyka upp av en slump.
+ */
+it('bär aldrig ett löpnummer under en id-nyckel', function () {
+    $konto = insamlingKonto();
+    $person = insamlingPerson($konto);
+    $arende = insamlingArende($person, $konto);
+
+    // Rader ur tabellerna utan egen `ulid`, så att `rows()` prövas.
+    DB::table('dismissed_tip')->insert([
+        'user_id' => $person->id,
+        'tip_key' => 'valkommen',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    DB::table('notification_preference')->insert([
+        'user_id' => $person->id,
+        'type' => 'task.due',
+        'channel' => 'email',
+        'enabled' => true,
+        'digest' => false,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    [$utgång] = insamlingKor($arende);
+
+    expect($utgång)->toBe(Command::SUCCESS);
+
+    $idNycklar = insamlingIdNycklar(insamlingData($arende));
+
+    // Ingen rad bär sitt eget `id` — raden identifieras av sin `ulid`.
+    expect(array_filter($idNycklar, fn (array $fynd): bool => $fynd[0] === 'id'))->toBeEmpty();
+
+    // Och personens löpnummer står aldrig under en nyckel som heter `id`
+    // eller slutar på `_id`.
+    foreach ($idNycklar as [$nyckel, $varde]) {
+        expect($varde)->not->toBe($person->id, "Nyckeln {$nyckel} bär personens id.");
+    }
 });
 
 /*

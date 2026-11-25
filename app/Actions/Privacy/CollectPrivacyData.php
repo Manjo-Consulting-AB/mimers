@@ -72,6 +72,61 @@ class CollectPrivacyData
         'remember_token',
     ];
 
+    /**
+     * De system som återstår för handläggaren att hämta för hand. Listan är
+     * uttrycklig och valideras mot configen, så att ett nytt system i
+     * `privacy.systems` aldrig tyst hamnar här och `database` — det som
+     * sammanställningen tar med — aldrig kan göra det (ADR-0095 § 9 och § 12).
+     */
+    private const NOT_INCLUDED = [
+        'user_content',
+        'sentry',
+        'mailgun',
+        'backups',
+        'server_logs',
+    ];
+
+    /**
+     * Löpnummer som aldrig följer med i filen (AGENTS.md
+     * § Databaskonventioner). Den egna raden identifieras av sin `ulid` där
+     * tabellen har en; ett främmande `*_id` som är meningsfullt för personen
+     * ersätts i stället, se REFERENCE_COLUMNS.
+     */
+    private const SERIAL_COLUMNS = [
+        'dismissed_tip' => ['id', 'user_id'],
+        'overview_panel' => ['id', 'user_id'],
+        'recent_visit' => ['id', 'user_id'],
+        'attachment_open' => ['id', 'user_id'],
+        'agent' => ['id', 'user_id'],
+        'agent_account_grant' => ['id'],
+        'agent_container_grant' => ['id'],
+        'notification_preference' => ['id', 'user_id'],
+        'help_feedback' => ['id', 'user_id'],
+    ];
+
+    /**
+     * Främmande nycklar som ersätts av den refererade radens `ulid` under ett
+     * namn utan `_id`: [kolumn => [tabell, nyckelnamn]].
+     */
+    private const REFERENCE_COLUMNS = [
+        'recent_visit' => ['item_id' => ['item', 'item']],
+        'attachment_open' => ['attachment_id' => ['attachment', 'attachment']],
+        'agent' => ['account_id' => ['account', 'account']],
+        'agent_account_grant' => ['agent_id' => ['agent', 'agent']],
+        'agent_container_grant' => [
+            'agent_id' => ['agent', 'agent'],
+            'container_id' => ['container', 'container'],
+        ],
+    ];
+
+    /**
+     * Tabeller som har `ulid`, cachade: frågan ställs en gång per tabell och
+     * en referens till en tabell utan `ulid` utelämnas helt.
+     *
+     * @var array<string, bool>
+     */
+    private static array $ulidTables = [];
+
     public function __construct(
         private readonly AttachPrivacyAttachment $attach,
         private readonly RecordPrivacyAction $recordAction,
@@ -233,14 +288,42 @@ class CollectPrivacyData
             'notification' => $this->notifications($userId),
             'notification_preference' => $this->rows('notification_preference', 'user_id', $userId),
             'help_feedback' => $this->rows('help_feedback', 'user_id', $userId),
-            'not_included' => array_values((array) config('privacy.collection_not_included')),
+            'not_included' => $this->notIncluded(),
         ];
     }
 
     /**
-     * Personens rad med alla kolumner utom hemligheterna. Kolumnlistan läses
-     * ur schemat, så en ny kolumn följer med utan en ändring här — och en
-     * kolumn som slutar på `_hash` eller `_secret` stannar alltid kvar.
+     * Listan `not_included`: exakt de fem systemen, oavsett vad configen
+     * innehåller utöver dem.
+     *
+     * @return list<string>
+     */
+    private function notIncluded(): array
+    {
+        /** @var list<string> $konfigurerade */
+        $konfigurerade = array_values((array) config('privacy.collection_not_included'));
+
+        foreach (self::NOT_INCLUDED as $system) {
+            if (! in_array($system, $konfigurerade, true)) {
+                throw new InvalidArgumentException(
+                    "Systemet {$system} saknas i privacy.collection_not_included."
+                );
+            }
+        }
+
+        return self::NOT_INCLUDED;
+    }
+
+    /**
+     * Personens rad med alla kolumner utom hemligheterna och löpnumren.
+     * Kolumnlistan läses ur schemat, så en ny kolumn följer med utan en
+     * ändring här — och en kolumn som slutar på `_hash` eller `_secret`
+     * stannar alltid kvar.
+     *
+     * `id` tas bort: raden identifieras av sin `ulid` (AGENTS.md
+     * § Databaskonventioner). `avatar_attachment_id` och
+     * `hero_attachment_id` är löpnummer till personens egen bilaga och
+     * ersätts av bilagans `ulid`.
      *
      * @return array<string, mixed>|null
      */
@@ -258,7 +341,19 @@ class CollectPrivacyData
                 continue;
             }
 
-            $ut[$column] = $data[$column] ?? null;
+            $varde = $data[$column] ?? null;
+
+            if ($column === 'avatar_attachment_id' || $column === 'hero_attachment_id') {
+                $ut[substr($column, 0, -3)] = $this->referencedUlid('attachment', $varde);
+
+                continue;
+            }
+
+            if ($column === 'id' || str_ends_with($column, '_id')) {
+                continue;
+            }
+
+            $ut[$column] = $varde;
         }
 
         return $ut;
@@ -306,6 +401,10 @@ class CollectPrivacyData
                 }
 
                 $row = (array) $account;
+
+                // Kontot identifieras av sin `ulid`; löpnumret följer aldrig
+                // med (AGENTS.md § Databaskonventioner).
+                unset($row['id']);
 
                 if (($row['registration_ip'] ?? null) === null) {
                     unset($row['registration_ip']);
@@ -357,8 +456,14 @@ class CollectPrivacyData
             ->get()
             ->map(function (object $row): array {
                 $data = (array) $row;
+                $accountId = $data['account_id'] ?? null;
 
-                unset($data['ip_group']);
+                // Löpnumren stannar hos oss; kontot identifieras av sin
+                // `ulid` (AGENTS.md § Databaskonventioner). Tabellen har
+                // ingen egen `ulid`.
+                unset($data['id'], $data['account_id'], $data['user_id'], $data['ip_group']);
+
+                $data['account'] = $this->referencedUlid('account', $accountId);
 
                 if (isset($data['meta']) && is_string($data['meta'])) {
                     $decoded = json_decode($data['meta'], true);
@@ -377,7 +482,8 @@ class CollectPrivacyData
     /**
      * Händelseloggens rader med personen som handlande. Bara handlingen,
      * tiden och agenten: `meta` och subjektets identifierare kan peka på
-     * andra personers innehåll (art. 15.4).
+     * andra personers innehåll (art. 15.4). Agentens löpnummer ersätts av
+     * agentens `ulid` under `agent` (AGENTS.md § Databaskonventioner).
      *
      * @return list<array<string, mixed>>
      */
@@ -387,7 +493,11 @@ class CollectPrivacyData
             ->where('user_id', $userId)
             ->orderBy('id')
             ->get(['action', 'created_at', 'agent_id'])
-            ->map(fn (object $row): array => (array) $row)
+            ->map(fn (object $row): array => [
+                'action' => $row->action,
+                'created_at' => $row->created_at,
+                'agent' => $this->referencedUlid('agent', $row->agent_id),
+            ])
             ->values()
             ->all();
     }
@@ -452,7 +562,8 @@ class CollectPrivacyData
     }
 
     /**
-     * En tabell vars rader är personens egna, med alla kolumner.
+     * En tabell vars rader är personens egna, med alla kolumner utom
+     * löpnumren.
      *
      * @return list<array<string, mixed>>
      */
@@ -462,9 +573,69 @@ class CollectPrivacyData
             ->where($column, $userId)
             ->orderBy('id')
             ->get()
-            ->map(fn (object $row): array => (array) $row)
+            ->map(fn (object $row): array => $this->personRow($table, $row))
             ->values()
             ->all();
+    }
+
+    /**
+     * En rad ur en tabell vars rader är personens egna: löpnummer bort, och
+     * meningsfulla främmande nycklar kvar som den refererade radens `ulid`
+     * under ett namn utan `_id` (AGENTS.md § Databaskonventioner).
+     *
+     * @return array<string, mixed>
+     */
+    private function personRow(string $table, object $row): array
+    {
+        $data = (array) $row;
+        $referenser = self::REFERENCE_COLUMNS[$table] ?? [];
+        $löpnummer = self::SERIAL_COLUMNS[$table] ?? ['id', 'user_id'];
+        $ut = [];
+
+        foreach ($data as $kolumn => $varde) {
+            if (isset($referenser[$kolumn])) {
+                [$refereradTabell, $namn] = $referenser[$kolumn];
+
+                // Saknar den refererade tabellen `ulid` utelämnas
+                // referensen helt.
+                if ($this->hasUlid($refereradTabell)) {
+                    $ut[$namn] = $this->referencedUlid($refereradTabell, $varde);
+                }
+
+                continue;
+            }
+
+            if (in_array($kolumn, $löpnummer, true)) {
+                continue;
+            }
+
+            $ut[$kolumn] = $varde;
+        }
+
+        return $ut;
+    }
+
+    /**
+     * Den refererade radens `ulid`, eller null när nyckeln är null eller
+     * raden inte finns.
+     */
+    private function referencedUlid(string $table, mixed $id): ?string
+    {
+        if ($id === null) {
+            return null;
+        }
+
+        $ulid = DB::table($table)->where('id', $id)->value('ulid');
+
+        return is_string($ulid) ? $ulid : null;
+    }
+
+    /**
+     * Har tabellen en `ulid`? Frågan cachas: den ställs en gång per tabell.
+     */
+    private function hasUlid(string $table): bool
+    {
+        return self::$ulidTables[$table] ??= Schema::hasColumn($table, 'ulid');
     }
 
     /**
@@ -484,7 +655,7 @@ class CollectPrivacyData
             ->whereIn('agent_id', $agentIds)
             ->orderBy('id')
             ->get()
-            ->map(fn (object $row): array => (array) $row)
+            ->map(fn (object $row): array => $this->personRow($table, $row))
             ->values()
             ->all();
     }
