@@ -3,6 +3,8 @@
 namespace App\Console\Commands\Privacy;
 
 use App\Actions\Privacy\CollectPrivacyData;
+use App\Actions\Privacy\PrivacyCollectionNotRecordedException;
+use App\Models\Account;
 use App\Models\LegalHold;
 use App\Models\PrivacyRequest;
 use Illuminate\Console\Command;
@@ -60,6 +62,13 @@ class PrivacyCollect extends Command
 
         try {
             $attachment = $collect->handle($request, $by);
+        } catch (PrivacyCollectionNotRecordedException $e) {
+            // Bilagan skrevs men exporten kunde inte antecknas. Ulid:et står
+            // i meddelandet, så att handläggaren kan följa upp ärendet för
+            // hand i stället för att kommandot kraschar.
+            $this->error($e->getMessage());
+
+            return self::FAILURE;
         } catch (InvalidArgumentException $e) {
             // Personen saknas, identiteten är inte prövad eller innehållet
             // kunde inte kodas. Ingenting har skrivits när actionen kastar.
@@ -70,7 +79,7 @@ class PrivacyCollect extends Command
 
         // Varningen står på skärmen och aldrig i filen. Raden säger att
         // spärren finns, inte vilket ärende eller vilket skäl den gäller.
-        if ($request->account !== null && LegalHold::covers($request->account)) {
+        if ($this->coversLegalHold($request, $collect)) {
             $this->line('Legal hold active');
         }
 
@@ -80,6 +89,37 @@ class PrivacyCollect extends Command
         $this->line("SHA-256: {$attachment->sha256}");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Gäller en rättslig spärr för något av de konton sammanställningen rör?
+     *
+     * Ärendets `account_id` är valfritt och saknar främmande nyckel, och
+     * personen kan vara medlem i flera konton. Frågan ställs därför på
+     * ärendets konto och på varje konto ur `account_user`, inte bara på
+     * ärendets. En raderad person har inga medlemskap kvar, och då gäller
+     * bara ärendets konto ([[ADR-0043 Tre loggar]] § Den rättsliga spärren).
+     */
+    private function coversLegalHold(PrivacyRequest $request, CollectPrivacyData $collect): bool
+    {
+        $userId = $request->user_id;
+
+        $accountIds = $collect->accountIds($userId === null ? null : (int) $userId);
+
+        if ($request->account_id !== null) {
+            $accountIds[] = (int) $request->account_id;
+        }
+
+        $accountIds = array_values(array_unique($accountIds));
+
+        if ($accountIds === []) {
+            return false;
+        }
+
+        return Account::query()
+            ->whereIn('id', $accountIds)
+            ->get()
+            ->contains(fn (Account $account): bool => LegalHold::covers($account));
     }
 
     /**

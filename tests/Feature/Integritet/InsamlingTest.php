@@ -452,6 +452,72 @@ it('nämner aldrig den rättsliga spärren i filen men varnar på skärmen', fun
 });
 
 /*
+ * Klart när: en gällande rättslig spärr på personens konto varnar även när
+ * ärendet saknar `account_id`. `privacy_request.account_id` är valfritt, och
+ * sammanställningen hämtar personens konton via `account_user`.
+ */
+it('varnar när spärren gäller personens konto och ärendet saknar konto', function () {
+    $konto = insamlingKonto();
+    $person = insamlingPerson($konto);
+    $arende = insamlingArende($person);
+
+    $ärendenummer = 'DSA-2026-0043';
+    $anledning = 'Utredning utan koppling till ärendets konto.';
+
+    LegalHold::factory()->create([
+        'account_id' => $konto->id,
+        'case_number' => $ärendenummer,
+        'reason' => $anledning,
+    ]);
+
+    [$utgång, $utdata] = insamlingKor($arende);
+
+    expect($utgång)->toBe(Command::SUCCESS)
+        ->and($utdata)->toContain('Legal hold active');
+
+    $fil = insamlingFil($arende);
+
+    foreach (['legal_hold', $ärendenummer, $anledning] as $förbjudet) {
+        expect($fil)->not->toContain($förbjudet);
+    }
+});
+
+/*
+ * Klart när: en gällande rättslig spärr på ett annat av personens konton än
+ * ärendets varnar ändå. Ärendets `account_id` pekar på ett konto utan spärr,
+ * men personen är medlem i det spärrade kontot.
+ */
+it('varnar när spärren gäller ett annat av personens konton än ärendets', function () {
+    $sparratKonto = insamlingKonto();
+    $person = insamlingPerson($sparratKonto);
+    $annatKonto = insamlingKonto();
+
+    $annatKonto->users()->attach($person, ['role' => 'member']);
+
+    $arende = insamlingArende($person, $annatKonto);
+
+    $ärendenummer = 'DSA-2026-0044';
+    $anledning = 'Utredning som gäller personens andra konto.';
+
+    LegalHold::factory()->create([
+        'account_id' => $sparratKonto->id,
+        'case_number' => $ärendenummer,
+        'reason' => $anledning,
+    ]);
+
+    [$utgång, $utdata] = insamlingKor($arende);
+
+    expect($utgång)->toBe(Command::SUCCESS)
+        ->and($utdata)->toContain('Legal hold active');
+
+    $fil = insamlingFil($arende);
+
+    foreach (['legal_hold', $ärendenummer, $anledning] as $förbjudet) {
+        expect($fil)->not->toContain($förbjudet);
+    }
+});
+
+/*
  * Klart när: utan koppling till en person, och utan en verifierad identitet,
  * ger kommandot exit 1 och ingen bilaga.
  */

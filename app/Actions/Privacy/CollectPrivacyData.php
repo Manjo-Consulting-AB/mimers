@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use JsonException;
+use Throwable;
 
 /**
  * Sammanställer de uppgifter i databasen som Mimers är
@@ -84,6 +85,10 @@ class CollectPrivacyData
      *                                  sammanställningen inte kan kodas som
      *                                  JSON; ingen bilaga och ingen händelse
      *                                  finns då.
+     * @throws PrivacyCollectionNotRecordedException när bilagan skrevs men
+     *                                               händelsen `action` inte
+     *                                               kunde antecknas; filen
+     *                                               finns då kvar.
      */
     public function handle(PrivacyRequest $request, string $actor): PrivacyRequestAttachment
     {
@@ -118,7 +123,9 @@ class CollectPrivacyData
 
         // Filen läggs på ärendet först. Händelsen `action` skrivs efteråt,
         // så att den aldrig påstår en export som inte finns: faller
-        // attach-steget finns varken fil eller händelse.
+        // attach-steget finns varken fil eller händelse. Faller i stället
+        // händelsen finns bilagan kvar, och undantaget bär dess ulid så att
+        // handläggaren kan följa upp ärendet för hand.
         $attachment = $this->attach->handleContents(
             request: $request,
             originalName: 'insamling-'.$request->reference.'.json',
@@ -129,18 +136,47 @@ class CollectPrivacyData
         /** @var list<string> $categories */
         $categories = array_values((array) config('privacy.collection_categories'));
 
-        $this->recordAction->handle(
-            request: $request,
-            system: self::SYSTEM,
-            operation: self::OPERATION,
-            categories: $categories,
-            retentionReason: null,
-            feature: null,
-            note: null,
-            actor: $actor,
-        );
+        try {
+            $this->recordAction->handle(
+                request: $request,
+                system: self::SYSTEM,
+                operation: self::OPERATION,
+                categories: $categories,
+                retentionReason: null,
+                feature: null,
+                note: null,
+                actor: $actor,
+            );
+        } catch (Throwable $e) {
+            throw new PrivacyCollectionNotRecordedException($attachment, $e);
+        }
 
         return $attachment;
+    }
+
+    /**
+     * Personens konto-id:n från medlemskapen i `account_user`.
+     *
+     * Kommandot ställer spärrfrågan på varje konto som faktiskt räknas upp:
+     * ärendets `account_id` är valfritt och kan peka på ett annat konto än
+     * det spärren gäller. En raderad person har inga medlemskap kvar, och då
+     * är listan tom ([[ADR-0043 Tre loggar]] § Den rättsliga spärren).
+     *
+     * @return list<int>
+     */
+    public function accountIds(?int $userId): array
+    {
+        if ($userId === null) {
+            return [];
+        }
+
+        return DB::table('account_user')
+            ->where('user_id', $userId)
+            ->orderBy('account_id')
+            ->get(['account_id'])
+            ->map(fn (object $row): int => (int) $row->account_id)
+            ->values()
+            ->all();
     }
 
     /**
