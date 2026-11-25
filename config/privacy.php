@@ -6,9 +6,9 @@
  *
  * Listorna här är de värden kolumnernas CHECK-villkor tillåter, samlade på
  * ett ställe så att koden aldrig stavar en sträng och en ny typ blir en
- * ändring i config, inte i varje kommando. Statusarna, verifieringens ämnen,
- * metoder och resultat finns här; senare issuers listor — åtgärder,
- * bedömningar — läggs hit när de byggs.
+ * ändring i config, inte i varje kommando. Här finns statusarna,
+ * verifieringens ämnen, metoder och resultat, och det som bedömningen,
+ * åtgärderna och kommunikationen antecknar (ADR-0095 § 7).
  *
  * `deadline_months` är fristen i art. 12.3: en kalendermånad från
  * mottagandet, räknad med addMonthsNoOverflow() (ADR-0095 § 5). Den är inte
@@ -160,5 +160,203 @@ return [
     'extension_months' => [1, 2],
 
     'max_extension_months' => 2,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rollen
+    |--------------------------------------------------------------------------
+    |
+    | Mimers roll för det begäran gäller. Bedömningen sätter den på ärendet,
+    | och listan prövas av `privacy:assess` (ADR-0095 § 7). `undetermined` är
+    | förvalet på ett nytt ärende och kan inte väljas som bedömning. Rollen
+    | avgör om raden i [[Registerförteckning]] är vår eller kundens.
+    |
+    */
+
+    'roles' => [
+        'controller',
+        'processor',
+        'both',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Systemen
+    |--------------------------------------------------------------------------
+    |
+    | Var uppgifterna bor och var en åtgärd vidtogs. Kategorierna nedan är
+    | raderna i [[Registerförteckning]]; den här listan säger vilket system
+    | raden finns i.
+    |
+    */
+
+    'systems' => [
+        'database',
+        'user_content',
+        'sentry',
+        'mailgun',
+        'backups',
+        'server_logs',
+        'other',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Datakategorierna
+    |--------------------------------------------------------------------------
+    |
+    | Kategorierna är raderna i [[Registerförteckning]], så att en sökning på
+    | ärendena går att lita på: samma ord om samma uppgift, oavsett vilket
+    | system åtgärden gällde. `other` finns för det som ännu inte fått en rad.
+    |
+    */
+
+    'data_categories' => [
+        'profile',
+        'account',
+        'sessions',
+        'security_log',
+        'audit_log',
+        'agents',
+        'help_feedback',
+        'item_versions',
+        'user_content',
+        'error_reports',
+        'email_delivery',
+        'other',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Operationerna
+    |--------------------------------------------------------------------------
+    |
+    | Vad som gjordes med uppgifterna, och därmed vilken rad i
+    | [[Registerförteckning]] det gällde. `referred_to_controller` används när
+    | Mimers är biträde och begäran gäller kundens innehåll (ADR-0095 § 7),
+    | och `self_service` när den registrerade hänvisats till eller själv
+    | använt en funktion — aldrig som ett fullgörande (ADR-0095 § 9).
+    |
+    */
+
+    'operations' => [
+        'searched',
+        'exported',
+        'corrected',
+        'erased',
+        'retained',
+        'referred_to_controller',
+        'self_service',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Skälen att behålla uppgifter
+    |--------------------------------------------------------------------------
+    |
+    | `retained` kräver ett skäl ur listan (ADR-0095 § 7), och skälet hör till
+    | raden i [[Registerförteckning]] som behålls. `legal_hold` godtas bara när
+    | ärendets konto omfattas av en gällande spärr, se
+    | [[ADR-0043 Tre loggar]] § Den rättsliga spärren.
+    |
+    */
+
+    'retention_reasons' => [
+        'legal_obligation',
+        'legal_claims',
+        'legal_hold',
+        'other',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | De rättsliga grunderna
+    |--------------------------------------------------------------------------
+    |
+    | Art. 6.1. Vilken grund bedömningen vilar på, och därmed vilken rad i
+    | [[Registerförteckning]] som gäller för behandlingen.
+    |
+    */
+
+    'legal_bases' => [
+        'contract',
+        'legitimate_interest',
+        'legal_obligation',
+        'consent',
+        'not_applicable',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Besluten
+    |--------------------------------------------------------------------------
+    |
+    | Bedömningens utfall för de rader i [[Registerförteckning]] som begäran
+    | gäller. Ett ärende kan ha flera bedömningar, en per datamängd eller
+    | behandling, så att delvis bifall går att dokumentera (ADR-0095 § 7).
+    | `partial` är ett delvis bifall, inte ett avslag.
+    |
+    */
+
+    'decisions' => [
+        'grant',
+        'partial',
+        'refuse',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Kommunikationens slag
+    |--------------------------------------------------------------------------
+    |
+    | Vad som skickades till eller togs emot från den registrerade, som en del
+    | av hanteringen av raden i [[Registerförteckning]]. Slaget kompletterar
+    | riktningen och kanalen; fritexten står i `--note`.
+    |
+    */
+
+    'communication_kinds' => [
+        'acknowledgement',
+        'clarification_request',
+        'extension_notice',
+        'final_response',
+        'other',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Kanalerna
+    |--------------------------------------------------------------------------
+    |
+    | Var kommunikationen gick, om raden i [[Registerförteckning]] eller om
+    | begäran själv. Kanalen säger ingenting om kategorierna ovan; den hör
+    | bara till `privacy:communicate`.
+    |
+    */
+
+    'channels' => [
+        'email',
+        'post',
+        'other',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Självbetjäningens funktioner
+    |--------------------------------------------------------------------------
+    |
+    | Vilken funktion den registrerade hänvisats till eller själv använt, för
+    | de rader i [[Registerförteckning]] funktionen rör. Det är en anteckning
+    | om ett svar, inte ett fullgörande: containerexporten är inte ett
+    | fullständigt svar på art. 15 eller 20 (ADR-0095 § 9).
+    |
+    */
+
+    'self_service_features' => [
+        'profile',
+        'user_deletion',
+        'account_deletion',
+        'container_export',
+    ],
 
 ];

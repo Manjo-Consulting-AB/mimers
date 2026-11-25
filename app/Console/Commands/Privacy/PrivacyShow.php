@@ -3,6 +3,7 @@
 namespace App\Console\Commands\Privacy;
 
 use App\Actions\Privacy\ShowPrivacyRequest;
+use App\Models\LegalHold;
 use App\Models\PrivacyRequest;
 use Illuminate\Console\Command;
 
@@ -14,6 +15,12 @@ use Illuminate\Console\Command;
  * `--by`, precis som `privacy:open` bär det på `created`. Kommandot
  * schemaläggs aldrig — åtkomsten till ärendena är åtkomsten till servern
  * (ADR-0095 § 1).
+ *
+ * Två rader i utskriften är varningar till handläggaren och syns aldrig för
+ * den registrerade: *Legal hold active* överst när ärendets konto omfattas av
+ * en gällande spärr ([[ADR-0043 Tre loggar]] § Den rättsliga spärren), och
+ * *Self-service is not a complete response* under en `self_service`-händelse
+ * (ADR-0095 § 9).
  *
  * Logiken bor i App\Actions\Privacy\ShowPrivacyRequest, testad direkt.
  */
@@ -50,6 +57,14 @@ class PrivacyShow extends Command
         }
 
         $resultat = $show->handle($request, $by);
+
+        // Den rättsliga spärren syns för handläggaren och aldrig för den
+        // registrerade (ADR-0043 § Den rättsliga spärren). Raden står överst:
+        // den som läser ärendet ska veta att gallringen står still innan hen
+        // tolkar resten.
+        if ($request->account !== null && LegalHold::covers($request->account)) {
+            $this->line('Legal hold active');
+        }
 
         $this->line("Referens: {$request->reference}");
         $this->line("Typ: {$request->type}");
@@ -89,6 +104,16 @@ class PrivacyShow extends Command
 
             if ($event->body !== null) {
                 $this->line('    '.$event->body);
+            }
+
+            // Självbetjäningen är inte ett fullgörande (ADR-0095 § 9), och
+            // påminnelsen står under själva händelsen så att den som läser
+            // historiken inte tar en hänvisning för ett svar.
+            if (
+                $event->kind === 'action'
+                && ($event->data['operation'] ?? null) === 'self_service'
+            ) {
+                $this->line('    Self-service is not a complete response');
             }
         }
 
