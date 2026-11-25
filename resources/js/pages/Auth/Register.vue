@@ -1,16 +1,19 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import AppLayout from '../../layouts/AppLayout.vue';
+import AuthSplitLayout from '../../components/AuthSplitLayout.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from './useErrorFocus.js';
 
-defineOptions({ layout: AppLayout });
-
 /*
  * Registreringen, se issue 53a § Beslut 8. Samma mönster som Auth/Login.vue —
  * läs den filens kommentar för de tre stegen; den upprepas inte här.
+ *
+ * **Samma skal som inloggningen** (issue 1671): sidan ritas utan AppLayout i
+ * `components/AuthSplitLayout.vue` — bilden till vänster, kortet till höger —
+ * och fälten bär samma klasser som i Login.vue. Fälten, deras `name` och
+ * `autocomplete` och beteendet är oförändrade.
  *
  * Fälten är `name`, `email`, `voucher_code` och `password` — och ingen
  * `password_confirmation`. RegisterRequest validerar dem och har inget
@@ -90,83 +93,85 @@ function submit() {
 <template>
     <Head :title="t('auth.register.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('auth.register.heading') }}</h1>
+    <AuthSplitLayout>
+        <h1 class="mt-4 text-center text-2xl font-semibold">{{ t('auth.register.heading') }}</h1>
 
-    <form class="mt-6 flex max-w-sm flex-col gap-4" @submit.prevent="submit">
-        <FormField
-            v-slot="{ describedBy }"
-            :label="voucherLabel"
-            id="voucher_code"
-            :error="form.errors.voucher_code"
-        >
-            <input
+        <form class="mt-6 flex flex-col gap-4" @submit.prevent="submit">
+            <FormField
+                v-slot="{ describedBy }"
+                :label="voucherLabel"
                 id="voucher_code"
-                v-model="form.voucher_code"
-                :aria-describedby="describedBy"
-                type="text"
-                name="voucher_code"
-                autocomplete="off"
-                :required="voucherRequired"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
+                :error="form.errors.voucher_code"
             >
-            <p v-if="voucherHelp" class="text-sm text-slate-600">{{ voucherHelp }}</p>
-        </FormField>
+                <input
+                    id="voucher_code"
+                    v-model="form.voucher_code"
+                    :aria-describedby="describedBy"
+                    type="text"
+                    name="voucher_code"
+                    autocomplete="off"
+                    :required="voucherRequired"
+                    class="w-full rounded-control border border-border px-3 py-2"
+                >
+                <p v-if="voucherHelp" class="text-body text-ink-muted">{{ voucherHelp }}</p>
+            </FormField>
 
-        <FormField v-slot="{ describedBy }" :label="t('form.name')" id="name" :error="form.errors.name">
-            <input
-                id="name"
-                v-model="form.name"
-                :aria-describedby="describedBy"
-                type="text"
-                name="name"
-                autocomplete="name"
-                required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
-        </FormField>
+            <FormField v-slot="{ describedBy }" :label="t('form.name')" id="name" :error="form.errors.name">
+                <input
+                    id="name"
+                    v-model="form.name"
+                    :aria-describedby="describedBy"
+                    type="text"
+                    name="name"
+                    autocomplete="name"
+                    required
+                    class="w-full rounded-control border border-border px-3 py-2"
+                >
+            </FormField>
 
-        <FormField v-slot="{ describedBy }" :label="t('form.email')" id="email" :error="form.errors.email">
-            <input
-                id="email"
-                v-model="form.email"
-                :aria-describedby="describedBy"
-                type="email"
-                name="email"
-                autocomplete="email"
-                required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
-        </FormField>
+            <FormField v-slot="{ describedBy }" :label="t('form.email')" id="email" :error="form.errors.email">
+                <input
+                    id="email"
+                    v-model="form.email"
+                    :aria-describedby="describedBy"
+                    type="email"
+                    name="email"
+                    autocomplete="email"
+                    required
+                    class="w-full rounded-control border border-border px-3 py-2"
+                >
+            </FormField>
 
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('form.password')"
-            id="password"
-            :error="form.errors.password"
-        >
-            <input
+            <FormField
+                v-slot="{ describedBy }"
+                :label="t('form.password')"
                 id="password"
-                v-model="form.password"
-                :aria-describedby="describedBy"
-                type="password"
-                name="password"
-                autocomplete="new-password"
-                required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
+                :error="form.errors.password"
             >
-            <p class="text-sm text-slate-600">{{ t('auth.register.password_hint') }}</p>
-        </FormField>
+                <input
+                    id="password"
+                    v-model="form.password"
+                    :aria-describedby="describedBy"
+                    type="password"
+                    name="password"
+                    autocomplete="new-password"
+                    required
+                    class="w-full rounded-control border border-border px-3 py-2"
+                >
+                <p class="text-body text-ink-muted">{{ t('auth.register.password_hint') }}</p>
+            </FormField>
 
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
-            {{ form.processing ? t('common.pending.default') : t('auth.register.submit') }}
-        </button>
-    </form>
+            <button
+                type="submit"
+                :disabled="form.processing"
+                class="inline-flex min-h-11 w-full items-center justify-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+            >
+                {{ form.processing ? t('common.pending.default') : t('auth.register.submit') }}
+            </button>
+        </form>
 
-    <p class="mt-6 max-w-sm text-sm">
-        <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.login') }}</Link>
-    </p>
+        <p class="mt-6 text-center text-body text-ink-muted">
+            <Link href="/login" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">{{ t('auth.register.login') }}</Link>
+        </p>
+    </AuthSplitLayout>
 </template>

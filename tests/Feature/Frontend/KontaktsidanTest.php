@@ -372,9 +372,11 @@ it('prefixar ämnet med miljön utanför produktion', function () {
 
 it('lägger Contact-länken efter Subprocessors i sidfoten och på inloggningssidan', function () {
     $layout = kontaktKalla('js/layouts/AppLayout.vue');
-    $login = kontaktKalla('js/pages/Auth/Login.vue');
+    // Länkarna under kortet bor sedan issue 1671 i skalet som /login och
+    // /register delar.
+    $login = kontaktKalla('js/components/AuthSplitLayout.vue');
 
-    foreach (['js/layouts/AppLayout.vue' => $layout, 'js/pages/Auth/Login.vue' => $login] as $fil => $kod) {
+    foreach (['js/layouts/AppLayout.vue' => $layout, 'js/components/AuthSplitLayout.vue' => $login] as $fil => $kod) {
         expect($kod)->toContain('href="/contact"')
             ->and($kod)->toContain("t('auth.landing.links.contact')");
 

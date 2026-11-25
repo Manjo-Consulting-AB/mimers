@@ -40,7 +40,9 @@ use Illuminate\Support\Facades\File;
  */
 
 /**
- * De tjugo sidorna i rutan, relativa `resources/js/pages/`.
+ * De nitton sidorna i rutan, relativa `resources/js/pages/`. `Auth/Register.vue`
+ * stod här som den tjugonde tills issue 1671: sidan ritas nu i
+ * `components/AuthSplitLayout.vue`, utan AppLayout, precis som `Auth/Login.vue`.
  *
  * @return list<string>
  */
@@ -49,7 +51,6 @@ function bestaendeSkalSidor(): array
     return [
         'Auth/MagicLink.vue',
         'Auth/MagicLinkCode.vue',
-        'Auth/Register.vue',
         'Auth/VerifyEmail.vue',
         'Containers/Create.vue',
         'Containers/Index.vue',
@@ -122,16 +123,16 @@ function bestaendeSkalInstallningssidor(): array
 }
 
 /*
- * Klart när: `de tjugo sidorna deklarerar AppLayout` — var och en av sidorna i
+ * Klart när: `de nitton sidorna deklarerar AppLayout` — var och en av sidorna i
  * rutan innehåller `defineOptions(`, `layout:` och `AppLayout` (Beslut 1).
  *
  * Listan räknas och inte bara läsas: en sida som tappas ur rutan ska falla
- * här, och antalet är issuens eget — tjugo.
+ * här, och antalet är nitton sedan issue 1671 (issuens tjugo, minus Register).
  */
-it('de tjugo sidorna deklarerar AppLayout', function () {
+it('de nitton sidorna deklarerar AppLayout', function () {
     $sidor = bestaendeSkalSidor();
 
-    expect($sidor)->toHaveCount(20);
+    expect($sidor)->toHaveCount(19);
 
     foreach ($sidor as $sida) {
         expect(bestaendeSkalKod("js/pages/{$sida}"))
@@ -142,14 +143,14 @@ it('de tjugo sidorna deklarerar AppLayout', function () {
 });
 
 /*
- * Klart när: `ingen av de tjugo sidorna bär AppLayout i mallen` (Beslut 1).
+ * Klart när: `ingen av de nitton sidorna bär AppLayout i mallen` (Beslut 1).
  *
  * Regeln läser den KOMMENTARRENSADE koden: en sida får nämna `AppLayout` i
  * importen och i `defineOptions`, men taggen `<AppLayout>` ska vara borta ur
  * mallen. En mall med flera rotnoder är giltig i Vue 3, och `<Head>` står
  * kvar som första nod.
  */
-it('ingen av de tjugo sidorna bär AppLayout i mallen', function () {
+it('ingen av de nitton sidorna bär AppLayout i mallen', function () {
     foreach (bestaendeSkalSidor() as $sida) {
         $kod = bestaendeSkalKod("js/pages/{$sida}");
 
@@ -159,11 +160,25 @@ it('ingen av de tjugo sidorna bär AppLayout i mallen', function () {
 });
 
 /*
+ * Klart när: `Register.vue` ritas i det delade gästskalet och inte i AppLayout
+ * (issue 1671). Registreringen hör inte till de nitton sidorna: den delar
+ * tvåkolumnsskalet med inloggningen.
+ */
+it('Register.vue ritas i det delade gästskalet och inte i AppLayout', function () {
+    expect(bestaendeSkalSidor())->not->toContain('Auth/Register.vue');
+
+    $kod = bestaendeSkalKod('js/pages/Auth/Register.vue');
+
+    expect($kod)->toContain('<AuthSplitLayout>');
+    expect($kod)->not->toContain('AppLayout');
+});
+
+/*
  * Klart när: `plusknappens mål följer med som layoutprop` — `Dashboard.vue` och
  * `Containers/Index.vue` bär målet i en pilfunktion med exakt en parameter
  * (Beslut 2).
  *
- * De arton andra skickar ingen `create` i dag och gör det inte heller efteråt:
+ * De sjutton andra skickar ingen `create` i dag och gör det inte heller efteråt:
  * de deklarerar layouten utan proppar. Skillnaden är hela poängen — en sida
  * vars knapp ska ha ett mål bär det, och en sida utan mål får ingen knapp
  * (PlusknappTest prövar serverns sida av samma kontrakt).
