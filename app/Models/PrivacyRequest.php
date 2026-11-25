@@ -192,6 +192,20 @@ class PrivacyRequest extends Model
     }
 
     /**
+     * Gäller en begränsning just nu? En begränsning är satt när
+     * `restricted_at` finns och inte hävd när `restriction_lifted_at` saknas.
+     *
+     * **Markeringen läses inte av någon kod.** Den ändrar inget i appen —
+     * kontot är inte skrivskyddat och ingen inloggning stoppas (ADR-0095
+     * § 8). Metoden finns för att kommandona ska kunna visa och varna om
+     * markeringen, inte för att någon yta ska agera på den.
+     */
+    public function hasActiveRestriction(): bool
+    {
+        return $this->restricted_at !== null && $this->restriction_lifted_at === null;
+    }
+
+    /**
      * Den URSPRUNGLIGA fristen: mottagandet plus `deadline_months`, utan
      * förlängning. Det är den `privacy:extend` prövar emot — en förlängning
      * efter den vägras, också när fristen redan förlängts, eftersom den
