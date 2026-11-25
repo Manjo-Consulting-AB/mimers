@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Auth\CreatesUserWithPersonalAccount;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
@@ -72,8 +73,13 @@ it('ger samma svar för ny och befintlig adress när rutan är ikryssad', functi
     expect($ny->status())->toBe($finns->status())->and($ny->json())->toBe($finns->json());
 });
 
-it('lämnar terms_accepted_at tom för en användare som inte registrerat sig via rutan', function () {
-    expect(User::factory()->create()->fresh()->terms_accepted_at)->toBeNull();
+it('sätter terms_accepted_at bara via registreringen, inte när actionen anropas utan argument', function () {
+    $direkt = app(CreatesUserWithPersonalAccount::class)
+        ->handle('Direkt', 'direkt-v@example.com', 'lösenord-123456', null);
+    expect($direkt->fresh()->terms_accepted_at)->toBeNull();
+
+    post('/register', villkorsUppgifter('via-form-v@example.com', ['terms_accepted' => true]));
+    expect(User::query()->where('email', 'via-form-v@example.com')->firstOrFail()->terms_accepted_at)->not->toBeNull();
 });
 
 it('visar rutan i Register.vue med länkar till villkoren och integritetspolicyn', function () {
