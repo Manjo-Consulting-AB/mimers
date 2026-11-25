@@ -1,6 +1,6 @@
 # ADR-0095 Integritetsbegäranden
 
-**Status:** Antagen 2026-11-24 · Bygger vidare på [[ADR-0043 Tre loggar]], [[ADR-0045 Radering av konto och person]] och [[ADR-0094 Hjälpcentret]] § 9 (ingen adminroll) · Spärren i § 12, tillägg 2026-11-25 · [[ADR-index]]
+**Status:** Antagen 2026-11-24 · Bygger vidare på [[ADR-0043 Tre loggar]], [[ADR-0045 Radering av konto och person]] och [[ADR-0094 Hjälpcentret]] § 9 (ingen adminroll) · Spärren i § 12, tillägg 2026-11-25 · Kontoexporten och viewed, tillägg 2026-11-25 · [[ADR-index]]
 
 Tonys beslut 2026-11-24 om hur Mimers tar emot, prövar och dokumenterar begäranden från registrerade, efter feature request #1595. Kodarbetet ligger i [[M87 Integritetsbegäranden]].
 
@@ -110,3 +110,15 @@ Automatiska hanterare läggs till ett i taget som egna kommandon som skriver en 
 - Ett nattjobb, `prune-privacy-requests`.
 - En ny rad i [[Registerförteckning]]. Raderna raderas inte med personen av `DeleteUser`: ärendet är beviset på hur begäran hanterades.
 - Fyra frågor i [[Tankar]]: påminnelsen om fristen, den rättsliga spärren i svaret på art. 15, begränsningen som ingen kod läser, och åtkomstloggen för `viewed`.
+
+## Tillägg 2026-11-25
+
+Tonys beslut 2026-11-25, ur två frågor i [[Tankar]].
+
+- **§ 9.** Kontoexporten ([[ADR-0098 Kontoexporten]]) kan antecknas som `self_service`. Den besvarar art. 20 för det personen själv har lagt in. För art. 15 är den inte ett fullständigt svar, eftersom `not_included` gäller som för `privacy:collect`.
+- **§ 3.** Händelsen `viewed` är åtkomstloggen för ärendet, och någon rad i säkerhetsloggen behövs inte. Skälen:
+  - Säkerhetsloggen sparar sina rader i 12 månader, kortare tid än ärendet, och skulle inte tillföra något.
+  - När ärendet gallras finns inga uppgifter kvar som kan ha lästs.
+  - Kommandona körs bara av den som har ssh till servern.
+
+  Frågan tas upp igen om handläggarna blir fler än en, eller om en adminsida byggs (se punkten om adminsidan i [[Tankar]]).

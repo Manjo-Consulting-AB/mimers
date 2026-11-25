@@ -93,20 +93,23 @@ Ingen `deleted_at`: raden är inget innehåll att återställa, papperskorgen li
 
 ## export
 
-En beställd export av en container: ZIP med metadata och filer, eller en PDF-pärm ([[ADR-0091 PDF-pärmen]]). Raden är beställningens historik och har ingen `deleted_at`. Den räknas inte mot kvoten, och artefakten gallras efter `files.export_retention_days` (7).
+En beställd export av en container: ZIP med metadata och filer, eller en PDF-pärm ([[ADR-0091 PDF-pärmen]]). Även en kontoexport, en ZIP med alla ägda containrar och personens uppgifter ([[ADR-0098 Kontoexporten]]). Raden är beställningens historik och har ingen `deleted_at`. Den räknas inte mot kvoten, och artefakten gallras efter `files.export_retention_days` (7), en kontoexport efter `files.account_export_retention_hours` (24).
 
 | Kolumn | Typ | Anmärkning |
 |---|---|---|
 | id, ulid | | `ulid` är identifieraren utåt |
-| container_id | FK | RESTRICT |
+| container_id | FK NULL | RESTRICT. NULL bara för `kind = account` |
+| account_id | FK NULL | RESTRICT. Satt bara för `kind = account` |
 | requested_by_user_id | FK | RESTRICT |
-| kind | VARCHAR(20) | `zip` \| `binder`, förval `zip`. CHECK på mysql |
+| kind | VARCHAR(20) | `zip` \| `binder` \| `account`, förval `zip`. CHECK på mysql |
 | item_id | FK NULL | RESTRICT. Satt bara för en pärm över ett enda item |
 | options | JSON NULL | Bara för `binder`: nycklarna `sections`, `costs`, `attachments` och `attachment_mode`. Värdena fastställs i issue 443 |
 | status | VARCHAR(20) | `pending`, `running`, `ready`, `failed`, `expired` |
 | storage_path, byte_size, failure_reason, expires_at | | NULL tills bygget är klart eller har misslyckats |
 
-Index: `(container_id, created_at)` och `(status, expires_at)`.
+CHECK: `kind = 'account'` om och endast om `container_id IS NULL AND account_id IS NOT NULL`.
+
+Index: `(container_id, created_at)`, `(account_id, created_at)` och `(status, expires_at)`.
 
 ## Uppladdningsflödet
 
