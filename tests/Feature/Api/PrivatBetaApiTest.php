@@ -48,6 +48,7 @@ it('invite_only utan kod ger 422 validation.required på voucher_code', function
     config(['konton.registration' => 'invite_only']);
 
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'utan-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -68,6 +69,7 @@ it('invite_only med giltig kod ger 202 och pro', function () {
         ->handle('pro', 365, 1, true, 'Testare', null);
 
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'med-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -89,6 +91,7 @@ it('en ogiltig kod ger 422 validation.redeemable_voucher', function () {
     config(['konton.registration' => 'invite_only']);
 
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'ogiltig-kod@example.com',
         'password' => 'giltigt-losenord',
@@ -113,6 +116,7 @@ it('en giltig invitation_token släpper in utan kod och ger free', function () {
     privatBetaApiInbjudan('inbjuden@example.com', $token);
 
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Inbjuden Person',
         'email' => 'inbjuden@example.com',
         'password' => 'giltigt-losenord',
@@ -137,6 +141,7 @@ it('en invitation_token till en annan adress ger 422', function () {
     // fram, och det har det inte till den här adressen (ADR-0055 § 3). Utan
     // giltig kod och utan inbjudan är fältet obligatoriskt.
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Objuden Person',
         'email' => 'objuden@example.com',
         'password' => 'giltigt-losenord',
@@ -154,6 +159,7 @@ it('läget open ger 202 utan kod', function () {
     config(['konton.registration' => 'open']);
 
     postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Öppen Person',
         'email' => 'oppen@example.com',
         'password' => 'giltigt-losenord',
@@ -166,6 +172,7 @@ it('felsvaret har ingen message-nyckel', function () {
     config(['konton.registration' => 'invite_only']);
 
     $svar = postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Ny Person',
         'email' => 'ingen-message@example.com',
         'password' => 'giltigt-losenord',

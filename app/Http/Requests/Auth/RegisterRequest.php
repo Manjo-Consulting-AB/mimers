@@ -34,6 +34,10 @@ use Illuminate\Validation\Rules\Password;
  * och skickar därför inget sådant fält; API:et har ingen session och bär
  * det i kroppen i stället (ADR-0055 § 3). Längden är exakt 64 tecken,
  * samma form som `Invitation`-token har i produktionen.
+ *
+ * `terms_accepted` tillagt i issue 1691 (M91) — rutan som bekräftar 18-årsgränsen
+ * och godkänner villkoren (`accepted`). Valideras före RegistersOrNotifies, så
+ * ett fel om rutan säger inget om adressen.
  */
 class RegisterRequest extends FormRequest
 {
@@ -53,6 +57,17 @@ class RegisterRequest extends FormRequest
             'password' => ['required', 'string', Password::defaults()],
             'voucher_code' => ['nullable', 'string', 'max:32', new RedeemableVoucher],
             'invitation_token' => ['nullable', 'string', 'size:64'],
+            'terms_accepted' => ['accepted'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'terms_accepted.accepted' => __('ui.auth.register.terms_required'),
         ];
     }
 }

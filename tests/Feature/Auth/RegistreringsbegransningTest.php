@@ -29,6 +29,7 @@ beforeEach(function () {
 function registreringsForsokApi(int $i, bool $giltigt): TestResponse
 {
     return postJson('/api/register', [
+        'terms_accepted' => true,
         'name' => 'Person',
         'email' => $giltigt ? "giltig-{$i}@example.com" : 'inte-en-adress',
         'password' => 'giltigt-losenord',
@@ -62,7 +63,7 @@ it('ger 429 på det elfte API-försöket när de tio första föll på validerin
 it('omdirigerar det elfte webbförsöket tillbaka med fel på email utan lösenord i gamla indata', function () {
     // Giltig adress men för kort lösenord: valideringen fäller på
     // `password`, så ett fel på `email` kan bara komma från begränsaren.
-    $payload = ['name' => 'Person', 'email' => 'webb@example.com', 'password' => 'kort'];
+    $payload = ['name' => 'Person', 'email' => 'webb@example.com', 'password' => 'kort', 'terms_accepted' => true];
 
     for ($i = 0; $i < 10; $i++) {
         from('/register')->post('/register', $payload)

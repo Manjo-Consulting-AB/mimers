@@ -77,6 +77,29 @@ const form = useForm({
     email: '',
     voucher_code: '',
     password: '',
+    terms_accepted: false,
+});
+
+// Texten bär länkarna som [text](/url); delas i bitar så att de ritas som <Link>.
+const termsParts = computed(() => {
+    const parts = [];
+    const re = /\[([^\]]+)\]\((\/[^)]*)\)/g;
+    const text = t('auth.register.terms');
+    let last = 0;
+    let m;
+
+    while ((m = re.exec(text)) !== null) {
+        if (m.index > last) {
+            parts.push({ text: text.slice(last, m.index) });
+        }
+        parts.push({ text: m[1], href: m[2] });
+        last = re.lastIndex;
+    }
+    if (last < text.length) {
+        parts.push({ text: text.slice(last) });
+    }
+
+    return parts;
 });
 
 function submit() {
@@ -160,6 +183,34 @@ function submit() {
                 >
                 <p class="text-body text-ink-muted">{{ t('auth.register.password_hint') }}</p>
             </FormField>
+
+            <div class="flex flex-col gap-1">
+                <label for="terms_accepted" class="flex items-start gap-3 text-body">
+                    <input
+                        id="terms_accepted"
+                        v-model="form.terms_accepted"
+                        :aria-describedby="form.errors.terms_accepted ? 'terms_accepted-error' : undefined"
+                        type="checkbox"
+                        name="terms_accepted"
+                        required
+                        class="mt-1 size-5"
+                    >
+                    <span>
+                        <template v-for="(part, i) in termsParts" :key="i">
+                            <a v-if="part.href" :href="part.href" target="_blank" class="font-medium text-blue-700 hover:underline">{{ part.text }}</a>
+                            <template v-else>{{ part.text }}</template>
+                        </template>
+                    </span>
+                </label>
+                <p
+                    v-if="form.errors.terms_accepted"
+                    id="terms_accepted-error"
+                    tabindex="-1"
+                    class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+                >
+                    {{ form.errors.terms_accepted }}
+                </p>
+            </div>
 
             <button
                 type="submit"

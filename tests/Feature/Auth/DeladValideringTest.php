@@ -68,6 +68,7 @@ it('avvisar saknad e-post, saknat lösenord och saknat namn likadant vid registr
 it('webb och api avvisar ett saknat namn likadant', function () {
     $utanNamn = [
         'email' => 'utan-namn@example.com',
+        'terms_accepted' => true,
         'password' => 'giltigt-losenord',
     ];
 

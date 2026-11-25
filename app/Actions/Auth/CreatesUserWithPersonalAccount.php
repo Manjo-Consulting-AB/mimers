@@ -43,11 +43,16 @@ class CreatesUserWithPersonalAccount
     public function handle(string $name, string $email, string $password, ?string $registrationIp): User
     {
         return DB::transaction(function () use ($name, $email, $password, $registrationIp): User {
-            $user = User::query()->create([
+            // terms_accepted_at ligger utanför #[Fillable]; sätts här, i
+            // samma INSERT, när användaren skapas genom registreringen
+            // (issue 1691). Rutan är redan validerad i RegisterRequest.
+            $user = new User([
                 'name' => $name,
                 'email' => $email,
                 'password_hash' => $password,
             ]);
+            $user->terms_accepted_at = now();
+            $user->save();
 
             // account.locale, timezone och unit_system samlas inte in vid
             // registrering (formuläret tar bara namn, e-post och lösenord).
