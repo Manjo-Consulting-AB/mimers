@@ -169,9 +169,8 @@ it('Register.vue ritas i det delade gästskalet och inte i AppLayout', function 
 
     $kod = bestaendeSkalKod('js/pages/Auth/Register.vue');
 
-    expect($kod)
-        ->toContain('<AuthSplitLayout>')
-        ->not->toContain('AppLayout');
+    expect($kod)->toContain('<AuthSplitLayout>');
+    expect($kod)->not->toContain('AppLayout');
 });
 
 /*
