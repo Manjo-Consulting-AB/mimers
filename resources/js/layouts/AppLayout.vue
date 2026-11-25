@@ -579,6 +579,7 @@ onBeforeUnmount(() => {
                     <Link href="/about" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.about') }}</Link>
                     <Link href="/privacy" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.privacy') }}</Link>
                     <Link href="/terms" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.terms') }}</Link>
+                    <Link href="/refund-policy" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.refund_policy') }}</Link>
                     <Link href="/subprocessors" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.subprocessors') }}</Link>
                     <Link href="/contact" class="inline-flex min-h-11 items-center hover:underline">{{ t('auth.landing.links.contact') }}</Link>
                 </nav>

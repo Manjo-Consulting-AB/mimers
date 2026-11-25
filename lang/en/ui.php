@@ -691,6 +691,7 @@ return [
                 'about' => 'About Mimers',
                 'privacy' => 'Privacy policy',
                 'terms' => 'Terms of use',
+                'refund_policy' => 'Refund policy',
                 'subprocessors' => 'Subprocessors',
                 'contact' => 'Contact',
                 'help' => 'Help',
@@ -6164,6 +6165,10 @@ return [
         'subprocessors' => [
             'title' => 'Subprocessors',
             'description' => 'The service providers that process personal data on behalf of Mimers.',
+        ],
+        'refund-policy' => [
+            'title' => 'Refund policy',
+            'description' => 'How to get your money back for Mimers Pro and Pro+.',
         ],
         'help' => [
             'title' => 'Help',
