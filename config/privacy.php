@@ -163,6 +163,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Gallringsfristen
+    |--------------------------------------------------------------------------
+    |
+    | Ett avslutat ärende sparas i 36 kalendermånader efter `closed_at` och
+    | gallras därefter av App\Console\PrunesPrivacyRequests (ADR-0095 § 11,
+    | Tony 2026-11-24). Talet bor här av samma skäl som loggarnas frister i
+    | config/loggar.php: en frist är en uppgift om verksamheten, inte om
+    | koden. Gränsen räknas med Carbon::subMonths(), aldrig med dagar.
+    |
+    | Ett öppet ärende har ingen `closed_at` och därmed ingen frist — det
+    | gallras aldrig, hur gammalt det än är.
+    |
+    */
+
+    'retention_months' => (int) env('PRIVACY_RETENTION_MONTHS', 36),
+
+    /*
+    |--------------------------------------------------------------------------
     | Rollen
     |--------------------------------------------------------------------------
     |
