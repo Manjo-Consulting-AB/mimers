@@ -637,10 +637,9 @@ return [
             'submit' => 'Log in',
 
             // Issue 263 · den privata betan, se [[ADR-0055 Inbjudningskoder
-            // och stängd registrering]] § 1. Raderna ritas bara i läget
+            // och stängd registrering]] § 1. Rubriken ritas bara i läget
             // `invite_only`; i läget `open` finns ingen grind att förklara.
             'beta_heading' => 'Private beta · Invite only',
-            'beta_prompt' => 'Have an invite code?',
         ],
 
         /*

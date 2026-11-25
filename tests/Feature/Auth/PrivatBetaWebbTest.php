@@ -279,6 +279,6 @@ it('inloggningssidan har beta-texten i invite_only', function () {
     $kod = privatBetaKalla('js/pages/Auth/Login.vue');
 
     expect($kod)->toContain('auth.login.beta_heading')
-        ->and($kod)->toContain('auth.login.beta_prompt')
+        ->and($kod)->not->toContain('auth.login.beta_prompt')
         ->and($kod)->toContain('registrationMode === \'invite_only\'');
 });

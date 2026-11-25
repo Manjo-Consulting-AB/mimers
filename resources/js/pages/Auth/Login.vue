@@ -38,9 +38,10 @@ import { useErrorFocus } from './useErrorFocus.js';
  * **Issue 263 § Beslut 4 · den privata betan.** Proppen `registrationMode`
  * bär `konton.registration` ([[ADR-0055 Inbjudningskoder och stängd
  * registrering]] § 1). Är läget `invite_only` står rubriken *Private beta ·
- * Invite only* och raden *Have an invite code?* ovanför länken till
- * registreringen — den som inte har någon ska veta varför hon inte kommer
- * in, innan hon fyllt i formuläret. I läget `open` ritas ingenting: det
+ * Invite only* — den som inte har någon kod ska veta varför hon inte kommer
+ * in, innan hon fyllt i formuläret. Länken till registreringen är den under
+ * kortet, *Don't have an account?*; en andra länk till samma sida (issue 1670)
+ * var en dubblett. I läget `open` ritas ingenting: det
  * finns ingen grind att förklara, och en rubrik om inbjudningar hade varit
  * osann.
  */
@@ -342,10 +343,6 @@ function submit() {
                 -->
                 <div v-if="registrationMode === 'invite_only'" class="mt-6 text-center">
                     <p class="text-body font-semibold">{{ t('auth.login.beta_heading') }}</p>
-                    <p class="mt-1 text-body text-ink-muted">
-                        {{ t('auth.login.beta_prompt') }}
-                        <Link href="/register" class="font-medium text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
-                    </p>
                 </div>
 
                 <p class="mt-6 text-center text-body text-ink-muted">
