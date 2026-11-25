@@ -42,6 +42,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Manage billing måste byggas när Paddle kopplas på.** `/privacy` § 7 och `/refund-policy` § 4 ([[M86 Integritetspolicyn och underbiträdena]] issue 494) säger att prenumerationen sägs upp med **Manage billing** på profilen. Knappen finns inte, eftersom Paddle inte finns i koden ([[ADR-0014 Prismodell]] § Tillägg 2026-11-24). När betalflödet byggs måste profilen få knappen, så att texterna inte lovar något som inte finns. Annars måste texterna ändras. Det som inte är bestämt: om knappen leder till Paddles kundportal eller till en egen vy, och var på profilen den ska stå. Restes 2026-11-25.
 
+- **Ska Mimers återbetala om tjänsten läggs ned?** Mail Shields återbetalningspolicy har en mening om att kunden får tillbaka pengar om tjänsten stängs eller kontot avslutas av något annat skäl än ett brott mot villkoren. Meningen ströks ur `/refund-policy` ([[M86 Integritetspolicyn och underbiträdena]] issue 494), eftersom `/terms` inte beskriver någon sådan återbetalning. § 15 hänvisar bara till lag och betalvillkor. Det som inte är bestämt: om Mimers ska lova en återbetalning när tjänsten läggs ned, och i så fall för den oanvända delen av perioden eller för hela betalningen. Då måste både `/terms` § 15 och `/refund-policy` få texten. Restes 2026-11-25.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
