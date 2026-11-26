@@ -525,6 +525,32 @@ it('ger en ny container en av Mimers mallar via mimers_template', function () {
         ->and($container->fields()->pluck('label')->all())->toContain('Manufacturer', 'Warranty until');
 });
 
+it('avvisar containers_create med både template och mimers_template, och med en okänd nyckel', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    [, $mall] = faltMall($agent, $anvandare);
+
+    $agent->create_containers = true;
+    $agent->save();
+
+    $fore = Container::query()->count();
+
+    $bada = mcpFel(mcpVerktyg($token, 'containers_create', [
+        'name' => 'Dubbelt',
+        'template' => $mall->ulid,
+        'mimers_template' => 'sailboat',
+    ]));
+
+    $okand = mcpFel(mcpVerktyg($token, 'containers_create', [
+        'name' => 'Okänd',
+        'mimers_template' => 'finns-inte',
+    ]));
+
+    expect($bada['code'])->toBe('validation.failed')
+        ->and($okand['code'])->toBe('validation.failed')
+        ->and(array_column($okand['data']['fields']['mimers_template'], 'code'))->toContain('validation.in')
+        ->and(Container::query()->count())->toBe($fore);
+});
+
 it('ger en ny container mallens kategorier och fält', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
     [, $mall] = faltMall($agent, $anvandare);

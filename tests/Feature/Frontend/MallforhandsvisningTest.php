@@ -2,6 +2,10 @@
 
 use App\Support\Template\MimersTemplates;
 use Illuminate\Support\Facades\File;
+use Inertia\Testing\AssertableInertia;
+
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 422 · Förhandsvisningen av en mall och de inbyggda förslagens fält.
@@ -154,4 +158,20 @@ it('ritar förhandsvisningen i tillämpningsdialogen före knappen', function ()
 
     expect($val < $forhands)->toBeTrue('dialogen väljer mall efter förhandsvisningen');
     expect($forhands < $knapp)->toBeTrue('dialogen skickar innan den visar vad som hoppas över');
+});
+
+it('ger sidan för att skapa en container Mimers mallar som propen mimersTemplates', function () {
+    withoutVite();
+
+    [, $anvandare] = kontoMedMedlem();
+
+    actingAs($anvandare)
+        ->get('/containers/create')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Create')
+            ->has('mimersTemplates', count(app(MimersTemplates::class)->all()))
+            ->where('mimersTemplates.0.key', 'sailboat')
+            ->has('mimersTemplates.0.name')
+            ->has('mimersTemplates.0.content.categories'));
 });
