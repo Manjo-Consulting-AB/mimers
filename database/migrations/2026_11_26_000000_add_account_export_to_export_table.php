@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\Schema;
  *    samma skäl som `container_id`; DeleteAccount raderar kontots exporter
  *    först.
  *  - CHECK-villkoret för `kind` vidgas med `account`, och ett nytt villkor
- *    säger att `kind = 'account'` gäller om och endast om `container_id IS
- *    NULL AND account_id IS NOT NULL`.
+ *    säger att `account`-rader har `account_id` och ingen container, och att
+ *    alla andra rader har en container och inget `account_id`.
  *  - Index `(account_id, created_at)` bär listan över kontots exporter.
  *
  * Villkoren finns bara på mysql, som övriga CHECK-villkor i schemat.
@@ -37,10 +37,15 @@ return new class extends Migration
         if (Schema::getConnection()->getDriverName() === 'mysql') {
             DB::statement('ALTER TABLE export DROP CONSTRAINT export_kind_check');
             DB::statement("ALTER TABLE export ADD CONSTRAINT export_kind_check CHECK (kind IN ('zip', 'binder', 'account'))");
-            DB::statement("ALTER TABLE export ADD CONSTRAINT export_account_check CHECK ((kind = 'account') = (container_id IS NULL AND account_id IS NOT NULL))");
+            DB::statement("ALTER TABLE export ADD CONSTRAINT export_account_check CHECK ((kind = 'account' AND container_id IS NULL AND account_id IS NOT NULL) OR (kind <> 'account' AND container_id IS NOT NULL AND account_id IS NULL))");
         }
     }
 
+    /**
+     * `container_id` återställs inte till NOT NULL: efter en kontoexport kan
+     * tabellen innehålla rader utan container, och en nedrullning ska inte
+     * fälla på dem.
+     */
     public function down(): void
     {
         if (Schema::getConnection()->getDriverName() === 'mysql') {
@@ -50,8 +55,11 @@ return new class extends Migration
         }
 
         Schema::table('export', function (Blueprint $table) {
+            // Nyckeln först: det sammansatta indexet stöder den, och MySQL
+            // nekar att släppa ett index som en främmande nyckel behöver.
+            $table->dropForeign(['account_id']);
             $table->dropIndex(['account_id', 'created_at']);
-            $table->dropConstrainedForeignId('account_id');
+            $table->dropColumn('account_id');
         });
     }
 };
