@@ -1065,6 +1065,9 @@ return [
         // sentence says what happens next — that the row is already in the
         // list and that it is being packed. Without it a click would look like
         // it did nothing, because the new row is the only visible change.
+        // Issue 1702: the account export on the profile.
+        'account-export-requested' => 'Your account export has been ordered. It shows up below when it is ready.',
+        'account-export-deleted' => 'The account export has been deleted.',
         'export-requested' => 'The export has been ordered. The bag is being packed and shows up here when it is done.',
 
         'session-expired' => 'Your session expired. Please try again.',
@@ -1313,6 +1316,14 @@ return [
             // Issue 1564: a row that is being packed cannot be deleted — the
             // job writes the file after us.
             'still_running' => 'The export is still being packed. Wait until it is done, then delete it.',
+        ],
+
+        // Issue 1702 · [[ADR-0098 Kontoexporten]]. `in_progress` is a 409 on
+        // /api; on the web the sentence becomes the form error on `export`.
+        'account_export' => [
+            'in_progress' => 'An account export is already being packed. It is in the list below — wait until it is done.',
+            'no_account' => 'You have no personal account to export.',
+            'too_many_requests' => 'You can order three account exports per day. Try again tomorrow.',
         ],
 
         // Issue 450 · [[ADR-0092 Tvåfaktor som krav för delade containrar]].
@@ -1577,6 +1588,21 @@ return [
                 // Serverns valideringsfel vid bekräftelsen: adressen togs av
                 // någon annan under timmen mellan begäran och länken.
                 'taken' => 'That address is already in use. Try another one.',
+            ],
+
+            /*
+             * Issue 1702 · [[ADR-0098 Kontoexporten]]. The section sits on the
+             * profile, as the export is the person's own whole account. The
+             * rows reuse the `export.*` words (status, size, download).
+             */
+            'account_export' => [
+                'heading' => 'Export your account',
+                'intro' => 'All containers you own, with their files, and the data we hold about you. Containers shared with you are listed but not included.',
+                'create' => 'Export account',
+                'retention' => 'The file is deleted 24 hours after it is ready.',
+                'list_heading' => 'Your account exports',
+                'empty' => 'You have not exported your account yet.',
+                'kind' => 'Account export',
             ],
 
             /*

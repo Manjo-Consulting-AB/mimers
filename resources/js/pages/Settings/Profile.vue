@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import AccountExportSection from '../../components/AccountExportSection.vue';
 import CurrencyField from '../../components/CurrencyField.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
@@ -47,6 +48,9 @@ const props = defineProps({
     name: { type: String, required: true },
     email: { type: String, required: true },
     emailVerifiedAt: { type: String, default: null },
+
+    /* Personens kontoexporter (issue 1702), ur ExportResource. */
+    accountExports: { type: Array, default: () => [] },
 
     // `userLocale`, inte `locale`: den delade propen `locale` bär
     // språkKATALOGEN (`sv`/`en`) och skickas till varje sida — en sidprop med
@@ -491,4 +495,7 @@ function submit() {
     </UiSheet>
 
     <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
+
+    <!-- Kontoexporten, issue 1702 · [[ADR-0098 Kontoexporten]]. -->
+    <AccountExportSection :exports="props.accountExports" />
 </template>

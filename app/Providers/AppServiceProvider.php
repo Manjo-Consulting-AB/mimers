@@ -52,6 +52,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureHelpSearchRateLimiting();
         $this->configureHelpFeedbackRateLimiting();
         $this->configureContactRateLimiting();
+        $this->configureAccountExportRateLimiting();
         $this->configureScheduleHeartbeat();
         $this->configurePerformanceLogging();
         $this->configureMcp();
@@ -346,5 +347,32 @@ class AppServiceProvider extends ServiceProvider
                 429,
             )->withHeaders($headers));
         });
+    }
+
+    /**
+     * Issue 1702 · [[ADR-0098 Kontoexporten]] § 6 · kontoexportens takt,
+     * `throttle:account-export`: högst tre beställningar per dygn och person.
+     *
+     * Nyckeln är personen. Bara `POST`-rutterna bär begränsaren — att lista
+     * och hämta ska inte stängas av en full hink. `/api` får API-höljet; en
+     * webbbeställning skickas tillbaka till profilen med meningen som
+     * formulärfel, för en rå JSON-kropp vore en modalruta i Inertia.
+     */
+    private function configureAccountExportRateLimiting(): void
+    {
+        RateLimiter::for('account-export', fn (Request $request): Limit => Limit::perDay(3)
+            ->by('account-export-user:'.$request->user()?->getKey())
+            ->response(static function (Request $request, array $headers): mixed {
+                $retryAfter = (int) ($headers['Retry-After'] ?? 0);
+
+                if (! $request->is('api/*')) {
+                    return redirect()
+                        ->route('settings.profile')
+                        ->withErrors(['export' => trans('ui.error.account_export.too_many_requests')]);
+                }
+
+                return ApiError::response('auth.too_many_attempts', ['retry_after_seconds' => $retryAfter], 429)
+                    ->withHeaders($headers);
+            }));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Export\RequestAccountExport;
 use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Export;
 use App\Models\SecurityLog;
@@ -42,6 +43,10 @@ class ExportDownloadController extends Controller
         Export $export,
         RecordSecurityEvent $recordSecurityEvent,
     ): Response {
+        if ($export->kind === Export::KIND_ACCOUNT) {
+            return $this->downloadAccountExport($request, $export, $recordSecurityEvent);
+        }
+
         $export->load('container');
 
         // SoftDeletes' globala scope gäller genom relationen: en mjukraderad
@@ -101,6 +106,60 @@ class ExportDownloadController extends Controller
             // Content-Type ur ett 204-svar när det förbereds, och LiteSpeed
             // sätter inte typen själv vid intern omdirigering — se
             // AttachmentDownloadController. Med 200 följer headern med.
+            return response()->make('', 200, $headers + [
+                'X-LiteSpeed-Location' => '/_protected/'.$export->storage_path,
+            ]);
+        }
+
+        return Storage::disk('files')->response($export->storage_path, $filename, $headers);
+    }
+
+    /**
+     * Kontoexporten (issue 1702 · ADR-0098 § 4). Det finns ingen container att
+     * pröva `view` mot: i stället prövas att exportens konto är beställarens
+     * eget personkonto och att beställaren är den inloggade. Samma ordning som
+     * containergrenen — behörighet, status och disk, säkerhetsrad, leverans — och
+     * en annan persons export är 403.
+     */
+    private function downloadAccountExport(Request $request, Export $export, RecordSecurityEvent $recordSecurityEvent): Response
+    {
+        $user = $request->user();
+
+        $account = $export->account;
+
+        if ($account === null
+            || $export->requested_by_user_id === null
+            || (int) $export->requested_by_user_id !== (int) $user->id
+            || RequestAccountExport::personalAccountFor($user)?->id !== $account->id) {
+            abort(403);
+        }
+
+        // Behörigheten först: en annan person ska inte kunna läsa av
+        // statusen på någons export genom skillnaden mellan 403 och 404.
+        if ($export->status !== Export::STATUS_READY
+            || $export->storage_path === null
+            || ! Storage::disk('files')->exists($export->storage_path)) {
+            abort(404);
+        }
+
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_EXPORT_DOWNLOADED,
+            account: $account,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['export' => $export->ulid],
+        );
+
+        $filename = 'mimers-account-export-'.$export->created_at->toDateString().'.zip';
+
+        $headers = [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => $this->disposition($filename),
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        if (config('files.internal_redirect')) {
             return response()->make('', 200, $headers + [
                 'X-LiteSpeed-Location' => '/_protected/'.$export->storage_path,
             ]);
