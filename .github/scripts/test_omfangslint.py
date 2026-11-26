@@ -283,13 +283,15 @@ def test_modellsvar_som_pekar_in_i_rutan_kastas():
 def test_fil_utanfor_ruttabellen_overlever_om_den_finns():
     """PR #398 (issue 84) är fallet: punkten "kategorimallen väljs uttryckligen"
     bärs av `resources/js/data/categoryPresets.js`, som inte serverar någon URL
-    och alltså inte står i ruttabellen. En instruktion som band modellen till
+    och alltså inte står i ruttabellen. Filen raderades i #1751, så provet
+    använder nu `resources/js/composables/useRelativeDate.js`, som också
+    saknar URL. En instruktion som band modellen till
     tabellen hade gjort just den punkten omöjlig att rapportera - och
     existenskontrollen nedan är ändå det som stoppar en påhittad sökväg."""
     _, _, innanfor, _ = _analys(ISSUE_83)
-    svar = "SAKNAS: resources/js/data/categoryPresets.js — punkt 2\n"
+    svar = "SAKNAS: resources/js/composables/useRelativeDate.js — punkt 2\n"
     fynd = l.fynd_ur_modellsvar(svar, innanfor, ROT)
-    assert len(fynd) == 1 and "categoryPresets" in fynd[0], fynd
+    assert len(fynd) == 1 and "useRelativeDate" in fynd[0], fynd
 
 
 def test_modellfragan_binder_inte_modellen_till_ruttabellen():
