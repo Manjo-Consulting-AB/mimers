@@ -23,7 +23,7 @@ name: MariaDB
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/issue-1697] # TILLFÄLLIG: tas bort före merge
   workflow_dispatch:
 
 permissions:
