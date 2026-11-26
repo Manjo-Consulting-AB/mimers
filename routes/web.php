@@ -1796,7 +1796,7 @@ Route::middleware('auth')->group(function () {
         ->name('containers.update');
 
     /*
-     * Issue 422 · *Save as template* och *Apply template* i containerns
+     * Issue 422 · *Save as template* i containerns
      * inställningar, se App\Http\Controllers\ContainerTemplateController och
      * [[ADR-0089 Egna fält på items]] § Riktning 6.
      *
@@ -1811,9 +1811,6 @@ Route::middleware('auth')->group(function () {
      */
     Route::post('/containers/{container}/templates', [ContainerTemplateController::class, 'store'])
         ->name('containers.templates.store');
-
-    Route::post('/containers/{container}/template', [ContainerTemplateController::class, 'apply'])
-        ->name('containers.template.apply');
 
     /*
      * Issue 1254 · Containerns valutor för kostnader, se
@@ -2263,22 +2260,6 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/containers/{container}/categories', [CategoryController::class, 'store'])
         ->name('containers.categories.store');
-
-    /*
-     * Den färdiga uppsättningen, se issue 56b § Beslut 3 och 4. POST lägger in
-     * hela uppsättningen, DELETE tackar nej till förslaget för den här containern i
-     * den här sessionen.
-     *
-     * **Bägge ligger FÖRE `{category}`-rutterna nedan.** En DELETE mot
-     * `/categories/preset` matchar annars `containers.categories.destroy` och
-     * `preset` hade bundits som en kategori-ULID — 404 i stället för ett nej
-     * som håller.
-     */
-    Route::post('/containers/{container}/categories/preset', [CategoryController::class, 'storePreset'])
-        ->name('containers.categories.preset');
-
-    Route::delete('/containers/{container}/categories/preset', [CategoryController::class, 'dismissPreset'])
-        ->name('containers.categories.preset.dismiss');
 
     Route::patch('/containers/{container}/categories/{category}', [CategoryController::class, 'update'])
         ->scopeBindings()

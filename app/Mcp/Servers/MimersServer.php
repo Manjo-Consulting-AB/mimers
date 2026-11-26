@@ -9,7 +9,6 @@ use App\Mcp\Tools\AttachmentsUploadUrl;
 use App\Mcp\Tools\CategoriesCreate;
 use App\Mcp\Tools\CategoriesList;
 use App\Mcp\Tools\CategoriesUpdate;
-use App\Mcp\Tools\ContainersApplyTemplate;
 use App\Mcp\Tools\ContainersCreate;
 use App\Mcp\Tools\ContainersDelete;
 use App\Mcp\Tools\ContainersList;
@@ -84,7 +83,6 @@ class MimersServer extends Server
         ContainersList::class,
         ContainersTree::class,
         ContainersCreate::class,
-        ContainersApplyTemplate::class,
         ContainersUpdate::class,
         ContainersDelete::class,
         AttachmentsGet::class,

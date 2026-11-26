@@ -3,27 +3,22 @@
 // rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
 
 use App\Http\Controllers\CategoryController;
-use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\ContainerAccess;
 use App\Models\User;
 use App\Support\Template\MimersTemplates;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
-use function Pest\Laravel\delete;
-use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 56b · Färdiga kategoriuppsättningar per språk. Se
  * resources/templates/en.php,
- * resources/js/components/CategoryPresetCard.vue,
- * App\Http\Requests\Category\StoreCategoryPresetRequest och
- * App\Http\Controllers\CategoryController::storePreset()/dismissPreset().
+ * och [[ADR-0101 Mallarna]]: kortet och rutterna är borta sedan issue 517.
  *
  * Uppsättningarna hängde fram till issue 84 på containerns `kind` och valdes
  * åt användaren. Den nyckeln finns inte längre ([[ADR-0036 Containerns art]]):
@@ -155,446 +150,70 @@ function uppsattningLocale(User $anvandare, Container $container): string
  * Beslut 3: rutterna ligger bakom `auth`. En utloggad besökare skickas till
  * inloggningen och når aldrig en kontrollermetod.
  */
-it('skickar en utloggad besökare till inloggningen från uppsättningsrutten', function () {
-    withoutVite();
-
-    [, , $container] = uppsattningKontext();
-
-    post("/containers/{$container->ulid}/categories/preset", ['categories' => [['name' => 'Rigg']]])
-        ->assertRedirect('/login');
-
-    delete("/containers/{$container->ulid}/categories/preset")->assertRedirect('/login');
-
-    expect(Category::query()->count())->toBe(0);
-});
 
 /*
- * Klart när: en tom container visar förslaget, och servern har inte skickat orden.
- *
- * Att kortet ritas är presentationslogik och prövas i källfilerna; det som
- * prövas HÄR är att servern bara säger sitt om nej:et (Beslut 2 och 4) och att
- * uppsättningens ord inte finns i svaret — servern får aldrig veta vad de
- * betyder.
+ * Issue 517 · [[ADR-0101 Mallarna]] beslut 4: en mall läggs bara på när en
+ * container skapas. Förslagskortet på kategorisidan och dess två rutter är
+ * borta; en tom kategorisida visar den vanliga tomma vyn.
  */
-it('visar förslaget på en tom container och skickar Mimers mallar som prop', function () {
+it('har inga rutter för förslagskortet och svarar 404 eller 405', function () {
+    [, $anvandare, $container] = uppsattningKontext('sv_SE');
+
+    $post = actingAs($anvandare)
+        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => [['name' => 'Rigg']]]);
+    $delete = actingAs($anvandare)->delete("/containers/{$container->ulid}/categories/preset");
+
+    expect($post->status())->toBeIn([404, 405]);
+    expect($delete->status())->toBeIn([404, 405]);
+
+    expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+
+    $uris = collect(Route::getRoutes()->getRoutes())->map(fn ($rutt) => $rutt->uri())->all();
+
+    expect($uris)->not->toContain('containers/{container}/categories/preset');
+});
+
+it('skickar varken förslagsprop eller mallar till en tom kategorisida', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE');
 
-    $container->account->update(['name' => 'Testkontot']);
-    $container->update(['name' => 'Vindil']);
+    actingAs($anvandare)->get("/containers/{$container->ulid}/categories")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Categories')
+            ->has('categories', 0)
+            ->where('can.manage', true)
+            ->missing('presetDismissed')
+            ->missing('mimersTemplates')
+        );
 
-    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}/categories");
-
-    // [[ADR-0101 Mallarna]]: servern äger mallarna och skickar dem som prop
-    // (`key`, `name`, `content`); klienten väljer med nyckeln.
-    $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-        ->component('Containers/Categories')
-        ->has('categories', 0)
-        ->where('presetDismissed', false)
-        ->where('can.manage', true)
-        ->has('mimersTemplates', count(app(MimersTemplates::class)->all()))
-        ->where('mimersTemplates.0.key', 'sailboat')
-        ->where('mimersTemplates.0.name', 'Boat')
-        ->has('mimersTemplates.0.content.categories')
-    );
-
-    // Sidans eget formulär fungerar medan kortet står kvar obesvarat — det är
-    // vad "kan tacka nej utan att fastna" betyder (Beslut 4).
+    // Sidans eget formulär fungerar som förut.
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories", ['name' => 'Rigg och segel'])
         ->assertSessionHas('status', 'category-created');
+});
 
-    expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rigg och segel']);
+it('ritar inget förslagskort på kategorisidan och har tagit bort kortet', function () {
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+
+    expect($sida)->toContain('<CategoryCreateForm')
+        ->toContain("t('container.categories.empty')");
+
+    expect(str_contains($sida, 'CategoryPresetCard'))->toBeFalse();
+    expect(str_contains($sida, 'presetDismissed'))->toBeFalse();
+    expect(File::exists(resource_path('js/components/CategoryPresetCard.vue')))->toBeFalse();
+    expect(File::exists(app_path('Http/Requests/Category/StoreCategoryPresetRequest.php')))->toBeFalse();
+    expect(method_exists(CategoryController::class, 'storePreset'))->toBeFalse();
+    expect(method_exists(CategoryController::class, 'dismissPreset'))->toBeFalse();
 });
 
 /*
- * Beslut 4: villkoret är att trädet är tomt. Efter att uppsättningen lagts in
- * är det inte tomt, och samma prop gäller — servern räknar inte tomhet, den
- * skickar listan.
- */
-it('visar inte förslaget när trädet har kategorier', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE');
-
-    Category::factory()->for($container, 'container')->create(['name' => 'Rigg', 'position' => 1]);
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('categories', 1)
-    );
-});
-
-/*
- * Klart när: *Lägg till uppsättningen* skapar rot- och underkategorierna i
- * rätt ordning, med rätt föräldrar, i en transaktion.
- *
- * Ordningen prövas som `position`, för det är den ordningen 56a:s ytor sedan
- * visar. Den nya kategorin hamnar sist bland sina syskon — servern räknar
- * aldrig positionen här, App\Actions\Category\CreateCategory gör det
- * (Beslut 3).
- */
-it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
-
-    $uppsattning = uppsattningFor('en', 'Boat');
-
-    $svar = actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => $uppsattning]);
-
-    $svar->assertRedirect("/containers/{$container->ulid}/categories")
-        ->assertSessionHas('status', 'category-preset-applied');
-
-    $rotnamn = array_column($uppsattning, 'name');
-
-    $rotter = Category::query()
-        ->where('container_id', $container->id)
-        ->whereNull('parent_id')
-        ->orderBy('position')
-        ->get();
-
-    expect($rotter->pluck('name')->all())->toBe($rotnamn);
-    expect($rotter->pluck('position')->all())->toBe(range(1, count($rotnamn)));
-
-    // Barnen ligger under sin rot, i uppsättningens ordning.
-    $motor = $rotter->firstWhere('name', 'Engine');
-
-    $barn = Category::query()
-        ->where('parent_id', $motor->id)
-        ->orderBy('position')
-        ->get();
-
-    expect($barn->pluck('name')->all())->toBe(['Drive train', 'Cooling']);
-    expect($barn->pluck('position')->all())->toBe([1, 2]);
-    expect($barn->pluck('container_id')->unique()->all())->toBe([$container->id]);
-
-    // Ingen märkning: raderna ÄR vanliga kategorier (Beslut 6). Lövet går att
-    // radera med 56a:s yta, och ingenting i systemet minns att det kom från
-    // ett förslag.
-    $drivlina = $barn->firstWhere('name', 'Drive train');
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->delete("/containers/{$container->ulid}/categories/{$drivlina->ulid}")
-        ->assertSessionHas('status', 'category-deleted');
-
-    expect($drivlina->refresh()->trashed())->toBeTrue();
-});
-
-/*
- * Klart när: ett andra anrop mot `preset` på en container som redan har kategorier
- * ger 422 och skapar ingenting.
- *
- * Utan den kontrollen är rutten ett sätt att fördubbla trädet med en knapp som
- * ser ut som ett förslag (Beslut 3).
- */
-it('vägrar en uppsättning i en container som redan har kategorier och skapar ingenting', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
-
-    $befintlig = Category::factory()->for($container, 'container')->create(['name' => 'Rigg']);
-
-    $svar = actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => uppsattningFor('en', 'Boat'),
-        ]);
-
-    $svar->assertRedirect("/containers/{$container->ulid}/categories");
-    $svar->assertSessionHasErrors('categories');
-
-    // Meningen är läsbar och inte en felkod, och den finns på användarens
-    // språk — rutten finns bara på webben.
-    $mening = session('errors')->get('categories')[0];
-
-    expect($mening)->toBe(trans('ui.container.categories.preset_not_empty', [], 'en'));
-    expect($mening)->not->toBe('preset_not_empty');
-
-    expect(Category::query()->where('container_id', $container->id)->count())->toBe(1);
-    expect($befintlig->refresh()->name)->toBe('Rigg');
-});
-
-/*
- * Klart när: en container vars enda kategorier är mjukraderade är TOM. Villkoret är
- * "minst en levande kategori", alltså Eloquents SoftDeletes-scope och inte en
- * rå `count()`.
- */
-it('räknar en container med bara mjukraderade kategorier som tom', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
-
-    $gammal = Category::factory()->for($container, 'container')->create(['name' => 'Gammal']);
-    $gammal->delete();
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => [['name' => 'Rig and sails']],
-        ])
-        ->assertSessionHas('status', 'category-preset-applied');
-
-    expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rig and sails']);
-});
-
-/*
- * Klart när: fler än tolv rotkategorier, eller fler än tolv barn under en rot,
- * avvisas av valideringen.
- *
- * Taket är bindande (Beslut 3): en yta som skapar obegränsat många rader per
- * anrop är en missbruksvektor, och kategorier har ingen kvot som fångar det.
- */
-it('avvisar fler än tolv rötter och fler än tolv barn under en rot', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE');
-
-    $förMångaRötter = array_map(
-        fn (int $i): array => ['name' => "Rot {$i}"],
-        range(1, StoreCategoryPresetRequest::MAX_ROOTS + 1),
-    );
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => $förMångaRötter])
-        ->assertSessionHasErrors('categories');
-
-    $förMångaBarn = [[
-        'name' => 'Motor',
-        'children' => array_map(
-            fn (int $i): string => "Barn {$i}",
-            range(1, StoreCategoryPresetRequest::MAX_CHILDREN + 1),
-        ),
-    ]];
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => $förMångaBarn])
-        ->assertSessionHasErrors('categories.0.children');
-
-    expect(Category::query()->count())->toBe(0);
-
-    // Precis på taket går bra — annars vore reglerna av ett annat skäl än de
-    // påstår.
-    $påTaket = array_map(
-        fn (int $i): array => ['name' => "Rot {$i}"],
-        range(1, StoreCategoryPresetRequest::MAX_ROOTS),
-    );
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => $påTaket])
-        ->assertSessionHas('status', 'category-preset-applied');
-
-    expect(Category::query()->where('container_id', $container->id)->count())
-        ->toBe(StoreCategoryPresetRequest::MAX_ROOTS);
-});
-
-/*
- * Klart när: ett namn längre än 255 tecken avvisas på rätt fält — rotnamnet på
- * `categories.N.name`, barnnamnet på `categories.N.children.M`.
- */
-it('avvisar ett namn längre än 255 tecken på rätt fält', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE');
-
-    $långt = str_repeat('a', 256);
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => [['name' => $långt]],
-        ])
-        ->assertSessionHasErrors('categories.0.name');
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => [['name' => 'Motor', 'children' => [$långt]]],
-        ])
-        ->assertSessionHasErrors('categories.0.children.0');
-
-    expect(Category::query()->count())->toBe(0);
-});
-
-/*
- * Klart när: *Nej tack* döljer förslaget för den containern under sessionen, och
- * sidans övriga formulär fungerar oförändrat.
- */
-it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE');
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('presetDismissed', false)
-    );
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->delete("/containers/{$container->ulid}/categories/preset")
-        ->assertRedirect("/containers/{$container->ulid}/categories");
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->where('presetDismissed', true)
-            ->has('categories', 0)
-            ->where('can.manage', true)
-    );
-
-    // Att tacka nej är ingen skrivning i containern, och sidans eget formulär
-    // fungerar precis som förut — det är vad "kan tacka nej utan att fastna"
-    // betyder.
-    expect(session(CategoryController::PRESET_DISMISSED_SESSION_KEY))->toBe([$container->ulid]);
-
-    actingAs($anvandare)
-        ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories", ['name' => 'Rig and sails'])
-        ->assertSessionHas('status', 'category-created');
-
-    expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rig and sails']);
-});
-
-/*
- * Klart när: *Nej tack* på en container döljer inte förslaget på en ANNAN tom container.
- *
- * Nej:et är per container — en lista av ULID:n, inte en enda flagga för användaren.
- */
-it('döljer inte förslaget på en annan tom container', function () {
-    withoutVite();
-
-    [$konto, $anvandare, $container] = uppsattningKontext('sv_SE');
-
-    $annan = Container::factory()->for($konto, 'account')->create(['kind' => 'caravan']);
-
-    actingAs($anvandare)->delete("/containers/{$container->ulid}/categories/preset");
-
-    actingAs($anvandare)->get("/containers/{$container->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('presetDismissed', true)
-    );
-
-    actingAs($anvandare)->get("/containers/{$annan->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('presetDismissed', false)
-    );
-});
-
-/*
- * Klart när: en användare med `read` på containern får 403 på `preset`, och ett
- * `read_only`-ägarkonto likaså.
- *
- * Grinden är `ContainerPolicy::update()` — samma som att skapa en kategori för
- * hand, för det är precis vad rutten gör (Beslut 3).
- */
-it('nekar en read-innehavare och ett fryst ägarkonto uppsättningsrutten', function () {
-    withoutVite();
-
-    [, , $container] = uppsattningKontext();
-
-    $läsare = User::factory()->create();
-
-    ContainerAccess::factory()->create([
-        'container_id' => $container->id,
-        'item_id' => null,
-        'grantee_type' => 'user',
-        'grantee_id' => $läsare->id,
-        'level' => 'read',
-        'kind' => 'guest',
-        'granted_by_user_id' => User::factory()->create()->id,
-    ]);
-
-    actingAs($läsare)
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => [['name' => 'Rigg']]])
-        ->assertForbidden();
-
-    actingAs($läsare)->delete("/containers/{$container->ulid}/categories/preset")->assertForbidden();
-
-    // Läsaren ser trädet och den tomma containern, men ingen skrivyta.
-    actingAs($läsare)->get("/containers/{$container->ulid}/categories")->assertInertia(
-        fn (AssertableInertia $page) => $page->where('can.manage', false)
-    );
-
-    // Ett fryst ägarkonto nekas allt skrivande oavsett roll — förslaget med.
-    [, $ägare, $fryst] = uppsattningKontext('sv_SE', 'boat', ['status' => 'read_only']);
-
-    actingAs($ägare)
-        ->post("/containers/{$fryst->ulid}/categories/preset", ['categories' => [['name' => 'Rigg']]])
-        ->assertForbidden();
-
-    expect(Category::query()->count())->toBe(0);
-});
-
-/*
- * Klart när: en container i en annan användares konto går inte att fylla via rutten
- * (403).
- */
-it('nekar en främling både uppsättningen och ett nej', function () {
-    withoutVite();
-
-    [, , $container] = uppsattningKontext();
-    $främmande = User::factory()->create();
-
-    actingAs($främmande)
-        ->post("/containers/{$container->ulid}/categories/preset", ['categories' => [['name' => 'Rigg']]])
-        ->assertForbidden();
-
-    actingAs($främmande)->delete("/containers/{$container->ulid}/categories/preset")->assertForbidden();
-
-    expect(Category::query()->count())->toBe(0);
-});
-
-/*
- * Klart när: en svensk användare får den svenska uppsättningen, en användare
- * med `en_GB` den engelska — samma container, olika ord.
- *
- * Valet görs av den delade propen `locale` och containerns `kind` (Beslut 2), och
- * prövas därför med klientens egen väljare på den locale servern faktiskt
- * skickade.
- */
-it('ger varje användare samma uppsättning för samma container', function () {
-    withoutVite();
-
-    [, $svensk, $container] = uppsattningKontext('sv_SE', 'boat');
-    $engelsk = User::factory()->create(['locale' => 'en_GB']);
-    $container->account->users()->attach($engelsk, ['role' => 'member']);
-
-    // Propen `locale` är `en` för båda: `en` är den enda katalogen
-    // ([[ADR-0034 Engelska vid lansering]]), och klientens väljare följer den.
-    expect(uppsattningLocale($svensk, $container))->toBe('en');
-    expect(uppsattningLocale($engelsk, $container))->toBe('en');
-
-    $uppsattning = uppsattningFor(uppsattningLocale($svensk, $container), 'Boat');
-
-    expect(array_column($uppsattning, 'name'))->toContain('Rig and sails');
-});
-
-/*
- * Klart när: en locale utan samling möts av engelska, utan fel.
- *
- * Ingen containeregenskap styr längre vilken uppsättning som erbjuds (issue
- * 84), så kvar att falla tillbaka på är språket: `en` är den enda katalogen
- * ([[ADR-0034 Engelska vid lansering]]). Ett okänt NAMN är inget fel heller —
- * det betyder bara att kortet inte har någon förhandsvisning att rita.
+ * Mimers mallar (resources/templates/en.php) faller tillbaka på engelska för
+ * en okänd locale.
  */
 it('faller tillbaka på engelska för en okänd locale', function () {
-    withoutVite();
-
-    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'Segelbåt');
-
-    actingAs($anvandare)
-        ->get("/containers/{$container->ulid}/categories")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('presetDismissed', false));
-
-    // Samma samling, oavsett locale — och samma uppsättning ur den.
     expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningAlla()['en'][0]['categories']);
     expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningFor('en', 'Boat'));
 
@@ -694,58 +313,4 @@ it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
             ));
         }
     }
-});
-
-/*
- * Beslut 4: förslaget är ett kort och ingen modal. Det ritas i stället för
- * tomtexten på en tom container, och sidans eget formulär finns kvar oavsett.
- */
-it('renderar förslaget som ett kort ovanför trädet', function () {
-    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
-    $kort = File::get(resource_path('js/components/CategoryPresetCard.vue'));
-    expect($sida)->toContain('<CategoryPresetCard')
-        ->toContain('showsPreset')
-        ->toContain('presetDismissed')
-        // Villkoret är att trädet är tomt: efter en applicerad uppsättning är
-        // det inte tomt, och kortet försvinner av sig självt (Beslut 4).
-        ->toContain('categories.length === 0')
-        // Skapa-formuläret ritas oberoende av kortet — "kan tacka nej utan
-        // att fastna".
-        ->toContain('<CategoryCreateForm');
-
-    // Ingen modal, ingen overlay: ett <section> i sidflödet.
-    expect($kort)->toContain('<section')
-        ->toContain('mimersTemplates')
-        ->toContain('preset_apply')
-        ->toContain('preset_dismiss');
-
-    expect(File::exists(resource_path('js/data/categoryPresets.js')))->toBeFalse();
-});
-
-/*
- * Klart när: kategorimallen väljs uttryckligen av användaren och härleds inte
- * ur `kind` (issue 84).
- *
- * Tre påståenden, alla om källfilen och inte om renderingen: kortet får ingen
- * art att slå upp en mall med, det väljer bland uppsättningarna på deras EGET
- * namn, och den uppsättning som ligger i listan är den användaren pekat på —
- * inte den första. Det sista är det som skiljer "ett val" från "ett förval".
- */
-it('väljer mallen på användarens val och inte ur containerns art', function () {
-    $kort = File::get(resource_path('js/components/CategoryPresetCard.vue'));
-    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
-
-    // Ingen art in i kortet, och ingen uppslagning på en.
-    expect(str_contains($sida, ':kind="container.kind"'))->toBeFalse();
-    expect(str_contains($kort, 'props.kind'))->toBeFalse();
-    expect(str_contains($kort, 'presetFor('))->toBeFalse();
-
-    // Valet är användarens: en `<select>` över uppsättningarnas namn, och
-    // förhandsvisningen ritas ur det valda namnet.
-    expect($kort)->toContain('<select')
-        ->toContain('chosenName')
-        ->toContain('props.mimersTemplates')
-        ->toContain('find((one) => one.name === chosenName.value)')
-        // Ingen förvald uppsättning: listan är tom tills hon pekat på en.
-        ->toContain("ref('')");
 });

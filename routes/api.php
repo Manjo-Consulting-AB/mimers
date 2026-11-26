@@ -175,7 +175,6 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/templates', [ContainerTemplateController::class, 'store']);
     Route::patch('/templates/{template}', [ContainerTemplateController::class, 'update']);
     Route::delete('/templates/{template}', [ContainerTemplateController::class, 'destroy']);
-    Route::post('/containers/{container}/template', [ContainerTemplateController::class, 'apply']);
 
     // Issue 9b · Åtkomstytan — bevilja, lista och återkalla delegerade
     // åtkomster till en container, se

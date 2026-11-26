@@ -359,40 +359,6 @@ it('kategorier, taggar och kalenderflöden skriver en rad per skrivning', functi
     expect(DB::table('audit_log')->whereNotNull('item_id')->count())->toBe(0);
 });
 
-it('en tillämpad kategorimall skriver en rad och en avfärdad ingen', function () {
-    [$konto, $ägare] = kontoMedMedlem();
-    $container = Container::factory()->for($konto, 'account')->create();
-
-    $svar = actingAs($ägare)->post("/containers/{$container->ulid}/categories/preset", [
-        'categories' => [
-            ['name' => 'Verktyg', 'children' => ['Skruvmejsel', 'Hammare']],
-            ['name' => 'Rigg'],
-        ],
-    ]);
-
-    $svar->assertRedirect();
-
-    // Fyra kategorier skapades — och hela tillämpningen är EN rad.
-    expect(Category::query()->where('container_id', $container->id)->count())->toBe(4);
-
-    $rad = containerhandelseRad(AuditLog::ACTION_CATEGORY_TEMPLATE_APPLIED, $container);
-    expect($rad->user_id)->toBe($ägare->id);
-    expect($rad->subject_type)->toBe('container');
-    expect($rad->subject_id)->toBe($container->ulid);
-    expect(containerhandelseMeta($rad))->toBe(['categories' => 4]);
-
-    // Ingen av kategorierna fick en egen rad — de är följden av handlingen,
-    // inte handlingar (samma regel som förekomsten CloseOccurrence öppnar).
-    expect(containerhandelseRader(AuditLog::ACTION_CATEGORY_CREATED, $container))->toHaveCount(0);
-    expect(DB::table('audit_log')->where('container_id', $container->id)->count())->toBe(1);
-
-    // "Nej tack" är ingen skrivning alls: ingen rad, varken för mallen eller
-    // för avfärdandet.
-    actingAs($ägare)->delete("/containers/{$container->ulid}/categories/preset")->assertRedirect();
-
-    expect(DB::table('audit_log')->where('container_id', $container->id)->count())->toBe(1);
-});
-
 it('en inbjudan som skickas, återkallas, accepteras eller avböjs skriver en rad', function () {
     Notification::fake();
 

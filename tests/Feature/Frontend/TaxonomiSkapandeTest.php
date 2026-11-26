@@ -163,7 +163,6 @@ it('har inte lagt till några rutter för tagg- och kategoriskapandet', function
     expect($poster)->toEqualCanonicalizing([
         'containers/{container}/tags',
         'containers/{container}/categories',
-        'containers/{container}/categories/preset',
     ]);
 
     $rutter = File::get(base_path('routes/web.php'));

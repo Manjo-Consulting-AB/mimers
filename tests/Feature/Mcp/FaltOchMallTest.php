@@ -319,8 +319,8 @@ it('avvisar fields_create för en agent utan skrivrätt i items eller utan påsl
     ]))['code'])->toBe('resource.not_found');
 });
 
-it('prövar containern som mål för fältverktygen och för en tillämpad mall', function () {
-    [$agent, $token, $anvandare, $privat] = faltMiljo();
+it('prövar containern som mål för fältverktygen', function () {
+    [$agent, $token, , $privat] = faltMiljo();
 
     $delad = mcpEgenContainer($agent, 'Delad');
     beviljaAccess($delad, User::factory()->create(), 'read', 'guest');
@@ -337,17 +337,6 @@ it('prövar containern som mål för fältverktygen och för en tillämpad mall'
 
     expect($fel['code'])->toBe('agent.copy_widens_access')
         ->and(ItemField::query()->where('container_id', $delad->id)->exists())->toBeFalse();
-
-    [, $mall] = faltMall($agent, $anvandare);
-
-    $fel = mcpFel(mcpVerktyg($token, 'containers_apply_template', [
-        'container' => $delad->ulid,
-        'template' => $mall->ulid,
-    ]));
-
-    expect($fel['code'])->toBe('agent.copy_widens_access')
-        ->and($delad->fields()->count())->toBe(0)
-        ->and($delad->categories()->count())->toBe(0);
 });
 
 it('raderar ett fält till papperskorgen, räknar det mot taket och visar det i notisen', function () {
@@ -579,58 +568,26 @@ it('ger en ny container mallens kategorier och fält', function () {
         ->exists())->toBeTrue();
 });
 
-it('tillämpar en mall på en befintlig container', function () {
-    [$agent, $token, $anvandare] = mcpAgentMedToken();
-    [, $mall] = faltMall($agent, $anvandare);
+it('har inget verktyg för att lägga en mall på en befintlig container', function () {
+    [, $token, , $container] = faltMiljo();
 
-    $mal = mcpEgenContainer($agent, 'Målet');
+    // [[ADR-0101 Mallarna]] beslut 4: en mall läggs bara på när containern
+    // skapas. Verktyget är borta utan avvecklingstid (MCP är beta till 1.0.0).
+    $namn = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))
+        ->pluck('name')
+        ->all();
 
-    $resultat = mcpResultat(mcpVerktyg($token, 'containers_apply_template', [
-        'container' => $mal->ulid,
-        'template' => $mall->ulid,
-    ]));
+    expect($namn)->not->toContain('containers_apply_template')
+        ->toContain('templates_list')
+        ->toContain('containers_create');
 
-    expect($resultat['categories'])->toBe(2)
-        ->and($resultat['fields'])->toBe(2)
-        ->and($mal->categories()->pluck('name')->sort()->values()->all())
-        ->toBe(['Skruvdragare', 'Verktyg'])
-        ->and($mal->fields()->pluck('label')->all())
-        ->toBe(['Serienummer', 'Inköpsdatum']);
-});
+    $svar = mcpVerktyg($token, 'containers_apply_template', [
+        'container' => $container->ulid,
+        'template' => 'x',
+    ]);
 
-it('tillämpar inte någon annans mall och ändrar ingenting när gränsen slås i taket', function () {
-    [$agent, $token, $anvandare] = mcpAgentMedToken();
-    $mal = mcpEgenContainer($agent, 'Målet');
-
-    [$annatKonto, $annanAnvandare] = mcpKonto('pro');
-    $annansKalla = Container::factory()->for($annatKonto, 'account')->create();
-    $annansMall = app(SaveContainerTemplate::class)->handle($annanAnvandare, $annansKalla, 'Annans mall');
-
-    expect(mcpFel(mcpVerktyg($token, 'containers_apply_template', [
-        'container' => $mal->ulid,
-        'template' => $annansMall->ulid,
-    ]))['code'])->toBe('resource.not_found');
-
-    // En mall med fler fält än containern har plats för avvisas i sin helhet.
-    // Målet har ett fält sedan förut, och mallen bär de 25 som får plats i
-    // källcontainern — tillsammans 26 och därmed över gränsen.
-    faltFalt($mal, null, 'Befintligt', 'text', $anvandare);
-
-    $stor = mcpEgenContainer($agent, 'Stor');
-    foreach (range(1, 25) as $nummer) {
-        faltFalt($stor, null, "Källfält {$nummer}", 'text', $anvandare);
-    }
-    $storMall = app(SaveContainerTemplate::class)->handle($anvandare, $stor, 'Stor mall');
-
-    $fel = mcpFel(mcpVerktyg($token, 'containers_apply_template', [
-        'container' => $mal->ulid,
-        'template' => $storMall->ulid,
-    ]));
-
-    expect($fel['code'])->toBe('field.limit_reached')
-        ->and($fel['hint'])->toBeString()
-        ->and($mal->fields()->count())->toBe(1)
-        ->and($mal->categories()->count())->toBe(0);
+    expect($svar->json('error'))->not->toBeNull()
+        ->and($container->categories()->count())->toBe(0);
 });
 
 // ─── Issue 509: ja/nej-fält ──────────────────────────────────────────────────

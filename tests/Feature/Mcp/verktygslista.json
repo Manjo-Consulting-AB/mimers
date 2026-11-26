@@ -160,26 +160,6 @@
         }
     },
     {
-        "name": "containers_apply_template",
-        "parameters": {
-            "container": {
-                "type": "string"
-            },
-            "template": {
-                "type": "string"
-            }
-        },
-        "required": [
-            "container",
-            "template"
-        ],
-        "annotations": {
-            "destructiveHint": false,
-            "idempotentHint": false,
-            "readOnlyHint": false
-        }
-    },
-    {
         "name": "containers_create",
         "parameters": {
             "description": {

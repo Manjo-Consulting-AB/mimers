@@ -905,7 +905,6 @@ return [
         'category-created' => 'The category has been created.',
         'category-updated' => 'The category has been saved.',
         'category-deleted' => 'The category has been deleted.',
-        'category-preset-applied' => 'The categories have been added. Change them however you like.',
         'tag-created' => 'The tag has been created.',
         'tag-updated' => 'The tag has been saved.',
         'tag-deleted' => 'The tag has been deleted.',
@@ -3099,22 +3098,6 @@ return [
             'destroy_confirm' => 'This category is used on :items items. Move it to the trash? You can restore it within 30 days.',
             'destroy_confirm_tree' => 'This category and its :subcategories subcategories are used on :items items. Move them to the trash? You can restore them within 30 days.',
             'destroy_confirm_tree_empty' => 'This category and its :subcategories subcategories will be moved to the trash. You can restore them within 30 days.',
-
-            // The suggestion on an empty container, see issue 56b decision 4. The
-            // words in the set itself are NOT here and never will be: they live
-            // in resources/js/data/categoryPresets.js, per language. Since issue
-            // 84 the sets hang off no container field at all — the user picks
-            // one, and `preset_choose`/`preset_pick` are the picker's own words.
-            // `preset_not_empty` is the route's answer on a container that already
-            // has categories and lands on the `categories` form key — a
-            // sentence, not an API error code, since the route is web-only.
-            'preset_heading' => 'Ready-made set',
-            'preset_description' => 'We can fill the container with a ready-made suggestion of categories. You can rename, move and delete them just like any other category afterwards.',
-            'preset_choose' => 'Choose a set',
-            'preset_pick' => '— pick one —',
-            'preset_apply' => 'Add the set',
-            'preset_dismiss' => 'No thanks',
-            'preset_not_empty' => 'The container already has categories. A set can only be added to an empty container.',
         ],
 
         // The tag list, see issue 56a decisions 6 and 8.
@@ -3249,21 +3232,12 @@ return [
             'name' => 'Template name',
             'save_confirm' => 'Save',
 
-            'apply_heading' => 'Apply template',
-            'apply_description' => 'Add the categories and fields from a template to this container. Fields whose heading already exists are skipped, and nothing is changed until you confirm.',
-            'apply' => 'Apply template',
-            'apply_dialog_heading' => 'Apply template',
-            'choose' => 'Template',
-            'choose_empty' => 'Choose a template',
-            'empty' => 'This account has no templates yet.',
-
             'preview_heading' => 'What will be added',
             'preview_categories' => 'Categories: :count',
             'preview_fields' => 'Fields: :count',
             'preview_no_fields' => 'No fields will be added.',
             'preview_skipped' => 'Skipped — the heading already exists: :labels',
             'preview_none_skipped' => 'No fields will be skipped.',
-            'apply_confirm' => 'Apply',
         ],
 
         /*

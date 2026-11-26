@@ -5,7 +5,6 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CategoryCreateForm from '../../components/CategoryCreateForm.vue';
-import CategoryPresetCard from '../../components/CategoryPresetCard.vue';
 import CategoryTree from '../../components/CategoryTree.vue';
 import { buildCategoryTree, movePayload } from '../../components/categoryTree.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -60,13 +59,6 @@ defineOptions({
  * dragets begäran, och felpåsen kan inte säga vilken rad `errors.parent`
  * tillhör — så en gammal ruta aldrig står kvar på fel rad när nästa sparning
  * nekas.
- *
- * **Förslaget på en tom container** kom med issue 56b § Beslut 4:
- * resources/js/components/CategoryPresetCard.vue ritas i stället för
- * tomtexten när trädet är tomt, användaren får skriva och hon inte redan tackat
- * nej i den här sessionen (`presetDismissed`, den enda prop servern skickar om
- * förslaget). Kortet är ett `<section>` och ingen modal — skapa-formuläret
- * ovanför fungerar oförändrat bredvid det.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -75,10 +67,6 @@ const props = defineProps({
        — talen raderingsfrågan ritar (issue 150). Samma form som taggsidans. */
     counts: { type: Object, required: true },
     can: { type: Object, required: true },
-    /* Sant när användaren tackat nej till förslaget för den här containern i den
-       här sessionen — se App\Http\Controllers\CategoryController. */
-    presetDismissed: { type: Boolean, required: true },
-    mimersTemplates: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -154,17 +142,6 @@ function sendMove(draggedUlid, payload) {
         onError: () => { moveErrorUlid.value = draggedUlid; },
     });
 }
-
-/*
- * Den färdiga uppsättningen visas bara på en TOM container (Beslut 4) — den frågan
- * är redan ställd av listan — och bara för den som får skriva. Servern har
- * bara sagt sitt om nej:et; uppsättningen själv väljs i klienten av
- * CategoryPresetCard, ur localen och användarens eget val (issue 84).
- * Containerns art skickas INTE med: den är fri och pekar inte ut någon mall.
- */
-const showsPreset = computed(
-    () => props.can.manage && props.categories.length === 0 && !props.presetDismissed,
-);
 </script>
 
 <template>
@@ -221,12 +198,6 @@ const showsPreset = computed(
             @submit="clearMoveError"
         />
     </ul>
-
-    <CategoryPresetCard
-        v-else-if="showsPreset"
-        :container-ulid="container.ulid"
-        :mimers-templates="mimersTemplates"
-    />
 
     <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>
 </template>

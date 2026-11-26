@@ -2,25 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Category\CreateCategory;
 use App\Actions\Category\DeleteCategory;
 use App\Actions\Category\ListCategories;
 use App\Actions\Category\UpdateCategory;
 use App\Exceptions\Api\ApiException;
-use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
-use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Support\Frontend\ApiErrorTranslator;
-use App\Support\Template\MimersTemplates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -69,17 +64,6 @@ use Inertia\Response;
 class CategoryController extends Controller
 {
     /**
-     * Sessionsnyckeln för de containers vars förslag tackats nej till, se issue
-     * 56b § Beslut 4. En lista av containerns ULID:n, ingenting annat — nej:et
-     * är ett sessionsbegrepp och får aldrig bli en kolumn (Beslut 4: "en
-     * kolumn för att minnas ett nej vore en migration för ett nej").
-     *
-     * Stavas BARA här, precis som App\Support\Frontend\ActiveContainer::
-     * SESSION_KEY, så en omladdning av nyckeln är en rad och inte en jakt.
-     */
-    public const PRESET_DISMISSED_SESSION_KEY = 'category_preset_dismissed_ulids';
-
-    /**
      * GET /containers/{container}/categories — trädet.
      *
      * `categories` är den platta listan ur `CategoryResource`, sorterad på
@@ -90,13 +74,6 @@ class CategoryController extends Controller
      * presentation; grinden är policyn, och varje skrivning auktoriserar med
      * `Gate::authorize()` oavsett vad sidan visade — samma linje som issue 54
      * § Beslut 9.
-     *
-     * `presetDismissed` är det enda servern vet om det färdiga förslaget (issue
-     * 56b § Beslut 2 och 4): att användaren tackat nej till det för DEN HÄR
-     * containern i DEN HÄR sessionen. Uppsättningarna kommer som propen
-     * `mimersTemplates` ur App\Support\Template\MimersTemplates
-     * ([[ADR-0101 Mallarna]]). Att tomheten avgör om kortet ritas är sidans
-     * sak: den frågan är redan ställd av listan.
      *
      * **`counts` är räknaren som raderingsfrågan ritar talen ur** (issue 150),
      * samma form som taggsidans prop: ett uppslag ULID → tal, skickat som
@@ -137,10 +114,6 @@ class CategoryController extends Controller
             'can' => [
                 'manage' => $canManage,
             ],
-            'presetDismissed' => $this->presetDismissed($container),
-            // Mimers mallar bor på servern ([[ADR-0101 Mallarna]]); kortet
-            // visar dem och väljer med `key`.
-            'mimersTemplates' => app(MimersTemplates::class)->forProp(),
         ]);
     }
 
@@ -170,150 +143,6 @@ class CategoryController extends Controller
         }
 
         return back()->with('status', 'category-created');
-    }
-
-    /**
-     * POST /containers/{container}/categories/preset — 302 tillbaka.
-     *
-     * Den färdiga uppsättningen, se issue 56b § Beslut 3. Kroppen är en lista
-     * med namn servern inte förstår; den skapar en rad per namn, rot först och
-     * sedan barnen med roten som förälder, **i den ordning listan kommer**, i
-     * EN transaktion. App\Actions\Category\CreateCategory sätter positionen —
-     * ingen egen räkning här, för då hade två sanningar om syskonordningen
-     * funnits.
-     *
-     * **Bara en TOM container.** Har containern minst en levande kategori är svaret
-     * 422 på formulärnyckeln `categories` och ingenting skrivs. Utan den
-     * kontrollen är rutten ett sätt att fördubbla trädet med en knapp som ser
-     * ut som ett förslag. Det är också hela idempotensen: när raderna finns är
-     * trädet inte längre tomt, och det finns inget tillstånd att synkronisera
-     * (Beslut 6).
-     *
-     * **Kontrollen och skrivningen är samma kritiska sektion.** Låg tomhets-
-     * kontrollen före transaktionen kunde två samtidiga anrop mot samma tomma
-     * container bägge passera den innan någon av dem hunnit skriva, och trädet hade
-     * fördubblats — precis det Beslut 3 kallar "inte en smaksak". Låset sitter
-     * därför på CONTAINERRADEN (`lockForUpdate()`), inte på `exists()`-frågan:
-     * mot en tabell som per definition är tom låser en sådan fråga ingenting
-     * alls. Det andra anropet väntar på radlåset, ser sedan raderna och får
-     * 422.
-     *
-     * Felet är en MENING ur `lang/`, inte en API-felkod: rutten finns bara på
-     * webben och har ingen motsvarighet i `/api` att hålla koden i takt med,
-     * till skillnad från `category.cycle` och de andra i
-     * App\Http\Controllers\Api\CategoryController.
-     *
-     * **Mallen skriver EN loggrad, inte en per kategori** (issue 111). Att
-     * tillämpa mallen är användarens handling; kategorierna den skapar är
-     * följden, på samma sätt som förekomsten `CloseOccurrence` öppnar i issue
-     * 110 inte loggas. Raden skrivs därför HÄR — rutten finns bara på webben,
-     * och `CreateCategory` får `null` som aktör och avstår från en egen rad.
-     * Att AVFÄRDA mallen (App\Http\Controllers\CategoryController::
-     * dismissPreset()) är ingen skrivning alls och loggas inte.
-     */
-    public function storePreset(
-        StoreCategoryPresetRequest $request,
-        Container $container,
-        CreateCategory $createCategory,
-        RecordAuditEvent $recordAuditEvent,
-    ): RedirectResponse {
-        Gate::authorize('update', $container);
-
-        DB::transaction(function () use ($request, $container, $createCategory, $recordAuditEvent): void {
-            $container = Container::query()->whereKey($container->id)->lockForUpdate()->firstOrFail();
-
-            if ($container->categories()->exists()) {
-                throw ValidationException::withMessages([
-                    'categories' => trans('ui.container.categories.preset_not_empty'),
-                ]);
-            }
-
-            $createdCount = 0;
-
-            // `null` som aktör: mallen skriver EN rad för hela tillämpningen
-            // och ingen per kategori den skapar (issue 111) — se den här
-            // metodens docblock.
-            foreach ($request->validated('categories') as $preset) {
-                $root = $createCategory->handle($container, $preset['name'], null, null, null);
-                $createdCount++;
-
-                foreach ($preset['children'] ?? [] as $child) {
-                    $createCategory->handle($container, $child, $root, null, null);
-                    $createdCount++;
-                }
-            }
-
-            // EN rad, i samma transaktion som trädet: en mall som avfärdas
-            // skriver ingen rad alls — avfärdandet är ingen skrivning.
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_CATEGORY_TEMPLATE_APPLIED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'container',
-                subjectUlid: $container->ulid,
-                meta: ['categories' => $createdCount],
-            );
-        });
-
-        return back()->with('status', 'category-preset-applied');
-    }
-
-    /**
-     * DELETE /containers/{container}/categories/preset — 302 tillbaka.
-     *
-     * "Nej tack", se issue 56b § Beslut 4. Containerns ULID hamnar i en lista i
-     * sessionen och sidan renderar om utan förslaget. Ingen flagga i
-     * databasen, ingen kolumn, ingen ny tabell.
-     *
-     * Att nej:et inte överlever en ny session är ett medvetet val: kombinationen
-     * "tom container" och "ny session" är sällsynt, och en påminnelse där är
-     * hjälpsam snarare än tjatig.
-     *
-     * Grinden är `update()` — samma som för att lägga in uppsättningen. Bara
-     * den som får skriva ser kortet, och bara den som ser kortet kan tacka nej
-     * till det.
-     */
-    public function dismissPreset(Container $container): RedirectResponse
-    {
-        Gate::authorize('update', $container);
-
-        $dismissed = $this->dismissedUlids();
-
-        if (! in_array($container->ulid, $dismissed, true)) {
-            $dismissed[] = $container->ulid;
-
-            session()->put(self::PRESET_DISMISSED_SESSION_KEY, $dismissed);
-        }
-
-        return back();
-    }
-
-    /**
-     * Har förslaget för $container tackats nej till i den här sessionen?
-     */
-    private function presetDismissed(Container $container): bool
-    {
-        return in_array($container->ulid, $this->dismissedUlids(), true);
-    }
-
-    /**
-     * ULID:n för de containers sessionen tackat nej till. En trasig eller saknad
-     * sessionspost blir en tom lista — sessionen är användarens, och ett nej
-     * som tappats ska visa förslaget igen, inte krascha sidan (samma linje som
-     * App\Support\Frontend\ActiveContainer::forUser()).
-     *
-     * @return list<string>
-     */
-    private function dismissedUlids(): array
-    {
-        $dismissed = session()->get(self::PRESET_DISMISSED_SESSION_KEY, []);
-
-        if (! is_array($dismissed)) {
-            return [];
-        }
-
-        return array_values(array_filter($dismissed, 'is_string'));
     }
 
     /**

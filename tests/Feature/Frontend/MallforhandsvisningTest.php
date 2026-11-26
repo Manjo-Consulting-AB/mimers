@@ -17,11 +17,8 @@ use function Pest\Laravel\withoutVite;
  * mot samma modul klienten importerar — en assertion på en PHP-avskrift hade
  * bevisat noll.
  *
- * **Klart när-punkten "Apply template visar vad som hoppas över innan det
- * tillämpas"** bevisas i två steg: att räknandet ger rätt svar (nodprovet),
- * och att dialogen ritar TemplatePreview före sin skicka-knapp (källprovet).
- * Det som kräver en webbläsare — att raden syns på skärmen — står i PR:ens
- * handprov.
+ * Tillämpningsdialogen är borta sedan issue 517 ([[ADR-0101 Mallarna]]);
+ * räknandet används kvar av förhandsvisningen vid skapandet.
  *
  * Hjälparna har prefixet `mallforhands` — Pest lägger alla testfiler i samma
  * namnrymd.
@@ -138,26 +135,9 @@ it('skickar Mimers mall som mimers_template och mallen som template', function (
     $redigera = File::get(resource_path('js/pages/Containers/Edit.vue'));
 
     expect($redigera)->toContain('/templates`')
-        ->toContain('/template`')
-        ->toContain('visibleFieldLabels')
-        ->toContain('ApplyTemplateDialog')
         ->toContain('SaveTemplateDialog');
-});
-
-it('ritar förhandsvisningen i tillämpningsdialogen före knappen', function () {
-    $dialog = File::get(resource_path('js/components/templates/ApplyTemplateDialog.vue'));
-
-    // Dialogen väljer mall, ritar TemplatePreview och skickar först därefter.
-    $val = strpos($dialog, 'id="apply-template"');
-    $forhands = strpos($dialog, '<TemplatePreview');
-    $knapp = strpos($dialog, 'container.templates.apply_confirm');
-
-    expect($val)->not->toBeFalse();
-    expect($forhands)->not->toBeFalse();
-    expect($knapp)->not->toBeFalse();
-
-    expect($val < $forhands)->toBeTrue('dialogen väljer mall efter förhandsvisningen');
-    expect($forhands < $knapp)->toBeTrue('dialogen skickar innan den visar vad som hoppas över');
+    expect(str_contains($redigera, '/template`'))->toBeFalse();
+    expect(str_contains($redigera, 'ApplyTemplateDialog'))->toBeFalse();
 });
 
 it('ger sidan för att skapa en container Mimers mallar som propen mimersTemplates', function () {

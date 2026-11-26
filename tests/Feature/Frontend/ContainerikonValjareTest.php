@@ -304,9 +304,9 @@ it('ritar ikonsektionen bredvid bilden och bara med rätten att uppdatera', func
 
     // Bilden har kvar sin egen gren; ikonen ärver samma regel. Sedan issue
     // 1254 finns en tredje gren — *Currencies for costs* — och den ritas av
-    // samma `can.update` som de två andra. Issue 422 lägger den fjärde:
-    // *Apply template*, som också är en skrivning.
-    expect(substr_count($vy, '<section v-if="can.update"'))->toBe(4);
+    // samma `can.update` som de två andra. *Apply template* var den fjärde
+    // och togs bort i issue 517.
+    expect(substr_count($vy, '<section v-if="can.update"'))->toBe(3);
 });
 
 /*
