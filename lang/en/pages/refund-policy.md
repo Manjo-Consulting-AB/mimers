@@ -42,6 +42,10 @@ You can cancel your subscription at any time with **Manage billing** on your pro
 
 After 30 days, payments are not normally refunded. Your rights under mandatory consumer law are not affected. If something went wrong on our side — a double charge, or the service did not work as described — contact us through the [contact form](/contact) and we will put it right.
 
+## 6. If Mimers shuts down
+
+If we decide to shut down Mimers, we will stop accepting new subscriptions and stop renewals, and let paid subscription periods run to their end before the service closes. If we have to close the service before your paid period ends, we will refund the part of the period that was not delivered, pro rata. See section 15 of our [Terms of Use](/terms).
+
 ---
 
 Mimers is operated by Manjo Consulting AB.

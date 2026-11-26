@@ -59,10 +59,10 @@ function aterbetalningspolicynKalla(string $sokvag): string
 
 /*
  * Klart när: `GET /refund-policy` ger `Info` med `page = refund-policy` och en
- * `body` som inte är `null`, med de fem numrerade rubrikerna som `<h2>`, raden
+ * `body` som inte är `null`, med de sex numrerade rubrikerna som `<h2>`, raden
  * *Last updated: 25 November 2026* och ingen `<h1>`.
  */
-it('visar de fem numrerade rubrikerna som h2 och uppdateringsdatumet', function () {
+it('visar de sex numrerade rubrikerna som h2 och uppdateringsdatumet', function () {
     $body = aterbetalningspolicynKropp();
 
     $rubriker = [
@@ -71,6 +71,7 @@ it('visar de fem numrerade rubrikerna som h2 och uppdateringsdatumet', function 
         '3. What happens to your account',
         '4. Cancelling without a refund',
         '5. After 30 days',
+        '6. If Mimers shuts down',
     ];
 
     $senast = -1;
@@ -86,7 +87,7 @@ it('visar de fem numrerade rubrikerna som h2 och uppdateringsdatumet', function 
         $senast = $position;
     }
 
-    expect(substr_count($body, '<h2'))->toBe(5)
+    expect(substr_count($body, '<h2'))->toBe(6)
         ->and($body)->toContain('Last updated: 25 November 2026')
         ->and($body)->not->toContain('<h1');
 });
@@ -197,4 +198,16 @@ it('lämnar /about och /subprocessors orörda', function () {
 
     expect((string) $about->inertiaProps()['body'])->toContain('Structure on your terms.')
         ->and((string) $underbitraden->inertiaProps()['body'])->toContain('Inleed');
+});
+
+/*
+ * Klart när: § 6 säger vad som händer om Mimers läggs ned och hänvisar till /terms § 15.
+ */
+it('har avsnittet om nedläggning med återbetalning pro rata', function () {
+    $body = aterbetalningspolicynKropp();
+
+    expect($body)->toContain('>6. If Mimers shuts down</h2>')
+        ->and($body)->toContain('If we decide to shut down Mimers, we will stop accepting new subscriptions and stop renewals, and let paid subscription periods run to their end before the service closes.')
+        ->and($body)->toContain('we will refund the part of the period that was not delivered, pro rata.')
+        ->and($body)->toContain('section 15 of our <a href="/terms">Terms of Use</a>');
 });
