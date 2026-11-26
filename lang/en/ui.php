@@ -1538,6 +1538,7 @@ return [
             'save' => 'Save',
             'destroy' => 'Delete',
             'count' => ':categories categories · :fields fields',
+            'has_agent_rules' => 'Includes agent rules',
 
             'destroy_heading' => 'Delete “:name”?',
             'destroy_body' => 'The template is removed from the account. Containers made from it keep their categories and fields.',
@@ -3231,6 +3232,7 @@ return [
             'save_dialog_heading' => 'Save as template',
             'name' => 'Template name',
             'save_confirm' => 'Save',
+            'include_agent_rules' => 'Include agent rules',
 
             'preview_heading' => 'What will be added',
             'preview_categories' => 'Categories: :count',
@@ -3238,6 +3240,7 @@ return [
             'preview_no_fields' => 'No fields will be added.',
             'preview_skipped' => 'Skipped — the heading already exists: :labels',
             'preview_none_skipped' => 'No fields will be skipped.',
+            'preview_agent_rules' => 'Agent rules the container will get',
         ],
 
         /*

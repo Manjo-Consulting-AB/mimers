@@ -26,6 +26,12 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+const agentRules = computed(() => {
+    const rules = props.content?.agent_rules;
+
+    return typeof rules === 'string' && rules.trim() !== '' ? rules : null;
+});
+
 const preview = computed(() => templatePreview(props.content, props.existingLabels));
 </script>
 
@@ -52,5 +58,10 @@ const preview = computed(() => templatePreview(props.content, props.existingLabe
         </p>
 
         <p v-else class="mt-2 text-sm text-ink-muted">{{ t('container.templates.preview_none_skipped') }}</p>
+
+        <div v-if="agentRules" class="mt-2">
+            <h4 class="text-sm font-medium text-ink">{{ t('container.templates.preview_agent_rules') }}</h4>
+            <p class="mt-1 whitespace-pre-line text-sm text-ink-muted">{{ agentRules }}</p>
+        </div>
     </section>
 </template>

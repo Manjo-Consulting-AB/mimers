@@ -459,7 +459,7 @@ function saveVersioning(value) {
 // *Save as template* frågar efter namnet i en dialog och postar till
 // `/containers/{ulid}/templates`; `useForm` ger vänteläget (`processing`), så en
 // dubbelpostning är stängd.
-const saveTemplateForm = useForm({ container: props.container.ulid, name: '' });
+const saveTemplateForm = useForm({ container: props.container.ulid, name: '', include_agent_rules: true });
 const saveTemplateOpen = ref(false);
 const saveTemplateTrigger = ref(null);
 
@@ -468,9 +468,10 @@ function openSaveTemplate(event) {
     saveTemplateOpen.value = true;
 }
 
-function saveTemplate(name) {
+function saveTemplate({ name, includeAgentRules }) {
     saveTemplateForm.container = props.container.ulid;
     saveTemplateForm.name = name;
+    saveTemplateForm.include_agent_rules = includeAgentRules;
 
     saveTemplateForm.post(`/containers/${props.container.ulid}/templates`, {
         preserveScroll: true,
@@ -809,6 +810,7 @@ async function destroy() {
             :trigger="saveTemplateTrigger"
             :pending="saveTemplateForm.processing"
             :error="saveTemplateForm.errors.name ?? null"
+            :can-include-agent-rules="can.includeAgentRules === true"
             @save="saveTemplate"
             @close="saveTemplateOpen = false"
         />

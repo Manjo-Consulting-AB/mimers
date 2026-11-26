@@ -12,6 +12,7 @@ use App\Support\Usage\MetadataLedger;
 use App\Support\Usage\Payer;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Sparar en containers kategoriträd och fält som en mall på kontot, se
@@ -21,6 +22,10 @@ use Illuminate\Support\Facades\DB;
  * `position`-ordning; fälten är containerns (de med `item_id` NULL), också de
  * i ordning. Inga items och inga egna fält på items följer med — mallen bär
  * det som hör till containern, inte dess innehåll.
+ *
+ * **Agentreglerna följer med** när `$includeAgentRules` är sant och
+ * `manageAgentRules` tillåter det ([[ADR-0101 Mallarna]] § Beslut 5); annars
+ * sparas `agent_rules` som `null`.
  *
  * **Mallen ägs av containerns konto**, och betalaren är det agerande kontot
  * genom App\Support\Usage\Payer — samma regel som för en rad skaparen själv
@@ -44,9 +49,16 @@ final class SaveContainerTemplate
      * @throws ApiException 422 `template.limit_reached` när kontot redan har
      *                      `templates.max_per_account` levande mallar.
      */
-    public function handle(User $actor, Container $container, string $name): ContainerTemplate
+    public function handle(User $actor, Container $container, string $name, bool $includeAgentRules = true): ContainerTemplate
     {
         $content = $this->contentOf($container);
+
+        // Reglerna följer bara med när den som sparar får skriva dem
+        // (ContainerPolicy::manageAgentRules()); för alla andra blir de `null`
+        // oavsett vad som begärts ([[ADR-0101 Mallarna]] § Beslut 5).
+        $content['agent_rules'] = $includeAgentRules && Gate::forUser($actor)->allows('manageAgentRules', $container)
+            ? $this->normalisedRules($container->agent_rules)
+            : null;
 
         return DB::transaction(function () use ($actor, $container, $name, $content): ContainerTemplate {
             // Radlåset serialiserar räkningen av mallar för kontot.
@@ -78,7 +90,9 @@ final class SaveContainerTemplate
      * ordningen och det globala SoftDeletes-scopet, så ett raderat fält eller
      * en raderad kategori aldrig hamnar i en mall.
      *
-     * @return array{categories: list<array<string, mixed>>, fields: list<array{label: string, type: string}>}
+     * `agent_rules` är `null` här; handle() fyller i den efter behörighetsprövningen.
+     *
+     * @return array{categories: list<array<string, mixed>>, fields: list<array{label: string, type: string}>, agent_rules: string|null}
      */
     public function contentOf(Container $container): array
     {
@@ -92,7 +106,15 @@ final class SaveContainerTemplate
         return [
             'categories' => $this->tree($categories),
             'fields' => $fields,
+            'agent_rules' => null,
         ];
+    }
+
+    private function normalisedRules(?string $rules): ?string
+    {
+        $rules = $rules === null ? '' : trim($rules);
+
+        return $rules === '' ? null : $rules;
     }
 
     /**

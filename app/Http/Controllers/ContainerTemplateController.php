@@ -67,6 +67,7 @@ class ContainerTemplateController extends Controller
                 $request->user(),
                 $container,
                 (string) $request->validated('name'),
+                $request->boolean('include_agent_rules', true),
             );
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['name' => $translator->message($e)]);

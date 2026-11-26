@@ -16,6 +16,9 @@ use Illuminate\Validation\Rule;
  * Formen är `{"categories": [{"name", "children": [...]}], "fields":
  * [{"label", "type"}]}` enligt [[Items och organisation]] § container_template.
  *
+ * **`agent_rules`** är ren text, högst 2 000 tecken som containerns fält
+ * ([[ADR-0100 Agentregler]]); en gammal mall utan nyckeln läses som `null`.
+ *
  * **Djupet är kategoriträdets**, `Category::MAX_DEPTH` nivåer. Ett `children`
  * på den sista nivån är `prohibited`, så ett för djupt träd blir ett
  * valideringsfel i stället för en halv tillämpning.
@@ -41,6 +44,7 @@ final class TemplateContentRules
     {
         $rules = [
             "{$prefix}categories" => ['sometimes', 'array', 'max:100'],
+            "{$prefix}agent_rules" => ['sometimes', 'nullable', 'string', 'max:2000'],
             "{$prefix}fields" => ['sometimes', 'array', 'max:'.config('fields.max_per_container')],
             "{$prefix}fields.*" => ['array'],
             "{$prefix}fields.*.label" => ['required', 'string', 'min:1', 'max:100'],

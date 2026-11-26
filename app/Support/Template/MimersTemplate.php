@@ -20,10 +20,21 @@ final class MimersTemplate
     ) {}
 
     /**
+     * Innehållet med `agent_rules`, i samma form som en sparad mall — för
+     * förhandsvisningen och `templates_list`.
+     *
+     * @return array<string, mixed>
+     */
+    public function contentWithRules(): array
+    {
+        return $this->agentRules === null ? $this->content : [...$this->content, 'agent_rules' => $this->agentRules];
+    }
+
+    /**
      * @return array{key: string, name: string, content: array<string, mixed>}
      */
     public function toArray(): array
     {
-        return ['key' => $this->key, 'name' => $this->name, 'content' => $this->content];
+        return ['key' => $this->key, 'name' => $this->name, 'content' => $this->contentWithRules()];
     }
 }
