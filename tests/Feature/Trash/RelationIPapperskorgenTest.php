@@ -246,3 +246,26 @@ it('tar med relationerna i agentens batch, efter items, och hoppar över en vars
         ->and(ItemLink::query()->count())->toBe(1)
         ->and(Item::query()->whereKey($a->id)->exists())->toBeTrue();
 });
+
+it('tappar ingen synlig relation på /trash när fler än en sida nyare relationer i en annan container döljs av update-grinden', function () {
+    [, $anvandare, , $container, $a, $b] = relPapperskorgKontext();
+    $gammal = relPapperskorgRad($a, $b);
+    $gammal->forceFill(['deleted_at' => now()->subDays(3)])->saveQuietly();
+
+    // En container där användaren bara får läsa, med fler än 51 nyare
+    // raderade relationer — de filtreras bort av grinden i minnet.
+    $annan = Container::factory()->create();
+    beviljaAccess($annan, $anvandare, 'read', 'guest');
+
+    foreach (range(1, 52) as $i) {
+        $rad = ItemLink::factory()->create([
+            'from_item_id' => Item::factory()->for($annan, 'container'),
+            'to_item_id' => Item::factory()->for($annan, 'container'),
+        ]);
+        $rad->forceFill(['deleted_at' => now()->subMinutes($i)])->saveQuietly();
+    }
+
+    $ulids = collect(app(ListAllTrash::class)->handle($anvandare, 'link', null, null)['entries'])->pluck('ulid');
+
+    expect($ulids->all())->toBe([$gammal->ulid]);
+});

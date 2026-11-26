@@ -495,7 +495,7 @@ class ListAllTrash
             });
         };
 
-        $rows = ItemLink::query()->onlyTrashed()
+        $fetch = fn (?array $after) => ItemLink::query()->onlyTrashed()
             ->join('item as from_item', 'from_item.id', '=', 'item_link.from_item_id')
             ->join('item as to_item', 'to_item.id', '=', 'item_link.to_item_id')
             ->whereNull('from_item.deleted_at')
@@ -507,7 +507,7 @@ class ListAllTrash
                 $query->where('from_item.name', 'like', '%'.$q.'%')
                     ->orWhere('to_item.name', 'like', '%'.$q.'%');
             }))
-            ->when($cursor !== null, fn (Builder $query) => $this->afterCursor($query, 'item_link', $cursor))
+            ->when($after !== null, fn (Builder $query) => $this->afterCursor($query, 'item_link', $after))
             ->orderByDesc('item_link.deleted_at')
             ->orderBy('item_link.ulid')
             ->limit(self::PER_PAGE + 1)
@@ -529,39 +529,55 @@ class ListAllTrash
             ]);
 
         $visible = [];
+        $after = $cursor;
 
-        foreach ($rows as $row) {
-            $container = $containers[(int) $row->getAttribute('link_container_id')] ?? null;
+        // Grinden prövas i minnet och kan dölja rader; hämta därför nya
+        // omgångar efter den sista råa raden tills sidan är full eller källan
+        // är slut, så ingen synlig relation tappas ur listan.
+        do {
+            $rows = $fetch($after);
+            $last = $rows->last();
 
-            // Relationen hör till EN container (item_link.cross_container);
-            // en rad som ändå korsar två lämnas utanför.
-            if ($container === null || (int) $row->getAttribute('to_container_id') !== (int) $container->getKey()) {
-                continue;
+            if ($last !== null) {
+                $after = [
+                    'deleted_at' => Carbon::parse($last->deleted_at)->toDateTimeString(),
+                    'ulid' => (string) $last->ulid,
+                ];
             }
 
-            $from = (new Item)->forceFill([
-                'id' => (int) $row->from_item_id,
-                'ulid' => $row->getAttribute('from_ulid'),
-                'name' => $row->getAttribute('from_name'),
-                'container_id' => (int) $container->getKey(),
-            ]);
-            $to = (new Item)->forceFill([
-                'id' => (int) $row->to_item_id,
-                'ulid' => $row->getAttribute('to_ulid'),
-                'name' => $row->getAttribute('to_name'),
-                'container_id' => (int) $container->getKey(),
-            ]);
-            $from->setRelation('container', $container);
-            $to->setRelation('container', $container);
+            foreach ($rows as $row) {
+                $container = $containers[(int) $row->getAttribute('link_container_id')] ?? null;
 
-            if (! Gate::forUser($user)->allows('update', $from) || ! Gate::forUser($user)->allows('update', $to)) {
-                continue;
+                // Relationen hör till EN container (item_link.cross_container);
+                // en rad som ändå korsar två lämnas utanför.
+                if ($container === null || (int) $row->getAttribute('to_container_id') !== (int) $container->getKey()) {
+                    continue;
+                }
+
+                $from = (new Item)->forceFill([
+                    'id' => (int) $row->from_item_id,
+                    'ulid' => $row->getAttribute('from_ulid'),
+                    'name' => $row->getAttribute('from_name'),
+                    'container_id' => (int) $container->getKey(),
+                ]);
+                $to = (new Item)->forceFill([
+                    'id' => (int) $row->to_item_id,
+                    'ulid' => $row->getAttribute('to_ulid'),
+                    'name' => $row->getAttribute('to_name'),
+                    'container_id' => (int) $container->getKey(),
+                ]);
+                $from->setRelation('container', $container);
+                $to->setRelation('container', $container);
+
+                if (! Gate::forUser($user)->allows('update', $from) || ! Gate::forUser($user)->allows('update', $to)) {
+                    continue;
+                }
+
+                $row->setRelation('fromItem', $from);
+                $row->setRelation('toItem', $to);
+                $visible[] = $row;
             }
-
-            $row->setRelation('fromItem', $from);
-            $row->setRelation('toItem', $to);
-            $visible[] = $row;
-        }
+        } while ($rows->count() > self::PER_PAGE && count($visible) <= self::PER_PAGE);
 
         return $visible;
     }
