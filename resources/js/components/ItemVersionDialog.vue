@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import UiButton from './UiButton.vue';
 import { useTranslations } from '../composables/useTranslations.js';
+import { formatFieldValue, isChecked } from './fields/fieldPresentation.js';
 
 /*
  * Versionen i en dialog, se issue 413 · [[ADR-0088 Versionshistorik för
@@ -185,8 +186,12 @@ const rows = computed(() => {
         rows.push({
             key: `field:${field.id}`,
             label: field.label,
-            value: empty(field.value),
-            changed: (field.value ?? null) !== current,
+            value: field.type === 'boolean'
+                ? formatFieldValue(field, '', t)
+                : empty(field.value),
+            changed: field.type === 'boolean'
+                ? isChecked(field.value) !== isChecked(current)
+                : (field.value ?? null) !== current,
         });
     }
 

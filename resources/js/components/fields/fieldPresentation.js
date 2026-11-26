@@ -30,6 +30,11 @@ import { formatDateOnly } from '../itemPresentation.js';
  * användaren inte skrev, och fältet är `<input type="number">` som inte tar
  * emot avgränsare.
  *
+ * **Ett ja/nej-fält räknas aldrig som tomt** ([[ADR-0099 Kryssrutefält]]).
+ * Ett fält som inte är ikryssat betyder *nej* och ritas alltid, annars går
+ * det inte att kryssa i på itemet. Det är undantaget från regeln ovan; raden
+ * bär typen och det råa värdet så att vyn kan rita en kryssruta.
+ *
  * **Typen bestämmer inmatningen.** `fieldInputType()` är hela regeln:
  * talfältet är `<input type="number">` och tar därmed bara tal, datumfältet
  * är webbläsarens datumväljare, och textfältet är ett vanligt textfält.
@@ -57,33 +62,91 @@ export function normalizeFields(fields) {
 }
 
 /**
- * Itemets egna fältrader, bara de som har ett värde.
+ * Är värdet ett ikryssat ja/nej-fält? Servern ger `true`/`false`; en version
+ * bär `true`, och en äldre sträng `1` läses på samma sätt.
  *
- * `key` är fältets ULID och inte rubriken: två fält får heta nästan samma sak,
- * och rubriken är användarens text. `label` är rubriken som den står.
- *
- * @param {object} item itemet ur `ItemResource`
- * @param {string} locale användarens språk
- * @returns {Array<{key: string, label: string, value: string}>}
+ * @param {unknown} value
+ * @returns {boolean}
  */
-export function customFieldRows(item, locale) {
-    return (item.fields ?? [])
-        .filter((field) => field.value !== null && field.value !== undefined && field.value !== '')
-        .map((field) => ({
-            key: `field-${field.id}`,
-            label: field.label,
-            value: formatFieldValue(field, locale),
-        }));
+export function isChecked(value) {
+    return value === true || value === 1 || value === '1' || value === 'true';
 }
 
 /**
- * Värdet som användaren ska läsa, formaterat efter fältets typ.
+ * Formulärets startvärde för ett fält: en boolean för ja/nej, annars värdet
+ * eller en tom sträng.
  *
- * @param {{type: string, value: string|null}} field
+ * @param {{type: string, value: unknown}} field
+ * @returns {string|boolean}
+ */
+export function initialFieldValue(field) {
+    if (field.type === 'boolean') {
+        return isChecked(field.value);
+    }
+
+    return field.value ?? '';
+}
+
+/**
+ * Har fältet ett sparat värde som ska stå direkt i formuläret? Ett ja/nej-fält
+ * har alltid det: det har inget tomt läge att fälla ihop.
+ *
+ * @param {{type: string, value: unknown}} field
+ * @returns {boolean}
+ */
+export function hasStoredValue(field) {
+    return field.type === 'boolean'
+        || (field.value !== null && field.value !== undefined && field.value !== '');
+}
+
+/**
+ * Itemets egna fältrader: de som har ett värde, och alla ja/nej-fält.
+ *
+ * `key` är fältets ULID och inte rubriken: två fält får heta nästan samma sak,
+ * och rubriken är användarens text. `label` är rubriken som den står. En rad
+ * för ett ja/nej-fält bär dessutom `type: 'boolean'`, `fieldId` (ULID:en som
+ * PATCH:en pekar på) och `checked` (det råa värdet).
+ *
+ * @param {object} item itemet ur `ItemResource`
+ * @param {string} locale användarens språk
+ * @param {(key: string) => string} [t] översättaren, för *Yes* och *No*
+ * @returns {Array<{key: string, label: string, value: string}>}
+ */
+export function customFieldRows(item, locale, t = (key) => key) {
+    return (item.fields ?? [])
+        .filter((field) => field.type === 'boolean'
+            || (field.value !== null && field.value !== undefined && field.value !== ''))
+        .map((field) => {
+            const row = {
+                key: `field-${field.id}`,
+                label: field.label,
+                value: formatFieldValue(field, locale, t),
+            };
+
+            if (field.type === 'boolean') {
+                row.type = 'boolean';
+                row.fieldId = field.id;
+                row.checked = isChecked(field.value);
+            }
+
+            return row;
+        });
+}
+
+/**
+ * Värdet som användaren ska läsa, formaterat efter fältets typ. Ett ja/nej-fält
+ * ger alltid *Yes* eller *No* — aldrig `null` och aldrig `true`.
+ *
+ * @param {{type: string, value: string|boolean|null}} field
  * @param {string} locale
+ * @param {(key: string) => string} [t] översättaren; `field.value.yes`/`no`
  * @returns {string|null}
  */
-export function formatFieldValue(field, locale) {
+export function formatFieldValue(field, locale, t = (key) => key) {
+    if (field.type === 'boolean') {
+        return t(isChecked(field.value) ? 'field.value.yes' : 'field.value.no');
+    }
+
     if (field.value === null || field.value === undefined || field.value === '') {
         return null;
     }

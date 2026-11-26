@@ -14,7 +14,7 @@ import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
 import FieldTypeSelect from './fields/FieldTypeSelect.vue';
 import FieldValueField from './fields/FieldValueField.vue';
-import { normalizeFields } from './fields/fieldPresentation.js';
+import { hasStoredValue, initialFieldValue, normalizeFields } from './fields/fieldPresentation.js';
 import { categoryOptions } from './categoryTree.js';
 import { useCreationUpload } from '../composables/useCreationUpload.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -222,17 +222,17 @@ const incomingFields = computed(() => normalizeFields(props.fields));
 
 const initialFieldRows = () => incomingFields.value.map((field) => ({
     field: field.id,
-    value: field.value ?? '',
+    value: initialFieldValue(field),
 }));
 
 /*
  * Fältet har ett sparat värde: då står det direkt i formuläret. Ett tomt fält
  * ligger under *More details* vid skapandet, som containerns övriga tomma
  * fält gör. Frågan ställs mot det SPARADE värdet och inte mot det man skriver
- * just nu, så en rad inte hoppar mellan avsnitten mitt i en mening.
+ * just nu, så en rad inte hoppar mellan avsnitten mitt i en mening. Ett
+ * ja/nej-fält har alltid ett värde och står alltid direkt
+ * ([[ADR-0099 Kryssrutefält]]): `hasStoredValue()` svarar ja för typen.
  */
-const hasStoredValue = (field) => field.value !== null && field.value !== undefined && field.value !== '';
-
 const visibleFields = computed(() => incomingFields.value.filter(hasStoredValue));
 const foldedFields = computed(() => incomingFields.value.filter((field) => ! hasStoredValue(field)));
 
@@ -289,12 +289,12 @@ watch(incomingFields, (next) => {
 
     form.fields = next.map((field) => ({
         field: field.id,
-        value: current.has(field.id) ? current.get(field.id) : (field.value ?? ''),
+        value: current.has(field.id) ? current.get(field.id) : initialFieldValue(field),
     }));
 
     for (const field of next) {
         if (! fieldRowDefaults.has(field.id)) {
-            fieldRowDefaults.set(field.id, field.value ?? '');
+            fieldRowDefaults.set(field.id, initialFieldValue(field));
         }
     }
 

@@ -445,7 +445,7 @@ it('alla sex befintliga propar når sin flik', function () {
     $rutnat = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/components/ItemFieldGrid.vue')));
 
     expect($rutnat)->toContain("import { customFieldRows } from './fields/fieldPresentation.js'")
-        ->toContain('customFieldRows(props.item, props.locale)');
+        ->toContain('customFieldRows(props.item, props.locale, t)');
 
     // Länken *Show all fields* är borta (issue 332): informationsfliken finns
     // inte längre, och fältrutnätet byggs i issue 333.

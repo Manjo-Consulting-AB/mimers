@@ -53,7 +53,7 @@ it('ritar varje ifyllt fält i rutnätet och inget tomt fält', function () {
     // Sedan issue 420 ritas alla fält — även de sex före detta fasta — genom
     // customFieldRows() ([[ADR-0089 Egna fält på items]] § Riktning 5).
     expect($rutnat)->toContain("import { customFieldRows } from './fields/fieldPresentation.js'")
-        ->toContain('customFieldRows(props.item, props.locale)')
+        ->toContain('customFieldRows(props.item, props.locale, t)')
         ->toContain("key: 'category'")
         ->toContain('v-for="field in fields"')
         ->toContain('{{ field.value }}')
@@ -65,7 +65,7 @@ it('ritar varje ifyllt fält i rutnätet och inget tomt fält', function () {
     expect($rutnat)->toContain('props.categoryName !== null')
         ->and($rutnat)->not->toContain('quick_facts');
 
-    expect(itemoversiktSektion())->toContain('<ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName" />');
+    expect(itemoversiktSektion())->toContain('<ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName"');
 
     // Bara kategorin slås upp i lang; fältens rubriker är användarens text.
     expect(Lang::has('ui.item.show.category', 'en'))->toBeTrue('etiketten item.show.category saknas');
