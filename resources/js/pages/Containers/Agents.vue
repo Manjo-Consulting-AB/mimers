@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
+import AgentRulesEditor from '../../components/AgentRulesEditor.vue';
 import ContainerAgentsSection from '../../components/ContainerAgentsSection.vue';
 import HelpLink from '../../components/HelpLink.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -37,6 +38,10 @@ defineOptions({
 defineProps({
     container: { type: Object, required: true },
     section: { type: Object, required: true },
+
+    /* [[ADR-0100 Agentregler]]: `{text, can_edit, revisions}`, eller null när
+       containern saknar regler och användaren inte får skriva dem. */
+    rules: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -53,6 +58,17 @@ const { t } = useTranslations();
             <HelpLink context="container.agents" class="max-sm:hidden" />
         </span>
     </div>
+
+    <AgentRulesEditor
+        v-if="rules"
+        id="container-agent-rules"
+        :action="`/containers/${container.ulid}/agent-rules`"
+        :heading="t('agents.rules.container_heading')"
+        :hint="rules.can_edit ? t('agents.rules.container_hint') : t('agents.rules.container_readonly_hint')"
+        :text="rules.text"
+        :revisions="rules.revisions"
+        :readonly="!rules.can_edit"
+    />
 
     <ContainerAgentsSection :container-ulid="container.ulid" :section="section" />
 </template>

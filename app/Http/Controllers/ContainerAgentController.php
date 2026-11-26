@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Actions\Agent\DisableAgentInContainer;
 use App\Actions\Agent\EnableAgentInContainer;
 use App\Actions\Agent\ResolveAgentAccess;
+use App\Actions\Agent\SetContainerAgentRules;
 use App\Http\Controllers\Settings\AgentController;
+use App\Http\Requests\Agent\UpdateAgentRulesRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Agent;
+use App\Models\AgentRulesRevision;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
@@ -52,6 +55,9 @@ use Inertia\Response;
  */
 class ContainerAgentController extends Controller
 {
+    /** Antalet revisioner av reglerna sidan visar. */
+    private const REVISION_LIMIT = 50;
+
     /**
      * Syns avsnittet och fälten för användaren i den här containern?
      */
@@ -157,7 +163,62 @@ class ContainerAgentController extends Controller
         return Inertia::render('Containers/Agents', [
             'container' => ContainerResource::make($container)->resolve($request),
             'section' => $section,
+            'rules' => $this->rulesProp($user, $container),
         ]);
+    }
+
+    /**
+     * PUT /containers/{container}/agent-rules — containerns regler
+     * ([[ADR-0100 Agentregler]]). Bara ägarkontots medlem; en mottagare på
+     * varje nivå och en inbox får 403, och en agent har ingen väg hit.
+     */
+    public function rules(UpdateAgentRulesRequest $request, Container $container, SetContainerAgentRules $set): RedirectResponse
+    {
+        Gate::authorize('manageAgentRules', $container);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $set->handle($container, $request->validated('rules'), $user);
+
+        return back();
+    }
+
+    /**
+     * Containerns regler för sidan. Den som får skriva får textarean och
+     * revisionerna; alla andra får bara texten, och ingenting alls när den
+     * saknas. Revisionerna läcker aldrig till en mottagare.
+     *
+     * @return array{text: string|null, can_edit: bool, revisions: array<int, array<string, mixed>>}|null
+     */
+    private function rulesProp(User $user, Container $container): ?array
+    {
+        $canEdit = Gate::forUser($user)->allows('manageAgentRules', $container);
+
+        if (! $canEdit && $container->agent_rules === null) {
+            return null;
+        }
+
+        $revisions = $canEdit
+            ? AgentRulesRevision::query()
+                ->where('container_id', $container->id)
+                ->with('author')
+                ->orderByDesc('revision')
+                ->limit(self::REVISION_LIMIT)
+                ->get()
+                ->map(fn (AgentRulesRevision $revision): array => [
+                    'revision' => (int) $revision->revision,
+                    'at' => $revision->created_at->toIso8601String(),
+                    'author' => $revision->author?->name,
+                    'rules' => $revision->rules,
+                ])->all()
+            : [];
+
+        return [
+            'text' => $container->agent_rules,
+            'can_edit' => $canEdit,
+            'revisions' => $revisions,
+        ];
     }
 
     /**

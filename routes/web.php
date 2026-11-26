@@ -1114,6 +1114,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/agents', [AgentController::class, 'index'])
         ->name('settings.agents');
 
+    // [[ADR-0100 Agentregler]] · användarens regler. Före `{agent}`-rutterna.
+    Route::put('/settings/agents/rules', [AgentController::class, 'rules'])
+        ->name('settings.agents.rules');
+
     Route::get('/settings/agents/{agent}', [AgentController::class, 'show'])
         ->name('settings.agents.show');
 
@@ -1997,6 +2001,10 @@ Route::middleware('auth')->group(function () {
     // menyrad som inte ritas och en adress som inte finns säger samma sak.
     Route::get('/containers/{container}/agents', [ContainerAgentController::class, 'index'])
         ->name('containers.agents');
+
+    // [[ADR-0100 Agentregler]] · containerns regler, bara ägarkontots medlem.
+    Route::put('/containers/{container}/agent-rules', [ContainerAgentController::class, 'rules'])
+        ->name('containers.agent-rules');
 
     Route::put('/containers/{container}/agents/{agent}', [ContainerAgentController::class, 'update'])
         ->name('containers.agents.update');

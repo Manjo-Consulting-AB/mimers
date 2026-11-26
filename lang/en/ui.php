@@ -2232,6 +2232,25 @@ return [
             'unknown_group' => 'Unknown agent group.',
             'saved' => 'Saved',
         ],
+        // Issue 513 · ADR-0100: the rules for agents, written by a person in
+        // the app. `user_*` is the box on /settings/agents, `container_*` the
+        // box on a container's agents page; the rest is shared.
+        'rules' => [
+            'user_heading' => 'Rules for your agents',
+            'user_hint' => 'The rules are sent to every agent you have connected, in every container it reaches. They never give an agent more access than it has.',
+            'container_heading' => 'Rules for agents in this container',
+            'container_hint' => 'The rules are sent to every agent that reaches this container, whoever connected it. They never give an agent more access than it has. Only the owner can change them.',
+            'container_readonly_hint' => 'The owner of this container gives these rules to every agent that reaches it. They never give an agent more access than it has.',
+            'label' => 'Rules',
+            'counter' => ':count / :max',
+            'save' => 'Save',
+            'saved' => 'Saved',
+            'versions' => 'Earlier versions (:count)',
+            'version' => 'Version :revision',
+            'empty_version' => '(empty)',
+            'deleted_user' => 'Deleted user',
+            'use_version' => 'Use this version',
+        ],
         // Issue 439: the field answers what the person's agents may do, in
         // everyday words, and folds behind a summary so it does not compete
         // with the level choice above it.
