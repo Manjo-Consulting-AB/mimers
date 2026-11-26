@@ -2,6 +2,7 @@
 
 namespace App\Actions\OwnershipTransfer;
 
+use App\Actions\Agent\SetContainerAgentRules;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Trash\PurgeContent;
 use App\Actions\Usage\AdjustUsage;
@@ -181,6 +182,11 @@ class AcceptOwnershipTransfer
             }
 
             $container->save();
+
+            // M95 · issue 512: den nya ägaren ärver inte regler hen inte
+            // skrivit. Fältet nollställs genom SetContainerAgentRules utan
+            // författare; revisionerna står kvar hos containern.
+            app(SetContainerAgentRules::class)->handle($container, null, null);
 
             // Beslut 7: containerantalet flyttas mellan räknarna.
             (new AdjustUsage)->handle($fromAccount->id, containersDelta: -1);

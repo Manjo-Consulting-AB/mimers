@@ -260,6 +260,12 @@ class AuditLog extends Model
      */
     public const ACTION_CONTAINER_CURRENCIES_UPDATED = 'container.currencies_updated';
 
+    /**
+     * Containerns agentregler ändrades ([[ADR-0100 Agentregler]]).
+     * `meta.revision` bär revisionsnumret — aldrig texten.
+     */
+    public const ACTION_CONTAINER_AGENT_RULES_UPDATED = 'container.agent_rules_updated';
+
     public const ACTION_CATEGORY_CREATED = 'category.created';
 
     public const ACTION_CATEGORY_UPDATED = 'category.updated';
