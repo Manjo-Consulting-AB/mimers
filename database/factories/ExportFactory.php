@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Account;
 use App\Models\Container;
 use App\Models\Export;
 use App\Models\User;
@@ -28,6 +29,7 @@ class ExportFactory extends Factory
     {
         return [
             'container_id' => Container::factory(),
+            'account_id' => null,
             'requested_by_user_id' => User::factory(),
             'kind' => Export::KIND_ZIP,
             'item_id' => null,
@@ -38,5 +40,17 @@ class ExportFactory extends Factory
             'failure_reason' => null,
             'expires_at' => null,
         ];
+    }
+
+    /**
+     * En kontoexport (issue 1701): `kind = account`, ingen container.
+     */
+    public function account(?Account $account = null): static
+    {
+        return $this->state(fn (): array => [
+            'kind' => Export::KIND_ACCOUNT,
+            'container_id' => null,
+            'account_id' => $account ?? Account::factory(),
+        ]);
     }
 }

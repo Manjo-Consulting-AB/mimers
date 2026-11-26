@@ -38,6 +38,16 @@ return [
         'action' => 'View transfer',
     ],
     /*
+     * Kontoexporten är klar (issue 1701 · [[ADR-0098 Kontoexporten]] § 8).
+     * Filen ligger kvar i 24 timmar.
+     */
+    'account_export_ready' => [
+        'subject' => 'Your account export is ready',
+        'greeting' => 'Hello!',
+        'line' => 'The export of your account is ready to download. The file is deleted after 24 hours.',
+        'action' => 'Open Mimers',
+    ],
+    /*
      * Containern raderades med kontot som ägde den (issue 1235 ·
      * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-11-14).
      * En mening per skäl: mottagaren ska veta om ägaren raderade sig själv
@@ -158,6 +168,7 @@ return [
             'container_deleted' => 'container deletion notices',
             'container_content_moving' => 'notices about content moving to your storage',
             'agent_deleted' => 'agent deletion notices',
+            'account_export_ready' => 'account export notices',
         ],
     ],
     /*

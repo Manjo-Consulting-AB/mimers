@@ -70,6 +70,7 @@ const ICONS = {
     'account.downgrade_warning': 'warning',
     'binder.ready': 'export',
     'access.left': 'share',
+    'account_export.ready': 'export',
 };
 
 const icon = computed(() => ICONS[props.notification.type] ?? 'notifications');

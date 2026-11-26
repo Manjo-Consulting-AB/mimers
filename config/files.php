@@ -144,6 +144,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Kontoexportens retention
+    |--------------------------------------------------------------------------
+    |
+    | Så många timmar efter att den blivit klar ligger en kontoexport kvar
+    | innan gallringen tar bort den (issue 1701 · [[ADR-0098 Kontoexporten]]
+    | § 9, Tony 2026-11-25). Filen bär hela personens uppgifter och ska inte
+    | ligga kvar; containerexporten behåller sina sju dagar ovan.
+    |
+    */
+
+    'account_export_retention_hours' => (int) env('ACCOUNT_EXPORT_RETENTION_HOURS', 24),
+
+    /*
+    |--------------------------------------------------------------------------
     | Pärmens tak för sammanslagna bilagor
     |--------------------------------------------------------------------------
     |

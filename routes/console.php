@@ -115,9 +115,14 @@ Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
  * driftmiljön och kommentaren för magic link-gallringen ovan. Körs i samma
  * nattliga fönster som purge-expired-stored-files (17b) och
  * purge-expired-trash (20b).
+ *
+ * Issue 1701 · Varje timme och inte nattligen: en kontoexport (ADR-0098 § 9)
+ * har `expires_at` 24 timmar fram och bär personens uppgifter, så filen ska
+ * inte ligga kvar ett dygn för länge. Gallringen går på `expires_at`, så
+ * containerexportens sju dagar är oförändrade.
  */
 Schedule::call(fn () => app(PurgesExpiredExports::class)->handle())
-    ->daily()
+    ->hourly()
     ->name('purge-expired-exports');
 
 /*

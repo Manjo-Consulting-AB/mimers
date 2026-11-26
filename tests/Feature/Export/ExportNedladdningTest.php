@@ -363,13 +363,13 @@ it('en .part-fil äldre än ett dygn tas bort, en färsk ligger kvar', function 
     expect(Storage::disk('files')->exists($färsk))->toBeTrue();
 });
 
-it('jobbet är schemalagt dagligen med Schedule::call', function () {
+it('jobbet är schemalagt varje timme med Schedule::call', function () {
     artisan('inspire');
 
     $händelse = collect(app(Schedule::class)->events())
         ->first(fn ($event) => $event->description === 'purge-expired-exports');
 
     expect($händelse)->not->toBeNull();
-    expect($händelse->getExpression())->toBe('0 0 * * *');
+    expect($händelse->getExpression())->toBe('0 * * * *');
     expect($händelse->command ?? null)->toBeNull();
 });

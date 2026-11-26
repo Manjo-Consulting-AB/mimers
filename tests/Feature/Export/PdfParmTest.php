@@ -183,7 +183,7 @@ it('export har kind, item_id och options, och en rad utan dem är zip', function
     expect($gammal->kind)->toBe(Export::KIND_ZIP)
         ->and($gammal->item_id)->toBeNull()
         ->and($gammal->options)->toBeNull()
-        ->and(Export::EXPORT_KINDS)->toBe(['zip', 'binder']);
+        ->and(Export::EXPORT_KINDS)->toBe(['zip', 'binder', 'account']);
 });
 
 it('den gamla exporten fungerar som förut: en zip-rad blir en ZIP', function () {

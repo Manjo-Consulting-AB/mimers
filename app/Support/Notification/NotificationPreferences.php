@@ -91,6 +91,11 @@ final class NotificationPreferences
         // Issue 1529: någon lämnade containern. Bara i appen, ingen växel
         // (se NO_EMAIL_TYPES).
         Notification::TYPE_ACCESS_LEFT => ['enabled' => true, 'digest' => false],
+        // Issue 1701: kontoexporten är klar. Förvalet för appen är på. Typen
+        // står INTE i EMAIL_DEFAULTS och har ingen växel på inställningssidan,
+        // som `container.content_moving`: mejlet följer UNKNOWN_DEFAULT (på,
+        // direkt) och en sparad rad i notification_preference gäller.
+        Notification::TYPE_ACCOUNT_EXPORT_READY => ['enabled' => true, 'digest' => false],
     ];
 
     /**

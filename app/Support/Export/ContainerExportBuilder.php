@@ -15,6 +15,7 @@ use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\Tag;
+use App\Models\User;
 use App\Support\Access\ItemScope;
 use App\Support\Notification\LocaleResolver;
 use Carbon\CarbonInterface;
@@ -76,6 +77,14 @@ use ZipArchive;
  */
 class ContainerExportBuilder
 {
+    /**
+     * Relationerna en container behöver för att skrivas. `coverAttachment.
+     * storedFile` eagras: containerns bild följer alltid med i ZIP:en (issue
+     * 158), och en lat läsning per bilaga vore en fråga per export i stället
+     * för två.
+     */
+    public const CONTAINER_RELATIONS = ['categories', 'tags', 'fields', 'coverAttachment.storedFile'];
+
     public function build(Export $export): string
     {
         $disk = Storage::disk('files');
@@ -84,7 +93,7 @@ class ContainerExportBuilder
         // med i ZIP:en (issue 158), och en lat läsning per bilaga vore en
         // fråga per export i stället för två.
         $container = Container::query()
-            ->with(['categories', 'tags', 'fields', 'coverAttachment.storedFile'])
+            ->with(self::CONTAINER_RELATIONS)
             ->findOrFail($export->container_id);
 
         // Upplösningen sker här och inte i konstruktorn: `scoped()` tömmer
@@ -104,20 +113,6 @@ class ContainerExportBuilder
             ? ItemScope::restricted([])
             : app(ResolveItemScope::class)->handle($requester, $container);
 
-        $items = $container->items()
-            ->inScope($scope)
-            ->with(['category', 'tags', 'attachments.storedFile', 'schedules.occurrences', 'loans', 'ownFields', 'fieldValues'])
-            ->orderBy('id')
-            ->get();
-
-        $categories = $scope->isUnrestricted()
-            ? $container->categories
-            : $this->categoriesUsedBy($container->categories, $items);
-
-        $tags = $scope->isUnrestricted()
-            ? $container->tags
-            : $this->tagsUsedBy($container->tags, $items);
-
         $dir = 'exports/'.$container->ulid;
         $partial = $dir.'/'.$export->ulid.'.zip.part';
         $final = $dir.'/'.$export->ulid.'.zip';
@@ -132,22 +127,7 @@ class ContainerExportBuilder
         }
 
         try {
-            $itemArrays = $this->buildItems($items, $container, $zip, $disk);
-
-            $this->addLinks($itemArrays, $items);
-
-            $payload = $this->payload($container, $itemArrays, $categories, $tags, $this->addCover($container, $zip, $disk));
-
-            $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-            if ($json === false) {
-                throw new RuntimeException('container.json kunde inte serialiseras.');
-            }
-
-            $html = $this->renderIndexHtml($export, $container, $payload);
-
-            $this->addEntry($zip, 'container.json', $json);
-            $this->addEntry($zip, 'index.html', $html);
+            $this->addContainerTo($zip, $container, $scope, $requester, '');
         } catch (Throwable $e) {
             $zip->close();
             throw $e;
@@ -160,6 +140,59 @@ class ContainerExportBuilder
         $disk->move($partial, $final);
 
         return $final;
+    }
+
+    /**
+     * Skriver en container till en öppen ZIP under `$prefix`: `container.json`,
+     * `index.html` och `filer/` (issue 1701 · [[ADR-0098 Kontoexporten]] § 5).
+     * `build()` anropar den med prefixet `''`, så att containerexporten är
+     * byte för byte densamma; kontoexporten anropar den en gång per container
+     * med `containers/<slug>-<ulid>/`. Sökvägarna i `container.json` är
+     * relativa till containerns mapp (`filer/...`) oavsett prefix, så
+     * `index.html` fungerar var mappen än ligger.
+     *
+     * `$container` ska ha {@see self::CONTAINER_RELATIONS} laddade — en
+     * anropare med många containrar laddar dem i en fråga. ZIP:en öppnas och
+     * stängs av anroparen; ett fel kastas vidare utan att stänga den.
+     *
+     * Omfånget är anroparens val: containerexporten ger beställarens,
+     * kontoexporten hela containern. `$requester` styr bara språket i
+     * `index.html`.
+     */
+    public function addContainerTo(ZipArchive $zip, Container $container, ItemScope $scope, ?User $requester, string $prefix): void
+    {
+        $disk = Storage::disk('files');
+
+        $items = $container->items()
+            ->inScope($scope)
+            ->with(['category', 'tags', 'attachments.storedFile', 'schedules.occurrences', 'loans', 'ownFields', 'fieldValues'])
+            ->orderBy('id')
+            ->get();
+
+        $categories = $scope->isUnrestricted()
+            ? $container->categories
+            : $this->categoriesUsedBy($container->categories, $items);
+
+        $tags = $scope->isUnrestricted()
+            ? $container->tags
+            : $this->tagsUsedBy($container->tags, $items);
+
+        $itemArrays = $this->buildItems($items, $container, $zip, $disk, $prefix);
+
+        $this->addLinks($itemArrays, $items);
+
+        $payload = $this->payload($container, $itemArrays, $categories, $tags, $this->addCover($container, $zip, $disk, $prefix));
+
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        if ($json === false) {
+            throw new RuntimeException('container.json kunde inte serialiseras.');
+        }
+
+        $html = $this->renderIndexHtml($requester, $container, $payload);
+
+        $this->addEntry($zip, $prefix.'container.json', $json);
+        $this->addEntry($zip, $prefix.'index.html', $html);
     }
 
     /**
@@ -176,7 +209,7 @@ class ContainerExportBuilder
      * @param  Collection<int, Item>  $items
      * @return array<int, array<string, mixed>>
      */
-    private function buildItems($items, Container $container, ZipArchive $zip, FilesystemAdapter $disk): array
+    private function buildItems($items, Container $container, ZipArchive $zip, FilesystemAdapter $disk, string $prefix): array
     {
         $itemArrays = [];
 
@@ -194,7 +227,7 @@ class ContainerExportBuilder
                     $filename = $this->uniqueFilename($attachment->filename, $usedNames);
                     $innerPath = 'filer/'.$item->ulid.'/'.$filename;
 
-                    $this->addFile($zip, $disk->path($stored->storage_path), $innerPath);
+                    $this->addFile($zip, $disk->path($stored->storage_path), $prefix.$innerPath);
 
                     $entry['path'] = $innerPath;
                 } else {
@@ -252,7 +285,7 @@ class ContainerExportBuilder
      *
      * @return array<string, mixed>|null
      */
-    private function addCover(Container $container, ZipArchive $zip, FilesystemAdapter $disk): ?array
+    private function addCover(Container $container, ZipArchive $zip, FilesystemAdapter $disk, string $prefix): ?array
     {
         $attachment = $container->coverAttachment;
 
@@ -272,7 +305,7 @@ class ContainerExportBuilder
         $used = [];
         $innerPath = 'filer/'.$container->ulid.'/'.$this->uniqueFilename($attachment->filename, $used);
 
-        $this->addFile($zip, $disk->path($stored->storage_path), $innerPath);
+        $this->addFile($zip, $disk->path($stored->storage_path), $prefix.$innerPath);
 
         $entry['path'] = $innerPath;
 
@@ -585,9 +618,9 @@ class ContainerExportBuilder
      * användarens, och en kvarglömd locale vore en bugg som smittar allt som
      * renderas efter det här jobbet (samma mönster som CalendarFeedDownload).
      */
-    private function renderIndexHtml(Export $export, Container $container, array $payload): string
+    private function renderIndexHtml(?User $requester, Container $container, array $payload): string
     {
-        $locale = (new LocaleResolver)->forUser($export->requestedBy);
+        $locale = (new LocaleResolver)->forUser($requester);
 
         $tidigare = App::getLocale();
 

@@ -345,6 +345,10 @@ return [
             'ready' => 'Your PDF binder for :container is ready',
             'ready_item' => 'Your PDF binder for :item is ready',
         ],
+        // Issue 1701: the account export is ready.
+        'account_export' => [
+            'ready' => 'Your account export is ready',
+        ],
 
         // Issue 131: the clock's invitation row, read from `invitation` and
         // not from `notification`. An invitation has no notification type —
@@ -2072,6 +2076,10 @@ return [
                 'binder' => [
                     'ready' => 'Your PDF binder for :container is ready.',
                     'ready_item' => 'Your PDF binder for :item is ready.',
+                ],
+                // Issue 1701: the account export. No container, no link yet.
+                'account_export' => [
+                    'ready' => 'Your account export is ready. The file is deleted after 24 hours.',
                 ],
                 /*
                  * Issue 1457 · [[Planer och kvoter]] § Nedgradering. The row
