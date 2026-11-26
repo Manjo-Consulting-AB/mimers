@@ -167,6 +167,10 @@ class PurgeContainer
             // finns kvar i `audit_log` utan främmande nyckel (issue 107).
             DB::table('ownership_transfer')->where('container_id', $container->id)->delete();
 
+            // Agentreglernas revisioner (M95 · issue 512) pekar på containern
+            // med RESTRICT och måste bort före den.
+            DB::table('agent_rules_revision')->where('container_id', $container->id)->delete();
+
             // issue 26a § Beslut 6 — containerräknaren minskas bara för en
             // container som fortfarande var LEVANDE precis innan forceDelete.
             // Den vanliga vägen (mjukradering, 30 dagar, sedan gallring)

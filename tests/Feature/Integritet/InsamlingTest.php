@@ -198,6 +198,7 @@ it('sammanställer en nyckel per källa, not_included och händelsen action', fu
         'notification',
         'notification_preference',
         'help_feedback',
+        'agent_rules_revision',
         'not_included',
     ]);
 

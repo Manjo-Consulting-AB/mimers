@@ -69,6 +69,7 @@ class CollectPersonData
         'agent_container_grant' => ['id'],
         'notification_preference' => ['id', 'user_id'],
         'help_feedback' => ['id', 'user_id'],
+        'agent_rules_revision' => ['id', 'user_id', 'container_id', 'author_user_id'],
     ];
 
     /**
@@ -156,6 +157,7 @@ class CollectPersonData
             'notification' => $this->notifications($userId),
             'notification_preference' => $this->rows('notification_preference', 'user_id', $userId),
             'help_feedback' => $this->rows('help_feedback', 'user_id', $userId),
+            'agent_rules_revision' => $this->rows('agent_rules_revision', 'user_id', $userId),
             'not_included' => $this->notIncluded(),
         ];
     }

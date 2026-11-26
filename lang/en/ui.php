@@ -3783,6 +3783,8 @@ return [
                 // selection is a list, written by its own route, and
                 // `meta.values.allowed_currencies` carries both lists.
                 'currencies_updated' => ':user changed the currencies for costs on the container',
+                // Issue 512 · ADR-0100: the text is never in `meta`, only the revision.
+                'agent_rules_updated' => ':user changed the agent rules for the container',
                 'deleted' => ':user moved the container to the trash',
                 'restored' => ':user restored the container from the trash',
                 'transferred' => ':user transferred the container to another account',

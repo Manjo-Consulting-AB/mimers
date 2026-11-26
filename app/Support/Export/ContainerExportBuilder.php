@@ -394,6 +394,9 @@ class ContainerExportBuilder
                 // alla valutor — samma regel som i ContainerResource — och
                 // standardvalutan står inte med om den inte är markerad.
                 'allowed_currencies' => $container->allowedCurrencyCodes(),
+                // Containerns aktuella agentregler, eller null (M95 ·
+                // issue 512). Revisionerna följer inte med.
+                'agent_rules' => $container->agent_rules,
             ],
             'categories' => $categories->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,

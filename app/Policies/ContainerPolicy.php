@@ -218,6 +218,22 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren skriva containerns agentregler ([[ADR-0100
+     * Agentregler]])? Bara ägarkontots medlemmar, och inte när kontot är
+     * fruset — samma kropp som manageAccess(). Den som når containern genom
+     * en `container_access` nekas på varje nivå och oavsett `kind`, och en
+     * agent har ingen skrivrätt alls.
+     */
+    public function manageAgentRules(User $user, Container $container): bool
+    {
+        if ($container->isInbox()) {
+            return false;
+        }
+
+        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
+    }
+
+    /**
      * Får användaren INITIERA ett ägarbyte av containern (issue 39a, POST
      * och DELETE)? Regel 1 + regel 4, exakt som manageAccess() ovan —
      * [[Konton och åtkomst]] § Behörighetsregler: "Ingen nivå får radera

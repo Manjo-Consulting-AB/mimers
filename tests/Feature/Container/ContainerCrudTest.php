@@ -544,6 +544,8 @@ it('har inte fått någon annan kolumn än description', function () {
         // Issue 406 · agentens radering: namnet i papperskorgen och
         // tillfället som återställs i ett svep.
         'agent_deletion_batch',
+        // Issue 512 · ADR-0100: containerns fritextregler till agenten.
+        'agent_rules',
         'cover_attachment_id',
         'cover_focus_x',
         'cover_focus_y',
