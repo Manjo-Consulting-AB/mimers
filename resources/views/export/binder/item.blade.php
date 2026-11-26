@@ -12,7 +12,9 @@
             <tr><th>{{ __('export.tags') }}</th><td>{{ $item->tags->pluck('name')->implode(', ') }}</td></tr>
         @endif
         @foreach ($fields as $field)
-            @if ($field['value'] !== null)
+            @if (is_bool($field['value']))
+                <tr><th>{{ $field['label'] }}</th><td>{{ __($field['value'] ? 'ui.field.value.yes' : 'ui.field.value.no') }}</td></tr>
+            @elseif ($field['value'] !== null)
                 <tr><th>{{ $field['label'] }}</th><td>{{ $field['value'] }}</td></tr>
             @endif
         @endforeach

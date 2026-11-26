@@ -166,7 +166,10 @@ final class ItemFieldInput
         return match ($field->type) {
             'number' => ['present', 'nullable', 'numeric', 'regex:/^[+-]?\d{1,14}(\.\d{1,6})?$/'],
             'date' => ['present', 'nullable', 'date_format:Y-m-d'],
-            // `text` är standardtypen; de två andra har egna regler ovan.
+            // `true`, `1` och `"1"` kryssar i; `false`, `0`, `"0"` och null
+            // kryssar ur ([[ADR-0099 Kryssrutefält]]).
+            'boolean' => ['present', 'nullable', 'boolean'],
+            // `text` är standardtypen; de andra har egna regler ovan.
             default => ['present', 'nullable', 'string', 'max:'.config('fields.text_max_length')],
         };
     }

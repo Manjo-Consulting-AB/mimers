@@ -247,7 +247,7 @@ class RecordItemVersion
      * `Y-m-d`. Ett fält utan rad har inget värde — ett tomt värde lagras
      * aldrig ([[ADR-0089 Egna fält på items]] § Riktning 9).
      *
-     * @return array<int, string>
+     * @return array<int, string|bool>
      */
     private function currentFieldValues(Item $item): array
     {
@@ -256,7 +256,7 @@ class RecordItemVersion
         $rows = ItemFieldValue::query()
             ->where('item_id', $item->id)
             ->orderBy('item_field_id')
-            ->get(['item_field_id', 'value_text', 'value_number', 'value_date']);
+            ->get(['item_field_id', 'value_text', 'value_number', 'value_date', 'value_boolean']);
 
         $types = ItemField::query()
             ->whereIn('id', $rows->pluck('item_field_id')->all())
@@ -266,7 +266,8 @@ class RecordItemVersion
             $type = (string) ($types[$row->item_field_id] ?? 'text');
             $value = $row->getRawOriginal('value_text')
                 ?? $row->getRawOriginal('value_number')
-                ?? $row->getRawOriginal('value_date');
+                ?? $row->getRawOriginal('value_date')
+                ?? $row->getRawOriginal('value_boolean');
             $normalized = $this->normalizeFieldValue($type, $value);
 
             if ($normalized !== null) {
@@ -285,9 +286,9 @@ class RecordItemVersion
      * som i `currentFieldValues()`, så att arrayerna går att jämföra med
      * `===`.
      *
-     * @param  array<int, string>  $current
+     * @param  array<int, string|bool>  $current
      * @param  array<int, mixed>  $fieldValues
-     * @return array<int, string>
+     * @return array<int, string|bool>
      */
     private function desiredFieldValues(array $current, array $fieldValues): array
     {
@@ -320,8 +321,14 @@ class RecordItemVersion
      * om en rad behöver skrivas, så att de två inte kan säga olika saker om
      * samma ändring.
      */
-    private function normalizeFieldValue(string $type, mixed $value): ?string
+    private function normalizeFieldValue(string $type, mixed $value): string|bool|null
     {
+        // Ett ja/nej-fält som inte är ikryssat saknas i ögonblicksbilden,
+        // precis som ett tomt fält; ett ikryssat är `true`.
+        if ($type === 'boolean') {
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? true : null;
+        }
+
         if ($value === null || $value === '') {
             return null;
         }
@@ -378,7 +385,7 @@ class RecordItemVersion
      * typ, som rå sträng: en återställning (issue 413) skickar tillbaka den
      * genom samma väg som ett värde ur kroppen.
      *
-     * @return array<int, string>
+     * @return array<int, string|bool>
      */
     private function fieldValues(Item $item): array
     {
@@ -387,7 +394,7 @@ class RecordItemVersion
         ItemFieldValue::query()
             ->where('item_id', $item->id)
             ->orderBy('item_field_id')
-            ->get(['item_field_id', 'value_text', 'value_number', 'value_date'])
+            ->get(['item_field_id', 'value_text', 'value_number', 'value_date', 'value_boolean'])
             ->each(function (ItemFieldValue $row) use (&$values): void {
                 $value = $row->getRawOriginal('value_text')
                     ?? $row->getRawOriginal('value_number')
@@ -395,6 +402,9 @@ class RecordItemVersion
 
                 if ($value !== null) {
                     $values[(string) $row->item_field_id] = (string) $value;
+                } elseif ($row->getRawOriginal('value_boolean') !== null) {
+                    // Ett ikryssat ja/nej-fält sparas som JSON `true`.
+                    $values[(string) $row->item_field_id] = true;
                 }
             });
 

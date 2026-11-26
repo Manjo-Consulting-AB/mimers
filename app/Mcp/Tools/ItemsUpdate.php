@@ -54,7 +54,7 @@ class ItemsUpdate extends WritesItems
             'cover' => $schema->string()->description('The ULID of an image attachment on this item, or null to clear.'),
             'fields' => $schema->array()->items($schema->object([
                 'field' => $schema->string()->description('The ULID of a field on the item: one of the container\'s fields or the item\'s own.'),
-                'value' => $schema->anyOf([$schema->string(), $schema->number()])->nullable()->description('The new value, or null/empty to clear. Text, a number or YYYY-MM-DD according to the field type.'),
+                'value' => $schema->anyOf([$schema->string(), $schema->number(), $schema->boolean()])->nullable()->description('The new value, or null/empty to clear. Text, a number, YYYY-MM-DD or true/false according to the field type (false clears a checkbox).'),
             ]))->description('Custom field values to set. Omitted fields keep their value.'),
         ];
     }
