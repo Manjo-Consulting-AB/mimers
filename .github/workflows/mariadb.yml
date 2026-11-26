@@ -29,13 +29,18 @@ on:
 permissions:
   contents: read
 
+# Köande körningar, inte avbrutna: `github.ref` är alltid `refs/heads/main`, så
+# `cancel-in-progress: true` skulle ta bort körningen för en tidigare merge och
+# lämna den committen utan resultat.
 concurrency:
   group: mariadb-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   sviten:
     runs-on: ubuntu-latest
+    # Justeras efter första körningens verkliga tid.
+    timeout-minutes: 30
 
     services:
       mariadb:
