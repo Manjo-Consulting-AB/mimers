@@ -42,7 +42,7 @@ Mimers makes it possible to transfer ownership and information while allowing pr
 
 And your information should never be locked into a platform.
 
-You can export your data, whether you want a complete copy of a container or a PDF binder for printing, sharing or safekeeping.
+You can export your data: a complete copy of your account, a single container, or a PDF binder for printing, sharing or safekeeping.
 
 **Your information remains yours.**
 

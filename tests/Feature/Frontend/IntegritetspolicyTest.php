@@ -83,7 +83,7 @@ it('visar de 18 numrerade rubrikerna som h2 och uppdateringsdatumet', function (
         $senast = $position;
     }
 
-    expect($body)->toContain('Last updated: 23 November 2026');
+    expect($body)->toContain('Last updated: 26 November 2026');
 });
 
 it('ritar ändamålstabellen i § 4 och fristtabellen i § 12 som tabeller', function () {

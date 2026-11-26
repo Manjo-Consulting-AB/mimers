@@ -1,4 +1,4 @@
-**Last updated: 23 November 2026**
+**Last updated: 26 November 2026**
 
 ## 1. Introduction
 
@@ -248,7 +248,7 @@ Audit logs may contain a user identifier associated with records of actions perf
 
 Deleted content placed in the trash is retained for up to 30 days before permanent deletion.
 
-Generated exports are retained for up to 7 days.
+Generated exports are retained for up to 7 days. An account export is retained for 24 hours.
 
 Temporary signed file delivery links expire after 15 minutes.
 
@@ -288,7 +288,7 @@ Where GDPR applies to our processing of your personal data, you have several rig
 
 You can request confirmation of whether we process personal data about you and obtain a copy of that information.
 
-Information available in your Mimers account or through container exports does not necessarily constitute a complete copy of all personal data we process.
+Information available in your Mimers account or through an account or container export does not necessarily constitute a complete copy of all personal data we process.
 
 **Right to rectification**
 
@@ -317,6 +317,8 @@ We will assess your objection in accordance with applicable data protection law.
 **Right to data portability**
 
 Where the right to data portability applies, you may request the personal data you have provided to us in a structured, commonly used and machine-readable format, or request that it be transmitted to another controller where technically feasible.
+
+You can download the content you have added to Mimers, and the data we hold about your account, yourself with **Export account** in your profile settings.
 
 **How to exercise your rights**
 
