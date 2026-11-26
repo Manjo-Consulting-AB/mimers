@@ -4,9 +4,11 @@
 
 use App\Actions\Agent\SetContainerAgentRules;
 use App\Actions\Agent\SetUserAgentRules;
+use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
 use App\Actions\Privacy\CollectPersonData;
 use App\Actions\Trash\PurgeContainer;
+use App\Http\Resources\AuditLogResource;
 use App\Models\AgentRulesRevision;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -14,8 +16,10 @@ use App\Models\User;
 use App\Support\Access\ItemScope;
 use App\Support\Api\ValidationErrorMapper;
 use App\Support\Export\ContainerExportBuilder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /*
@@ -109,7 +113,7 @@ it('manageAgentRules nekar en inbjuden på varje nivå och oavsett kind', functi
     $container = Container::factory()->for($konto, 'account')->create();
 
     foreach (['member', 'guest'] as $kind) {
-        foreach (['read', 'write'] as $level) {
+        foreach (['read', 'create', 'write', 'delete'] as $level) {
             foreach (['read', 'create', 'write', 'delete'] as $agentLevel) {
                 [, $inbjuden] = kontoMedMedlem();
                 $access = beviljaAccess($container, $inbjuden, $level, $kind);
@@ -240,4 +244,42 @@ it('migrationen går fram och tillbaka', function () {
 
     expect(Schema::hasTable('agent_rules_revision'))->toBeTrue()
         ->and(Schema::hasColumn('container', 'agent_rules'))->toBeTrue();
+});
+
+it('CHECK-villkoret avvisar en revisionsrad med både eller ingen av user_id och container_id', function () {
+    [$konto, $ägare] = kontoMedMedlem();
+    $container = Container::factory()->for($konto, 'account')->create();
+
+    $rad = fn (?int $userId, ?int $containerId): array => [
+        'ulid' => (string) Str::ulid(),
+        'user_id' => $userId,
+        'container_id' => $containerId,
+        'rules' => 'x',
+        'revision' => 1,
+    ];
+
+    expect(fn () => DB::table('agent_rules_revision')->insert($rad($ägare->id, $container->id)))
+        ->toThrow(QueryException::class)
+        ->and(fn () => DB::table('agent_rules_revision')->insert($rad(null, null)))
+        ->toThrow(QueryException::class);
+})->skip(fn () => DB::getDriverName() !== 'mysql', 'CHECK-villkoret läggs bara på mysql.');
+
+it('loggraden för ägarbytets nollställning har user null och visas med ersättaren a former user', function () {
+    [$säljare, $säljarAnv] = kontoMedMedlem();
+    [$köpare] = kontoMedMedlem();
+    $container = Container::factory()->for($säljare, 'account')->create();
+    DB::table('usage_counter')->updateOrInsert(['account_id' => $säljare->id], ['container_count' => 1, 'storage_bytes' => 0, 'created_at' => now(), 'updated_at' => now()]);
+    app(SetContainerAgentRules::class)->handle($container, 'Gamla regler.', $säljarAnv);
+
+    $överföring = skapaÄgarbyteRad($container, ['to_account_id' => $köpare->id, 'to_email' => null]);
+    app(AcceptOwnershipTransfer::class)->handle($överföring, $köpare);
+
+    $rad = AuditLog::query()->where('action', 'container.agent_rules_updated')->orderByDesc('id')->first();
+    expect($rad->user_id)->toBeNull()
+        ->and($rad->meta)->toBe(['revision' => 2]);
+
+    $presenterad = app(PresentAuditEvents::class)->handle(AuditLog::query()->whereKey($rad->id)->get());
+    expect($presenterad[0]['user'])->toBeNull()
+        ->and(json_decode((new AuditLogResource($rad->load('user')))->toJson(), true)['user'])->toBeNull()
+        ->and(__('ui.audit.fallback.user'))->toBe('a former user');
 });
