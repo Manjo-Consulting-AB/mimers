@@ -1,6 +1,6 @@
 # ADR-0087 MCP-server för agenter
 
-**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · Tillägg 2026-11-25 och 2026-11-26 · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · Tillägg 2026-11-25 och 2026-11-26 · Riktning 9 får ett undantag i [[ADR-0100 Agentregler]]; containers_apply_template tas bort i [[ADR-0101 Mallarna]] · [[ADR-index]]
 
 Tonys beslut 2026-11-18, efter en diskussion samma dag. De nitton riktningarna nedan är de som bestämdes.
 

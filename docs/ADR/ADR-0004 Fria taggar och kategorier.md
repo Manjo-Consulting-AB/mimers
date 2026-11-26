@@ -1,6 +1,6 @@
 # ADR-0004 Fria taggar och kategorier
 
-**Status:** Antagen 2026-08-03 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Konsekvenserna om kategoriförslagen i frontenden ersatta av [[ADR-0101 Mallarna]] · [[ADR-index]]
 
 ## Kontext
 

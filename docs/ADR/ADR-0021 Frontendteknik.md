@@ -1,6 +1,6 @@
 # ADR-0021 Frontendteknik
 
-**Status:** Antagen 2026-08-22 · [[ADR-index]]
+**Status:** Antagen 2026-08-22 · Konsekvenserna om kategoriförslagen i frontenden ersatta av [[ADR-0101 Mallarna]] · [[ADR-index]]
 
 Besvarar den öppna frågan i [[ADR-0020 Plattformsidentitet och frontendgräns]]. Kompletterar [[ADR-0011 Autentisering]] på punkten om vad webbsessionen faktiskt använder.
 
