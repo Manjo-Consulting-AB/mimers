@@ -99,14 +99,14 @@ Ingen `deleted_at`. Ett tömt värde är bara borta, som text som suddas ut, och
 
 ## container_template
 
-En mall som kontot har sparat: kategorier och fält som kopieras in i en container. Ingenting i containern pekar tillbaka på mallen. Se [[ADR-0089 Egna fält på items]] § Riktning 6. Inte samma sak som `container.template_source_id` i [[ADR-0002 Konto äger container]].
+En mall som kontot har sparat: kategorier och fält som kopieras in i en container. Ingenting i containern pekar tillbaka på mallen. Se [[ADR-0089 Egna fält på items]] § Riktning 6. Inte samma sak som `container.template_source_id` i [[ADR-0002 Konto äger container]]. Mimers egna mallar ligger i `resources/templates/en.php` med en `key` och har samma form. Se [[ADR-0101 Mallarna]].
 
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | |
 | account_id | FK → account | |
 | name | VARCHAR(255) | |
-| content | JSON | Kategoriträdet och fälten med rubrik, typ och ordning. Inga items |
+| content | JSON | Kategoriträdet och fälten med rubrik, typ och ordning, samt `agent_rules` (sträng eller `null`). Inga items |
 | billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
 | created_at, updated_at, deleted_at | | |
 

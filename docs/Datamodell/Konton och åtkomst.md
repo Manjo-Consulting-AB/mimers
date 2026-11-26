@@ -47,6 +47,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | notifications_cleared_at | TIMESTAMP NULL | Klockans rensning, se issue 647. Panellistan filtreras på rader i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att ingenting rensats och att allt visas. En tidsstämpel och ingen DELETE — `notification` är outboxen och raderna står kvar ([[ADR-0010 Notisarkitektur]] § Beslut) — och siffran styrs alltjämt av `notifications_read_at`. Sätts av `POST /notifications/clear`, som sätter båda |
 | show_upcoming_tasks | BOOLEAN NOT NULL DEFAULT TRUE | Växeln på todo-listan, se [[M21 Uppgifterna i vardagen]] § 134. `TRUE` visar alla synliga uppgifter — dagens beteende — och `FALSE` bara det som är aktuellt nu: försenat och i dag. Valet följer personen och inte webbläsaren, och läses av `App\Actions\Schedule\ListTodo`; `ScheduleOccurrence::scopeDueTodayOrEarlier()` är villkoret. Sätts av `PUT /settings/tasks` |
 | terms_accepted_at | TIMESTAMP NULL | När personen kryssade i rutan för 18 år och villkoren vid registreringen. `NULL` = registrerad före rutan. Se [[M91 Villkoren och den rättsliga spärren]] issue 499 |
+| agent_rules | TEXT NULL | Användarens regler till sina agenter, högst 2 000 tecken ren text. `NULL` = inga. Skrivs bara i appen. Se [[ADR-0100 Agentregler]] |
 | avatar_attachment_id | FK → attachment NULL, `RESTRICT` | Profilbilden, en av personens **egna** bilagor (en rad i `attachment` vars `user_id` är den här personen). Att den är egen upprätthålls i `SetUserAvatar`, som för `container.cover_attachment_id`. Se [[ADR-0076 Profilbilden]] |
 | avatar_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten |
 | avatar_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten |
@@ -263,6 +264,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | versioning_max_versions | TINYINT UNSIGNED NULL | `NULL` följer kontot, 0 stänger av versionshistoriken i containern, och ett tal får inte överstiga kontots. Se [[ADR-0088 Versionshistorik för items]] Riktning 1 |
 | require_two_factor | BOOLEAN NOT NULL DEFAULT false | Kräver bekräftad tvåfaktor av den som når just den här containern via en `container_access`. Kravet gäller när kontots eller containerns flagga är satt. Se [[ADR-0092 Tvåfaktor som krav för delade containrar]] |
+| agent_rules | TEXT NULL | Ägarens regler till varje agent som når containern, högst 2 000 tecken. Skrivs bara av ägarkontots medlemmar, nollställs vid ägarbyte, kan sättas ur en mall när containern skapas. Se [[ADR-0100 Agentregler]] |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.
@@ -561,6 +563,24 @@ Snittet av de personer som når allt agenten har läst under fönstret. Ligger i
 UNIQUE `(agent_id, user_id)`. Fönstret är `agent.read_audience_until`.
 
 **Upplösningen.** Agentens nivå är den lägsta av kontots, containerns, ägarens tak och användarens egen, och ingen alls när agenten är pausad eller när användarens eller ägarens plan inte är Pro eller Pro+, se [[ADR-0087 MCP-server för agenter]] Riktning 4 och 6.
+
+### agent_rules_revision
+
+Varje ändring av `user.agent_rules` eller `container.agent_rules`, med hela texten. Se [[ADR-0100 Agentregler]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| user_id | FK → user NULL | Vems regler, för användarens fält. Cascade: raden följer personraderingen |
+| container_id | FK → container NULL | För containerns fält. `RESTRICT`; `PurgeContainer` raderar containerns revisioner före containern |
+| author_user_id | FK → user NULL | Vem som skrev. `ON DELETE SET NULL`; `NULL` vid ägarbytets nollställning |
+| rules | TEXT NULL | Hela texten efter ändringen. `NULL` = tömd |
+| revision | INT UNSIGNED | Löpnummer per fält, börjar på 1. Ett fält som aldrig satts har revision 0 |
+| created_at | | |
+
+CHECK: exakt en av `user_id` och `container_id` är satt (på sqlite görs inget med villkoret, samma drivrutinsgrening som i befintliga migrationer). UNIQUE `(user_id, revision)` och UNIQUE `(container_id, revision)`.
+
+**Append-only, som `audit_log`.** Ingen `updated_at`, ingen `deleted_at`.
 
 ## usage_metric
 
