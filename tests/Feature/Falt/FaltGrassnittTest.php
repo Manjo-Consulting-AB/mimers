@@ -337,7 +337,7 @@ it('ritar bara fält som har ett värde i itemets vy', function () {
     $rutnat = faltGrassnittKod('components/ItemFieldGrid.vue');
 
     expect($rutnat)->toContain("from './fields/fieldPresentation.js'")
-        ->toContain('customFieldRows(props.item, props.locale)');
+        ->toContain('customFieldRows(props.item, props.locale, t)');
 });
 
 it('formaterar ett tal utan tusentalsavgränsare och utan att tappa decimaler', function () {

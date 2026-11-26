@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import FormField from '../FormField.vue';
+import UiCheckbox from '../UiCheckbox.vue';
 import UiInput from '../UiInput.vue';
 import { fieldInputType } from './fieldPresentation.js';
 
@@ -18,6 +19,10 @@ import { fieldInputType } from './fieldPresentation.js';
  * datumfält är webbläsarens datumväljare, som skickar `Y-m-d` precis som
  * `ItemFieldInput::valueRules()` kräver. Ingen dag räknas om här.
  *
+ * Ett ja/nej-fält är en `UiCheckbox` med fältets rubrik som etikett, och
+ * värdet är `true`/`false` ([[ADR-0099 Kryssrutefält]]). Rutan har UiCheckboxs
+ * träffyta på 44 px.
+ *
  * Felet kommer ur `form.errors['fields.N.value']` och ritas av FormField vid
  * rätt fält. Modulen vet inte vilket index den har — ItemForm äger listan —
  * så felet kommer färdigt som prop.
@@ -29,7 +34,7 @@ const props = defineProps({
     /* Fältet: `{id, label, type}` ur fieldPresentation.normalizeFields(). */
     field: { type: Object, required: true },
     /* Värdet, eller en tom sträng. Ett talfält bär decimalsträngen. */
-    modelValue: { type: [String, Number], default: '' },
+    modelValue: { type: [String, Number, Boolean], default: '' },
     /* Serverns fel för just det här fältet, eller null. */
     error: { type: String, default: null },
 });
@@ -37,6 +42,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const id = computed(() => `field-${props.field.id}-value`);
+
+const isBoolean = computed(() => props.field.type === 'boolean');
 
 const inputType = computed(() => fieldInputType(props.field.type));
 
@@ -50,7 +57,27 @@ const value = computed({
 </script>
 
 <template>
+    <div v-if="isBoolean" class="flex flex-col gap-1">
+        <div class="flex items-center gap-2">
+            <UiCheckbox :id="id" v-model="value">
+                {{ field.label }}
+            </UiCheckbox>
+
+            <slot name="action" />
+        </div>
+
+        <p
+            v-if="error"
+            :id="`${id}-error`"
+            tabindex="-1"
+            class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+        >
+            {{ error }}
+        </p>
+    </div>
+
     <FormField
+        v-else
         v-slot="{ describedBy }"
         :label="field.label"
         :id="id"

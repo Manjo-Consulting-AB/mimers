@@ -13,6 +13,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * skickar bara ordet `today`, `within:N` eller `past:N`, aldrig ett datum
  * den räknat själv. Det är samma regel som `useRelativeDate` följer.
  *
+ * Ett ja/nej-fält ([[ADR-0099 Kryssrutefält]]) är ett val *Any / Yes / No*
+ * som skickar `eq=1` eller `eq=0`; *Any* tar bort filtret.
+ *
  * **Komponenten filtrerar ingenting och gör inget router-anrop.** Den bär
  * användarens val som ett objekt `{ulid: {eq, min, max}}` och lämnar det
  * vidare; `ItemFilterBar` äger adressen och skickar den till servern.
@@ -138,6 +141,19 @@ function dateValue(raw) {
                     class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink"
                     @change="setValue(field, 'eq', $event.target.value)"
                 >
+
+                <select
+                    v-else-if="field.type === 'boolean'"
+                    :id="`item-filter-field-${field.ulid}`"
+                    :value="operations(field).eq ?? ''"
+                    :disabled="pending"
+                    class="min-h-11 w-full rounded-control border border-border bg-surface px-3 py-2 font-normal text-ink"
+                    @change="setValue(field, 'eq', $event.target.value)"
+                >
+                    <option value="">{{ t('item.index.filter_field_boolean_any') }}</option>
+                    <option value="1">{{ t('field.value.yes') }}</option>
+                    <option value="0">{{ t('field.value.no') }}</option>
+                </select>
 
                 <div v-else-if="field.type === 'number'" class="flex gap-2">
                     <input

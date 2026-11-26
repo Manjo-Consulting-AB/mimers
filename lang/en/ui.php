@@ -785,6 +785,7 @@ return [
             'text' => 'Text',
             'number' => 'Number',
             'date' => 'Date',
+            'boolean' => 'Yes/No',
         ],
         // A yes/no field is always shown; no row means No (ADR-0099).
         'value' => [
@@ -4064,6 +4065,7 @@ return [
             // computes a date itself.
             'filter_fields' => 'Fields',
             'filter_field_any' => 'Any date',
+            'filter_field_boolean_any' => 'Any',
             'filter_field_today' => 'Today',
             'filter_field_within' => 'Within :days days',
             'filter_field_past' => 'Past :days days',

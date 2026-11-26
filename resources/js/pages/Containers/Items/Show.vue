@@ -513,7 +513,32 @@ const locale = computed(() => page.props.locale);
  * fält är skrivet. Rutnätet ritar fälten (ItemFieldGrid), så den här listan
  * är bara underlaget för `overviewEmpty` nedan.
  */
-const fields = computed(() => customFieldRows(props.item, locale.value));
+const fields = computed(() => customFieldRows(props.item, locale.value, t));
+
+/*
+ * Ett klick på en ja/nej-ruta ([[ADR-0099 Kryssrutefält]]): ett val sparas
+ * direkt, med den befintliga PATCH:en av itemet och bara `fields`. Servern
+ * tar partiella fält och skriver en version; svaret leder tillbaka hit med
+ * flashen *The item has been saved.* `fieldPending` stänger rutan medan
+ * begäran pågår, och ett fel visas under rutnätet.
+ */
+const fieldPending = ref(null);
+const fieldError = ref(null);
+
+function saveBooleanField(fieldId, value) {
+    fieldError.value = null;
+
+    router.patch(
+        `/containers/${props.container.ulid}/items/${props.item.ulid}`,
+        { fields: [{ field: fieldId, value }] },
+        {
+            preserveScroll: true,
+            onStart: () => { fieldPending.value = fieldId; },
+            onError: (errors) => { fieldError.value = Object.values(errors)[0] ?? null; },
+            onFinish: () => { fieldPending.value = null; },
+        },
+    );
+}
 
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 
@@ -531,7 +556,7 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
 const overviewEmpty = computed(
     () => ! props.item.description
         && ! props.item.notes
-        && fields.value.length === 0
+        && fields.value.every((row) => row.type === 'boolean' && ! row.checked)
         && categoryName.value === null
         && (props.events === null || props.events.length === 0),
 );
@@ -1248,7 +1273,7 @@ function toggleFavorite() {
                         class="md:w-64 md:shrink-0"
                     />
                     <div class="flex min-w-0 flex-col gap-6 md:flex-1">
-                        <ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName" />
+                        <ItemFieldGrid :item="item" :locale="locale" :category-name="categoryName" :editable="can.update" :pending-field="fieldPending" :error="fieldError" @toggle="saveBooleanField" />
                         <p v-if="item.description" class="whitespace-pre-line text-ink">{{ item.description }}</p>
                     </div>
                 </div>

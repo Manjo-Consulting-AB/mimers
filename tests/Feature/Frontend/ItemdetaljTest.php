@@ -434,6 +434,30 @@ it('utelämnar tomma fält i stället för att hitta på ett värde', function (
 });
 
 /*
+ * Undantaget i ADR-0099: ett ja/nej-fält räknas aldrig som tomt. Texten,
+ * talet och datumet ovan utelämnas som förut; ett ja/nej-fält med `false`
+ * ger en rad.
+ */
+it('ger en rad för ett ja/nej-fält med false, men utelämnar fortfarande tomma text-, tal- och datumfält', function () {
+    $item = json_encode([
+        'fields' => [
+            ['id' => 'a', 'label' => 'Model', 'type' => 'text', 'scope' => 'container', 'value' => null],
+            ['id' => 'b', 'label' => 'Weight', 'type' => 'number', 'scope' => 'container', 'value' => null],
+            ['id' => 'c', 'label' => 'Bought', 'type' => 'date', 'scope' => 'container', 'value' => ''],
+            ['id' => 'd', 'label' => 'Insured', 'type' => 'boolean', 'scope' => 'container', 'value' => false],
+        ],
+    ], JSON_UNESCAPED_UNICODE);
+
+    $rader = itemdetaljKör(
+        "process.stdout.write(JSON.stringify(m.customFieldRows({$item}, 'sv-SE').map((rad) => rad.key)));",
+        'UTC',
+        'js/components/fields/fieldPresentation.js',
+    );
+
+    expect($rader)->toBe('["field-d"]');
+});
+
+/*
  * Klart när: översikten har ingen länk *Show all fields* (issue 332).
  *
  * Länken pekade på informationsfliken, som utgår. Fältrutnätet på översikten
