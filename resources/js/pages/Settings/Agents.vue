@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import AgentRulesEditor from '../../components/AgentRulesEditor.vue';
 import HelpLink from '../../components/HelpLink.vue';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -20,6 +21,9 @@ defineProps({
 
     /* Adressen klienten ska få. */
     mcpUrl: { type: String, required: true },
+
+    /* Användarens regler, [[ADR-0100 Agentregler]]: `{text, revisions}`. */
+    rules: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -38,6 +42,15 @@ const { eventDate } = useRelativeDate();
         </span>
     </div>
     <p class="mt-2 text-sm text-slate-700">{{ t('agents.intro') }}</p>
+
+    <AgentRulesEditor
+        id="user-agent-rules"
+        action="/settings/agents/rules"
+        :heading="t('agents.rules.user_heading')"
+        :hint="t('agents.rules.user_hint')"
+        :text="rules.text"
+        :revisions="rules.revisions"
+    />
 
     <section v-if="agents.length === 0" class="mt-6 rounded border border-slate-300 p-4 text-sm">
         <p>{{ t('agents.empty') }}</p>

@@ -9,11 +9,14 @@ use App\Actions\Agent\EnableAgentInContainer;
 use App\Actions\Agent\RenameAgent;
 use App\Actions\Agent\ResolveAgentAccount;
 use App\Actions\Agent\SetAgentPaused;
+use App\Actions\Agent\SetUserAgentRules;
 use App\Actions\Agent\UpdateAgentAccountGrants;
 use App\Actions\Inbox\ResolveInbox;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Agent\UpdateAgentRulesRequest;
 use App\Models\Agent;
 use App\Models\AgentContainerGrant;
+use App\Models\AgentRulesRevision;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\User;
@@ -48,6 +51,9 @@ class AgentController extends Controller
 {
     /** Antalet händelser agentens sida visar. */
     private const EVENT_LIMIT = 20;
+
+    /** Antalet revisioner av reglerna sidan visar. */
+    private const REVISION_LIMIT = 50;
 
     /**
      * Är MCP tillgängligt för användaren? Delas med menyn.
@@ -95,7 +101,49 @@ class AgentController extends Controller
                 'paused' => $agent->isPaused(),
             ])->all(),
             'mcpUrl' => $this->mcpUrl(),
+            'rules' => $this->rulesProp($request->user()),
         ]);
+    }
+
+    /**
+     * PUT /settings/agents/rules — användarens regler ([[ADR-0100 Agentregler]]).
+     * Pro-kravet och formen prövas i UpdateAgentRulesRequest (403 respektive
+     * 422); en revision skrivs bara när texten ändrats.
+     */
+    public function rules(UpdateAgentRulesRequest $request, SetUserAgentRules $set): RedirectResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $set->handle($user, $request->validated('rules'), $user);
+
+        return back();
+    }
+
+    /**
+     * Texten och revisionerna, nyast först. Högst `REVISION_LIMIT` rader
+     * läses; texterna är högst 2 000 tecken.
+     *
+     * @return array{text: string|null, revisions: array<int, array<string, mixed>>}
+     */
+    private function rulesProp(User $user): array
+    {
+        $revisions = AgentRulesRevision::query()
+            ->where('user_id', $user->id)
+            ->with('author')
+            ->orderByDesc('revision')
+            ->limit(self::REVISION_LIMIT)
+            ->get();
+
+        return [
+            'text' => $user->agent_rules,
+            'revisions' => $revisions->map(fn (AgentRulesRevision $revision): array => [
+                'revision' => (int) $revision->revision,
+                'at' => $revision->created_at->toIso8601String(),
+                'author' => $revision->author?->name,
+                'rules' => $revision->rules,
+            ])->all(),
+        ];
     }
 
     public function show(Request $request, Agent $agent): Response
