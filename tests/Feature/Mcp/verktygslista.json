@@ -1156,6 +1156,29 @@
         }
     },
     {
+        "name": "tags_create",
+        "parameters": {
+            "color": {
+                "type": "string"
+            },
+            "container": {
+                "type": "string"
+            },
+            "name": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "container",
+            "name"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
         "name": "tags_list",
         "parameters": {
             "container": {

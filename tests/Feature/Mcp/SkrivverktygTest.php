@@ -113,6 +113,10 @@ function skrivItemVerktyg(): array
                 'container' => $c->ulid, 'category' => $f['category']->ulid, 'name' => 'Förrådet',
             ],
         ],
+        'tags_create' => [
+            'grupp' => 'items', 'niva' => 'write',
+            'args' => fn (Container $c): array => ['container' => $c->ulid, 'name' => 'Sommar'],
+        ],
         'tags_set' => [
             'grupp' => 'items', 'niva' => 'write',
             'forbered' => fn (Container $c): array => [
