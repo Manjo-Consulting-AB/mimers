@@ -252,11 +252,12 @@ class ItemsVersionsList extends ReadsItems
         ItemFieldValue::query()
             ->where('item_id', $item->id)
             ->orderBy('item_field_id')
-            ->get(['item_field_id', 'value_text', 'value_number', 'value_date'])
+            ->get(['item_field_id', 'value_text', 'value_number', 'value_date', 'value_boolean'])
             ->each(function (ItemFieldValue $row) use (&$values): void {
                 $value = $row->getRawOriginal('value_text')
                     ?? $row->getRawOriginal('value_number')
-                    ?? $row->getRawOriginal('value_date');
+                    ?? $row->getRawOriginal('value_date')
+                    ?? $row->getRawOriginal('value_boolean');
 
                 if ($value !== null) {
                     $values[(int) $row->item_field_id] = (string) $value;

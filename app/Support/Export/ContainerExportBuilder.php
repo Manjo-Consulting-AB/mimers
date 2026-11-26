@@ -566,7 +566,7 @@ class ContainerExportBuilder
      * `container` har redan sina `fields` eager-laddade; itemets `ownFields`
      * och `fieldValues` laddades i build().
      *
-     * @return list<array{label: string, type: string, value: string|null}>
+     * @return list<array{label: string, type: string, value: string|bool|null}>
      */
     public function fieldEntries(Item $item, Container $container): array
     {
@@ -593,8 +593,13 @@ class ContainerExportBuilder
      * App\Http\Resources\ItemResource::fieldValue() ger
      * ([[ADR-0089 Egna fält på items]] § Riktning 9).
      */
-    private function fieldValue(ItemField $field, ?ItemFieldValue $row): ?string
+    private function fieldValue(ItemField $field, ?ItemFieldValue $row): string|bool|null
     {
+        // Ett ja/nej-fält är aldrig null: en saknad rad är `false`.
+        if ($field->type === 'boolean') {
+            return $row !== null && $row->value_boolean === true;
+        }
+
         if ($row === null) {
             return null;
         }

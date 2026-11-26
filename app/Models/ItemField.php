@@ -57,7 +57,7 @@ class ItemField extends Model
      *
      * @var list<string>
      */
-    public const TYPES = ['text', 'number', 'date'];
+    public const TYPES = ['text', 'number', 'date', 'boolean'];
 
     /**
      * Containern fältet hör till — satt även för ett items egna fält.

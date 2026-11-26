@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * Tabellen skapades i issue 417 men skrivs först i 418.
  */
-#[Fillable(['value_text', 'value_number', 'value_date'])]
+#[Fillable(['value_text', 'value_number', 'value_date', 'value_boolean'])]
 class ItemFieldValue extends Model
 {
     /** @use HasFactory<ItemFieldValueFactory> */
@@ -47,6 +47,7 @@ class ItemFieldValue extends Model
         return [
             'value_number' => 'decimal:6',
             'value_date' => 'date',
+            'value_boolean' => 'boolean',
         ];
     }
 

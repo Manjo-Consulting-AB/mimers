@@ -75,6 +75,7 @@ class ResolveFieldFilters
         'text' => ['eq'],
         'number' => ['min', 'max'],
         'date' => ['min', 'max'],
+        'boolean' => ['eq'],
     ];
 
     /**
@@ -275,6 +276,20 @@ class ResolveFieldFilters
             $column = $this->column($spec['type']);
             $operator = $this->operator($spec['op']);
 
+            // Nej har ingen rad: `eq=0` kräver att raden SAKNAS
+            // ([[ADR-0099 Kryssrutefält]] § 9).
+            if ($spec['type'] === 'boolean' && $spec['value'] === '0') {
+                $query->whereNotExists(function (QueryBuilder $sub) use ($spec): void {
+                    $sub->selectRaw('1')
+                        ->from('item_field_value as field_filter_value')
+                        ->whereColumn('field_filter_value.item_id', 'item.id')
+                        ->where('field_filter_value.item_field_id', $spec['field_id'])
+                        ->where('field_filter_value.value_boolean', 1);
+                });
+
+                continue;
+            }
+
             $query->whereExists(function (QueryBuilder $sub) use ($spec, $column, $operator): void {
                 $sub->selectRaw('1')
                     ->from('item_field_value as field_filter_value')
@@ -313,6 +328,16 @@ class ResolveFieldFilters
 
         $column = $this->column($sort['type']);
         $direction = $sort['direction'] === 'desc' ? 'desc' : 'asc';
+
+        // En saknad rad är `0`, inte ett tomt värde: ingen "tomma sist".
+        if ($sort['type'] === 'boolean') {
+            return $query->orderByRaw(
+                'coalesce((select field_sort_value.value_boolean from item_field_value as field_sort_value'
+                .' where field_sort_value.item_id = item.id and field_sort_value.item_field_id = ? limit 1), 0) '.$direction,
+                [$sort['field_id']],
+            );
+        }
+
         $value = '(select field_sort_value.'.$column
             .' from item_field_value as field_sort_value'
             .' where field_sort_value.item_id = item.id'
@@ -330,6 +355,7 @@ class ResolveFieldFilters
     {
         return match ($field->type) {
             'number' => ['sometimes', 'nullable', 'numeric', 'regex:/^[+-]?\d{1,14}(\.\d{1,6})?$/'],
+            'boolean' => ['sometimes', 'nullable', 'in:0,1'],
             'date' => is_string($raw) && preg_match(self::RELATIVE_PATTERN, $raw) === 1
                 ? ['sometimes', 'nullable', 'string', 'regex:'.self::RELATIVE_PATTERN]
                 : ['sometimes', 'nullable', 'string', 'date_format:Y-m-d'],
@@ -346,6 +372,7 @@ class ResolveFieldFilters
         return match ($field->type) {
             'number' => $this->number($raw),
             'date' => $this->date($raw, $user),
+            'boolean' => $this->boolean($raw),
             default => $this->text($raw),
         };
     }
@@ -359,6 +386,20 @@ class ResolveFieldFilters
         $raw = trim($raw);
 
         return $raw === '' ? null : $raw;
+    }
+
+    /**
+     * `1` eller `0`, som sträng; allt annat är ogiltigt.
+     */
+    private function boolean(mixed $raw): ?string
+    {
+        if (is_bool($raw)) {
+            $raw = $raw ? '1' : '0';
+        } elseif (is_int($raw)) {
+            $raw = (string) $raw;
+        }
+
+        return is_string($raw) && in_array(trim($raw), ['0', '1'], true) ? trim($raw) : null;
     }
 
     private function number(mixed $raw): ?string
@@ -415,6 +456,7 @@ class ResolveFieldFilters
         return match ($type) {
             'number' => 'value_number',
             'date' => 'value_date',
+            'boolean' => 'value_boolean',
             default => 'value_text',
         };
     }

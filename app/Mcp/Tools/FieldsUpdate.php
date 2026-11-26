@@ -45,7 +45,7 @@ class FieldsUpdate extends FieldsTool
             'field' => $schema->string()->description('The ULID of the field.')->required(),
             'item' => $schema->string()->description('The ULID of the item when the field is one of the item\'s own; omit for a container field.'),
             'label' => $schema->string()->description('The new label, at most 100 characters.'),
-            'type' => $schema->string()->description('The new type: text, number or date. Refused when the field has values.'),
+            'type' => $schema->string()->description('The new type: text, number, date or boolean. Refused when the field has values.'),
         ];
     }
 

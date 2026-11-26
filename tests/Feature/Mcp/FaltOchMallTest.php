@@ -573,3 +573,46 @@ it('tillämpar inte någon annans mall och ändrar ingenting när gränsen slås
         ->and($mal->fields()->count())->toBe(1)
         ->and($mal->categories()->count())->toBe(0);
 });
+
+// ─── Issue 509: ja/nej-fält ──────────────────────────────────────────────────
+
+it('kryssar i och ur ett ja/nej-fält med items_update och ger JSON-boolean i items_get', function () {
+    [, $token, $anvandare, $container] = faltMiljo();
+
+    $falt = faltFalt($container, null, 'Besiktigad', 'boolean', $anvandare);
+    $item = Item::factory()->create(['container_id' => $container->id, 'name' => 'Motorn']);
+
+    $varde = function () use ($token, $item, $falt) {
+        $fields = mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $item->ulid]))['fields'];
+
+        return collect($fields)->firstWhere('id', $falt->ulid)['value'];
+    };
+
+    expect($varde())->toBeFalse();
+
+    mcpResultat(mcpVerktyg($token, 'items_update', ['item' => $item->ulid, 'fields' => [['field' => $falt->ulid, 'value' => true]]]));
+    expect($varde())->toBeTrue();
+
+    mcpResultat(mcpVerktyg($token, 'items_update', ['item' => $item->ulid, 'fields' => [['field' => $falt->ulid, 'value' => false]]]));
+    expect($varde())->toBeFalse();
+});
+
+it('skapar ett ja/nej-fält med fields_create och kryssar i det vid items_create', function () {
+    [, $token, , $container] = faltMiljo();
+
+    $falt = mcpResultat(mcpVerktyg($token, 'fields_create', [
+        'container' => $container->ulid, 'label' => 'Klar', 'type' => 'boolean',
+    ]));
+
+    expect($falt['type'])->toBe('boolean');
+
+    $skapat = mcpResultat(mcpVerktyg($token, 'items_create', [
+        'container' => $container->ulid,
+        'name' => 'Motorn',
+        'fields' => [['field' => $falt['ulid'] ?? $falt['id'], 'value' => true]],
+    ]));
+
+    $visat = mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $skapat['ulid']]));
+
+    expect($visat['fields'][0]['value'])->toBeTrue();
+});

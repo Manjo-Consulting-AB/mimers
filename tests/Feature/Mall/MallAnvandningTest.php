@@ -333,7 +333,7 @@ it('avvisar ett innehåll med okänd typ eller för djupt träd', function () {
 
     $felTyp = postJson("/api/containers/{$container->ulid}/template", [
         'template_content' => [
-            'fields' => [['label' => 'Fel', 'type' => 'boolean']],
+            'fields' => [['label' => 'Fel', 'type' => 'checkbox']],
         ],
     ], $headers);
 

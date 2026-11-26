@@ -71,7 +71,10 @@
                      användarens egen och översätts därför inte; ett tomt
                      fält ritas inte. --}}
                 @foreach ($item['fields'] as $field)
-                    @if ($field['value'] !== null)
+                    @if (is_bool($field['value']))
+                        <dt>{{ $field['label'] }}</dt>
+                        <dd>{{ __($field['value'] ? 'ui.field.value.yes' : 'ui.field.value.no') }}</dd>
+                    @elseif ($field['value'] !== null)
                         <dt>{{ $field['label'] }}</dt>
                         <dd>{{ $field['value'] }}</dd>
                     @endif

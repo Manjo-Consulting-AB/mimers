@@ -157,15 +157,21 @@ class ItemResource extends JsonResource
     }
 
     /**
-     * Värdet som en sträng, eller null när raden saknas.
+     * Värdet som en sträng, eller null när raden saknas. Ett ja/nej-fält är
+     * undantaget: det ger alltid `true` eller `false`, en saknad rad är
+     * `false` ([[ADR-0099 Kryssrutefält]]).
      *
      * **Ett tal är alltid en sträng.** `DECIMAL(20,6)` ryms inte i en
      * JSON-flyttal utan att decimalerna tappas, så klienten får samma
      * decimalsträng servern lagrade ([[ADR-0089 Egna fält på items]]
      * § Riktning 9). Ett datum är `Y-m-d`, en dag har ingen tidszon.
      */
-    private function fieldValue(ItemField $field, ?ItemFieldValue $row): ?string
+    private function fieldValue(ItemField $field, ?ItemFieldValue $row): string|bool|null
     {
+        if ($field->type === 'boolean') {
+            return $row !== null && $row->value_boolean === true;
+        }
+
         if ($row === null) {
             return null;
         }

@@ -76,7 +76,7 @@ class SyncItemFieldValues
             $value = $entry['value'] ?? null;
             $row = $rows->get($field->id);
 
-            if ($this->isEmpty($value)) {
+            if ($this->isEmpty($field->type, $value)) {
                 if ($row !== null) {
                     MetadataLedger::release($row);
                     $row->delete();
@@ -149,25 +149,32 @@ class SyncItemFieldValues
     /**
      * Värdet i rätt kolumn för fältets typ — och `null` i de två andra.
      *
-     * @return array{value_text?: string|null, value_number?: string|null, value_date?: string|null}
+     * @return array<string, string|bool|null>
      */
     private function attributes(string $type, mixed $value): array
     {
         return match ($type) {
-            'number' => ['value_text' => null, 'value_number' => $this->number($value), 'value_date' => null],
-            'date' => ['value_text' => null, 'value_number' => null, 'value_date' => (string) $value],
+            'number' => ['value_text' => null, 'value_number' => $this->number($value), 'value_date' => null, 'value_boolean' => null],
+            'date' => ['value_text' => null, 'value_number' => null, 'value_date' => (string) $value, 'value_boolean' => null],
+            'boolean' => ['value_text' => null, 'value_number' => null, 'value_date' => null, 'value_boolean' => true],
             // `text` är standardtypen.
-            default => ['value_text' => (string) $value, 'value_number' => null, 'value_date' => null],
+            default => ['value_text' => (string) $value, 'value_number' => null, 'value_date' => null, 'value_boolean' => null],
         };
     }
 
     /**
      * En tom sträng är ett tomt värde, precis som `null`
      * ([[ADR-0089 Egna fält på items]] § Riktning 9). `0` och `"0"` är
-     * däremot värden.
+     * däremot värden — det gäller TALFÄLT. Ett ja/nej-fält är tomt när
+     * värdet är falskt (`false`, `0`, `"0"`, `""`, null): nej har ingen rad
+     * ([[ADR-0099 Kryssrutefält]]).
      */
-    private function isEmpty(mixed $value): bool
+    private function isEmpty(string $type, mixed $value): bool
     {
+        if ($type === 'boolean') {
+            return ! filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        }
+
         return $value === null || $value === '';
     }
 
@@ -180,6 +187,8 @@ class SyncItemFieldValues
         return match ($type) {
             'number' => $this->sameNumber($row->getRawOriginal('value_number'), $this->number($value)),
             'date' => (string) $row->getRawOriginal('value_date') === (string) $value,
+            // Ett icke-tomt ja/nej-värde är alltid ja, och raden bär ja.
+            'boolean' => (bool) $row->getRawOriginal('value_boolean'),
             // `text` är standardtypen.
             default => (string) $row->getRawOriginal('value_text') === (string) $value,
         };

@@ -786,6 +786,11 @@ return [
             'number' => 'Number',
             'date' => 'Date',
         ],
+        // A yes/no field is always shown; no row means No (ADR-0099).
+        'value' => [
+            'yes' => 'Yes',
+            'no' => 'No',
+        ],
     ],
 
     // Issue 359: the link after a flash message, one per code that has an

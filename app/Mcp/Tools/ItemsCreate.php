@@ -58,7 +58,7 @@ class ItemsCreate extends McpTool
             'tags' => $schema->array()->items($schema->string())->description('Tag ULIDs from the same container.'),
             'fields' => $schema->array()->items($schema->object([
                 'field' => $schema->string()->description('The ULID of a field in the container.'),
-                'value' => $schema->anyOf([$schema->string(), $schema->number()])->nullable()->description('The value, or null/empty to clear. Text, a number or YYYY-MM-DD according to the field type.'),
+                'value' => $schema->anyOf([$schema->string(), $schema->number(), $schema->boolean()])->nullable()->description('The value, or null/empty to clear. Text, a number, YYYY-MM-DD or true/false according to the field type (false clears a checkbox).'),
             ]))->description('Custom field values for the item. Omit to leave every field empty.'),
         ];
     }
