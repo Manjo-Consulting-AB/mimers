@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Item\DeleteItem;
+use App\Actions\Item\LinkItems;
 use App\Actions\Notification\CreatesAgentDeletionNotifications;
 use App\Actions\Notification\MarkInAppNotificationsRead;
 use App\Actions\Trash\ListAllTrash;
@@ -16,14 +17,17 @@ use App\Mcp\Tools\FieldsDelete;
 use App\Mcp\Tools\ItemsDelete;
 use App\Mcp\Tools\SchedulesDelete;
 use App\Models\Agent;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\NotificationPreference;
 use App\Models\Schedule;
 use App\Models\User;
+use App\Support\Mcp\AgentDeletion;
 use App\Support\Mcp\ForbiddenDomains;
 use App\Support\Mcp\ToolKind;
 use App\Support\Notification\NotificationPreferences;
@@ -619,4 +623,25 @@ it('når aldrig tömningen eller rensningen av papperskorgen', function () {
                 ->not->toBeIn(['EmptyTrash', 'PurgeContent', 'PurgeContainer']);
         }
     }
+});
+
+it('mjukraderar en relation med relations_remove, märker den med agenten och räknar den mot taket', function () {
+    [$agent, $token, $anvandare, $container, $a] = raderingsMiljo();
+    $b = raderingsItem($container);
+    app(LinkItems::class)->handle($a, $b, 'related', $anvandare);
+
+    $resultat = mcpResultat(mcpVerktyg($token, 'relations_remove', ['item' => $a->ulid, 'other' => $b->ulid]));
+
+    expect($resultat['removed'])->toBeTrue();
+
+    $rad = ItemLink::withTrashed()->sole();
+    expect($rad->deleted_at)->not->toBeNull()
+        ->and((int) $rad->deleted_by_agent_id)->toBe((int) $agent->id)
+        ->and($rad->agent_deletion_batch)->toBeString()->toHaveLength(26);
+
+    // Händelsen bär agenten och tillfället, och är en av raderingarna som taket räknar.
+    $logg = AuditLog::query()->where('action', 'item_link.deleted')->sole();
+    expect((int) $logg->agent_id)->toBe((int) $agent->id)
+        ->and($logg->meta['agent_deletion_batch'])->toBe($rad->agent_deletion_batch)
+        ->and(AgentDeletion::DELETE_ACTIONS)->toContain('item_link.deleted');
 });

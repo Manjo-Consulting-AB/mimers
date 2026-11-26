@@ -72,6 +72,15 @@ class LinkItems
             ], 422);
         }
 
+        // UNIQUE gäller även mjukraderade rader: en borttagen relation för
+        // samma par ersätts av den nya och lämnar papperskorgen (ADR-0097
+        // Beslut 4). Hårt, i anroparens transaktion.
+        ItemLink::onlyTrashed()
+            ->where(fn ($query) => $query
+                ->where(fn ($pair) => $pair->where('from_item_id', $from->id)->where('to_item_id', $to->id))
+                ->orWhere(fn ($pair) => $pair->where('from_item_id', $to->id)->where('to_item_id', $from->id)))
+            ->forceDelete();
+
         $link = new ItemLink;
         $link->from_item_id = $from->id;
         $link->to_item_id = $to->id;
@@ -182,6 +191,7 @@ class LinkItems
     {
         $rows = ItemLink::query()
             ->join('item', 'item.id', '=', 'item_link.from_item_id')
+            ->whereNull('item_link.deleted_at')
             ->where('item.container_id', $containerId)
             ->where('item_link.relation', 'parent')
             ->get(['item_link.from_item_id', 'item_link.to_item_id']);

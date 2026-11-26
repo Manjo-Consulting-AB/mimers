@@ -13,10 +13,11 @@ use Illuminate\Support\Facades\DB;
  * Tar bort relationen mellan två items och loggar den — paret på ett ställe,
  * så webben och `/api` inte kan glida isär (issue 109).
  *
- * Raderingen är HÅRD (issue 14 § Beslut 10): båda itemen finns kvar, det som
- * går förlorat är kopplingen. `ItemLink` saknar `deleted_at` och `ulid`, så
- * raden beskrivs i `meta` i stället för av ett subjekt: parets båda ULID:er
- * och den lagrade relationen.
+ * Raderingen är MJUK ([[ADR-0097 Borttagna relationer i papperskorgen]],
+ * som ändrar issue 14 § Beslut 10): båda itemen finns kvar och raden ligger
+ * kvar med `deleted_at`, märkt med agenten när en agent tog bort den. Raden
+ * beskrivs fortfarande i `meta` i stället för av ett subjekt: parets båda
+ * ULID:er och den lagrade relationen.
  *
  * Uppslaget är detsamma som kontrollerna gjorde var för sig: ett par har
  * högst en relation (issue 14 § Beslut 5), så frågan prövar båda hållen och

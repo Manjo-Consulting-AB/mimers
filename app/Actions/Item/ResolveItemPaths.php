@@ -185,6 +185,7 @@ class ResolveItemPaths
         // två tabeller, och SoftDeletes-scopet sitter på Item — en join förbi
         // modellen filtrerar ingenting av sig själv.
         $rows = DB::table('item_link')
+            ->whereNull('item_link.deleted_at')
             ->join('item as parent', 'parent.id', '=', 'item_link.from_item_id')
             ->join('item as child', 'child.id', '=', 'item_link.to_item_id')
             ->where('parent.container_id', $container->id)

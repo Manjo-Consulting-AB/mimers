@@ -326,6 +326,7 @@ class ResolveItemScope
         // två tabeller, inte ett ItemLink-attribut — `container_id` finns
         // inte på modellen och ska inte låtsas finnas där.
         $rows = DB::table('item_link')
+            ->whereNull('item_link.deleted_at')
             ->join('item', 'item.id', '=', 'item_link.from_item_id')
             ->whereIn('item.container_id', $containerIds)
             ->where('item_link.relation', 'parent')

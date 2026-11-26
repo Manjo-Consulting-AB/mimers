@@ -203,10 +203,11 @@ class PurgeContent
             // PurgeContainer behöver veta att tabellen finns.
             DB::table('recent_visit')->where('item_id', $itemId)->delete();
 
-            ItemLink::query()
-                ->where('from_item_id', $itemId)
-                ->orWhere('to_item_id', $itemId)
-                ->delete();
+            // withTrashed + forceDelete: ett gallrat item lämnar inga rader
+            // alls, inte heller mjukraderade (ADR-0097 Beslut 5).
+            ItemLink::withTrashed()
+                ->where(fn ($query) => $query->where('from_item_id', $itemId)->orWhere('to_item_id', $itemId))
+                ->forceDelete();
 
             // withTrashed() — en kostnadsrad som mjukraderats syns inte
             // annars, och den måste med (issue 45a § Beslut 10). Rader som

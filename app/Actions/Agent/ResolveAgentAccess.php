@@ -199,6 +199,7 @@ class ResolveAgentAccess
 
         while ($frontier !== []) {
             $parents = DB::table('item_link')
+                ->whereNull('item_link.deleted_at')
                 ->whereIn('to_item_id', $frontier)
                 ->where('relation', 'parent')
                 ->pluck('from_item_id');

@@ -48,6 +48,7 @@ final class AgentDeletion
         AuditLog::ACTION_COST_ENTRY_DELETED,
         AuditLog::ACTION_CONTAINER_DELETED,
         AuditLog::ACTION_FIELD_DELETED,
+        AuditLog::ACTION_ITEM_LINK_DELETED,
     ];
 
     private ?int $agentId = null;
