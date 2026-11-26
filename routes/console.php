@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\LegalHold\LiftLegalHold;
+use App\Actions\LegalHold\MarkLegalHoldConfidential;
 use App\Actions\LegalHold\PlaceLegalHold;
 use App\Actions\Notification\CreatesAgentDeletionNotifications;
 use App\Console\AdvancesAccountLifecycle;
@@ -738,7 +739,7 @@ if ($hasProcOpen) {
  * nattjobb, och `drain-queue` ska fortsätta ligga sist i schemat — se
  * tests/Feature/Drift/KoarbetareTest.php.
  */
-Artisan::command('legal-hold:place {account : Kontots ULID} {case : Ärendenumret} {reason : Varför spärren sätts}', function (string $account, string $case, string $reason): int {
+Artisan::command('legal-hold:place {account : Kontots ULID} {case : Ärendenumret} {reason : Varför spärren sätts} {--confidential : En myndighet har ålagt oss tystnad om spärren}', function (string $account, string $case, string $reason): int {
     $target = Account::query()->where('ulid', $account)->first();
 
     if ($target === null) {
@@ -747,12 +748,37 @@ Artisan::command('legal-hold:place {account : Kontots ULID} {case : Ärendenumre
         return 1;
     }
 
-    app(PlaceLegalHold::class)->handle($target, $case, $reason);
+    $confidential = (bool) $this->option('confidential');
+
+    app(PlaceLegalHold::class)->handle($target, $case, $reason, $confidential);
 
     $this->info("Rättslig spärr satt på {$target->ulid}, ärende {$case}.");
+    $this->line($confidential
+        ? 'Confidential: the hold will not be disclosed in a reply under art. 15.'
+        : 'Not confidential: the hold will be disclosed in a reply under art. 15.');
 
     return 0;
 })->purpose('Sätter en rättslig spärr på ett konto');
+
+Artisan::command('legal-hold:confidential {account : Kontots ULID} {case : Ärendenumret}', function (string $account, string $case): int {
+    $target = Account::query()->where('ulid', $account)->first();
+
+    if ($target === null) {
+        $this->error("Inget konto med ULID {$account}.");
+
+        return 1;
+    }
+
+    if (app(MarkLegalHoldConfidential::class)->handle($target, $case) === 0) {
+        $this->error("Kontot {$target->ulid} har ingen spärr med ärende {$case}.");
+
+        return 1;
+    }
+
+    $this->info("Spärren för ärende {$case} på {$target->ulid} är tystnadsbelagd.");
+
+    return 0;
+})->purpose('Markerar en rättslig spärr som tystnadsbelagd (myndighetens åläggande)');
 
 Artisan::command('legal-hold:lift {account : Kontots ULID}', function (string $account): int {
     $target = Account::query()->where('ulid', $account)->first();

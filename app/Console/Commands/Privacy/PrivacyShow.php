@@ -72,7 +72,9 @@ class PrivacyShow extends Command
         // ärendets uppgifter: den som läser ärendet ska veta att gallringen
         // står still innan hen tolkar resten.
         if ($request->account !== null && LegalHold::covers($request->account)) {
-            $this->line('Legal hold active');
+            $this->line(LegalHold::coversConfidentially($request->account)
+                ? 'Legal hold active (confidential)'
+                : 'Legal hold active (will be disclosed)');
         }
 
         $this->line("Referens: {$request->reference}");

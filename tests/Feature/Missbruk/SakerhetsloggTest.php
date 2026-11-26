@@ -676,7 +676,7 @@ it('den rättsliga spärrens kommandon skriver en rad', function () {
         ->and($placerad->device_name)->toBeNull()
         // Ärendenumret är en identifierare och följer med; anledningen är
         // fritext och står i `legal_hold.reason` (ADR § Händelseloggen).
-        ->and($placerad->meta)->toBe(['case_number' => 'AR-2026-0042']);
+        ->and($placerad->meta)->toBe(['case_number' => 'AR-2026-0042', 'confidential' => false]);
 
     artisan('legal-hold:lift', ['account' => $account->ulid])->assertSuccessful();
 

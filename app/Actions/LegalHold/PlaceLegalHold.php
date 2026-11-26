@@ -22,6 +22,9 @@ use App\Models\SecurityLog;
  * (App\Actions\LegalHold\LiftLegalHold) — den dagen ett ärende ska kunna
  * hävas för sig är det en egen fråga, och raderna gör den möjlig.
  *
+ * `$confidential` är `true` när en myndighet ålagt oss tystnad (issue 1693);
+ * bara då utelämnas spärren ur svaret på art. 15.
+ *
  * Anropas bara från `legal-hold:place` i routes/console.php. Ingen yta i
  * webben och inget API: den som kan sätta spärren ska inte kunna göra det
  * av misstag.
@@ -32,12 +35,13 @@ class PlaceLegalHold
         private readonly RecordSecurityEvent $recordSecurityEvent,
     ) {}
 
-    public function handle(Account $account, string $caseNumber, string $reason): LegalHold
+    public function handle(Account $account, string $caseNumber, string $reason, bool $confidential = false): LegalHold
     {
         $hold = LegalHold::create([
             'account_id' => $account->id,
             'case_number' => $caseNumber,
             'reason' => $reason,
+            'confidential' => $confidential,
         ]);
 
         // Issue 113: spärren skrivs till säkerhetsloggen, inte till
@@ -50,7 +54,7 @@ class PlaceLegalHold
         $this->recordSecurityEvent->handle(
             action: SecurityLog::ACTION_LEGAL_HOLD_PLACED,
             account: $account,
-            meta: ['case_number' => $caseNumber],
+            meta: ['case_number' => $caseNumber, 'confidential' => $confidential],
         );
 
         return $hold;
