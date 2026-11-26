@@ -1,6 +1,6 @@
 # ADR-0087 MCP-server för agenter
 
-**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · Tillägg 2026-11-25 · [[ADR-index]]
+**Status:** Antagen 2026-11-18 · Bygger vidare på [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[ADR-0028 Åtkomst på itemnivå]], [[ADR-0043 Tre loggar]] och [[ADR-0086 Pro, Pro+ och grundarpris]] · Tillägg 2026-11-25 och 2026-11-26 · [[ADR-index]]
 
 Tonys beslut 2026-11-18, efter en diskussion samma dag. De nitton riktningarna nedan är de som bestämdes.
 
@@ -241,6 +241,21 @@ En agent som ansluter via MCP kan arbeta i containrar men inte i inboxen. Verkty
 
 Byggs som issue 495 (#1685), 496 (#1686) och 497 (#1688) i [[M90 Agenten i inboxen]]. Issue 498 (#1689) hör till ADR-0054, inte hit.
 
+## Tillägg 2026-11-26: agenten skapar taggar
+
+En agent kan sätta taggar på ett item med `tags_set`, men bara taggar som redan finns i containern. Kategorier har `categories_create`, taggar har inget motsvarande verktyg. Behöver agenten en ny tagg måste den be användaren skapa den i appen.
+
+**Tonys beslut (2026-11-26):** agenten ska kunna skapa taggar, inte bara använda befintliga.
+
+**Utformat av Claude:**
+
+- Verktyget `tags_create` i gruppen `items` tar `container`, `name` och `color`. Det har samma grind som `categories_create`, alltså skrivnivå på containern, och kan inte skriva i inboxen.
+- Taggen skapas genom `CreateTag`, samma action som REST-API:et. En mjukraderad tagg med samma namn återupplivas, `tag.created` loggas med agenten och taggen räknas mot kvoten.
+- Kopieringsspärren prövas mot containern (Riktning 10). Taggnamnet är fritext som agenten kan ha läst någon annanstans.
+- **Avvikelsen från REST:** finns redan en aktiv tagg med samma namn får agenten den tillbaka oförändrad med `created: false`. REST svarar i stället `validation.failed`. En agent ser inte hela tagglistan utan att bläddra igenom `tags_list`, och följden av ett skapande är nästan alltid ett `tags_set`. Ingenting skrivs och ingenting loggas när taggen redan fanns.
+
+Byggs som issue 511 (#1726) i [[M66 MCP-server för agenter]].
+
 ## Frågorna från diskussionen och var de besvaras
 
 Alla är besvarade 2026-11-18. 1b besvaras i [[ADR-0088 Versionshistorik för items]], utom relationer som tas bort.
@@ -268,7 +283,7 @@ Alla är besvarade 2026-11-18. 1b besvaras i [[ADR-0088 Versionshistorik för it
 - Passports och Sanctums `HasApiTokens` definierar båda `tokens()`, `createToken()`, `withAccessToken()` och `tokenCan()` och kan inte ligga på `User` samtidigt utan att krocken löses. `$user->tokens()` ska fortsätta betyda Sanctums tokens, eftersom befintlig kod (bland annat `ConfirmPasswordChange`) bygger på det.
 - AGENTS.md § Felformat i API:et får en mening om undantaget `hint`.
 - Datamodellen får tabellerna `agent`, `agent_account_grant`, `agent_container_grant` och `agent_read_audience`, kolumnen `agent_level` på `container_access` och `invitation` och kolumnen `agent_id` på `audit_log` ([[Konton och åtkomst]] § agent). Notistyperna `agent.connected`, `agent.deleted` och `agent.access_lost` står i [[Notiser]] § notification, och agentanslutningarna är en ny behandling i [[Registerförteckning]].
-- Byggs i [[M66 MCP-server för agenter]]: 400 OAuth-servern och anslutningen, 401 rättighetsmodellen, 402 MCP-servern med felformat, gränser och kontraktsprov, 403 läsverktygen, 404 skrivverktygen och förbuden, 405 uppladdning, 406 radering och papperskorgen, 407 sidan för agenter, 408 containerns inställningar och ägarens tak, 409 nedgradering och 410 testkontot på staging. Hjälpsidan och supportadressen (Riktning 19) och ansökan till katalogerna kommer efter M66.
+- Byggs i [[M66 MCP-server för agenter]]: 400 OAuth-servern och anslutningen, 401 rättighetsmodellen, 402 MCP-servern med felformat, gränser och kontraktsprov, 403 läsverktygen, 404 skrivverktygen och förbuden, 405 uppladdning, 406 radering och papperskorgen, 407 sidan för agenter, 408 containerns inställningar och ägarens tak, 409 nedgradering och 410 testkontot på staging, och efter tillägget 2026-11-26 511 `tags_create`. Hjälpsidan och supportadressen (Riktning 19) och ansökan till katalogerna kommer efter M66.
 
 ## Alternativ som valts bort
 

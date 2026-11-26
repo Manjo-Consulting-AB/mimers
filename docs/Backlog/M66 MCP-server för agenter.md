@@ -4,7 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-11-18, efter Tonys beslut om en MCP-server som låter AI-agenter (Claude, ChatGPT och andra MCP-klienter) läsa och skriva i Mimers genom API:et. Beslutet, de nitton riktningarna och motiveringen står i [[ADR-0087 MCP-server för agenter]].
 
-Elva issues, 400–410. Alla är skrivna direkt i GitHub (#1387–#1397) och sammanfattade här. Hjälpsidan, supportadressen och ansökan till katalogerna ingår inte (Riktning 19).
+Elva issues, 400–410. Alla är skrivna direkt i GitHub (#1387–#1397) och sammanfattade här. Uppföljningarna 416 och 511 (tillägget 2026-11-26 i ADR:en) kom till efteråt. Hjälpsidan, supportadressen och ansökan till katalogerna ingår inte (Riktning 19).
 
 **Releasen:** en, när 400–410 är mergade. MCP slås på i produktion först när testarna godkänt den på staging (Riktning 17): `mcp.enabled` är en switch per miljö, så koden kan rullas ut utan att MCP öppnas.
 
@@ -199,3 +199,19 @@ Uppföljning från granskningen av PR #1413, antagen av Tony 2026-11-18. GitHub 
 **Klart när:** en ändring av rättigheterna på kontot ger en rad `agent.grants_changed` med gammal och ny nivå; en oförändrad sparning ger ingen rad; raden har ingen fritext; hela sviten är grön.
 
 **Beror på:** 401 (#1388)
+
+---
+
+### 511. Agenten skapar taggar
+
+Tonys beslut 2026-11-26, [[ADR-0087 MCP-server för agenter]] § Tillägg 2026-11-26: agenten skapar taggar. GitHub #1726. **Läget:** agenten kan sätta taggar med `tags_set`, men bara taggar som redan finns i containern.
+
+**Lösningen:** verktyget `tags_create` i gruppen `items` med `container`, `name` och `color`, byggt som `categories_create` och genom `CreateTag`. En aktiv tagg med samma namn returneras oförändrad med `created: false` i stället för `validation.failed`, utan skrivning och utan loggrad.
+
+**Läs:** [[ADR-0087 MCP-server för agenter]] § Riktning 10, [[ADR-0087 MCP-server för agenter]] § Riktning 15, `app/Mcp/Tools/CategoriesCreate.php`, `app/Actions/Tag/CreateTag.php`
+
+**Axlar:** `risk_class` elevated
+
+**Klart när:** `tags_create` skapar en tagg med `tag.created` och agenten som aktör; en aktiv dubblett ger `created: false` utan loggrad; en mjukraderad tagg återupplivas med samma ULID; utan skrivnivå eller i en inbox svarar verktyget `agent.forbidden`, och en skrivning utanför snittet `agent.copy_widens_access`; hela sviten är grön.
+
+**Beror på:** 404 (#1391)
