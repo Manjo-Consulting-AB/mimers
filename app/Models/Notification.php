@@ -147,6 +147,15 @@ class Notification extends Model
     public const TYPE_BINDER_READY = 'binder.ready';
 
     /**
+     * Kontoexporten är klar, se [[ADR-0098 Kontoexporten]] § 8 och issue
+     * 1701. Skapas av App\Jobs\BuildAccountExport när en `account`-rad blir
+     * `ready`, till beställaren, i appen och som mejl enligt personens
+     * notisval. `payload` bär bara `export` (exportens ulid): en
+     * kontoexport har ingen container att nämna.
+     */
+    public const TYPE_ACCOUNT_EXPORT_READY = 'account_export.ready';
+
+    /**
      * Get the attributes that should be cast.
      *
      * `payload` är JSON (i sqlite en TEXT-kolumn) och castas till array —

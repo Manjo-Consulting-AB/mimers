@@ -196,6 +196,11 @@ class DeleteAccount
             // bland personens egna rader — den hör till containern.
             $this->raderaContainerExporter($containerIds);
 
+            // Kontoexporterna (issue 1701 · ADR-0098 § 9): `export.account_id`
+            // är ON DELETE RESTRICT, så raderna och deras filer går före
+            // kontot, som containerexporterna går före sina containrar.
+            $this->raderaKontoExporter($account);
+
             // Steg 3b — notiserna till dem som förlorar åtkomsten. Före
             // gallringen och i samma transaktion: åtkomsterna och
             // containernamnen finns bara medan containern står kvar, och en
@@ -446,6 +451,31 @@ class DeleteAccount
         }
 
         DB::table('export')->whereIn('container_id', $containerIds)->delete();
+    }
+
+    /**
+     * Kontots egna exporter — `kind = account` — och deras filer (issue 1701
+     * · [[ADR-0098 Kontoexporten]] § 9). Samma skäl som för containerexporten
+     * ovan: `export.account_id` är ON DELETE RESTRICT, och en exportfil har
+     * ingen annan pekare än `storage_path`. Katalogen
+     * `exports/account-{ulid}` tas med, så att inga `.part`-rester ligger kvar.
+     */
+    private function raderaKontoExporter(Account $account): void
+    {
+        $disk = Storage::disk('files');
+
+        $sökvägar = DB::table('export')
+            ->where('account_id', $account->getKey())
+            ->whereNotNull('storage_path')
+            ->pluck('storage_path');
+
+        foreach ($sökvägar as $sökväg) {
+            $disk->delete((string) $sökväg);
+        }
+
+        $disk->deleteDirectory('exports/account-'.$account->ulid);
+
+        DB::table('export')->where('account_id', $account->getKey())->delete();
     }
 
     /**

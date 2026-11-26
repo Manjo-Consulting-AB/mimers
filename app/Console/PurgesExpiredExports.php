@@ -39,6 +39,11 @@ use Throwable;
  * undantag, precis som de andra gallringsjobben. All filhantering går genom
  * `Storage::disk('files')`, aldrig `unlink()` eller absolut sökväg.
  *
+ * Kontoexporter (`kind = account`, issue 1701 · ADR-0098 § 9) gallras som
+ * andra exporter: urvalet går på `expires_at`, som jobbet satte 24 timmar
+ * fram, och ingenstans läses `container_id`. Därför körs gallringen varje
+ * timme och inte nattligen.
+ *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command(...)` eller `->runInBackground()` — se AGENTS.md §
  * Subprocesser i driftmiljön. Klassen är medvetet fri från Artisan-beroenden

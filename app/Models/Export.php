@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * En beställd export av en container — metadata och filer i en ZIP, se
+ * En beställd export av en container, eller av ett helt konto (`kind = account`) — metadata och filer i en ZIP, se
  * [[Backlog]] M6 § 41. Raden skapas som `pending` av
  * App\Http\Controllers\Api\ExportController när någon begär en export;
  * App\Jobs\BuildContainerExport bygger artefakten och för raden genom
@@ -61,14 +61,19 @@ class Export extends Model
 
     public const KIND_BINDER = 'binder';
 
+    public const KIND_ACCOUNT = 'account';
+
     /**
      * De giltiga värdena för `kind`, se migrationens CHECK-villkor.
      * `binder` är PDF-pärmen (issue 445 · ADR-0091), byggd av
-     * App\Support\Export\BinderBuilder; `zip` är den ursprungliga exporten.
+     * App\Support\Export\BinderBuilder; `zip` är den ursprungliga exporten;
+     * `account` är kontoexporten (issue 1701 · ADR-0098), byggd av
+     * App\Support\Export\AccountExportBuilder — den enda som saknar
+     * container och i stället bär `account_id`.
      *
      * @var list<string>
      */
-    public const EXPORT_KINDS = [self::KIND_ZIP, self::KIND_BINDER];
+    public const EXPORT_KINDS = [self::KIND_ZIP, self::KIND_BINDER, self::KIND_ACCOUNT];
 
     /**
      * Get the attributes that should be cast.
@@ -97,6 +102,18 @@ class Export extends Model
     public function container(): BelongsTo
     {
         return $this->belongsTo(Container::class);
+    }
+
+    /**
+     * Kontot en kontoexport gäller (issue 1701), eller null för en export av
+     * en container. Nyckeln är ON DELETE RESTRICT: DeleteAccount raderar
+     * kontots exporter innan kontot.
+     *
+     * @return BelongsTo<Account, $this>
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     /**
