@@ -34,6 +34,8 @@ use App\Support\Cost\CostReport;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Frontend\CreateTarget;
+use App\Support\Template\MimersTemplate;
+use App\Support\Template\MimersTemplates;
 use App\Support\Tips;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -453,13 +455,26 @@ class ContainerController extends Controller
         return Inertia::render('Containers/Create', [
             'kinds' => $this->kindsUsedBy($request->user()),
             // Issue 422 · *Start from*: användarens egna mallar, så att en ny
-            // container kan börja som en kopia av en äldre. De inbyggda
-            // förslagen är INTE med här — de bor i klienten
-            // (resources/js/data/categoryPresets.js) och sparas aldrig
-            // ([[ADR-0004 Fria taggar och kategorier]] § Konsekvenser).
-            // Mallen bär sitt kontos ULID, så väljaren kan följa kontovalet.
+            // container kan börja som en kopia av en äldre. Mallen bär sitt
+            // kontos ULID, så väljaren kan följa kontovalet.
             'templates' => ContainerTemplateResource::collection($this->templatesFor($request->user()))->resolve($request),
+            // Mimers mallar bor på servern ([[ADR-0101 Mallarna]]); klienten
+            // väljer dem med `key` och skickar aldrig innehållet.
+            'mimersTemplates' => app(MimersTemplates::class)->forProp(),
         ]);
+    }
+
+    /**
+     * Mallen i kroppen, upplöst på servern: en sparad (ULID, prövad mot
+     * användarens konton) eller en av Mimers (nyckel).
+     */
+    private function resolveTemplate(User $user, ?string $ulid, ?string $mimersKey): ContainerTemplate|MimersTemplate|null
+    {
+        if ($ulid !== null) {
+            return ContainerTemplate::query()->memberOf($user)->where('ulid', $ulid)->firstOrFail();
+        }
+
+        return $mimersKey === null ? null : app(MimersTemplates::class)->find($mimersKey);
     }
 
     /**
@@ -527,16 +542,13 @@ class ContainerController extends Controller
         Gate::authorize('create', [Container::class, $account]);
 
         try {
-            $templateUlid = $request->validated('template');
-            $content = $request->validated('template_content');
+            $template = $this->resolveTemplate($user, $request->validated('template'), $request->validated('mimers_template'));
 
-            // Issue 422 · *Start from* — en egen mall eller ett inbyggt
-            // förslag fyller den nya containern med en kopia av kategorier
-            // och fält, i SAMMA transaktion som containern
-            // ([[ADR-0089 Egna fält på items]] § Riktning 6). Det inbyggda
-            // förslaget kommer som `template_content` och sparas aldrig på
-            // servern. Utan någondera är vägen oförändrad.
-            $container = ($templateUlid !== null || $content !== null)
+            // [[ADR-0101 Mallarna]] · en sparad mall eller en av Mimers
+            // fyller den nya containern med en kopia av kategorier och fält,
+            // i SAMMA transaktion som containern. Innehållet kommer aldrig
+            // från klienten. Utan någondera är vägen oförändrad.
+            $container = $template !== null
                 ? $createContainerFromTemplate->handle(
                     $user,
                     $account,
@@ -547,13 +559,7 @@ class ContainerController extends Controller
                     // den (issue 314 · [[ADR-0064 Containerns ikon]] § 2).
                     $request->validated('icon'),
                     $request->validated('icon_color'),
-                    $templateUlid === null
-                        ? null
-                        : ContainerTemplate::query()
-                            ->memberOf($user)
-                            ->where('ulid', $templateUlid)
-                            ->firstOrFail(),
-                    is_array($content) ? $content : null,
+                    $template,
                 )
                 : $createContainer->handle(
                     $user,

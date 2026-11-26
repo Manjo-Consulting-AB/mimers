@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Container;
 
-use App\Http\Requests\Template\TemplateContentRules;
 use App\Models\Item;
+use App\Support\Template\MimersTemplates;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -46,13 +46,12 @@ use Illuminate\Validation\Rule;
  * `validated()` aldrig innehåller, och når därmed aldrig
  * App\Models\Container.
  *
- * `template` och `template_content` kom med issue 421 (§ 5) och är en ANNAN
- * mallsort än `template_source_id`: de fyller containern med en kopia av
- * kategorier och fält och lämnar ingen pekare efter sig
- * ([[ADR-0089 Egna fält på items]] § Riktning 6). Båda är frivilliga; skickas
- * ingen av dem skapas containern som förut. Reglerna för innehållet delas med
- * App\Http\Requests\Template\ApplyTemplateRequest genom
- * App\Http\Requests\Template\TemplateContentRules.
+ * `template` och `mimers_template` är en ANNAN mallsort än
+ * `template_source_id`: de fyller containern med en kopia av kategorier och
+ * fält och lämnar ingen pekare efter sig ([[ADR-0089 Egna fält på items]]
+ * § Riktning 6, [[ADR-0101 Mallarna]]). Båda är frivilliga men aldrig
+ * tillsammans; skickas ingen av dem skapas containern som förut.
+ * `template_content` är förbjudet (`validation.prohibited`).
  *
  * `icon` och `icon_color` (issue 314 · [[ADR-0064 Containerns ikon]] § 1
  * och 2) valideras ordagrant som itemets (StoreItemRequest): `icon` är ett
@@ -108,26 +107,24 @@ class StoreContainerRequest extends FormRequest
             'icon_color' => ['nullable', Rule::in(Item::ICON_COLORS)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
 
-            // Issue 421 § 5 · En valfri mall eller ett inbyggt förslag att
-            // fylla den nya containern med ([[ADR-0089 Egna fält på items]]
-            // § Riktning 6). BÅDA är frivilliga — ett anrop utan dem skapar
-            // en tom container precis som förut — men de får inte skickas
-            // tillsammans: rutten har inget rimligt svar på vilken som
-            // skulle gälla. `template` prövas mot användarens konton, så en
-            // mall hon inte når är ett valideringsfel och aldrig en läsning
-            // av någon annans innehåll.
+            // [[ADR-0101 Mallarna]] § Beslut 2 · Klienten skickar aldrig en
+            // malls innehåll: en ULID för en sparad mall (`template`) eller en
+            // nyckel för en av Mimers (`mimers_template`), aldrig båda. Servern
+            // hämtar innehållet själv. `template` prövas mot användarens
+            // konton, så en mall hon inte når är ett valideringsfel.
             'template' => [
                 'nullable',
                 'string',
-                'prohibits:template_content',
+                'prohibits:mimers_template',
                 Rule::exists('container_template', 'ulid')->where(
                     fn ($query) => $query
                         ->whereNull('deleted_at')
                         ->whereIn('account_id', $this->user()?->accounts()->pluck('account.id')->all() ?? [])
                 ),
             ],
-            'template_content' => ['nullable', 'array'],
-            ...TemplateContentRules::rules('template_content.'),
+            'mimers_template' => ['nullable', 'string', Rule::in(app(MimersTemplates::class)->keys())],
+            // Det gamla fria innehållet är borta och ignoreras inte tyst.
+            'template_content' => ['prohibited'],
         ];
     }
 }

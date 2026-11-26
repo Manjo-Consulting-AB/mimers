@@ -1,19 +1,16 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { Link, useForm } from '@inertiajs/vue3';
 import { useTranslations } from '../composables/useTranslations.js';
-import { presetsFor } from '../data/categoryPresets.js';
 
 /*
  * Den färdiga kategoriuppsättningen, som ett kort överst på kategorisidan — se
  * issue 56b § Beslut 1, 2 och 4, och issue 84 § [[ADR-0036 Containerns art]].
  *
- * **Vilka uppsättningar som erbjuds avgörs HÄR, i klienten** (Beslut 2).
- * Localen kommer ur den delade propen `locale` (issue 52);
- * `presetsFor()` i resources/js/data/categoryPresets.js ger samlingen. Servern
- * får aldrig veta vilket språk orden kom ifrån — den tar emot en lista med
- * namn och sparar dem. Därför finns ingen `preset`-prop: hade servern skickat
- * orden hade [[ADR-0004 Fria taggar och kategorier]] varit upphävd.
+ * **Vilka uppsättningar som erbjuds kommer ur propen** (Beslut 2).
+ * Mimers mallar kommer som propen
+ * `mimersTemplates` ([[ADR-0101 Mallarna]]); servern äger dem sedan
+ * resources/js/data/categoryPresets.js togs bort. POST:en skickar namn.
  *
  * **VILKEN uppsättning som används väljer användaren, och det är issue 84.**
  * Före den slogs uppsättningen upp på containerns `kind` — ett fält som
@@ -40,13 +37,14 @@ import { presetsFor } from '../data/categoryPresets.js';
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
+    /* Mimers mallar (`key`, `name`, `content`), ur serverns prop. */
+    mimersTemplates: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
-const page = usePage();
 
-/** Uppsättningarna på användarens språk. Bara `en` finns, se datafilen. */
-const presets = computed(() => presetsFor(page.props.locale));
+/** Uppsättningarna, ur propen. */
+const presets = computed(() => props.mimersTemplates);
 
 /*
  * Användarens val — klientstate, för det är hennes val och ingenting servern
@@ -57,6 +55,13 @@ const chosenName = ref('');
 
 const preset = computed(() => presets.value.find((one) => one.name === chosenName.value) ?? null);
 
+/* Kategorinamnen i den form rutten tar emot: rötter med barnens namn. */
+const names = computed(() => (preset.value?.content.categories ?? []).map((category) => (
+    category.children === undefined
+        ? { name: category.name }
+        : { name: category.name, children: category.children.map((child) => child.name) }
+)));
+
 const form = useForm({ categories: [] });
 
 function apply() {
@@ -64,7 +69,7 @@ function apply() {
         return;
     }
 
-    form.transform(() => ({ categories: preset.value.categories }));
+    form.transform(() => ({ categories: names.value }));
 
     form.post(`/containers/${props.containerUlid}/categories/preset`, {
         preserveScroll: true,
@@ -94,7 +99,7 @@ function apply() {
              hon trycker ska inte behöva gissa vad knappen gör. Ingenting
              förhandsvisas förrän hon valt: ingen mall är förvald. -->
         <ul v-if="preset" class="mt-3 flex flex-col gap-1 text-sm">
-            <li v-for="category in preset.categories" :key="category.name">
+            <li v-for="category in names" :key="category.name">
                 {{ category.name }}
                 <span v-if="category.children" class="text-slate-600">
                     — {{ category.children.join(', ') }}

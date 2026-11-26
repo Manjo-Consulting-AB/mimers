@@ -5,7 +5,6 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import AppHero from '../../components/AppHero.vue';
 import FormField from '../../components/FormField.vue';
 import TemplatePreview from '../../components/templates/TemplatePreview.vue';
-import { presetsFor, presetContent } from '../../data/categoryPresets.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -53,8 +52,11 @@ const props = defineProps({
     kinds: { type: Array, required: true },
     /* Användarens mallar, ur App\Http\Resources\ContainerTemplateResource —
        valet *Start from* (issue 422 · [[ADR-0089 Egna fält på items]]
-       § Riktning 6). De inbyggda förslagen är inte här: de bor i klienten. */
+       § Riktning 6). */
     templates: { type: Array, required: true },
+    /* Mimers egna mallar — `key`, `name` och `content` för förhandsvisningen.
+       Klienten skickar bara nyckeln ([[ADR-0101 Mallarna]]). */
+    mimersTemplates: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -72,20 +74,19 @@ const form = useForm({
     // `null` (issue 88).
     description: '',
     account: singleAccount.value?.ulid ?? '',
-    // Issue 422: exakt en av de två fylls i av `submit()` — en egen mall som
-    // ULID eller ett inbyggt förslag som `template_content`. Ingenting sparas
-    // på servern för det inbyggda förslaget.
+    // Exakt en av de två fylls i av `submit()` — en egen mall som ULID eller
+    // en av Mimers som nyckel. Innehållet skickas aldrig (ADR-0101).
     template: null,
-    template_content: null,
+    mimers_template: null,
 });
 
 /*
  * *Start from*: tom container, en egen mall eller ett inbyggt förslag.
  *
  * Värdet är en sträng med ett prefix — `''` för tom, `template:<ulid>` och
- * `preset:<namn>` — så att ett enda `<select>` kan bära alla tre sorterna
+ * `preset:<nyckel>` — så att ett enda `<select>` kan bära alla tre sorterna
  * utan att två listor blandas i en array. Valet bor i klienten; servern får
- * bara ULID:n eller innehållet.
+ * bara ULID:n eller nyckeln.
  */
 const source = ref('');
 
@@ -99,8 +100,8 @@ watch(() => form.account, () => {
     source.value = '';
 });
 
-/* Uppsättningarna på användarens språk. Bara `en` finns, se datafilen. */
-const presets = computed(() => presetsFor(page.props.locale));
+/* Mimers mallar, ur propen. */
+const presets = computed(() => props.mimersTemplates);
 
 /*
  * Mallarna som hör till det valda kontot. Med ett enda konto är det alla;
@@ -130,22 +131,18 @@ const chosenPreset = computed(() => {
         return null;
     }
 
-    const name = source.value.slice('preset:'.length);
+    const key = source.value.slice('preset:'.length);
 
-    return presets.value.find((preset) => preset.name === name) ?? null;
+    return presets.value.find((preset) => preset.key === key) ?? null;
 });
 
-/* Innehållet förhandsvisningen ritar: mallen eller det inbyggda förslaget,
-   det senare i den form servern tar emot som `template_content`. */
-const chosenContent = computed(() => chosenTemplate.value?.content
-    ?? (chosenPreset.value === null ? null : presetContent(chosenPreset.value)));
+/* Innehållet förhandsvisningen ritar: mallen eller Mimers mall. */
+const chosenContent = computed(() => chosenTemplate.value?.content ?? chosenPreset.value?.content ?? null);
 
 function submit() {
     form.template = chosenTemplate.value?.ulid ?? null;
 
-    form.template_content = chosenPreset.value === null
-        ? null
-        : presetContent(chosenPreset.value);
+    form.mimers_template = chosenPreset.value?.key ?? null;
 
     form.post('/containers', { onError: focusFirstError });
 }
@@ -260,10 +257,9 @@ function submit() {
         </FormField>
 
         <!-- Issue 422 · *Start from*: tom container, en egen mall på det
-             valda kontot, eller ett inbyggt förslag. Ett enda val, ett enda
-             fält — de tre sorterna är samma fråga. Det inbyggda förslaget är
-             klientens och skickas som `template_content`; servern sparar det
-             aldrig. -->
+             valda kontot, eller en av Mimers mallar. Ett enda val, ett enda
+             fält — de tre sorterna är samma fråga. Mimers mall skickas som
+             nyckel (`mimers_template`); innehållet skickas aldrig. -->
         <FormField
             v-slot="{ describedBy }"
             :label="t('container.create.start_from')"
@@ -292,8 +288,8 @@ function submit() {
                 <optgroup :label="t('container.create.start_presets')">
                     <option
                         v-for="preset in presets"
-                        :key="preset.name"
-                        :value="`preset:${preset.name}`"
+                        :key="preset.key"
+                        :value="`preset:${preset.key}`"
                     >
                         {{ preset.name }}
                     </option>

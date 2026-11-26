@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\Template\MimersTemplates;
 use Illuminate\Support\Facades\File;
 
 /*
@@ -8,7 +9,7 @@ use Illuminate\Support\Facades\File;
  * **Det som går att avgöra på serversidan är formen.** Vad en mall lägger
  * till och vad som hoppas över räknas i
  * resources/js/components/templates/templatePreview.js, och de inbyggda
- * förslagen bor i resources/js/data/categoryPresets.js. Båda körs HÄR i node,
+ * förslagen bor i resources/templates/en.php. templatePreview körs HÄR i node,
  * mot samma modul klienten importerar — en assertion på en PHP-avskrift hade
  * bevisat noll.
  *
@@ -89,7 +90,10 @@ it('räknar en malls storlek för kontots mallista', function () {
 });
 
 it('ger de inbyggda förslagen fält som servern kan ta emot', function () {
-    $presets = mallforhandsKor('js/data/categoryPresets.js', 'mod.presetsFor("en")');
+    $presets = array_map(fn ($mall): array => [
+        'name' => $mall->name,
+        'fields' => $mall->content['fields'],
+    ], app(MimersTemplates::class)->all('en'));
 
     $tillatna = ['text', 'number', 'date'];
 
@@ -113,11 +117,13 @@ it('ger de inbyggda förslagen fält som servern kan ta emot', function () {
     expect($annat['fields'] ?? [])->toBe([]);
 });
 
-it('skickar det inbyggda förslaget som template_content och mallen som template', function () {
+it('skickar Mimers mall som mimers_template och mallen som template', function () {
     $skapa = File::get(resource_path('js/pages/Containers/Create.vue'));
 
-    expect($skapa)->toContain("from '../../data/categoryPresets.js'")
-        ->toContain('form.template_content')
+    expect(str_contains($skapa, 'categoryPresets'))->toBeFalse();
+    expect(str_contains($skapa, 'template_content'))->toBeFalse();
+
+    expect($skapa)->toContain('form.mimers_template')
         ->toContain('form.template')
         ->toContain('preset:')
         ->toContain('template:');
