@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Template\ApplyTemplate;
 use App\Actions\Template\DeleteTemplate;
 use App\Actions\Template\RenameTemplate;
 use App\Actions\Template\SaveContainerTemplate;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Template\ApplyTemplateRequest;
 use App\Http\Requests\Template\StoreTemplateRequest;
 use App\Http\Requests\Template\UpdateTemplateRequest;
 use App\Http\Resources\ContainerTemplateResource;
@@ -32,8 +30,8 @@ use Illuminate\Support\Facades\Gate;
  *
  * Att SPARA från en container kräver dessutom `view` i containern och
  * medlemskap i dess konto: en gäst som fått läsrätt ser containern men äger
- * ingen del av kontots mallar. Att TILLÄMPA kräver skrivrätt i containern
- * (`ContainerPolicy::update()`), eftersom det lägger till kategorier och fält.
+ * ingen del av kontots mallar. Mallar läggs bara på när en container skapas
+ * ([[ADR-0101 Mallarna]]); ingen rutt lägger en mall på en befintlig container.
  *
  * **Ingen behörighetslogik bor i actionerna.** De är verktyget; grinden står
  * här och i routebindningen, samma linje som för App\Actions\Field.
@@ -118,40 +116,5 @@ class ContainerTemplateController extends Controller
         $deleteTemplate->handle($template);
 
         return response()->noContent();
-    }
-
-    /**
-     * POST /api/containers/{container}/template — 200. Tillämpar en mall, eller
-     * ett innehåll i samma form, på en befintlig container.
-     *
-     * Grinden är `update` i containern: att lägga till kategorier och fält är
-     * att skriva (issue 421 § 4). Mallen i kroppen har redan prövats mot
-     * användarens konton av ApplyTemplateRequest.
-     *
-     * Svaret räknar upp vad som hoppades över:
-     * `{"data": {"categories", "fields", "skipped"}}`.
-     */
-    public function apply(ApplyTemplateRequest $request, Container $container, ApplyTemplate $applyTemplate): JsonResponse
-    {
-        Gate::authorize('update', $container);
-
-        $templateUlid = $request->validated('template');
-        $template = $templateUlid === null
-            ? null
-            : ContainerTemplate::query()
-                ->memberOf($request->user())
-                ->where('ulid', $templateUlid)
-                ->firstOrFail();
-
-        $content = $request->validated('template_content');
-
-        $result = $applyTemplate->handle(
-            $container,
-            $template,
-            is_array($content) ? $content : null,
-            $request->user(),
-        );
-
-        return response()->json(['data' => $result]);
     }
 }

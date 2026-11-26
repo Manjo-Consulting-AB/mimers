@@ -1532,7 +1532,6 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         // Ingen av dem rör någon `container_access`-rad, och ingen ny läsare
         // eller mottagare läggs till.
         'containers/{container}/templates',
-        'containers/{container}/template',
         // Issue 159: containerns bild. Den sätter en bilaga på containern och
         // rör inga `container_access`-rader alls — grinden är
         // `ContainerPolicy::update`, samma pinne som att byta containerns
@@ -1548,7 +1547,6 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/binders',
         'containers/{container}/items/{item}/binders',
         'containers/{container}/categories',
-        'containers/{container}/categories/preset',
         'containers/{container}/tags',
         // Issue 417: fältens två POST. De skriver en `item_field`-rad och rör
         // inga åtkomster — grinden är `ContainerPolicy::update` för

@@ -6,6 +6,7 @@ use App\Models\Container;
 use App\Models\ContainerTemplate;
 use App\Models\ItemField;
 use App\Models\User;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -204,42 +205,29 @@ it('sparar en mall från containern och skapar en ny container ur den med samma 
     expect($ny->template_source_id)->toBeNull();
 });
 
-it('tillämpar en mall på en befintlig container och hoppar över rubriker som redan finns', function () {
+it('har ingen väg att lägga en mall på en befintlig container', function () {
     withoutVite();
 
     [$account, $user, $container] = mallgranssnittKontext();
 
-    ItemField::factory()->for($container, 'container')->create([
-        'label' => 'Färg',
-        'type' => 'text',
-        'billed_account_id' => $account->id,
-    ]);
-
     $mall = mallgranssnittMall($account, [
         'categories' => [['name' => 'Motor']],
-        'fields' => [
-            ['label' => 'färg', 'type' => 'text'],
-            ['label' => 'Vikt', 'type' => 'number'],
-        ],
+        'fields' => [['label' => 'Vikt', 'type' => 'number']],
     ]);
 
-    actingAs($user)
-        ->from("/containers/{$container->ulid}/edit")
-        ->post("/containers/{$container->ulid}/template", ['template' => $mall->ulid])
-        ->assertRedirect("/containers/{$container->ulid}/edit")
-        ->assertSessionHas('status', 'template-applied');
+    // [[ADR-0101 Mallarna]] beslut 4: en mall läggs bara på när containern
+    // skapas.
+    $svar = actingAs($user)->post("/containers/{$container->ulid}/template", ['template' => $mall->ulid]);
 
-    $rubriker = ItemField::query()
-        ->where('container_id', $container->id)
-        ->orderBy('position')
-        ->pluck('label')
-        ->all();
+    expect($svar->status())->toBeIn([404, 405]);
+    expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
+    expect(ItemField::query()->where('container_id', $container->id)->count())->toBe(0);
 
-    // `Färg` fanns, `färg` hoppades över utan hänsyn till skiftläge och
-    // `Vikt` lades till. Den befintliga rubriken behåller sin stavning.
-    expect($rubriker)->toBe(['Färg', 'Vikt']);
-    expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Motor']);
+    $redigera = File::get(resource_path('js/pages/Containers/Edit.vue'));
+
+    expect(str_contains($redigera, 'ApplyTemplateDialog'))->toBeFalse();
+    expect(str_contains($redigera, '/template`'))->toBeFalse();
+    expect(File::exists(resource_path('js/components/templates/ApplyTemplateDialog.vue')))->toBeFalse();
 });
 
 it('ger inställningsvyn underlaget förhandsvisningen behöver', function () {
@@ -361,16 +349,12 @@ it('når inte någon annans mall och nekar skrivningarna till en främling', fun
         ->delete("/settings/templates/{$annanMall->ulid}")
         ->assertNotFound();
 
-    // Att spara och tillämpa på containern hon inte når är 403.
+    // Att spara från containern hon inte når är 403.
     actingAs($främmande)
         ->post("/containers/{$container->ulid}/templates", [
             'container' => $container->ulid,
             'name' => 'Stulen',
         ])
-        ->assertForbidden();
-
-    actingAs($främmande)
-        ->post("/containers/{$container->ulid}/template", ['template' => $egenMall->ulid])
         ->assertForbidden();
 
     expect(ContainerTemplate::query()->where('name', 'Stulen')->exists())->toBeFalse();
@@ -383,7 +367,7 @@ it('når inte någon annans mall och nekar skrivningarna till en främling', fun
     );
 });
 
-it('nekar en läsare att tillämpa och en gäst att spara', function () {
+it('nekar en gäst att spara', function () {
     withoutVite();
 
     [$account, , $container] = mallgranssnittKontext();
@@ -396,23 +380,9 @@ it('nekar en läsare att tillämpa och en gäst att spara', function () {
     $läsare = User::factory()->create();
     beviljaAccess($container, $läsare, 'read', 'guest');
 
-    // Läsaren är medlem i ett EGET konto med en egen mall: annars faller
-    // anropet redan på ApplyTemplateRequest:s `exists`-regel (mallen ska
-    // finnas i hennes konton) och grindens 403 prövas aldrig.
-    $läsarKonto = Account::factory()->create();
-    $läsarKonto->users()->attach($läsare, ['role' => 'member']);
-    $läsarMall = mallgranssnittMall($läsarKonto, [
-        'categories' => [['name' => 'Egen']],
-        'fields' => [],
-    ], 'Läsarens mall');
-
     // Läsaren ser containern men får varken skriva kategorier eller fält —
     // och får därför inte heller spara dess innehåll som en mall, eftersom
     // hon inte är medlem i kontot.
-    actingAs($läsare)
-        ->post("/containers/{$container->ulid}/template", ['template' => $läsarMall->ulid])
-        ->assertForbidden();
-
     actingAs($läsare)
         ->post("/containers/{$container->ulid}/templates", [
             'container' => $container->ulid,
@@ -421,7 +391,7 @@ it('nekar en läsare att tillämpa och en gäst att spara', function () {
         ->assertForbidden();
 
     expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
-    expect(ContainerTemplate::query()->count())->toBe(2);
+    expect(ContainerTemplate::query()->count())->toBe(1);
 });
 
 it('skickar inga mallar till en skrivdelegat som inte är medlem i kontot', function () {
@@ -459,12 +429,5 @@ it('kräver inloggning för mallarnas sidor och rutter', function () {
     post("/containers/{$container->ulid}/templates", [
         'container' => $container->ulid,
         'name' => 'Utloggad',
-    ])->assertRedirect('/login');
-
-    post("/containers/{$container->ulid}/template", [
-        'template_content' => [
-            'categories' => [['name' => 'Motor']],
-            'fields' => [],
-        ],
     ])->assertRedirect('/login');
 });

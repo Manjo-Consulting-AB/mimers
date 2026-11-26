@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Template\ApplyTemplate;
 use App\Actions\Template\SaveContainerTemplate;
 use App\Exceptions\Api\ApiException;
-use App\Http\Requests\Template\ApplyTemplateRequest;
 use App\Http\Requests\Template\StoreTemplateRequest;
 use App\Models\Container;
-use App\Models\ContainerTemplate;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
@@ -21,7 +18,7 @@ use Illuminate\Validation\ValidationException;
  *
  * **Ingenting av `/api` görs om.** Båda rutterna delar sina FormRequests med
  * App\Http\Controllers\Api\ContainerTemplateController
- * (`StoreTemplateRequest` och `ApplyTemplateRequest`), och skrivningarna går
+ * (`StoreTemplateRequest`), och skrivningarna går
  * genom samma Actions under App\Actions\Template. Skillnaden är svaret:
  * `/api` svarar JSON, webben svarar `back()` med en flash-kod
  * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
@@ -76,48 +73,5 @@ class ContainerTemplateController extends Controller
         }
 
         return back()->with('status', 'template-saved');
-    }
-
-    /**
-     * POST /containers/{container}/template — tillämpar en egen mall eller ett
-     * inbyggt förslag på en befintlig container, 302 tillbaka.
-     *
-     * Kroppen bär `template` (en mall-ULID) eller `template_content` (det
-     * inbyggda förslaget, som aldrig sparas på servern). Mallen slås upp inom
-     * användarens konton — requesten har redan prövat att den finns där, och
-     * uppslaget här är samma fråga en gång till, så en framtida ändring av
-     * regeln inte kan läsa någon annans mall.
-     */
-    public function apply(
-        ApplyTemplateRequest $request,
-        Container $container,
-        ApplyTemplate $applyTemplate,
-        ApiErrorTranslator $translator,
-    ): RedirectResponse {
-        Gate::authorize('update', $container);
-
-        $templateUlid = $request->validated('template');
-
-        $template = $templateUlid === null
-            ? null
-            : ContainerTemplate::query()
-                ->memberOf($request->user())
-                ->where('ulid', $templateUlid)
-                ->firstOrFail();
-
-        $content = $request->validated('template_content');
-
-        try {
-            $applyTemplate->handle(
-                $container,
-                $template,
-                is_array($content) ? $content : null,
-                $request->user(),
-            );
-        } catch (ApiException $e) {
-            throw ValidationException::withMessages(['template' => $translator->message($e)]);
-        }
-
-        return back()->with('status', 'template-applied');
     }
 }
