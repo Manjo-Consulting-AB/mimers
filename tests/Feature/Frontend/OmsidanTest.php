@@ -108,11 +108,10 @@ it('länkar Get in touch till /contact utan e-postadress', function () {
         ->and($body)->not->toContain('@');
 });
 
-it('nämner container och PDF-pärmen men inte kontoexporten', function () {
+it('nämner kontoexporten, containern och PDF-pärmen', function () {
     $body = omsidanKropp('/about');
 
-    expect($body)->not->toContain('copy of your account')
-        ->and($body)->toContain('a complete copy of a container')
+    expect($body)->toContain('a complete copy of your account, a single container, or a PDF binder')
         ->and($body)->toContain('PDF binder');
 });
 
