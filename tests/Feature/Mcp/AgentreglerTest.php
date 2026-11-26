@@ -2,6 +2,8 @@
 
 use App\Actions\Agent\SetContainerAgentRules;
 use App\Actions\Agent\SetUserAgentRules;
+use App\Actions\Inbox\ResolveInbox;
+use App\Models\AgentContainerGrant;
 use App\Models\Container;
 use App\Models\Item;
 
@@ -134,9 +136,34 @@ it('beskriver agent_rules som instruktioner i containers_list och containers_tre
 });
 
 it('ger inboxen inga containerregler', function () {
-    [, $token] = mcpAgentMedToken();
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    $item = app(ResolveInbox::class)->handle($anvandare);
+    $rad = new AgentContainerGrant;
+    $rad->agent_id = $agent->id;
+    $rad->container_id = $item->container_id;
+    $rad->group = 'schedules';
+    $rad->level = 'write';
+    $rad->save();
 
-    $svar = mcpVerktyg($token, 'inbox_get');
+    app(SetUserAgentRules::class)->handle($anvandare, 'Mina regler');
+    app(SetContainerAgentRules::class)->handle(Container::query()->findOrFail($item->container_id), 'Inboxregler', $anvandare);
 
-    expect($svar->getContent())->not->toContain('agent_rules');
+    $svar = mcpResultat(mcpVerktyg($token, 'inbox_get'));
+
+    expect($svar)->toHaveKey('item')
+        ->and($svar)->not->toHaveKey('agent_rules')
+        ->and(json_encode($svar))->not->toContain('agent_rules');
+});
+
+it('ger owner_is_user false i containers_tree på en delad container användaren inte äger', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    [, $agare] = mcpKonto('pro');
+    $delad = Container::factory()->for($agare->accounts()->first(), 'account')->create(['name' => 'Delad']);
+    mcpSlaPaI($agent, $delad);
+    beviljaAccess($delad, $anvandare, 'read', 'member');
+    app(SetContainerAgentRules::class)->handle($delad, 'Ägarens regler', $agare);
+
+    $svar = mcpResultat(mcpVerktyg($token, 'containers_tree', ['container' => $delad->ulid]));
+
+    expect($svar['agent_rules'])->toBe(['from' => 'container_owner', 'owner_is_user' => false, 'text' => 'Ägarens regler', 'revision' => 1]);
 });
