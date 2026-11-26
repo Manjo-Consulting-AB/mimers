@@ -1,7 +1,7 @@
 <?php
 
+use App\Actions\Inbox\ResolveInbox;
 use App\Models\AuditLog;
-use App\Models\Container;
 use App\Models\Tag;
 use App\Models\User;
 
@@ -61,21 +61,22 @@ it('avvisar utan skrivnivå och i en inbox med agent.forbidden', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
     $container = mcpEgenContainer($agent);
 
+    // Inboxen prövas först, med full skrivnivå: skrivNiva() sänker också
+    // kontonivån, och då skulle nivåkontrollen svara i stället för inbox-kontrollen.
+    $inkorg = app(ResolveInbox::class)->handle($anvandare)->container;
+
+    expect($inkorg->isInbox())->toBeTrue();
+
+    mcpSlaPaI($agent, $inkorg);
+
+    expect(mcpFel(mcpVerktyg($token, 'tags_create', ['container' => $inkorg->ulid, 'name' => 'Vinter']))['code'])
+        ->toBe('agent.forbidden');
+
     skrivNiva($agent, $container, 'items', 'read');
 
     expect(mcpFel(mcpVerktyg($token, 'tags_create', ['container' => $container->ulid, 'name' => 'Vinter']))['code'])
-        ->toBe('agent.forbidden');
-
-    $inkorg = Container::query()->where('account_id', $agent->account_id)->get()->first(fn (Container $c) => $c->isInbox());
-
-    if ($inkorg !== null) {
-        mcpSlaPaI($agent, $inkorg);
-
-        expect(mcpFel(mcpVerktyg($token, 'tags_create', ['container' => $inkorg->ulid, 'name' => 'Vinter']))['code'])
-            ->toBe('agent.forbidden');
-    }
-
-    expect(Tag::query()->exists())->toBeFalse();
+        ->toBe('agent.forbidden')
+        ->and(Tag::query()->exists())->toBeFalse();
 });
 
 it('svarar resource.not_found för en okänd container', function () {
