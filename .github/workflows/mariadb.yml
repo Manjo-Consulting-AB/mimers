@@ -1,0 +1,92 @@
+name: MariaDB
+
+# Testsviten kör sqlite i minnet, produktionen kör MariaDB 11.4. Issue 12 (M1)
+# betalade skillnaden i en skiftlägeskänslig jämförelse, issue 23b (M3) i två
+# indexnamn över mysqls 64-teckengräns, och v0.9.0 i två migreringar med
+# MySQL-stavning som MariaDB avvisar. migreringar.yml vaktar migreringarna och
+# tre CHECK-prov - men `RESTRICT`, kollationen `utf8mb4_unicode_ci` och allt
+# annat sviten prövar är obevakat mot databasen som tar emot koden.
+#
+# Den här filen kör hela sviten, utan filter, mot `mariadb:11.4` vid varje push
+# till `main` och manuellt (`workflow_dispatch`). Beslutat 2026-11-25: det gör
+# oss redo för flytten till en egen VPS. Tjänst och miljö är desamma som i
+# migreringar.yml.
+#
+# Den körs på `main` och inte per PR: sviten mot MariaDB är dyrare än mot
+# sqlite, och PR:erna ska gå lika fort som förut (ci.yml är orörd). Därför
+# ingen `paths`-gräns - ett fel kan komma från vilken fil som helst. Den
+# fångar det som migreringar.yml inte fångar: felet efter merge, inte före.
+#
+# Den blockerar ingenting. Repot har ingen branch protection (Pipeline.md §
+# Branch protection); en röd körning syns i Actions och i GitHubs mejl till den
+# som pushade.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mariadb-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sviten:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_DATABASE: mimers
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.5'
+          extensions: fileinfo, imagick, mbstring, pdo_mysql, pdo_sqlite, sqlite3, zip
+          coverage: none
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Installera beroenden
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+          npm ci
+
+      # Ett prov läser public/build/manifest.json (som i ci.yml).
+      - name: Bygg frontend
+        run: npm run build
+
+      # Miljövariablerna sätts i steget: phpunit.xml pekar DB_CONNECTION på
+      # sqlite utan `force`, och en variabel som redan finns i miljön vinner.
+      # RefreshDatabase gör `migrate:fresh` på `mimers`, som slängs med jobbet.
+      - name: Hela sviten mot MariaDB
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: mimers
+          DB_USERNAME: root
+          DB_PASSWORD: ''
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan config:clear
+          php artisan test
