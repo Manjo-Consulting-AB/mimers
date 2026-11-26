@@ -141,6 +141,13 @@ class SecurityLog extends Model
     public const ACTION_EXPORT_DOWNLOADED = 'export.downloaded';
 
     /**
+     * En kontoexport beställdes (issue 1702 · ADR-0098 § 7). Exporten lämnar
+     * ut hela kontot på en gång, så en kapad session ska synas här. `meta`
+     * bär bara exportens ULID.
+     */
+    public const ACTION_ACCOUNT_EXPORT_REQUESTED = 'account.export_requested';
+
+    /**
      * En webhook skapades.
      */
     public const ACTION_WEBHOOK_CREATED = 'webhook.created';

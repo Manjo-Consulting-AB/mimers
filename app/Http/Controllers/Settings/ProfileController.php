@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdateProfileRequest;
+use App\Http\Resources\ExportResource;
 use App\Models\Account;
+use App\Models\Export;
 use App\Models\User;
 use DateTimeZone;
 use Illuminate\Http\RedirectResponse;
@@ -105,6 +107,17 @@ class ProfileController extends Controller
             'totpEnabled' => $user->totp_confirmed_at !== null,
 
             'timezones' => DateTimeZone::listIdentifiers(),
+
+            // Issue 1702: personens egna kontoexporter, nyast först. Samma
+            // form som containerns exportlista (ExportResource).
+            'accountExports' => ExportResource::collection(
+                Export::query()
+                    ->where('kind', Export::KIND_ACCOUNT)
+                    ->where('requested_by_user_id', $user->id)
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->get()
+            )->resolve($request),
         ]);
     }
 

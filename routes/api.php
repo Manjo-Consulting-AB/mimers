@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountExportController;
 use App\Http\Controllers\Api\AccountStorageController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AuditLogController;
@@ -291,6 +292,14 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/exports', [ExportController::class, 'store']);
     Route::get('/containers/{container}/exports', [ExportController::class, 'index']);
     Route::get('/containers/{container}/exports/{export}', [ExportController::class, 'show']);
+
+    // Issue 1702 · Kontoexporten, se App\Http\Controllers\Api\AccountExportController
+    // och [[ADR-0098 Kontoexporten]] § 5. Objektet är anroparens eget konto —
+    // ingen kontoparameter. POST bär begränsaren `account-export` (tre per
+    // dygn), läsningarna gör det inte.
+    Route::post('/account/exports', [AccountExportController::class, 'store'])->middleware('throttle:account-export');
+    Route::get('/account/exports', [AccountExportController::class, 'index']);
+    Route::get('/account/exports/{export}', [AccountExportController::class, 'show']);
 
     // Issue 11 · Kategorier — en hierarki per container, se
     // App\Http\Controllers\Api\CategoryController och

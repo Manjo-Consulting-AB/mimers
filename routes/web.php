@@ -60,6 +60,7 @@ use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
+use App\Http\Controllers\Settings\AccountExportController;
 use App\Http\Controllers\Settings\AgentController;
 use App\Http\Controllers\Settings\EmailChangeController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
@@ -822,6 +823,19 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/profile', [ProfileController::class, 'update'])
         ->name('settings.profile.update');
+
+    /*
+     * Issue 1702 · Kontoexporten på profilen, se App\Http\Controllers\Settings\
+     * AccountExportController och [[ADR-0098 Kontoexporten]]. Objektet är
+     * personen själv — ingen kontoparameter. POST bär `account-export`
+     * (tre per dygn); nedladdningen är `/exports/{export}/download`.
+     */
+    Route::post('/settings/account-export', [AccountExportController::class, 'store'])
+        ->middleware('throttle:account-export')
+        ->name('settings.account-export.store');
+
+    Route::delete('/settings/account-exports/{export}', [AccountExportController::class, 'destroy'])
+        ->name('settings.account-exports.destroy');
 
     /*
      * Issue 380 · Profilbilden, se App\Http\Controllers\Settings\

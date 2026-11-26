@@ -26,6 +26,9 @@ class ExportResource extends JsonResource
         return [
             'ulid' => $this->ulid,
             'kind' => $this->kind,
+            // Issue 1702: en kontoexport har ingen container. Nyckeln finns
+            // bara på den, så containerexporternas form är oförändrad.
+            'container' => $this->when($this->kind === Export::KIND_ACCOUNT, null),
             // Issue 447: pärmen om ett item bär itemets namn, för listans
             // etikett. Bara när relationen är laddad — `/api` ändras inte.
             'item' => $this->whenLoaded('item', fn () => $this->item === null ? null : ['ulid' => $this->item->ulid, 'name' => $this->item->name]),
