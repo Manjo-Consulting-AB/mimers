@@ -1903,7 +1903,7 @@ return [
         'types_heading' => 'What you want email about',
 
         // The default and the reason for it (Decision 3).
-        'digest_default' => 'The weekly summary is the default for task reminders. In April everything falls due at once, and twenty separate emails in one morning are harder to read than one collected.',
+        'digest_default' => 'The weekly summary is the default for task reminders.',
 
         // The mark on a type the user has never touched. The value comes
         // from `is_default` in the server response (31b § Decision 2).
@@ -2277,7 +2277,7 @@ return [
         // The page runs no check of its own for private ranges, `localhost` or
         // metadata services (decision 7) — but whoever types an address should
         // know the rules before the server answers.
-        'url_hint' => 'A public https address. Addresses on your own network, on the server itself, or without https are rejected.',
+        'url_hint' => 'A public https address. Addresses on private networks, on the server itself, or without https are rejected.',
 
         'event_types_label' => 'Events',
 
@@ -2535,7 +2535,7 @@ return [
                 'over' => 'The account is :over over :free.',
                 'remove_one' => 'One attachment would be deleted, newest first.',
                 'remove_many' => ':count attachments would be deleted, newest first.',
-                'fits' => 'Everything fits within Free.',
+                'fits' => 'Everything you store at the moment fits within Free.',
                 'cleanup_link' => 'Choose yourself what has to go',
             ],
         ],
@@ -2611,7 +2611,7 @@ return [
     'storage' => [
         'title' => 'Storage',
         'heading' => 'Storage',
-        'intro' => 'Choose yourself what has to go. What you remove here is deleted for good and cannot be restored.',
+        'intro' => 'What you remove here is deleted for good and cannot be restored.',
         'text_note' => 'Text in items, tasks, costs and loans also counts toward your storage. It\'s usually small. Removing files frees the most space.',
 
         'account_label' => 'Account',
