@@ -715,6 +715,11 @@ class ContainerController extends Controller
                 // i stället för att mötas av en 403.
                 'saveTemplate' => Gate::forUser($request->user())->allows('view', $container)
                     && $request->user()->accounts()->whereKey($container->account_id)->exists(),
+                // Kryssrutan *Include agent rules* i mallens dialog: bara när
+                // containern har regler och personen får skriva dem
+                // ([[ADR-0101 Mallarna]] § Beslut 5).
+                'includeAgentRules' => $container->agent_rules !== null
+                    && Gate::forUser($request->user())->allows('manageAgentRules', $container),
             ],
         ]);
     }

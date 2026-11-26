@@ -48,6 +48,7 @@ class StoreTemplateRequest extends FormRequest
                 ),
             ],
             'name' => ['required', 'string', 'min:1', 'max:255'],
+            'include_agent_rules' => ['sometimes', 'boolean'],
         ];
     }
 }

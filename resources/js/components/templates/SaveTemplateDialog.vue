@@ -28,6 +28,8 @@ const props = defineProps({
     pending: { type: Boolean, default: false },
     /* Serverns mening om namnet, eller null. */
     error: { type: String, default: null },
+    /* Containern har regler och personen får skriva dem: kryssrutan visas. */
+    canIncludeAgentRules: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['save', 'close']);
@@ -36,6 +38,7 @@ const { t } = useTranslations();
 
 const dialogElement = ref(null);
 const name = ref('');
+const includeAgentRules = ref(true);
 
 /* Elementet som hade fokus när dialogen öppnades, om `trigger` saknas. */
 let opener = null;
@@ -45,6 +48,7 @@ watch(
     async (open) => {
         if (open) {
             name.value = '';
+            includeAgentRules.value = true;
             opener = document.activeElement;
 
             // Innehållet finns i DOM:en redan, men dialogen ska vara öppen
@@ -91,7 +95,7 @@ function submit() {
         return;
     }
 
-    emit('save', trimmed);
+    emit('save', { name: trimmed, includeAgentRules: props.canIncludeAgentRules ? includeAgentRules.value : false });
 }
 </script>
 
@@ -139,6 +143,11 @@ function submit() {
                         class="rounded border border-border bg-surface px-3 py-2"
                     >
                 </div>
+
+                <label v-if="canIncludeAgentRules" for="template-include-agent-rules" class="flex min-h-11 items-center gap-2 text-sm text-ink">
+                    <input id="template-include-agent-rules" v-model="includeAgentRules" type="checkbox" name="include_agent_rules">
+                    {{ t('container.templates.include_agent_rules') }}
+                </label>
 
                 <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
 

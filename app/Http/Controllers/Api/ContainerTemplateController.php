@@ -83,6 +83,7 @@ class ContainerTemplateController extends Controller
             $request->user(),
             $container,
             (string) $request->validated('name'),
+            $request->boolean('include_agent_rules', true),
         );
 
         $template->setRelation('account', $container->account);

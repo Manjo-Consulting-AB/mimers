@@ -2,6 +2,7 @@
 
 namespace App\Actions\Template;
 
+use App\Actions\Agent\SetContainerAgentRules;
 use App\Actions\Container\CreateContainer;
 use App\Models\Account;
 use App\Models\Container;
@@ -24,6 +25,9 @@ use Illuminate\Support\Facades\DB;
  * vore en halv mall, och ett kast mitt i får därför containern att försvinna
  * med den (Laravel rullar tillbaka hela den yttre transaktionen).
  *
+ * **Mallens agentregler** sätts genom App\Actions\Agent\SetContainerAgentRules
+ * med den skapande personen som författare ([[ADR-0101 Mallarna]] § Beslut 5).
+ *
  * **Ingen `Gate::authorize()`.** Anroparen prövar
  * `ContainerPolicy::create()` för kontot, precis som för en vanlig container.
  */
@@ -32,6 +36,7 @@ final class CreateContainerFromTemplate
     public function __construct(
         private readonly CreateContainer $createContainer,
         private readonly ApplyTemplate $applyTemplate,
+        private readonly SetContainerAgentRules $setContainerAgentRules,
     ) {}
 
     public function handle(
@@ -61,6 +66,18 @@ final class CreateContainerFromTemplate
                 $template instanceof MimersTemplate ? $template->content : null,
                 $creator,
             );
+
+            // Mallens regler (sparad eller Mimers) skrivs av den skapande personen
+            // i samma transaktion; revisionen märks inte med mallen. Att en agent
+            // skapar containern ur mallen är ingen skrivväg till reglerna: texten
+            // skrevs av en människa på kontot eller av Mimers.
+            $rules = $template instanceof ContainerTemplate
+                ? ($template->content['agent_rules'] ?? null)
+                : $template->agentRules;
+
+            if (is_string($rules) && trim($rules) !== '') {
+                $this->setContainerAgentRules->handle($container, $rules, $creator);
+            }
 
             return $container;
         });

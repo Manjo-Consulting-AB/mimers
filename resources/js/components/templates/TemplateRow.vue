@@ -42,6 +42,8 @@ watch(
     },
 );
 
+const hasAgentRules = computed(() => typeof props.template.content?.agent_rules === 'string' && props.template.content.agent_rules !== '');
+
 const counts = computed(() => templateCounts(props.template.content));
 
 const confirmOpen = ref(false);
@@ -107,6 +109,8 @@ function destroy() {
         <p class="text-sm text-ink-muted">
             {{ t('settings.templates.count', { categories: counts.categories, fields: counts.fields }) }}
         </p>
+
+        <p v-if="hasAgentRules" class="text-sm text-ink-muted">{{ t('settings.templates.has_agent_rules') }}</p>
 
         <p v-if="accountName" class="text-sm text-ink-muted">{{ accountName }}</p>
 

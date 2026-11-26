@@ -7,6 +7,7 @@ use App\Actions\Template\SaveContainerTemplate;
 use App\Models\Agent;
 use App\Models\AgentAccountGrant;
 use App\Models\AgentContainerGrant;
+use App\Models\AgentRulesRevision;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
@@ -631,4 +632,26 @@ it('skapar ett ja/nej-fält med fields_create och kryssar i det vid items_create
     $visat = mcpResultat(mcpVerktyg($token, 'items_get', ['item' => $skapat['ulid']]));
 
     expect($visat['fields'][0]['value'])->toBeTrue();
+});
+
+it('visar agent_rules i mallens innehåll i templates_list och låter containers_create ge reglerna till containern', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    $kalla = mcpEgenContainer($agent, 'Regelkällan');
+    $kalla->forceFill(['agent_rules' => 'Fråga först.'])->save();
+
+    $mall = app(SaveContainerTemplate::class)->handle($anvandare, $kalla, 'Regelmallen');
+
+    $agent->create_containers = true;
+    $agent->save();
+
+    $lista = collect(mcpResultat(mcpVerktyg($token, 'templates_list'))['templates'])->firstWhere('ulid', $mall->ulid);
+
+    expect($lista['content']['agent_rules'])->toBe('Fråga först.');
+
+    $svar = mcpResultat(mcpVerktyg($token, 'containers_create', ['name' => 'Ur regelmall', 'template' => $mall->ulid]));
+
+    $ny = Container::query()->where('ulid', $svar['ulid'])->sole();
+
+    expect($ny->agent_rules)->toBe('Fråga först.')
+        ->and(AgentRulesRevision::query()->where('container_id', $ny->id)->sole()->author_user_id)->toBe($anvandare->id);
 });
