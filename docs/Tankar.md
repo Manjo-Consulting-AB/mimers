@@ -17,6 +17,7 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 - **Räcker påminnelsen om fristen i `privacy:list`?** Ett ärende om en begäran enligt art. 15–21 har en frist på en månad ([[ADR-0095 Integritetsbegäranden]] § 5), och den enda påminnelsen är att `privacy:list` sorterar de öppna ärendena på frist och visar dagar kvar eller *overdue* (§ 6). Det är Tonys beslut 2026-11-24 och räcker med ett fåtal ärenden och en handläggare. Frågan är om det räcker när ärendena blir fler eller handläggarna fler än en, eller om en daglig sammanställning behövs då. Restes 2026-11-24.
 
 - **Behöver något jobb en dag fråga efter begränsningen?** Begränsningen enligt art. 18 är en markering på ärendet som ingen kod läser ([[ADR-0095 Integritetsbegäranden]] § 8). Ett jobb som skickar något till personen, till exempel veckosammanfattningen, eller mätningen kan en dag behöva fråga efter den. Frågan är när, och om markeringen då måste bli en kolumn på kontot eller personen. Restes 2026-11-24.
+
 - **Ska Mimers nuvarande mallar (kategoriförslagen från issue 56b) finnas kvar?** Tony 2026-11-26: de är inte så genomtänkta som de borde vara. De flyttar oförändrade till servern i issue 515; vad de ska innehålla, och om de ska bära agentregler, är obesvarat. Se [[ADR-0101 Mallarna]].
 
 ## Avgjort och flyttat
