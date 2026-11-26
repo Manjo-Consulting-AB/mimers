@@ -1611,18 +1611,6 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
             continue;
         }
 
-        // `data/` är undantaget, och det är det ENDA undantaget: de färdiga
-        // kategoriuppsättningarna (issue 56b) är användarvänd text som med
-        // flit bor i Vue-lagret i stället för i `lang/` — se [[ADR-0004 Fria
-        // taggar och kategorier]] § Konsekvenser och [[ADR-0021
-        // Frontendteknik]] § Konsekvenser ("som data i Vue-lagret, seedad per
-        // språk och containertyp"). Regeln nedan gäller fortfarande varje
-        // komponent och varje sidmodul; att katalogen inte får växa vaktas av
-        // testet strax nedanför.
-        if (str_starts_with($fil->getRelativePath(), 'data')) {
-            continue;
-        }
-
         // Kommentarer är svenska med flit (AGENTS.md § Språk i koden). Kvar
         // efter städningen finns bara kod och markup, och där får ingen
         // svensk text finnas alls — varken som strängliteral eller som text
@@ -1713,15 +1701,9 @@ it('har ingen hårdkodad text i Ui-komponenterna', function () {
     }
 });
 
-it('har bara kategoriuppsättningarna i js/data/', function () {
-    $katalog = resource_path('js/data');
-
-    expect(File::isDirectory($katalog))->toBeTrue(
-        'resources/js/data saknas — undantaget i testet ovan undantar en katalog som inte finns',
-    );
-
-    expect(array_map(fn ($fil): string => $fil->getRelativePathname(), File::allFiles($katalog)))
-        ->toBe(['categoryPresets.js']);
+it('har ingen katalog js/data/ som undantar text från språkfilerna', function () {
+    // Mimers mallar bor på servern (ADR-0101); katalogen och undantaget är borta.
+    expect(File::isDirectory(resource_path('js/data')))->toBeFalse();
 });
 
 /*

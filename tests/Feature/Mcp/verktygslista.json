@@ -188,6 +188,9 @@
             "kind": {
                 "type": "string"
             },
+            "mimers_template": {
+                "type": "string"
+            },
             "name": {
                 "type": "string"
             },

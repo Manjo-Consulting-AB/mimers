@@ -17,6 +17,7 @@ use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Template\MimersTemplates;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,12 +93,10 @@ class CategoryController extends Controller
      *
      * `presetDismissed` är det enda servern vet om det färdiga förslaget (issue
      * 56b § Beslut 2 och 4): att användaren tackat nej till det för DEN HÄR
-     * containern i DEN HÄR sessionen. **Uppsättningen själv skickas aldrig som
-     * prop.** Vilka ord förslaget innehåller beror på localen och containerns
-     * `kind`, och den väljaren bor i `resources/js/data/categoryPresets.js` —
-     * servern får aldrig veta vad orden betyder ([[ADR-0004 Fria taggar och
-     * kategorier]]). Att tomheten avgör om kortet ritas är sidans sak: den
-     * frågan är redan ställd av listan.
+     * containern i DEN HÄR sessionen. Uppsättningarna kommer som propen
+     * `mimersTemplates` ur App\Support\Template\MimersTemplates
+     * ([[ADR-0101 Mallarna]]). Att tomheten avgör om kortet ritas är sidans
+     * sak: den frågan är redan ställd av listan.
      *
      * **`counts` är räknaren som raderingsfrågan ritar talen ur** (issue 150),
      * samma form som taggsidans prop: ett uppslag ULID → tal, skickat som
@@ -139,6 +138,9 @@ class CategoryController extends Controller
                 'manage' => $canManage,
             ],
             'presetDismissed' => $this->presetDismissed($container),
+            // Mimers mallar bor på servern ([[ADR-0101 Mallarna]]); kortet
+            // visar dem och väljer med `key`.
+            'mimersTemplates' => app(MimersTemplates::class)->forProp(),
         ]);
     }
 

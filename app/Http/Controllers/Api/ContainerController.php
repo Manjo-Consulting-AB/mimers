@@ -14,6 +14,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
 use App\Models\User;
+use App\Support\Template\MimersTemplates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -107,7 +108,7 @@ class ContainerController extends Controller
      * actionen, så att API:ets 403 och webbens 403 kommer från samma ställe.
      *
      * **En valfri mall fyller containern** (issue 421 § 5): skickas `template`
-     * (en mall-ULID) eller `template_content` (frontendens inbyggda förslag)
+     * (en mall-ULID) eller `mimers_template` (nyckeln för en av Mimers mallar)
      * skapas containern genom App\Actions\Template\CreateContainerFromTemplate,
      * som anropar samma CreateContainer och därefter lägger in kategorierna och
      * fälten i samma transaktion. `template` prövas mot användarens konton
@@ -122,14 +123,18 @@ class ContainerController extends Controller
 
         Gate::authorize('create', [Container::class, $account]);
 
-        $templateUlid = $request->validated('template');
-        $content = $request->validated('template_content');
+        $ulid = $request->validated('template');
+        $mimersKey = $request->validated('mimers_template');
 
-        // Issue 421 § 5 · En valfri mall eller ett inbyggt förslag fyller den
-        // nya containern med en kopia av kategorier och fält
-        // ([[ADR-0089 Egna fält på items]] § Riktning 6). Utan någondera är
-        // vägen oförändrad — samma CreateContainer, samma 201, samma resurs.
-        $container = ($templateUlid !== null || $content !== null)
+        $template = $ulid !== null
+            ? $this->templateForUser($request->user(), $ulid)
+            : ($mimersKey === null ? null : app(MimersTemplates::class)->find($mimersKey));
+
+        // En sparad mall eller en av Mimers fyller den nya containern med en
+        // kopia av kategorier och fält ([[ADR-0089 Egna fält på items]]
+        // § Riktning 6, [[ADR-0101 Mallarna]]). Utan någondera är vägen
+        // oförändrad — samma CreateContainer, samma 201, samma resurs.
+        $container = $template !== null
             ? $createContainerFromTemplate->handle(
                 $request->user(),
                 $account,
@@ -138,8 +143,7 @@ class ContainerController extends Controller
                 $request->validated('description'),
                 $request->validated('icon'),
                 $request->validated('icon_color'),
-                $this->templateForUser($request->user(), $templateUlid),
-                is_array($content) ? $content : null,
+                $template,
             )
             : $createContainer->handle(
                 $request->user(),
@@ -165,12 +169,8 @@ class ContainerController extends Controller
      * här är det försvar som gör att ett ändrat svar aldrig kan läsa någon
      * annans mall.
      */
-    private function templateForUser(User $user, ?string $ulid): ?ContainerTemplate
+    private function templateForUser(User $user, string $ulid): ContainerTemplate
     {
-        if ($ulid === null) {
-            return null;
-        }
-
         return ContainerTemplate::query()
             ->memberOf($user)
             ->where('ulid', $ulid)

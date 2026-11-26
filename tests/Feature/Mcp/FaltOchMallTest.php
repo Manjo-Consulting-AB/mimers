@@ -15,6 +15,7 @@ use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Template\MimersTemplates;
 use Illuminate\Support\Facades\RateLimiter;
 
 use function Pest\Laravel\getJson;
@@ -488,8 +489,66 @@ it('listar bara kontots mallar', function () {
 
     $svar = mcpResultat(mcpVerktyg($token, 'templates_list'));
 
-    expect(collect($svar['templates'])->pluck('name')->all())->toBe([$mall->name])
-        ->and($svar['templates'][0]['ulid'])->toBe($mall->ulid);
+    $kontots = collect($svar['templates'])->where('source', 'account')->values();
+
+    expect($kontots->pluck('name')->all())->toBe([$mall->name])
+        ->and($kontots[0]['ulid'])->toBe($mall->ulid);
+});
+
+it('listar Mimers mallar med nyckel och source mimers, de sparade med ulid och source account', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    [, $mall] = faltMall($agent, $anvandare);
+
+    $svar = mcpResultat(mcpVerktyg($token, 'templates_list'));
+
+    $mimers = collect($svar['templates'])->where('source', 'mimers')->values();
+
+    expect($mimers->pluck('key')->all())->toBe(array_map(fn ($t) => $t->key, app(MimersTemplates::class)->all()))
+        ->and($mimers->every(fn (array $t): bool => ! isset($t['ulid']) && $t['content'] !== []))->toBeTrue()
+        ->and(collect($svar['templates'])->where('source', 'account')->pluck('ulid')->all())->toBe([$mall->ulid]);
+});
+
+it('ger en ny container en av Mimers mallar via mimers_template', function () {
+    [$agent, $token] = mcpAgentMedToken();
+
+    $agent->create_containers = true;
+    $agent->save();
+
+    $svar = mcpResultat(mcpVerktyg($token, 'containers_create', [
+        'name' => 'Skutan',
+        'mimers_template' => 'sailboat',
+    ]));
+
+    $container = Container::query()->where('ulid', $svar['ulid'])->sole();
+
+    expect($container->categories()->pluck('name')->all())->toContain('Rig and sails', 'Engine')
+        ->and($container->fields()->pluck('label')->all())->toContain('Manufacturer', 'Warranty until');
+});
+
+it('avvisar containers_create med både template och mimers_template, och med en okänd nyckel', function () {
+    [$agent, $token, $anvandare] = mcpAgentMedToken();
+    [, $mall] = faltMall($agent, $anvandare);
+
+    $agent->create_containers = true;
+    $agent->save();
+
+    $fore = Container::query()->count();
+
+    $bada = mcpFel(mcpVerktyg($token, 'containers_create', [
+        'name' => 'Dubbelt',
+        'template' => $mall->ulid,
+        'mimers_template' => 'sailboat',
+    ]));
+
+    $okand = mcpFel(mcpVerktyg($token, 'containers_create', [
+        'name' => 'Okänd',
+        'mimers_template' => 'finns-inte',
+    ]));
+
+    expect($bada['code'])->toBe('validation.failed')
+        ->and($okand['code'])->toBe('validation.failed')
+        ->and(array_column($okand['data']['fields']['mimers_template'], 'code'))->toContain('validation.in')
+        ->and(Container::query()->count())->toBe($fore);
 });
 
 it('ger en ny container mallens kategorier och fält', function () {

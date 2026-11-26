@@ -10,6 +10,7 @@ use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
 use App\Support\Agent\AgentLevels;
+use App\Support\Template\MimersTemplate;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -43,7 +44,7 @@ class CreateContainerForAgent
         string $name,
         ?string $kind = null,
         ?string $description = null,
-        ?ContainerTemplate $template = null,
+        ContainerTemplate|MimersTemplate|null $template = null,
     ): Container {
         if (! $agent->create_containers || $agent->isPaused() || ! AgentLevels::planIncludesMcp($agent->account)) {
             throw ApiException::make('agent.create_containers_not_allowed', [], 403);
@@ -61,7 +62,6 @@ class CreateContainerForAgent
                     null,
                     null,
                     $template,
-                    null,
                 );
 
             $this->apply->handle($agent, $container);

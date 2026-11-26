@@ -238,43 +238,66 @@ it('tillämpar ett inbyggt förslag utan att spara en mall', function () {
     expect(ContainerTemplate::query()->count())->toBe(0);
 });
 
-it('skapar en container från ett inbyggt förslag utan att spara en mall', function () {
+it('skapar en container från en av Mimers mallar utan att spara en mall', function () {
     [$account, , $headers] = kontoMedMedlem();
 
     $response = postJson('/api/containers', [
         'account' => $account->ulid,
         'name' => 'Elektronik',
-        'template_content' => [
-            'categories' => [['name' => 'Dokumentation']],
-            'fields' => [
-                ['label' => 'Tillverkare', 'type' => 'text'],
-                ['label' => 'Garanti till', 'type' => 'date'],
-            ],
-        ],
+        'mimers_template' => 'house',
     ], $headers);
 
     $response->assertCreated();
 
     $ny = Container::query()->where('ulid', $response->json('data.ulid'))->firstOrFail();
 
-    expect(mallTrad($ny))->toBe([['name' => 'Dokumentation']]);
-    expect(collect(mallFalt($ny))->pluck('label')->all())->toBe(['Tillverkare', 'Garanti till']);
+    expect(collect(mallTrad($ny))->pluck('name')->all())->toContain('Roof and gutters', 'Garden');
+    expect(collect(mallFalt($ny))->pluck('label')->all())->toBe(['Built year', 'Warranty until']);
     expect(ContainerTemplate::query()->count())->toBe(0);
 });
 
-it('avvisar både template och template_content i samma anrop', function () {
-    [$account, , $headers, $container] = mallKontext();
+it('avvisar en okänd nyckel med validation.in och template_content med validation.prohibited', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $okand = postJson('/api/containers', [
+        'account' => $account->ulid,
+        'name' => 'Okänd',
+        'mimers_template' => 'finns-inte',
+    ], $headers);
+
+    $okand->assertStatus(422);
+    expect($okand->json('error.data.fields.mimers_template.0.code'))->toBe('validation.in');
+
+    $innehall = postJson('/api/containers', [
+        'account' => $account->ulid,
+        'name' => 'Fritt innehåll',
+        'template_content' => ['categories' => [['name' => 'Dokumentation']], 'fields' => []],
+    ], $headers);
+
+    $innehall->assertStatus(422);
+    expect($innehall->json('error.data.fields.template_content.0.code'))->toBe('validation.prohibited');
+    expect(Container::query()->whereIn('name', ['Okänd', 'Fritt innehåll'])->exists())->toBeFalse();
+});
+
+it('avvisar både template och mimers_template i samma anrop', function () {
+    [$account, , $headers] = kontoMedMedlem();
     $mall = mallMall($account, ['categories' => [], 'fields' => []]);
 
-    $vidSkapande = postJson('/api/containers', [
+    $svar = postJson('/api/containers', [
         'account' => $account->ulid,
         'name' => 'Två mallar',
         'template' => $mall->ulid,
-        'template_content' => ['categories' => [], 'fields' => []],
+        'mimers_template' => 'house',
     ], $headers);
 
-    $vidSkapande->assertStatus(422);
-    expect($vidSkapande->json('error.code'))->toBe('validation.failed');
+    $svar->assertStatus(422);
+    expect($svar->json('error.code'))->toBe('validation.failed');
+    expect(Container::query()->where('name', 'Två mallar')->exists())->toBeFalse();
+});
+
+it('avvisar både template och template_content i samma tillämpning', function () {
+    [$account, , $headers, $container] = mallKontext();
+    $mall = mallMall($account, ['categories' => [], 'fields' => []]);
 
     $vidTillampning = postJson("/api/containers/{$container->ulid}/template", [
         'template' => $mall->ulid,
@@ -387,17 +410,6 @@ it('avvisar ett innehåll med fler kategorinoder än taket och ändrar ingenting
 
     // Ingenting skrivs: kontrollen ligger före den första kategorin.
     expect(Category::query()->where('container_id', $container->id)->count())->toBe(0);
-
-    // Samma tak på skapanderutten — där hade containern annars skapats först.
-    $skapande = postJson('/api/containers', [
-        'account' => $account->ulid,
-        'name' => 'För stort träd',
-        'template_content' => ['categories' => $rottrad, 'fields' => []],
-    ], $headers);
-
-    $skapande->assertStatus(422);
-    expect($skapande->json('error.code'))->toBe('template.max_categories_exceeded');
-    expect(Container::query()->where('name', 'För stort träd')->exists())->toBeFalse();
 });
 
 it('avvisar en sparad mall över kategoritaket när den tillämpas', function () {

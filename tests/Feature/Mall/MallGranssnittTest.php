@@ -27,7 +27,7 @@ use function Pest\Laravel\withoutVite;
  * MallCrudTest.php och MallKvotTest.php sedan issue 421, och de är gröna utan
  * en ändrad förväntan. Den här filen lägger sidan ovanpå: propellarna
  * skapavyn och inställningsvyn får, de två skrivrutterna, kontots mallista
- * och de inbyggda förslagen som `template_content`.
+ * och Mimers mallar som `mimers_template`.
  *
  * **Förhandsvisningen** — vad som läggs till och vad som hoppas över innan
  * det tillämpas — räknas i resources/js/components/templates/
@@ -106,7 +106,7 @@ it('skickar användarens mallar till skapavyn och aldrig någon annans', functio
     );
 });
 
-it('skapar en container från ett inbyggt förslag med kategorier och fält och sparar ingen mall', function () {
+it('skapar en container från en av Mimers mallar med kategorier och fält och sparar ingen mall', function () {
     withoutVite();
 
     [$account, $user] = mallgranssnittKontext();
@@ -116,18 +116,8 @@ it('skapar en container från ett inbyggt förslag med kategorier och fält och 
         ->post('/containers', [
             'name' => 'Vindil',
             'account' => $account->ulid,
-            // Det inbyggda förslaget skickas som innehåll — servern vet inte
-            // vad orden betyder och sparar dem aldrig.
-            'template_content' => [
-                'categories' => [
-                    ['name' => 'Motor', 'children' => [['name' => 'Drivlina']]],
-                    ['name' => 'Dokument'],
-                ],
-                'fields' => [
-                    ['label' => 'Manufacturer', 'type' => 'text'],
-                    ['label' => 'Warranty until', 'type' => 'date'],
-                ],
-            ],
+            // Klienten skickar bara nyckeln; servern hämtar innehållet.
+            'mimers_template' => 'car',
         ]);
 
     $svar->assertSessionHasNoErrors();
@@ -136,19 +126,22 @@ it('skapar en container från ett inbyggt förslag med kategorier och fält och 
 
     $svar->assertRedirect("/containers/{$container->ulid}/categories");
 
-    expect(mallgranssnittInnehall($container))->toBe([
-        'categories' => [
-            ['name' => 'Motor', 'children' => [['name' => 'Drivlina']]],
-            ['name' => 'Dokument'],
-        ],
-        'fields' => [
-            ['label' => 'Manufacturer', 'type' => 'text'],
-            ['label' => 'Warranty until', 'type' => 'date'],
-        ],
-    ]);
+    $innehall = mallgranssnittInnehall($container);
 
-    // Det inbyggda förslaget är klientens: ingenting sparades på servern.
+    expect(collect($innehall['categories'])->pluck('name')->all())->toContain('Engine and drive train', 'Brakes')
+        ->and(collect($innehall['fields'])->pluck('label')->all())->toContain('Registration number');
+
     expect(ContainerTemplate::query()->count())->toBe(0);
+
+    // Fritt innehåll tas inte längre emot.
+    actingAs($user)
+        ->from('/containers/create')
+        ->post('/containers', [
+            'name' => 'Fritt',
+            'account' => $account->ulid,
+            'template_content' => ['categories' => [['name' => 'Motor']], 'fields' => []],
+        ])
+        ->assertSessionHasErrors('template_content');
 });
 
 it('sparar en mall från containern och skapar en ny container ur den med samma innehåll', function () {

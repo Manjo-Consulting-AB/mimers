@@ -78,6 +78,7 @@ const props = defineProps({
     /* Sant när användaren tackat nej till förslaget för den här containern i den
        här sessionen — se App\Http\Controllers\CategoryController. */
     presetDismissed: { type: Boolean, required: true },
+    mimersTemplates: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -224,6 +225,7 @@ const showsPreset = computed(
     <CategoryPresetCard
         v-else-if="showsPreset"
         :container-ulid="container.ulid"
+        :mimers-templates="mimersTemplates"
     />
 
     <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>

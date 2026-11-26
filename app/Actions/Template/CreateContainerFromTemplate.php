@@ -7,12 +7,15 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
 use App\Models\User;
+use App\Support\Template\MimersTemplate;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Skapar en container ur en mall — eller ur ett innehåll i samma form, som
- * frontendens inbyggda förslag — se [[ADR-0089 Egna fält på items]]
- * § Riktning 6 och issue 421 § 3.
+ * Skapar en container ur en upplöst mall — användarens sparade
+ * (App\Models\ContainerTemplate) eller en av Mimers
+ * (App\Support\Template\MimersTemplate) — se [[ADR-0089 Egna fält på items]]
+ * § Riktning 6 och [[ADR-0101 Mallarna]]. Innehållet kommer aldrig från
+ * klienten; anroparen löser upp mallen på ULID eller nyckel.
  *
  * **Genom App\Actions\Container\CreateContainer, i SAMMA transaktion.**
  * Containertaket, förbrukningsräknaren, `container.created` och ägarrelationen
@@ -31,9 +34,6 @@ final class CreateContainerFromTemplate
         private readonly ApplyTemplate $applyTemplate,
     ) {}
 
-    /**
-     * @param  array<string, mixed>|null  $content
-     */
     public function handle(
         User $creator,
         Account $account,
@@ -42,10 +42,9 @@ final class CreateContainerFromTemplate
         ?string $description,
         ?string $icon,
         ?string $iconColor,
-        ?ContainerTemplate $template,
-        ?array $content,
+        ContainerTemplate|MimersTemplate $template,
     ): Container {
-        return DB::transaction(function () use ($creator, $account, $name, $kind, $description, $icon, $iconColor, $template, $content): Container {
+        return DB::transaction(function () use ($creator, $account, $name, $kind, $description, $icon, $iconColor, $template): Container {
             $container = $this->createContainer->handle(
                 $creator,
                 $account,
@@ -56,7 +55,12 @@ final class CreateContainerFromTemplate
                 $iconColor,
             );
 
-            $this->applyTemplate->handle($container, $template, $content, $creator);
+            $this->applyTemplate->handle(
+                $container,
+                $template instanceof ContainerTemplate ? $template : null,
+                $template instanceof MimersTemplate ? $template->content : null,
+                $creator,
+            );
 
             return $container;
         });

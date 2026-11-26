@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
+use App\Support\Template\MimersTemplates;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -19,7 +20,7 @@ use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 56b · Färdiga kategoriuppsättningar per språk. Se
- * resources/js/data/categoryPresets.js,
+ * resources/templates/en.php,
  * resources/js/components/CategoryPresetCard.vue,
  * App\Http\Requests\Category\StoreCategoryPresetRequest och
  * App\Http\Controllers\CategoryController::storePreset()/dismissPreset().
@@ -68,46 +69,34 @@ function uppsattningKontext(
 }
 
 /**
- * Kör ett uttryck mot resources/js/data/categoryPresets.js i node, med
- * modulen bunden till `mod`.
+ * Mimers mallar (resources/templates/en.php) i den form proven läser:
+ * rötter med barnens NAMN.
  *
- * Sökvägen går genom pathToFileURL() i stället för att klistras in rått, samma
- * skäl som SprakTest::korTranslate(): en Windows-sökväg är ingen giltig
- * ESM-specificerare.
+ * @return list<array{name: string, categories: list<array{name: string, children?: list<string>}>}>
  */
-function uppsattningKor(string $uttryck): mixed
+function uppsattningSamling(?string $locale = null): array
 {
-    $skript = implode("\n", [
-        "const { pathToFileURL } = await import('node:url');",
-        'const mod = await import(pathToFileURL('
-            .json_encode(resource_path('js/data/categoryPresets.js'), JSON_UNESCAPED_SLASHES).').href);',
-        "process.stdout.write(JSON.stringify({$uttryck}));",
-    ]);
+    return array_map(fn ($mall): array => [
+        'name' => $mall->name,
+        'categories' => array_map(function (array $rot): array {
+            if (! isset($rot['children'])) {
+                return ['name' => $rot['name']];
+            }
 
-    $rader = [];
-    $kod = 0;
-
-    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
-
-    expect($kod)->toBe(0, implode("\n", $rader));
-
-    return json_decode(implode("\n", $rader), true);
+            return ['name' => $rot['name'], 'children' => array_column($rot['children'], 'name')];
+        }, $mall->content['categories']),
+    ], app(MimersTemplates::class)->all($locale));
 }
 
 /**
  * Kategorierna i uppsättningen som heter $namn på $locale, eller `null` om
  * namnet inte finns där.
  *
- * Sedan issue 84 slås uppsättningarna inte längre upp på containerns `kind`
- * ([[ADR-0036 Containerns art]]) — de har ett eget namn, och användaren väljer
- * bland dem. Hjälparen letar därför på namnet, precis som väljaren i
- * resources/js/components/CategoryPresetCard.vue gör.
- *
  * @return list<array{name: string, children?: list<string>}>|null
  */
 function uppsattningFor(string $locale, string $namn): ?array
 {
-    foreach (uppsattningKor('mod.presetsFor('.json_encode($locale).')') as $uppsattning) {
+    foreach (uppsattningSamling($locale) as $uppsattning) {
         if ($uppsattning['name'] === $namn) {
             return $uppsattning['categories'];
         }
@@ -123,7 +112,7 @@ function uppsattningFor(string $locale, string $namn): ?array
  */
 function uppsattningAlla(): array
 {
-    return uppsattningKor('mod.categoryPresets');
+    return ['en' => uppsattningSamling('en')];
 }
 
 /**
@@ -187,47 +176,28 @@ it('skickar en utloggad besökare till inloggningen från uppsättningsrutten', 
  * uppsättningens ord inte finns i svaret — servern får aldrig veta vad de
  * betyder.
  */
-it('visar förslaget på en tom container och skickar aldrig orden till webbläsaren', function () {
+it('visar förslaget på en tom container och skickar Mimers mallar som prop', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE');
 
-    // Namnen är satta och inte slumpade: assertionen nedan läser hela
-    // svarskroppen, och ett kontonamn ur fake() hade kunnat råka innehålla ett
-    // av orden.
     $container->account->update(['name' => 'Testkontot']);
     $container->update(['name' => 'Vindil']);
 
     $svar = actingAs($anvandare)->get("/containers/{$container->ulid}/categories");
 
+    // [[ADR-0101 Mallarna]]: servern äger mallarna och skickar dem som prop
+    // (`key`, `name`, `content`); klienten väljer med nyckeln.
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Categories')
         ->has('categories', 0)
         ->where('presetDismissed', false)
         ->where('can.manage', true)
+        ->has('mimersTemplates', count(app(MimersTemplates::class)->all()))
+        ->where('mimersTemplates.0.key', 'sailboat')
+        ->where('mimersTemplates.0.name', 'Boat')
+        ->has('mimersTemplates.0.content.categories')
     );
-
-    /*
-     * Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
-     * upphävd, oavsett vad kortet visade — så ALLA uppsättningar prövas, inte
-     * bara den testet råkade peka på.
-     *
-     * Språkkatalogen `translations` undantas med flit: den ÄR `lang/en/ui.php`
-     * och bär sidans egna ord (`Other` har en kategori som heter `Storage`, och
-     * navigeringen har en flik med samma ord). Att orden inte står i `lang/`
-     * vaktas i stället av provet `har inga kategorinamn i lang/, config/ eller
-     * någon PHP-fil` längre ner i filen.
-     */
-    $proppar = $svar->inertiaProps();
-    unset($proppar['translations']);
-
-    foreach (uppsattningAlla() as $samling) {
-        foreach ($samling as $uppsattning) {
-            foreach (uppsattningNamn($uppsattning['categories']) as $namn) {
-                expect(json_encode($proppar))->not->toContain($namn);
-            }
-        }
-    }
 
     // Sidans eget formulär fungerar medan kortet står kvar obesvarat — det är
     // vad "kan tacka nej utan att fastna" betyder (Beslut 4).
@@ -733,8 +703,6 @@ it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
 it('renderar förslaget som ett kort ovanför trädet', function () {
     $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
     $kort = File::get(resource_path('js/components/CategoryPresetCard.vue'));
-    $data = File::get(resource_path('js/data/categoryPresets.js'));
-
     expect($sida)->toContain('<CategoryPresetCard')
         ->toContain('showsPreset')
         ->toContain('presetDismissed')
@@ -747,12 +715,11 @@ it('renderar förslaget som ett kort ovanför trädet', function () {
 
     // Ingen modal, ingen overlay: ett <section> i sidflödet.
     expect($kort)->toContain('<section')
-        ->toContain('presetsFor')
+        ->toContain('mimersTemplates')
         ->toContain('preset_apply')
         ->toContain('preset_dismiss');
 
-    expect($data)->toContain('export function presetsFor')
-        ->toContain('export const categoryPresets');
+    expect(File::exists(resource_path('js/data/categoryPresets.js')))->toBeFalse();
 });
 
 /*
@@ -777,7 +744,7 @@ it('väljer mallen på användarens val och inte ur containerns art', function (
     // förhandsvisningen ritas ur det valda namnet.
     expect($kort)->toContain('<select')
         ->toContain('chosenName')
-        ->toContain('presetsFor(page.props.locale)')
+        ->toContain('props.mimersTemplates')
         ->toContain('find((one) => one.name === chosenName.value)')
         // Ingen förvald uppsättning: listan är tom tills hon pekat på en.
         ->toContain("ref('')");
