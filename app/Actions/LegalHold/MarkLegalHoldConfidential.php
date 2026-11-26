@@ -32,22 +32,28 @@ class MarkLegalHoldConfidential
      */
     public function handle(Account $account, string $caseNumber): int
     {
-        $query = LegalHold::query()
-            ->where('account_id', $account->id)
-            ->where('case_number', $caseNumber);
+        // Ärendenumret jämförs utan hänsyn till versaler och blanksteg, lika
+        // på alla databaser, och loggen bär spärrens lagrade värde — så att
+        // CollectPrivacyData kan känna igen raden.
+        $needle = mb_strtolower(trim($caseNumber));
 
-        $count = (clone $query)->count();
+        $holds = LegalHold::query()
+            ->where('account_id', $account->id)
+            ->get()
+            ->filter(fn (LegalHold $hold): bool => mb_strtolower(trim((string) $hold->case_number)) === $needle);
+
+        $count = $holds->count();
 
         if ($count === 0) {
             return 0;
         }
 
-        $query->update(['confidential' => true]);
+        LegalHold::query()->whereIn('id', $holds->pluck('id'))->update(['confidential' => true]);
 
         $this->recordSecurityEvent->handle(
             action: SecurityLog::ACTION_LEGAL_HOLD_CONFIDENTIAL,
             account: $account,
-            meta: ['case_number' => $caseNumber],
+            meta: ['case_number' => $holds->first()->case_number],
         );
 
         return $count;

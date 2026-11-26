@@ -500,7 +500,7 @@ class CollectPrivacyData
 
         if ($accountIds !== []) {
             foreach (LegalHold::query()->whereIn('account_id', $accountIds)->where('confidential', true)->get() as $hold) {
-                $tystnad[(int) $hold->account_id][] = $hold->case_number;
+                $tystnad[(int) $hold->account_id][] = mb_strtolower(trim((string) $hold->case_number));
             }
         }
 
@@ -537,7 +537,7 @@ class CollectPrivacyData
                 }
 
                 return is_string($case)
-                    && in_array($case, $tystnad[(int) ($data['account_id'] ?? 0)] ?? [], true);
+                    && in_array(mb_strtolower(trim($case)), $tystnad[(int) ($data['account_id'] ?? 0)] ?? [], true);
             })
             ->map(function (array $data): array {
                 $accountId = $data['account_id'] ?? null;

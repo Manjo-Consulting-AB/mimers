@@ -163,3 +163,18 @@ it('en spärr som markeras i efterhand utelämnas, också dess confidential-rad'
     expect($data['legal_hold'])->toBe([])
         ->and(json_encode($data['security_log']))->not->toContain('F-1');
 });
+
+it('ett ärendenummer med annan versalisering markerar spärren och loggar det lagrade värdet', function () {
+    [$konto, , $arende] = tystnadOpp();
+
+    artisan('legal-hold:place', ['account' => $konto->ulid, 'case' => 'F-1', 'reason' => 'x'])->assertSuccessful();
+    artisan('legal-hold:confidential', ['account' => $konto->ulid, 'case' => ' f-1 '])->assertSuccessful();
+
+    expect(LegalHold::query()->sole()->confidential)->toBeTrue()
+        ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_LEGAL_HOLD_CONFIDENTIAL)->sole()->meta['case_number'])->toBe('F-1');
+
+    [, $data] = tystnadKor($arende);
+
+    expect($data['legal_hold'])->toBe([])
+        ->and(json_encode($data['security_log']))->not->toContain('legal_hold.');
+});
