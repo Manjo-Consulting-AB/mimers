@@ -1,6 +1,6 @@
 # ADR-0089 Egna fält på items
 
-**Status:** Antagen 2026-11-19 · Bygger vidare på [[ADR-0004 Fria taggar och kategorier]], [[ADR-0033 Produktens omfång]], [[ADR-0008 Soft delete och papperskorg]], [[ADR-0081 All lagrad data räknas mot kvoten]] och [[ADR-0087 MCP-server för agenter]] · Ändrar [[ADR-0088 Versionshistorik för items]] § Riktning 2 · [[ADR-index]]
+**Status:** Antagen 2026-11-19 · Bygger vidare på [[ADR-0004 Fria taggar och kategorier]], [[ADR-0033 Produktens omfång]], [[ADR-0008 Soft delete och papperskorg]], [[ADR-0081 All lagrad data räknas mot kvoten]] och [[ADR-0087 MCP-server för agenter]] · Ändrar [[ADR-0088 Versionshistorik för items]] § Riktning 2 · Riktning 1 och 2 ändrade av [[ADR-0099 Kryssrutefält]] · [[ADR-index]]
 
 Tonys beslut 2026-11-19, efter en diskussion samma dag. Det som står som *utformad av Claude* är detaljer som Claude satte när ADR:n skrevs och som Tony ännu inte har godkänt uttryckligen. Allt annat är Tonys.
 

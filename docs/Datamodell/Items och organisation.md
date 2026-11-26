@@ -68,7 +68,7 @@ Ett fält som användaren har definierat: en rubrik och en typ. Gäller alla ite
 | container_id | FK → container | Satt även för ett items egna fält |
 | item_id | FK → item NULL | `NULL` för containerns fält, satt för ett items egna |
 | label | VARCHAR(100) | Unik utan hänsyn till skiftläge bland fälten som syns på ett item. Prövas i applikationen |
-| type | VARCHAR(10) | `text` \| `number` \| `date`, med CHECK-villkor. Låst när fältet har värden |
+| type | VARCHAR(10) | `text` \| `number` \| `date` \| `boolean`, med CHECK-villkor. Låst när fältet har värden |
 | position | INT | Ordningen bland containerns fält, eller bland itemets egna |
 | billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | Papperskorgen, som `category` |
@@ -89,10 +89,11 @@ Ett items värde i ett fält. En rad per item och fält, och ett tomt värde har
 | value_text | VARCHAR(255) NULL | Satt när fältet är `text`. Längden prövas mot `fields.text_max_length` |
 | value_number | DECIMAL(20,6) NULL | Satt när fältet är `number`. Aldrig flyttal |
 | value_date | DATE NULL | Satt när fältet är `date` |
+| value_boolean | BOOLEAN NULL | Satt (alltid 1) när fältet är `boolean` och ikryssat. Ej ikryssat har ingen rad, se [[ADR-0099 Kryssrutefält]] |
 | billed_account_id | FK → account | Se [[Planer och kvoter]] § usage_counter |
 | created_at, updated_at | | |
 
-UNIQUE `(item_id, item_field_id)`. Index: `(item_field_id, value_number)`, `(item_field_id, value_date)` för filter och sortering. FULLTEXT på `value_text`.
+UNIQUE `(item_id, item_field_id)`. Index: `(item_field_id, value_number)`, `(item_field_id, value_date)`, `(item_field_id, value_boolean)` för filter och sortering. FULLTEXT på `value_text`.
 
 Ingen `deleted_at`. Ett tömt värde är bara borta, som text som suddas ut, och versionshistoriken fångar det. Värdena i ett fält som ligger i papperskorgen syns inte och kommer tillbaka med fältet.
 
@@ -295,6 +296,6 @@ Byggs mot Laravel Scout med databasdrivern i MVP, se [[ADR-0012 Sök]]. Men det 
 - efter uppgiftsstatus och förfallodatum, se [[Scheman och uppgifter]]
 - efter utlåningsstatus
 - fritext över namn, beskrivning och textfältens värden
-- efter ett fälts värde: lika med för text, intervall för tal och datum
+- efter ett fälts värde: lika med för text och ja/nej, intervall för tal och datum
 
 MariaDB FULLTEXT saknar svensk stemming — "batteri" hittar inte "batterier". Accepterat i MVP, löses av Meilisearch när det finns en VPS.
