@@ -8,6 +8,7 @@ use App\Models\Account;
 use App\Models\LegalHold;
 use App\Models\PrivacyRequest;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Collection;
 use InvalidArgumentException;
 
 /**
@@ -80,7 +81,9 @@ class PrivacyCollect extends Command
         // Varningen står på skärmen och aldrig i filen. Raden säger att
         // spärren finns, inte vilket ärende eller vilket skäl den gäller.
         if ($this->coversLegalHold($request, $collect)) {
-            $this->line('Legal hold active');
+            $this->line($this->coversConfidentially($request, $collect)
+                ? 'Legal hold active (confidential)'
+                : 'Legal hold active (will be disclosed)');
         }
 
         $this->line("Bilaga: {$attachment->ulid}");
@@ -102,6 +105,25 @@ class PrivacyCollect extends Command
      */
     private function coversLegalHold(PrivacyRequest $request, CollectPrivacyData $collect): bool
     {
+        return $this->coveredAccounts($request, $collect)
+            ->contains(fn (Account $account): bool => LegalHold::covers($account));
+    }
+
+    /**
+     * Är någon av de gällande spärrarna tystnadsbelagd? Då utelämnas den ur
+     * filen (issue 1693).
+     */
+    private function coversConfidentially(PrivacyRequest $request, CollectPrivacyData $collect): bool
+    {
+        return $this->coveredAccounts($request, $collect)
+            ->contains(fn (Account $account): bool => LegalHold::coversConfidentially($account));
+    }
+
+    /**
+     * @return Collection<int, Account>
+     */
+    private function coveredAccounts(PrivacyRequest $request, CollectPrivacyData $collect): Collection
+    {
         $userId = $request->user_id;
 
         $accountIds = $collect->accountIds($userId === null ? null : (int) $userId);
@@ -112,14 +134,7 @@ class PrivacyCollect extends Command
 
         $accountIds = array_values(array_unique($accountIds));
 
-        if ($accountIds === []) {
-            return false;
-        }
-
-        return Account::query()
-            ->whereIn('id', $accountIds)
-            ->get()
-            ->contains(fn (Account $account): bool => LegalHold::covers($account));
+        return Account::query()->whereIn('id', $accountIds)->get();
     }
 
     /**

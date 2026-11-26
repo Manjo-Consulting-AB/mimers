@@ -173,6 +173,12 @@ class SecurityLog extends Model
     public const ACTION_LEGAL_HOLD_LIFTED = 'legal_hold.lifted';
 
     /**
+     * En rättslig spärr markerades som tystnadsbelagd (issue 1693). `meta`
+     * bär `case_number`.
+     */
+    public const ACTION_LEGAL_HOLD_CONFIDENTIAL = 'legal_hold.confidential';
+
+    /**
      * En person raderade sig själv (issue 144 · [[ADR-0045 Radering av konto
      * och person]] § Beslut 3). Skrivs av App\Actions\User\DeleteUser, före
      * commit i samma transaktion som raderingen.

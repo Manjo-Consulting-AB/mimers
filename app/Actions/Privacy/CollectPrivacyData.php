@@ -2,6 +2,7 @@
 
 namespace App\Actions\Privacy;
 
+use App\Models\LegalHold;
 use App\Models\PrivacyRequest;
 use App\Models\PrivacyRequestAttachment;
 use App\Models\PrivacyRequestEvent;
@@ -29,10 +30,17 @@ use Throwable;
  * innehåll (Mimers är biträde där, ADR-0095 § 9), Sentry, Mailgun, backuperna
  * och serverloggarna.
  *
- * **Den rättsliga spärren nämns aldrig i filen** ([[ADR-0043 Tre loggar]]
- * § Den rättsliga spärren). Rader i säkerhetsloggen vars `action` börjar på
- * `legal_hold.` tas inte med, och `legal_hold` läses aldrig. Kommandot
- * varnar handläggaren på skärmen i stället.
+ * **Den rättsliga spärren tas med, utom när den är tystnadsbelagd**
+ * ([[ADR-0043 Tre loggar]] § Den rättsliga spärren). GDPR tillåter bara att
+ * uppgifter hålls inne med stöd i lag (art. 23), och det stödet finns när en
+ * myndighet ålagt oss tystnad (`legal_hold.confidential`), inte när vi själva
+ * eller en anmälare enligt DSA vill att den som utreds inte ska få veta. För
+ * varje spärr på personens konton tas `case_number`, `created_at` och
+ * `lifted_at` med — aldrig `reason`, som är fritext om utredningen — och
+ * kontots rader i säkerhetsloggen om den. En tystnadsbelagd spärr utelämnas
+ * helt, och likaså de rader i säkerhetsloggen vars `meta.case_number` hör
+ * till den på samma konto. Kommandot varnar handläggaren på skärmen och
+ * säger om spärren är tystnadsbelagd.
  *
  * Filen skapas genom AttachPrivacyAttachment::handleContents(), utan en
  * temporär kopia: den finns bara på disken `privacy` (ADR-0095 § 12).
@@ -57,7 +65,8 @@ class CollectPrivacyData
     private const OPERATION = 'exported';
 
     /**
-     * Prefixet på de säkerhetsloggrad som aldrig får följa med.
+     * Prefixet på den rättsliga spärrens rader i säkerhetsloggen. De har
+     * ingen användare och nås därför via kontot.
      */
     private const LEGAL_HOLD_ACTION_PREFIX = 'legal_hold.';
 
@@ -273,6 +282,7 @@ class CollectPrivacyData
             'user' => $this->userRow($user),
             'account' => $this->accounts($userId),
             'sessions' => $this->sessions($userId),
+            'legal_hold' => $this->legalHolds($userId),
             'security_log' => $this->securityLog($userId),
             'audit_log' => $this->auditLog($userId),
             'email_change' => $this->emailChange($userId),
@@ -441,21 +451,84 @@ class CollectPrivacyData
     }
 
     /**
-     * Säkerhetsloggens rader utan `ip_group` och utan den rättsliga
-     * spärrens egna rader. `meta` följer med — det bär identifierare och
-     * aldrig en adress (ADR-0043 § Säkerhetsloggen).
+     * Kontots spärrar som inte är tystnadsbelagda: ärendenumret och
+     * tidpunkterna, aldrig `reason`.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function legalHolds(int $userId): array
+    {
+        $accountIds = $this->accountIds($userId);
+
+        if ($accountIds === []) {
+            return [];
+        }
+
+        return LegalHold::query()
+            ->whereIn('account_id', $accountIds)
+            ->where('confidential', false)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (LegalHold $hold): array => [
+                'account' => $this->referencedUlid('account', $hold->account_id),
+                'case_number' => $hold->case_number,
+                'created_at' => $hold->getRawOriginal('created_at'),
+                'lifted_at' => $hold->getRawOriginal('lifted_at'),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Säkerhetsloggens rader utan `ip_group`. `meta` följer med — det bär
+     * identifierare och aldrig en adress (ADR-0043 § Säkerhetsloggen).
+     *
+     * Den rättsliga spärrens rader har ingen användare och hämtas via
+     * personens konton. Rader vars `meta.case_number` hör till en
+     * tystnadsbelagd spärr på samma konto utelämnas.
      *
      * @return list<array<string, mixed>>
      */
     private function securityLog(int $userId): array
     {
+        $accountIds = $this->accountIds($userId);
+
+        /** @var array<int, list<string>> $tystnad */
+        $tystnad = [];
+
+        if ($accountIds !== []) {
+            foreach (LegalHold::query()->whereIn('account_id', $accountIds)->where('confidential', true)->get() as $hold) {
+                $tystnad[(int) $hold->account_id][] = $hold->case_number;
+            }
+        }
+
         return DB::table('security_log')
-            ->where('user_id', $userId)
-            ->where('action', 'not like', self::LEGAL_HOLD_ACTION_PREFIX.'%')
+            ->where(function ($q) use ($userId, $accountIds): void {
+                $q->where('user_id', $userId);
+
+                if ($accountIds !== []) {
+                    $q->orWhere(function ($q2) use ($accountIds): void {
+                        $q2->whereIn('account_id', $accountIds)
+                            ->where('action', 'like', self::LEGAL_HOLD_ACTION_PREFIX.'%');
+                    });
+                }
+            })
             ->orderBy('id')
             ->get()
             ->map(function (object $row): array {
                 $data = (array) $row;
+                $data['meta'] = $this->decodeMeta($data['meta'] ?? null);
+
+                return $data;
+            })
+            ->reject(function (array $data) use ($tystnad): bool {
+                $meta = $data['meta'];
+                $case = is_array($meta) ? ($meta['case_number'] ?? null) : null;
+
+                return is_string($case)
+                    && in_array($case, $tystnad[(int) ($data['account_id'] ?? 0)] ?? [], true);
+            })
+            ->map(function (array $data): array {
                 $accountId = $data['account_id'] ?? null;
 
                 // Löpnumren stannar hos oss; kontot identifieras av sin
@@ -465,18 +538,23 @@ class CollectPrivacyData
 
                 $data['account'] = $this->referencedUlid('account', $accountId);
 
-                if (isset($data['meta']) && is_string($data['meta'])) {
-                    $decoded = json_decode($data['meta'], true);
-
-                    if (json_last_error() === JSON_ERROR_NONE) {
-                        $data['meta'] = $decoded;
-                    }
-                }
-
                 return $data;
             })
             ->values()
             ->all();
+    }
+
+    private function decodeMeta(mixed $meta): mixed
+    {
+        if (is_string($meta)) {
+            $decoded = json_decode($meta, true);
+
+            if (json_last_error() === JSON_ERROR_NONE) {
+                return $decoded;
+            }
+        }
+
+        return $meta;
     }
 
     /**

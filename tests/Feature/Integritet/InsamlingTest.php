@@ -182,6 +182,7 @@ it('sammanställer en nyckel per källa, not_included och händelsen action', fu
         'user',
         'account',
         'sessions',
+        'legal_hold',
         'security_log',
         'audit_log',
         'email_change',
@@ -338,6 +339,10 @@ it('lämnar aldrig hemligheterna eller andras innehåll i filen', function () {
         expect($fil)->not->toContain($förbjudet);
     }
 
+    // Nyckeln finns som för varje källa, men listan är tom: en tystnadsbelagd
+    // spärr är inte i filen.
+    expect(insamlingData($arende)['legal_hold'])->toBe([]);
+
     // `remember_token` finns inte som kolumn, men nyckeln får aldrig dyka upp.
     expect($data['user'])->not->toHaveKey('password_hash');
     expect($data['user'])->not->toHaveKey('totp_secret');
@@ -476,6 +481,10 @@ it('tar inte med en annan persons rader i samma container eller säkerhetslogg',
     ] as $förbjudet) {
         expect($fil)->not->toContain($förbjudet);
     }
+
+    // Nyckeln finns som för varje källa, men listan är tom: en tystnadsbelagd
+    // spärr är inte i filen.
+    expect(insamlingData($arende)['legal_hold'])->toBe([]);
 });
 
 /*
@@ -483,7 +492,7 @@ it('tar inte med en annan persons rader i samma container eller säkerhetslogg',
  * strängen legal_hold, ärendenumret eller anledningen. Kommandot skriver en
  * varning på skärmen.
  */
-it('nämner aldrig den rättsliga spärren i filen men varnar på skärmen', function () {
+it('nämner aldrig en tystnadsbelagd spärr i filen men varnar på skärmen', function () {
     $konto = insamlingKonto();
     $person = insamlingPerson($konto);
     $arende = insamlingArende($person, $konto);
@@ -495,6 +504,7 @@ it('nämner aldrig den rättsliga spärren i filen men varnar på skärmen', fun
         'account_id' => $konto->id,
         'case_number' => $ärendenummer,
         'reason' => $anledning,
+        'confidential' => true,
     ]);
 
     SecurityLog::factory()->create([
@@ -515,14 +525,18 @@ it('nämner aldrig den rättsliga spärren i filen men varnar på skärmen', fun
     [$utgång, $utdata] = insamlingKor($arende);
 
     expect($utgång)->toBe(Command::SUCCESS)
-        ->and($utdata)->toContain('Legal hold active');
+        ->and($utdata)->toContain('Legal hold active (confidential)');
 
     $fil = insamlingFil($arende);
     $data = insamlingData($arende);
 
-    foreach (['legal_hold', $ärendenummer, $anledning] as $förbjudet) {
+    foreach ([$ärendenummer, $anledning] as $förbjudet) {
         expect($fil)->not->toContain($förbjudet);
     }
+
+    // Nyckeln finns som för varje källa, men listan är tom: en tystnadsbelagd
+    // spärr är inte i filen.
+    expect(insamlingData($arende)['legal_hold'])->toBe([]);
 
     expect(array_column($data['security_log'], 'action'))->toBe([SecurityLog::ACTION_LOGIN]);
 });
@@ -544,18 +558,23 @@ it('varnar när spärren gäller personens konto och ärendet saknar konto', fun
         'account_id' => $konto->id,
         'case_number' => $ärendenummer,
         'reason' => $anledning,
+        'confidential' => true,
     ]);
 
     [$utgång, $utdata] = insamlingKor($arende);
 
     expect($utgång)->toBe(Command::SUCCESS)
-        ->and($utdata)->toContain('Legal hold active');
+        ->and($utdata)->toContain('Legal hold active (confidential)');
 
     $fil = insamlingFil($arende);
 
-    foreach (['legal_hold', $ärendenummer, $anledning] as $förbjudet) {
+    foreach ([$ärendenummer, $anledning] as $förbjudet) {
         expect($fil)->not->toContain($förbjudet);
     }
+
+    // Nyckeln finns som för varje källa, men listan är tom: en tystnadsbelagd
+    // spärr är inte i filen.
+    expect(insamlingData($arende)['legal_hold'])->toBe([]);
 });
 
 /*
@@ -579,18 +598,23 @@ it('varnar när spärren gäller ett annat av personens konton än ärendets', f
         'account_id' => $sparratKonto->id,
         'case_number' => $ärendenummer,
         'reason' => $anledning,
+        'confidential' => true,
     ]);
 
     [$utgång, $utdata] = insamlingKor($arende);
 
     expect($utgång)->toBe(Command::SUCCESS)
-        ->and($utdata)->toContain('Legal hold active');
+        ->and($utdata)->toContain('Legal hold active (confidential)');
 
     $fil = insamlingFil($arende);
 
-    foreach (['legal_hold', $ärendenummer, $anledning] as $förbjudet) {
+    foreach ([$ärendenummer, $anledning] as $förbjudet) {
         expect($fil)->not->toContain($förbjudet);
     }
+
+    // Nyckeln finns som för varje källa, men listan är tom: en tystnadsbelagd
+    // spärr är inte i filen.
+    expect(insamlingData($arende)['legal_hold'])->toBe([]);
 });
 
 /*

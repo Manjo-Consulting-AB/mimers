@@ -29,8 +29,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * rad kvar (ADR-0043). Raderna skrivs och läses bara av
  * App\Actions\LegalHold\PlaceLegalHold och LiftLegalHold, som anropas från
  * kommandoraden — tabellen har ingen yta i webben och inget API.
+ *
+ * `confidential` är `true` när en myndighet ålagt oss tystnad (issue 1693).
+ * Bara då utelämnas spärren ur svaret på art. 15 (GDPR art. 23).
  */
-#[Fillable(['account_id', 'case_number', 'reason', 'lifted_at'])]
+#[Fillable(['account_id', 'case_number', 'reason', 'confidential', 'lifted_at'])]
 class LegalHold extends Model
 {
     /** @use HasFactory<LegalHoldFactory> */
@@ -52,6 +55,7 @@ class LegalHold extends Model
     {
         return [
             'lifted_at' => 'datetime',
+            'confidential' => 'boolean',
         ];
     }
 
@@ -82,6 +86,20 @@ class LegalHold extends Model
         return self::query()
             ->where('account_id', $account->id)
             ->whereNull('lifted_at')
+            ->exists();
+    }
+
+    /**
+     * Gäller en tystnadsbelagd spärr för kontot, alltså en gällande spärr
+     * som en myndighet ålagt oss tystnad om? Handläggaren ser svaret på
+     * skärmen; det avgör aldrig vad användaren ser i appen.
+     */
+    public static function coversConfidentially(Account $account): bool
+    {
+        return self::query()
+            ->where('account_id', $account->id)
+            ->whereNull('lifted_at')
+            ->where('confidential', true)
             ->exists();
     }
 }
