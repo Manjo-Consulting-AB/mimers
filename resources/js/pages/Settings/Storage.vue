@@ -174,7 +174,7 @@ function saveVersioning(value) {
             <HelpLink context="account.storage" class="max-sm:hidden" />
         </span>
     </div>
-    <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
+    <p class="mt-2 text-sm font-semibold text-slate-900">{{ t('storage.intro') }}</p>
     <p v-if="props.usage.textBytes > 0" class="mt-1 text-sm text-slate-700">{{ t('storage.text_note') }}</p>
 
     <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">

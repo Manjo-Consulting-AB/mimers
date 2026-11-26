@@ -222,11 +222,14 @@ function graceLabel(days) {
     <section class="mt-8">
         <h3 class="text-lg font-semibold">{{ t('plan.features_heading') }}</h3>
 
-        <dl class="mt-4 flex flex-col gap-2 text-sm">
+        <!-- Ett rutnät med två auto-kolumner: "Included" hamnar i en egen
+             kolumn direkt efter den längsta funktionstexten i stället för vid
+             sidans högerkant. `contents` låter raderna vara celler i rutnätet. -->
+        <dl class="mt-4 grid w-fit grid-cols-[auto_auto] items-baseline gap-x-8 gap-y-2 text-sm">
             <div
                 v-for="feature in props.features"
                 :key="feature.key"
-                class="flex items-baseline justify-between gap-4"
+                class="contents"
             >
                 <dt class="text-slate-600">{{ t(`plan.features.${feature.key}`) }}</dt>
                 <dd>{{ feature.included ? t('plan.included') : t('plan.not_included') }}</dd>
