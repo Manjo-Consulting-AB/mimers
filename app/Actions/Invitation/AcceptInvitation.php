@@ -75,14 +75,22 @@ class AcceptInvitation
             // Kapplöpning mot App\Actions\Invitation\UpdateInvitation (issue
             // 430): modellen lästes in före den här transaktionen, och en
             // samtidig nivåändring kan ha hunnit committa mellan bindningen
-            // och UPDATE:n ovan. UPDATE-satsen serialiserar mot samma rad, så
-            // efter den här punkten är raden låst och oföränderlig — men
-            // modellen i minnet bär fortfarande den nivå som gällde vid
-            // inläsningen. Utan omladdningen skapas åtkomsten nedan med den
-            // gamla nivån: sänkte ägaren från `write` till `read` fick
-            // mottagaren ändå `write`. `refresh()` läser inom samma
-            // transaktion och ser därför den committade nivån.
-            $invitation->refresh();
+            // och UPDATE:n ovan. Modellen i minnet bär då fortfarande den
+            // nivå som gällde vid inläsningen, och åtkomsten nedan skulle
+            // skapas med den: sänkte ägaren från `write` till `read` fick
+            // mottagaren ändå `write`.
+            //
+            // Därför läses raden om med `lockForUpdate()` (SELECT ... FOR
+            // UPDATE). Det är en låsande läsning, som alltid ser den senast
+            // committade versionen av raden och väntar in en skrivare som
+            // håller den — oberoende av transaktionens isoleringsnivå. En
+            // vanlig läsning eller `refresh()` skulle under REPEATABLE READ
+            // kunna ge en äldre ögonblicksbild. Den lästa modellen ersätter
+            // `$invitation` i resten av actionen.
+            $invitation = Invitation::query()
+                ->whereKey($invitation->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $container = $invitation->container;
 
