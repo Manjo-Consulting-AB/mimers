@@ -645,3 +645,25 @@ it('mjukraderar en relation med relations_remove, märker den med agenten och r�
         ->and($logg->meta['agent_deletion_batch'])->toBe($rad->agent_deletion_batch)
         ->and(AgentDeletion::DELETE_ACTIONS)->toContain('item_link.deleted');
 });
+
+it('räknar borttagna relationer mot taket och ger agent.delete_limit på nästa', function () {
+    [, $token, $anvandare, $container, $a] = raderingsMiljo();
+
+    $andra = [];
+
+    foreach (range(1, 21) as $nummer) {
+        $b = raderingsItem($container);
+        app(LinkItems::class)->handle($a, $b, 'related', $anvandare);
+        $andra[] = $b;
+    }
+
+    for ($nummer = 0; $nummer < 20; $nummer++) {
+        mcpResultat(mcpVerktyg($token, 'relations_remove', ['item' => $a->ulid, 'other' => $andra[$nummer]->ulid]));
+    }
+
+    $fel = mcpFel(mcpVerktyg($token, 'relations_remove', ['item' => $a->ulid, 'other' => $andra[20]->ulid]));
+
+    expect($fel['code'])->toBe('agent.delete_limit')
+        ->and($fel['data']['limit'])->toBe(20)
+        ->and(ItemLink::query()->count())->toBe(1);
+});

@@ -42,8 +42,12 @@ return new class extends Migration
             });
         }
 
-        DB::table('item_link')->whereNull('ulid')->orderBy('id')->each(function ($row): void {
-            DB::table('item_link')->where('id', $row->id)->update(['ulid' => (string) Str::ulid()]);
+        // chunkById, inte each/chunk: de paginerar med offset, och rader som
+        // fått ulid faller ur whereNull-filtret så nästa sida hoppar över rader.
+        DB::table('item_link')->whereNull('ulid')->chunkById(500, function ($rows): void {
+            foreach ($rows as $row) {
+                DB::table('item_link')->where('id', $row->id)->update(['ulid' => (string) Str::ulid()]);
+            }
         });
 
         if (! Schema::hasIndex('item_link', ['ulid'], 'unique')) {

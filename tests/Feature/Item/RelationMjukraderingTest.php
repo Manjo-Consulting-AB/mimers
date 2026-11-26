@@ -223,25 +223,61 @@ it('fyller i en ULID för befintliga rader i migreringen', function () {
         ->and(DB::table('item_link')->whereNull('ulid')->count())->toBe(0);
 });
 
+it('fyller i en ULID för fler rader än chunk-storleken', function () {
+    [, , , $container, $forelder, $barn] = mjukRelationKontext();
+    $rad = mjukRelationRad($forelder, $barn);
+
+    $nu = now();
+    $rader = [];
+
+    foreach (range(1, 1200) as $nummer) {
+        $rader[] = [
+            'from_item_id' => $rad->from_item_id,
+            'to_item_id' => $rad->to_item_id,
+            'relation' => 'x'.$nummer,
+            'ulid' => null,
+            'created_at' => $nu,
+            'updated_at' => $nu,
+        ];
+    }
+
+    DB::table('item_link')->update(['ulid' => null]);
+    foreach (array_chunk($rader, 200) as $del) {
+        DB::table('item_link')->insert($del);
+    }
+
+    (require database_path('migrations/2026_11_27_010000_add_soft_deletes_to_item_link_table.php'))->up();
+
+    expect(DB::table('item_link')->whereNull('ulid')->count())->toBe(0)
+        ->and(DB::table('item_link')->distinct()->count('ulid'))->toBe(1201);
+});
+
 it('tar inte med en mjukraderad relation i exporten', function () {
     [$konto, , $headers, $container, $forelder, $barn] = mjukRelationKontext();
-    ItemLink::query()->delete();
     Storage::fake('files');
     Queue::fake();
 
-    $svar = postJson("/api/containers/{$container->ulid}/exports", [], $headers)->assertStatus(202);
-    $export = Export::query()->where('ulid', $svar->json('data.ulid'))->firstOrFail();
-    (new BuildContainerExport($export))->handle();
-    $export->refresh();
+    $bygg = function () use ($container, $headers): array {
+        $svar = postJson("/api/containers/{$container->ulid}/exports", [], $headers)->assertStatus(202);
+        $export = Export::query()->where('ulid', $svar->json('data.ulid'))->firstOrFail();
+        (new BuildContainerExport($export))->handle();
+        $export->refresh();
 
-    $zip = new ZipArchive;
-    $zip->open(Storage::disk('files')->path($export->storage_path));
-    $payload = json_decode($zip->getFromName('container.json'), true);
-    $zip->close();
+        $zip = new ZipArchive;
+        $zip->open(Storage::disk('files')->path($export->storage_path));
+        $payload = json_decode($zip->getFromName('container.json'), true);
+        $zip->close();
 
-    foreach ($payload['items'] as $i) {
-        expect($i['links'] ?? [])->toBe([]);
-    }
+        return collect($payload['items'])->flatMap(fn (array $i): array => $i['links'] ?? [])->all();
+    };
+
+    // Positiv kontroll: den levande relationen finns i exporten.
+    expect($bygg())->not->toBe([]);
+
+    ItemLink::query()->delete();
+    Export::query()->delete();
+
+    expect($bygg())->toBe([]);
 });
 
 it('tar inte med en mjukraderad relation i pärmens trädordning', function () {
