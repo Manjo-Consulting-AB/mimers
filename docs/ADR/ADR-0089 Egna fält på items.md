@@ -1,6 +1,6 @@
 # ADR-0089 Egna fält på items
 
-**Status:** Antagen 2026-11-19 · Bygger vidare på [[ADR-0004 Fria taggar och kategorier]], [[ADR-0033 Produktens omfång]], [[ADR-0008 Soft delete och papperskorg]], [[ADR-0081 All lagrad data räknas mot kvoten]] och [[ADR-0087 MCP-server för agenter]] · Ändrar [[ADR-0088 Versionshistorik för items]] § Riktning 2 · Riktning 1 och 2 ändrade av [[ADR-0099 Kryssrutefält]] · Riktning 6 och 8 delvis ersatta av [[ADR-0101 Mallarna]] · [[ADR-index]]
+**Status:** Antagen 2026-11-19 · Bygger vidare på [[ADR-0004 Fria taggar och kategorier]], [[ADR-0033 Produktens omfång]], [[ADR-0008 Soft delete och papperskorg]], [[ADR-0081 All lagrad data räknas mot kvoten]] och [[ADR-0087 MCP-server för agenter]] · Ändrar [[ADR-0088 Versionshistorik för items]] § Riktning 2 · Riktning 1 och 2 ändrade av [[ADR-0099 Kryssrutefält]] · Riktning 6 och 8 delvis ersatta av [[ADR-0101 Mallarna]] · Tillägg 2026-11-26: länkar i textfält · [[ADR-index]]
 
 Tonys beslut 2026-11-19, efter en diskussion samma dag. Det som står som *utformad av Claude* är detaljer som Claude satte när ADR:n skrevs och som Tony ännu inte har godkänt uttryckligen. Allt annat är Tonys.
 
@@ -103,6 +103,32 @@ Fält ärvs inte från ett item till dess barn. `parent`/`child` bär redan beh�
 
 - *Påminnelser för datumfält,* till exempel innan en garanti går ut. Typen gör det möjligt men ingenting är beslutat.
 - *Mallar i kontots export* och *mallar som delas mellan konton.*
+
+## Tillägg 2026-11-26: länkar i textfält
+
+**Kontext.** Ett textfält bär ofta en adress, som tillverkarens sida eller en manual. Den går i dag bara att kopiera. Anteckningen gör redan en adress till en länk som öppnas i en ny flik ([[ADR-0066 Itemets anteckning]] § 2).
+
+**Tonys beslut (2026-11-26):**
+
+1. En URL i ett item ska vara klickbar, i ett fält och i anteckningen.
+2. Länken öppnas i en ny flik, inte i det fönster användaren står i.
+3. En adress blir en länk var den än står i värdet, inte bara när hela värdet är en URL.
+
+**Utformat av Claude** (issue 518):
+
+- Bara typen `text` får länkar. Tal, datum och ja/nej får det aldrig.
+- En adress börjar med `http://`, `https://` eller `www.`. Skiljetecken i slutet hör inte till den, som i GitHub-varianten i anteckningen. `www.` får `https://` i `href`. Inget annat protokoll blir en länk.
+- Länken har `target="_blank"` och `rel="noopener noreferrer nofollow"`, samma som anteckningen.
+- Klienten delar värdet i segment och ritar dem utan `v-html`. Undantagen i [[ADR-0066 Itemets anteckning]] § 3 blir inte fler.
+- Värdet lagras och skickas som text. API:et, MCP och exporterna ändras inte.
+
+**Alternativ som valts bort:**
+
+- *Bara när hela värdet är en URL:* enklare, men "se https://…" blir då ingen länk. Tony valde var som helst (beslut 3).
+- *En egen fälttyp `url`:* kräver en typ, en migrering och ett typbyte för fält som redan finns. Ett textfält räcker.
+- *Rita fältet som Markdown på servern:* ger fältet hela Markdown och ännu ett `v-html`.
+
+**Konsekvenser.** Issue 518 i [[M96 Länkar i fälten]]. Anteckningen ändras inte, den får bara ett prov.
 
 ## Om att ändra ett beslut
 
