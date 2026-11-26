@@ -47,7 +47,7 @@ class RestoreAnyRequest extends FormRequest
      *
      * @var list<string>
      */
-    public const TYPES = ['item', 'attachment', 'container'];
+    public const TYPES = ['item', 'attachment', 'container', 'link'];
 
     public function authorize(): bool
     {
@@ -98,6 +98,7 @@ class RestoreAnyRequest extends FormRequest
             'item' => 'item',
             'attachment' => 'attachment',
             'container' => 'container',
+            'link' => 'item_link',
             // Okänd typ: `type`-regeln rapporterar felet, men `ulid`-regeln
             // får inte krascha på en tabell som inte finns.
             default => null,

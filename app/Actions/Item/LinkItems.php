@@ -109,6 +109,37 @@ class LinkItems
     }
 
     /**
+     * Prövar om en mjukraderad relation får komma tillbaka — samma regler som
+     * handle() mot läget nu (ADR-0097 Beslut 7), med samma felkoder och i
+     * samma ordning: samma container, inget levande par, ingen cykel. Att
+     * ändarna finns och lever prövar anroparen (RestoreContent). Ändrar
+     * ingenting; raden `$link` är själv mjukraderad och räknas därför inte
+     * som en levande relation.
+     */
+    public function assertRestorable(ItemLink $link, Item $from, Item $to): void
+    {
+        if ($from->container_id !== $to->container_id) {
+            throw ApiException::make('item_link.cross_container', [], 422);
+        }
+
+        $existing = $this->findLinkBetween($from->id, $to->id);
+
+        if ($existing !== null) {
+            throw ApiException::make('item_link.pair_exists', [
+                'item' => $to->ulid,
+                'relation' => $existing->relationSeenFromItem($from->id),
+            ], 422);
+        }
+
+        if ($link->relation === 'parent' && $this->wouldCreateCycle($from, $to, $this->loadParentsByChild($from->container_id))) {
+            throw ApiException::make('item_link.cycle', [
+                'from' => $from->ulid,
+                'to' => $to->ulid,
+            ], 422);
+        }
+    }
+
+    /**
      * Kanonisk riktning (§ Beslut 4): `relation` beskriver vad `from` ÄR för
      * `to`. `parent` behåller paret, `child` ("det här itemet är barn till
      * motparten") vänder på det, `related` (symmetrisk) normaliseras till

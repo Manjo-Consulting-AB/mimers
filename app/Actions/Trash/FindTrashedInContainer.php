@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\Tag;
 
 /**
@@ -37,9 +38,9 @@ use App\Models\Tag;
 class FindTrashedInContainer
 {
     /**
-     * @param  'item'|'attachment'|'category'|'tag'|'field'  $type
+     * @param  'item'|'attachment'|'category'|'tag'|'field'|'link'  $type
      */
-    public function handle(Container $container, string $type, string $ulid): Item|Attachment|Category|Tag|ItemField|null
+    public function handle(Container $container, string $type, string $ulid): Item|Attachment|Category|Tag|ItemField|ItemLink|null
     {
         $cutoff = now()->subDays((int) config('files.trash_retention_days'));
 
@@ -67,6 +68,16 @@ class FindTrashedInContainer
                 ->where('container_id', $container->id)
                 ->where('ulid', $ulid)
                 ->where('deleted_at', '>=', $cutoff)
+                ->first(),
+            // ADR-0097: en relation hör till containern genom sin from-ände
+            // (båda ändarna ligger i samma container). Ändens tillstånd
+            // prövar RestoreContent, så joinen ser även mjukraderade items.
+            'link' => ItemLink::query()->onlyTrashed()
+                ->select('item_link.*')
+                ->join('item', 'item.id', '=', 'item_link.from_item_id')
+                ->where('item.container_id', $container->id)
+                ->where('item_link.ulid', $ulid)
+                ->where('item_link.deleted_at', '>=', $cutoff)
                 ->first(),
             'attachment' => Attachment::query()->onlyTrashed()
                 ->select('attachment.*')

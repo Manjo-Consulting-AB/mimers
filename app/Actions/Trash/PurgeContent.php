@@ -315,4 +315,14 @@ class PurgeContent
             $field->forceDelete();
         });
     }
+
+    /**
+     * Gallrar en mjukraderad relation på riktigt (ADR-0097 § 6). Raden har
+     * inga barn: itemen och loggraderna rörs inte, och `audit_log` pekar på
+     * ULID:er som strängar utan FK.
+     */
+    public function link(ItemLink $link): void
+    {
+        $link->forceDelete();
+    }
 }

@@ -3798,6 +3798,7 @@ return [
             'item_link' => [
                 'created' => ':user linked :item to another item',
                 'deleted' => ':user removed a link on :item',
+                'restored' => ':user restored a link on :item',
             ],
 
             'loan' => [
@@ -6065,6 +6066,15 @@ return [
             // of TrashEntryResource, and the row is the same component in both
             // lists.
             'container' => 'Container',
+            // ADR-0097: a removed link between two items.
+            'link' => 'Relation',
+        ],
+
+        // The relation seen from the `from` item, in the label of a link row:
+        // "Regulator — parent of — Manual" (ADR-0097 § 1).
+        'link' => [
+            'parent' => 'parent of',
+            'related' => 'related to',
         ],
 
         'expires' => [
@@ -6117,6 +6127,7 @@ return [
                 'item' => 'Items',
                 'attachment' => 'Attachments',
                 'container' => 'Containers',
+                'link' => 'Relations',
             ],
             'empty_filtered' => 'Nothing in the trash matches your search.',
             'load_more' => 'Load more',

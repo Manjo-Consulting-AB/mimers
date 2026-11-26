@@ -10,6 +10,7 @@ use App\Http\Requests\Trash\RestoreAnyRequest;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
@@ -68,7 +69,7 @@ use Inertia\Response;
 class TrashOverviewController extends Controller
 {
     /** Slagen den samlade papperskorgen listar — ADR-0065 § 2. */
-    private const TYPES = ['item', 'attachment', 'container'];
+    private const TYPES = ['item', 'attachment', 'container', 'link'];
 
     /**
      * `TrashController` anropas för grinden, inte för sin rutt: metoden
@@ -197,6 +198,25 @@ class TrashOverviewController extends Controller
             abort_if($container === null, 404);
 
             $model->setRelation('container', $container);
+        } elseif ($type === 'link') {
+            /** @var ItemLink|null $model */
+            $model = ItemLink::query()->onlyTrashed()
+                ->where('ulid', $ulid)
+                ->where('deleted_at', '>=', $cutoff)
+                ->first();
+
+            abort_if($model === null, 404);
+
+            // Containern är radens egen och måste leva (ADR-0065 § 3), som för
+            // item och bilaga. Ändarna slås upp med withTrashed(): en ände i
+            // papperskorgen ska nå RestoreContent.
+            $from = Item::query()->withTrashed()->find($model->from_item_id);
+
+            abort_if($from === null, 404);
+
+            $container = Container::query()->find($from->container_id);
+
+            abort_if($container === null, 404);
         } else {
             /** @var Attachment|null $model */
             $model = Attachment::query()->onlyTrashed()
@@ -295,7 +315,7 @@ class TrashOverviewController extends Controller
      * minnet, och bilagans item byggdes ur den joinade raden — så flaggan
      * kostar ingen ny fråga.
      *
-     * @param  array<string, Item|Attachment|Container>  $subjects
+     * @param  array<string, Item|Attachment|Container|ItemLink>  $subjects
      * @return array<string, bool>
      */
     private function canRestore(?User $user, array $subjects): array
@@ -309,6 +329,10 @@ class TrashOverviewController extends Controller
                 $subject instanceof Attachment => $user !== null
                     && $subject->item !== null
                     && Gate::forUser($user)->allows('delete', $subject->item),
+                $subject instanceof ItemLink => $user !== null
+                    && $subject->relationLoaded('fromItem') && $subject->relationLoaded('toItem')
+                    && Gate::forUser($user)->allows('update', $subject->getRelation('fromItem'))
+                    && Gate::forUser($user)->allows('update', $subject->getRelation('toItem')),
                 // Container — den sista typen i facket.
                 default => $user !== null
                     && Gate::forUser($user)->allows('delete', $subject),

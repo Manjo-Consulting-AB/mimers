@@ -46,7 +46,7 @@ class RestoreRequest extends FormRequest
      *
      * @var list<string>
      */
-    public const TYPES = ['item', 'attachment', 'category', 'tag', 'field'];
+    public const TYPES = ['item', 'attachment', 'category', 'tag', 'field', 'link'];
 
     public function authorize(): bool
     {
@@ -92,6 +92,17 @@ class RestoreRequest extends FormRequest
                 fn ($query) => $query
                     ->where('container_id', $container->id)
                     ->whereNotNull('deleted_at')
+            ),
+            // ADR-0097: en relation hör till containern genom sina items. Som
+            // för bilagan tas itemen med withTrashed(): en relation vars ände
+            // ligger i papperskorgen ska nå RestoreContent och få
+            // trash.parent_deleted.
+            'link' => Rule::exists('item_link', 'ulid')->where(
+                fn ($query) => $query
+                    ->whereNotNull('item_link.deleted_at')
+                    ->whereIn('item_link.from_item_id', Item::query()->withTrashed()
+                        ->where('container_id', $container->id)
+                        ->select('id'))
             ),
             // Bilagans containertillhörighet går genom itemet (Beslut 3).
             // Ingen join här — Rule::exists kör sina where-closures i en

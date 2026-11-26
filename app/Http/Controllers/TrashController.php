@@ -16,6 +16,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
@@ -225,6 +226,18 @@ class TrashController extends Controller
 
                 return $container !== null && Gate::forUser($user)->allows('update', $container);
             }),
+            'links' => $models['links']->filter(function (ItemLink $link) use ($user, $containerFor): bool {
+                foreach ([$link->from_item_id, $link->to_item_id] as $itemId) {
+                    $item = Item::withTrashed()->find($itemId);
+                    $container = $item === null ? null : $containerFor((int) $item->container_id);
+
+                    if ($container === null || ! Gate::forUser($user)->allows('update', $item->setRelation('container', $container))) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }),
             'attachments' => $models['attachments']->filter(function (Attachment $attachment) use ($user, $containerFor): bool {
                 $item = Item::withTrashed()->find($attachment->item_id);
                 $container = $item === null ? null : $containerFor((int) $item->container_id);
@@ -301,7 +314,7 @@ class TrashController extends Controller
      * inte kopieras och inte flyttas (ADR-0065 § 8,
      * [[ADR-0024 Tunna controllers och actions]]).
      */
-    public function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField $model): void
+    public function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField|ItemLink $model): void
     {
         if ($model instanceof Item) {
             Gate::authorize('delete', $model);
@@ -315,6 +328,20 @@ class TrashController extends Controller
             abort_if($item === null, 404);
 
             Gate::authorize('delete', $item);
+
+            return;
+        }
+
+        // ADR-0097: en relation tas bort och kommer tillbaka av den som får
+        // `update` på BÅDA ändarna (issue 71 § Beslut 4).
+        if ($model instanceof ItemLink) {
+            foreach ([$model->from_item_id, $model->to_item_id] as $itemId) {
+                $item = Item::withTrashed()->find($itemId);
+
+                abort_if($item === null, 404);
+
+                Gate::authorize('update', $item);
+            }
 
             return;
         }
@@ -353,7 +380,7 @@ class TrashController extends Controller
      * registrerad `scoped` och memoiserad per `{user}:{container}`, och
      * ListTrash har redan löst upp det.
      *
-     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}  $list
+     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag|ItemLink>, subcategory_counts: array<string, int>}  $list
      * @return array<string, bool>
      */
     private function canRestore(?User $user, Container $container, array $list): array
@@ -371,6 +398,11 @@ class TrashController extends Controller
                 $subject instanceof Item => Gate::forUser($user)->allows('delete', $this->inContainer($subject, $container)),
                 $subject instanceof Attachment => ($parent = $parents[$subject->item_id] ?? null) !== null
                     && Gate::forUser($user)->allows('delete', $this->inContainer($parent, $container)),
+                // Relationen: `update` på båda ändarna, som i restore(). Itemen
+                // lades i minnet av ListTrash.
+                $subject instanceof ItemLink => $subject->relationLoaded('fromItem') && $subject->relationLoaded('toItem')
+                    && Gate::forUser($user)->allows('update', $subject->getRelation('fromItem'))
+                    && Gate::forUser($user)->allows('update', $subject->getRelation('toItem')),
                 // Kategori och tagg — containervida, som i restore(). EN fråga
                 // för hela listan, se docblocken.
                 default => $containerWide ??= Gate::forUser($user)->allows('update', $container),
@@ -390,7 +422,7 @@ class TrashController extends Controller
      * samma skäl som i `authorizeRestore()` och i
      * App\Actions\Trash\RestoreContent.
      *
-     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}  $list
+     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag|ItemLink>, subcategory_counts: array<string, int>}  $list
      * @return array<int, Item>
      */
     private function attachmentItems(array $list): array

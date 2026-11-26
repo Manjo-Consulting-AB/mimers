@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\LegalHold;
 use App\Models\Tag;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * kontrollerna; Actionen är verktyget.
  *
  * Själva raderingen är PurgeContent, orörd, i nattjobbets ordning:
- * bilagor, items, kategorier, taggar, fält. Allt sker i EN transaktion — ett
+ * bilagor, items, kategorier, taggar, fält, relationer. Allt sker i EN transaktion — ett
  * fel i en enskild radering rullar tillbaka hela tömningen. Filernas bytes
  * tas av PurgesExpiredStoredFiles efter sin frist, som vanligt.
  *
@@ -31,7 +32,7 @@ class EmptyTrash
     ) {}
 
     /**
-     * @return array{attachment: int, item: int, category: int, tag: int, field: int}
+     * @return array{attachment: int, item: int, category: int, tag: int, field: int, link: int}
      */
     public function handle(Container $container): array
     {
@@ -83,12 +84,23 @@ class EmptyTrash
                 $this->purgeContent->field($field);
             }
 
+            // Relationerna (ADR-0097 § 6): de mjukraderade vars ände ligger i
+            // containern. Itemens egna har redan gallrats med dem ovan.
+            $links = ItemLink::onlyTrashed()
+                ->whereIn('from_item_id', Item::withTrashed()->where('container_id', $container->id)->select('id'))
+                ->get();
+
+            foreach ($links as $link) {
+                $this->purgeContent->link($link);
+            }
+
             return [
                 'attachment' => $attachments->count(),
                 'item' => $items->count(),
                 'category' => $categories->count(),
                 'tag' => $tags->count(),
                 'field' => $fields->count(),
+                'link' => $links->count(),
             ];
         });
     }

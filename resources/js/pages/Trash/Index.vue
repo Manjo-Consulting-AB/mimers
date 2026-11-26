@@ -80,6 +80,7 @@ const modes = [
     { value: 'item', key: 'item' },
     { value: 'attachment', key: 'attachment' },
     { value: 'container', key: 'container' },
+    { value: 'link', key: 'link' },
 ];
 
 const q = ref(props.filter.q ?? '');
@@ -469,8 +470,13 @@ onBeforeUnmount(() => {
             class="flex min-h-11 items-start gap-3 rounded border border-border bg-surface px-4 py-2 text-sm"
         >
             <span class="flex shrink-0 items-center">
+                <UiIcon
+                    v-if="entry.type === 'link'"
+                    name="link"
+                    tile="neutral"
+                />
                 <ItemIcon
-                    v-if="entry.type !== 'attachment'"
+                    v-else-if="entry.type !== 'attachment'"
                     :name="entry.icon"
                     :color="entry.icon_color"
                     :tile="true"
@@ -489,7 +495,7 @@ onBeforeUnmount(() => {
                     <span class="font-normal text-ink-muted">{{ t(`trash.type.${entry.type}`) }}</span>
                 </span>
 
-                <span v-if="entry.type === 'item' && entry.container" class="text-ink-muted">
+                <span v-if="(entry.type === 'item' || entry.type === 'link') && entry.container" class="text-ink-muted">
                     {{ t('trash.overview.in_container', { container: entry.container.name }) }}
                 </span>
 

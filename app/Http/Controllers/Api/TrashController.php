@@ -15,6 +15,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -136,6 +137,11 @@ class TrashController extends Controller
             $row = ListTrash::entry('attachment', $model->ulid, $model->filename, $model->item?->name, null, $retentionDays);
         } elseif ($model instanceof Category) {
             $row = ListTrash::entry('category', $model->ulid, $model->name, $model->parent?->name, null, $retentionDays);
+        } elseif ($model instanceof ItemLink) {
+            // ADR-0097: en relation bär de två itemens namn och relationen sedd
+            // från from-itemet, som ListTrash.
+            $names = Item::withTrashed()->whereIn('id', [$model->from_item_id, $model->to_item_id])->pluck('name', 'id');
+            $row = ListTrash::entry('link', $model->ulid, ListTrash::linkLabel((string) $names[$model->from_item_id], $model->relation, (string) $names[$model->to_item_id]), null, null, $retentionDays);
         } elseif ($model instanceof ItemField) {
             // Ett eget fält bär sitt items namn som sammanhang, som en
             // underkategori bär förälderns (issue 417). Itemet slås upp med
@@ -188,7 +194,7 @@ class TrashController extends Controller
      * RestoreContent och få 422 `trash.parent_deleted` (Beslut 8), precis
      * som före issuen. Samma uppslag och samma skäl som i RestoreContent.
      */
-    private function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField $model): void
+    private function authorizeRestore(Container $container, Item|Attachment|Category|Tag|ItemField|ItemLink $model): void
     {
         if ($model instanceof Item) {
             Gate::authorize('delete', $model);
@@ -202,6 +208,19 @@ class TrashController extends Controller
             abort_if($item === null, 404);
 
             Gate::authorize('delete', $item);
+
+            return;
+        }
+
+        // ADR-0097: en relation grindas mot BÅDA ändarna, `update`.
+        if ($model instanceof ItemLink) {
+            foreach ([$model->from_item_id, $model->to_item_id] as $itemId) {
+                $item = Item::withTrashed()->find($itemId);
+
+                abort_if($item === null, 404);
+
+                Gate::authorize('update', $item);
+            }
 
             return;
         }
