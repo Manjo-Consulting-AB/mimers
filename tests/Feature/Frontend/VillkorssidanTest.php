@@ -49,7 +49,7 @@ function villkorssidanKropp(): string
 
 /*
  * Klart när: de arton numrerade rubrikerna från *1. About Mimers* till
- * *18. Contact* ritas som `<h2>`, raden *Last updated: 24 November 2026*
+ * *18. Contact* ritas som `<h2>`, raden *Last updated: 25 November 2026*
  * finns, och `body` har ingen `<h1>` — sidans rubrik kommer ur
  * `info.terms.title`.
  */
@@ -91,7 +91,7 @@ it('visar de 18 numrerade rubrikerna som h2 och uppdateringsdatumet', function (
     }
 
     expect(substr_count($body, '<h2'))->toBe(18)
-        ->and($body)->toContain('Last updated: 24 November 2026')
+        ->and($body)->toContain('Last updated: 25 November 2026')
         ->and($body)->not->toContain('<h1');
 });
 
@@ -275,4 +275,15 @@ it('lämnar /about och /subprocessors orörda', function () {
 
     expect((string) $about->inertiaProps()['body'])->toContain('Structure on your terms.')
         ->and((string) $underbitraden->inertiaProps()['body'])->toContain('Inleed');
+});
+
+/*
+ * Klart när: § 2 låter Mimers stänga ett konto som tillhör någon under 18, och
+ * § 15 säger vad som händer med betalda perioder om tjänsten läggs ned.
+ */
+it('har meningarna om konton under 18 och om nedläggning', function () {
+    $body = villkorssidanKropp();
+
+    expect($body)->toContain('If we learn that an account belongs to someone under 18, we may close the account and delete its data.')
+        ->and($body)->toContain('If we decide to shut down Mimers, we will stop accepting new subscriptions and stop renewals, and let paid subscription periods run to their end before the service closes. If we have to close the service before your paid period ends, we will refund the part of the period that was not delivered, pro rata.');
 });

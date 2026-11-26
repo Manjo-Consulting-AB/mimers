@@ -1,4 +1,4 @@
-**Last updated: 24 November 2026**
+**Last updated: 25 November 2026**
 
 These Terms of Use ("Terms") govern your access to and use of Mimers, including its website, applications, APIs and related services.
 
@@ -22,6 +22,8 @@ Mimers is primarily designed for individual users. There are currently no separa
 ## 2. Eligibility and accounts
 
 You must be at least 18 years old to create and use a Mimers account.
+
+If we learn that an account belongs to someone under 18, we may close the account and delete its data.
 
 You are responsible for:
 - Providing accurate information when registering and maintaining your account.
@@ -275,6 +277,8 @@ We may also update these Terms from time to time. The latest version will be pub
 Where a change materially affects your rights or obligations, we will provide notice where reasonably practicable. Your continued use of Mimers after the updated Terms take effect constitutes acceptance of the revised Terms, to the extent permitted by applicable law.
 
 If you do not agree to a material change, you may stop using Mimers and cancel your subscription. Any refund rights will be determined by applicable law and the relevant payment terms.
+
+If we decide to shut down Mimers, we will stop accepting new subscriptions and stop renewals, and let paid subscription periods run to their end before the service closes. If we have to close the service before your paid period ends, we will refund the part of the period that was not delivered, pro rata.
 
 ## 16. Privacy and personal data
 
