@@ -485,7 +485,9 @@ class CollectPrivacyData
      *
      * Den rättsliga spärrens rader har ingen användare och hämtas via
      * personens konton. Rader vars `meta.case_number` hör till en
-     * tystnadsbelagd spärr på samma konto utelämnas.
+     * tystnadsbelagd spärr på samma konto utelämnas, och likaså varje
+     * spärrrad (`legal_hold.*`) utan ärendenummer på ett konto med en
+     * tystnadsbelagd spärr, eftersom `legal_hold.lifted` saknar ärendenummer.
      *
      * @return list<array<string, mixed>>
      */
@@ -524,6 +526,15 @@ class CollectPrivacyData
             ->reject(function (array $data) use ($tystnad): bool {
                 $meta = $data['meta'];
                 $case = is_array($meta) ? ($meta['case_number'] ?? null) : null;
+                $kontoTystnad = $tystnad[(int) ($data['account_id'] ?? 0)] ?? [];
+
+                // Raden `legal_hold.lifted` bär inget ärendenummer och går
+                // inte att koppla till en spärr: har kontot en tystnadsbelagd
+                // spärr, även hävd, utelämnas varje spärrrad utan ärendenummer.
+                if ($kontoTystnad !== [] && ! is_string($case)
+                    && str_starts_with((string) ($data['action'] ?? ''), self::LEGAL_HOLD_ACTION_PREFIX)) {
+                    return true;
+                }
 
                 return is_string($case)
                     && in_array($case, $tystnad[(int) ($data['account_id'] ?? 0)] ?? [], true);

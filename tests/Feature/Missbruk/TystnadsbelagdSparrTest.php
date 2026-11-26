@@ -127,6 +127,31 @@ it('privacy:collect utelämnar en tystnadsbelagd spärr och dess rader', functio
         ->and(json_encode($data['security_log']))->toContain('E-2');
 });
 
+it('en hävd tystnadsbelagd spärr lämnar inga legal_hold-rader', function () {
+    [$konto, , $arende] = tystnadOpp();
+
+    artisan('legal-hold:place', ['account' => $konto->ulid, 'case' => 'G-1', 'reason' => 'x', '--confidential' => true])->assertSuccessful();
+    artisan('legal-hold:lift', ['account' => $konto->ulid])->assertSuccessful();
+
+    [, $data] = tystnadKor($arende);
+
+    expect($data['legal_hold'])->toBe([])
+        ->and(json_encode($data['security_log']))->not->toContain('legal_hold.');
+});
+
+it('två spärrar, en av varje, där den ena hävs, lämnar inga legal_hold-rader', function () {
+    [$konto, , $arende] = tystnadOpp();
+
+    artisan('legal-hold:place', ['account' => $konto->ulid, 'case' => 'H-1', 'reason' => 'x', '--confidential' => true])->assertSuccessful();
+    artisan('legal-hold:place', ['account' => $konto->ulid, 'case' => 'H-2', 'reason' => 'x'])->assertSuccessful();
+    artisan('legal-hold:lift', ['account' => $konto->ulid])->assertSuccessful();
+
+    [, $data] = tystnadKor($arende);
+
+    expect(json_encode($data['security_log']))->not->toContain('legal_hold.lifted')
+        ->and(json_encode($data['security_log']))->not->toContain('H-1');
+});
+
 it('en spärr som markeras i efterhand utelämnas, också dess confidential-rad', function () {
     [$konto, , $arende] = tystnadOpp();
 
