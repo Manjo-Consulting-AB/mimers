@@ -562,6 +562,8 @@ Snittet av de personer som når allt agenten har läst under fönstret. Ligger i
 
 UNIQUE `(agent_id, user_id)`. Fönstret är `agent.read_audience_until`.
 
+**Upplösningen.** Agentens nivå är den lägsta av kontots, containerns, ägarens tak och användarens egen, och ingen alls när agenten är pausad eller när användarens eller ägarens plan inte är Pro eller Pro+, se [[ADR-0087 MCP-server för agenter]] Riktning 4 och 6.
+
 ### agent_rules_revision
 
 Varje ändring av `user.agent_rules` eller `container.agent_rules`, med hela texten. Se [[ADR-0100 Agentregler]].
@@ -579,8 +581,6 @@ Varje ändring av `user.agent_rules` eller `container.agent_rules`, med hela tex
 CHECK: exakt en av `user_id` och `container_id` är satt (på sqlite görs inget med villkoret, samma drivrutinsgrening som i befintliga migrationer). UNIQUE `(user_id, revision)` och UNIQUE `(container_id, revision)`.
 
 **Append-only, som `audit_log`.** Ingen `updated_at`, ingen `deleted_at`.
-
-**Upplösningen.** Agentens nivå är den lägsta av kontots, containerns, ägarens tak och användarens egen, och ingen alls när agenten är pausad eller när användarens eller ägarens plan inte är Pro eller Pro+, se [[ADR-0087 MCP-server för agenter]] Riktning 4 och 6.
 
 ## usage_metric
 
