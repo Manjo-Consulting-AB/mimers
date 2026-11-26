@@ -708,7 +708,7 @@ it('lägger papperskorgen i containerns navigation, sist', function () {
  * hämtning av bilagornas items. Se § Frågor och antaganden i PR:en: "noll
  * extra" håller per rad, inte för sidan.
  */
-it('gör fyra frågor för listan', function () {
+it('gör sex frågor för listan', function () {
     [$konto, $ägare, $container] = papperskorgsvyKontext();
 
     foreach (range(1, 3) as $i) {
@@ -725,7 +725,7 @@ it('gör fyra frågor för listan', function () {
 
     // Omfånget först, så att memon sitter — exakt som i en request, där
     // ListTrash löser upp det innan typ-frågorna ställs. Fem frågor sedan
-    // issue 417: fälten är den femte typen.
+    // issue 417: fälten är den femte typen, och relationerna (ADR-0097) den sjätte.
     app(ResolveItemScope::class)->handle($ägare, $container);
 
     DB::enableQueryLog();
@@ -734,7 +734,7 @@ it('gör fyra frågor för listan', function () {
     DB::disableQueryLog();
 
     expect($lista['entries'])->toHaveCount(6);
-    expect($antal)->toBe(5);
+    expect($antal)->toBe(6);
 });
 
 it('gör ett konstant antal frågor på sidan, oavsett antal rader', function () {

@@ -10,6 +10,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\LegalHold;
 use App\Models\Tag;
 use Closure;
@@ -70,7 +71,7 @@ class PurgesExpiredTrash
     /**
      * Gallrar allt vars retention har passerats.
      *
-     * @return array{attachment: int, item: int, category: int, tag: int, field: int, container: int}
+     * @return array{attachment: int, item: int, category: int, tag: int, field: int, link: int, container: int}
      */
     public function handle(): array
     {
@@ -105,6 +106,14 @@ class PurgesExpiredTrash
                 ItemField::onlyTrashed()->where('deleted_at', '<=', $cutoff),
                 fn (ItemField $field) => $this->purgeContent->field($field),
             ),
+            // ADR-0097 § 6: en mjukraderad relation gallras hårt efter samma
+            // tid. Efter items — ett gallrat item har redan tagit sina
+            // relationer med sig.
+            'link' => $this->purge(
+                'link',
+                ItemLink::onlyTrashed()->where('deleted_at', '<=', $cutoff),
+                fn (ItemLink $link) => $this->purgeContent->link($link),
+            ),
             // 20c · Raderade containers: PurgeContainer tar med sig hela
             // innehållet, och varje container ligger i sin egen transaktion
             // (Beslut 7) — samma chunkById/felhantering/loggning som de fyra
@@ -128,7 +137,7 @@ class PurgesExpiredTrash
      * försvinner under iterationen och pagingen måste följa primärnyckeln,
      * inte radnumret (Beslut 8).
      *
-     * @template TModel of Item|Attachment|Category|Tag|ItemField|Container
+     * @template TModel of Item|Attachment|Category|Tag|ItemField|ItemLink|Container
      *
      * @param  Builder<TModel>  $query
      * @param  Closure(TModel): void  $perRow
@@ -177,7 +186,7 @@ class PurgesExpiredTrash
      * SoftDeletes-scope hade gömt den — och därmed spärren. Null betyder
      * "ingen ägare att fråga om", och då gallras raden som förut.
      */
-    private function owningAccount(Item|Attachment|Category|Tag|ItemField|Container $row): ?Account
+    private function owningAccount(Item|Attachment|Category|Tag|ItemField|ItemLink|Container $row): ?Account
     {
         if ($row instanceof Container) {
             return $row->account;
@@ -188,6 +197,16 @@ class PurgesExpiredTrash
         // containerbilaga — containerns bild. Utan den första grenen hade en
         // containerbild svarat "ingen ägare att fråga om", och den rättsliga
         // spärren (issue 112) hade tyst hoppats över för just den raden.
+        // En relation hör till containern genom sin from-ände, som kan ligga i
+        // papperskorgen — withTrashed(), som för bilagans item.
+        if ($row instanceof ItemLink) {
+            $containerId = Item::withTrashed()->whereKey($row->from_item_id)->value('container_id');
+
+            return $containerId === null
+                ? null
+                : Container::withTrashed()->whereKey($containerId)->first()?->account;
+        }
+
         $containerId = $row instanceof Attachment
             ? ($row->container_id ?? Item::withTrashed()->whereKey($row->item_id)->value('container_id'))
             : $row->container_id;

@@ -8,12 +8,14 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Access\ItemScope;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Papperskorgen för innehållet i en levande container: de mjukraderade
@@ -83,7 +85,7 @@ class ListTrash
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
-     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag|ItemField>, subcategory_counts: array<string, int>}
+     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag|ItemField|ItemLink>, subcategory_counts: array<string, int>}
      */
     public function handle(?User $user, Container $container): array
     {
@@ -210,6 +212,24 @@ class ListTrash
             $subjects[$attachment->ulid] = $attachment;
         }
 
+        // Relationer (ADR-0097 § 1 och 3) — containerns egna, för den som får
+        // ta bort dem: `update` på båda ändarna. Raden bär sina två items som
+        // relationerna `fromItem` och `toItem`, så kontrollern kan pröva samma
+        // grind utan en ny fråga.
+        if ($user !== null) {
+            foreach ($this->links($user, $container, $cutoff) as $link) {
+                $entries[] = self::entry(
+                    'link',
+                    $link->ulid,
+                    self::linkLabel((string) $link->getAttribute('from_name'), $link->relation, (string) $link->getAttribute('to_name')),
+                    null,
+                    $link->deleted_at,
+                    $retentionDays,
+                );
+                $subjects[$link->ulid] = $link;
+            }
+        }
+
         usort($entries, function (array $a, array $b): int {
             $byDeletedAt = $b['deleted_at']->timestamp <=> $a['deleted_at']->timestamp;
 
@@ -217,6 +237,81 @@ class ListTrash
         });
 
         return ['entries' => $entries, 'subjects' => $subjects, 'subcategory_counts' => $subcategoryCounts];
+    }
+
+    /**
+     * De mjukraderade relationerna i containern vars BÅDA ändar lever och som
+     * användaren får ta bort (`update` på båda, issue 71 § Beslut 4). Ligger
+     * en ände i papperskorgen står itemets egen rad för den, och relationen
+     * syns igen när itemet återställs (ADR-0097 § 3).
+     *
+     * EN fråga: de två itemen kommer med joinen. Grindobjekten byggs i minnet
+     * ur den joinade raden med containern satt, som bilagans item i
+     * ListAllTrash.
+     *
+     * @return list<ItemLink>
+     */
+    private function links(User $user, Container $container, Carbon $cutoff): array
+    {
+        $rows = ItemLink::query()->onlyTrashed()
+            ->join('item as from_item', 'from_item.id', '=', 'item_link.from_item_id')
+            ->join('item as to_item', 'to_item.id', '=', 'item_link.to_item_id')
+            ->where('from_item.container_id', $container->id)
+            ->whereNull('from_item.deleted_at')
+            ->whereNull('to_item.deleted_at')
+            ->where('item_link.deleted_at', '>=', $cutoff)
+            ->get([
+                'item_link.id',
+                'item_link.ulid',
+                'item_link.relation',
+                'item_link.from_item_id',
+                'item_link.to_item_id',
+                'item_link.deleted_at',
+                'item_link.deleted_by_agent_id',
+                'item_link.agent_deletion_batch',
+                'from_item.ulid as from_ulid',
+                'from_item.name as from_name',
+                'to_item.ulid as to_ulid',
+                'to_item.name as to_name',
+            ]);
+
+        $visible = [];
+
+        foreach ($rows as $row) {
+            $from = (new Item)->forceFill([
+                'id' => (int) $row->from_item_id,
+                'ulid' => $row->getAttribute('from_ulid'),
+                'name' => $row->getAttribute('from_name'),
+                'container_id' => $container->id,
+            ]);
+            $to = (new Item)->forceFill([
+                'id' => (int) $row->to_item_id,
+                'ulid' => $row->getAttribute('to_ulid'),
+                'name' => $row->getAttribute('to_name'),
+                'container_id' => $container->id,
+            ]);
+            $from->setRelation('container', $container);
+            $to->setRelation('container', $container);
+
+            if (! Gate::forUser($user)->allows('update', $from) || ! Gate::forUser($user)->allows('update', $to)) {
+                continue;
+            }
+
+            $row->setRelation('fromItem', $from);
+            $row->setRelation('toItem', $to);
+            $visible[] = $row;
+        }
+
+        return $visible;
+    }
+
+    /**
+     * Radens namn: relationen sedd från `from`-itemet, "Regulator — parent of
+     * — Manual" (ADR-0097 § 1). Delas med ListAllTrash.
+     */
+    public static function linkLabel(string $fromName, string $relation, string $toName): string
+    {
+        return $fromName.' — '.__('ui.trash.link.'.$relation).' — '.$toName;
     }
 
     /**

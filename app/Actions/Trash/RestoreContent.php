@@ -4,12 +4,14 @@ namespace App\Actions\Trash;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Field\FieldRules;
+use App\Actions\Item\LinkItems;
 use App\Exceptions\Api\ApiException;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemLink;
 use App\Models\Tag;
 use App\Models\User;
 use Carbon\Carbon;
@@ -62,14 +64,17 @@ use Illuminate\Support\Facades\DB;
  */
 class RestoreContent
 {
-    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+    public function __construct(
+        private readonly RecordAuditEvent $recordAuditEvent,
+        private readonly LinkItems $linkItems,
+    ) {}
 
     /**
-     * @param  'item'|'attachment'|'category'|'tag'|'field'  $type
+     * @param  'item'|'attachment'|'category'|'tag'|'field'|'link'  $type
      * @param  User  $actor  Den som återställer; blir `user_id` på
      *                       loggraden. Behörigheten är redan prövad.
      */
-    public function handle(string $type, Item|Attachment|Category|Tag|ItemField $model, User $actor): void
+    public function handle(string $type, Item|Attachment|Category|Tag|ItemField|ItemLink $model, User $actor): void
     {
         if ($model instanceof Attachment) {
             $item = Item::withTrashed()->find($model->item_id);
@@ -107,7 +112,12 @@ class RestoreContent
             }
         }
 
-        DB::transaction(function () use ($model, $actor): void {
+        // En relation (ADR-0097 § 7): ändarna ska finnas och leva. Ligger en
+        // ände i papperskorgen är det itemets rad som kommer först, med samma
+        // svar som för en bilaga vars item är raderat.
+        $linkEnds = $model instanceof ItemLink ? $this->linkEnds($model) : null;
+
+        DB::transaction(function () use ($model, $actor, $linkEnds): void {
             // Återställningen sker under radlåset (granskningsfynd 1).
             //
             // Händelseloggen grundas på radens tillstånd UNDER radlåset, inte
@@ -136,6 +146,13 @@ class RestoreContent
             // händelse och ska inte kunna avvisas.
             if ($varMjukraderad && $rad instanceof ItemField) {
                 FieldRules::assertRestorable($rad);
+            }
+
+            // Relationen prövas mot läget NU, under radlåset och bara när
+            // raden låg i papperskorgen: samma regler och felkoder som
+            // LinkItems (ADR-0097 § 7). Ett fel ändrar ingenting.
+            if ($varMjukraderad && $model instanceof ItemLink && $linkEnds !== null) {
+                $this->linkItems->assertRestorable($model, $linkEnds[0], $linkEnds[1]);
             }
 
             // restore() körs på instansen även när en samtidig återställning
@@ -179,6 +196,24 @@ class RestoreContent
                 return;
             }
 
+            if ($model instanceof ItemLink && $linkEnds !== null) {
+                // Samma `meta` som `item_link.deleted` bär (UnlinkItems).
+                $this->recordAuditEvent->handle(
+                    action: AuditLog::ACTION_ITEM_LINK_RESTORED,
+                    account: $linkEnds[0]->container->account,
+                    user: $actor,
+                    container: $linkEnds[0]->container,
+                    item: $linkEnds[0],
+                    meta: [
+                        'from' => $linkEnds[0]->ulid,
+                        'to' => $linkEnds[1]->ulid,
+                        'relation' => $model->relation,
+                    ],
+                );
+
+                return;
+            }
+
             if ($model instanceof Attachment) {
                 $item = Item::withTrashed()->findOrFail($model->item_id);
 
@@ -194,6 +229,36 @@ class RestoreContent
                 );
             }
         });
+    }
+
+    /**
+     * Relationens två ändar, `from` först. Finns en ände inte kvar (gallrad)
+     * eller ligger den i papperskorgen kan relationen inte komma tillbaka:
+     * `trash.parent_deleted` pekar ut itemet, som för en bilaga. En gallrad
+     * ände tar relationen med sig (PurgeContent), så det fallet är bara
+     * defensivt.
+     *
+     * @return array{0: Item, 1: Item}
+     */
+    private function linkEnds(ItemLink $link): array
+    {
+        $from = Item::withTrashed()->with('container.account')->find($link->from_item_id);
+        $to = Item::withTrashed()->with('container.account')->find($link->to_item_id);
+
+        foreach ([$from, $to] as $end) {
+            if ($end !== null && $end->trashed()) {
+                throw ApiException::make('trash.parent_deleted', [
+                    'type' => 'item',
+                    'ulid' => $end->ulid,
+                ], 422);
+            }
+        }
+
+        if ($from === null || $to === null) {
+            throw ApiException::make('resource.not_found', [], 404);
+        }
+
+        return [$from, $to];
     }
 
     /**

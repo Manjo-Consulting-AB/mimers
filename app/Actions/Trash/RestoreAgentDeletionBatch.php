@@ -7,6 +7,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * och actions]]): kontrollern skickar bara de rader användaren själv får
  * återställa.
  *
- * **Ordningen är containrar → items → kategorier → taggar → bilagor.**
+ * **Ordningen är containrar → items → kategorier → taggar → bilagor → relationer.**
  * Containern måste tillbaka först: ett item som raderades före sin container
  * hör till samma tillfälle, och `RestoreContent` läser itemets container när
  * den loggar raden. Bilagan prövar sitt item, så itemet måste tillbaka före
@@ -57,6 +58,7 @@ class RestoreAgentDeletionBatch
      *     tags: Collection<int, Tag>,
      *     attachments: Collection<int, Attachment>,
      *     containers: Collection<int, Container>,
+     *     links: Collection<int, ItemLink>,
      * }
      */
     public function models(string $batch): array
@@ -84,6 +86,10 @@ class RestoreAgentDeletionBatch
                 ->where('agent_deletion_batch', $batch)
                 ->where('deleted_at', '>=', $cutoff)
                 ->get(),
+            'links' => ItemLink::query()->onlyTrashed()
+                ->where('agent_deletion_batch', $batch)
+                ->where('deleted_at', '>=', $cutoff)
+                ->get(),
         ];
     }
 
@@ -94,6 +100,7 @@ class RestoreAgentDeletionBatch
      *     tags: Collection<int, Tag>,
      *     attachments: Collection<int, Attachment>,
      *     containers: Collection<int, Container>,
+     *     links: Collection<int, ItemLink>,
      * }  $models
      * @return array{restored: int, skipped: int}
      */
@@ -131,6 +138,15 @@ class RestoreAgentDeletionBatch
 
             foreach ($models['attachments'] as $attachment) {
                 [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('attachment', $attachment, $actor));
+            }
+
+            // Relationerna sist (ADR-0097 § 8): en relation kan bara komma
+            // tillbaka när båda ändarna gör det, så items och containrar måste
+            // vara levande igen. Prövningen är RestoreContent:s — en relation
+            // vars ände ligger i en annan batch, eller vars par under tiden
+            // länkats på nytt, räknas som `skipped`.
+            foreach ($models['links'] as $link) {
+                [$restored, $skipped] = $this->restoreOne($restored, $skipped, fn () => $this->restoreContent->handle('link', $link, $actor));
             }
 
             return ['restored' => $restored, 'skipped' => $skipped];

@@ -9,10 +9,12 @@ use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Den samlade papperskorgen: raderade items, bilagor och containrar över
@@ -51,7 +53,7 @@ use Illuminate\Database\Eloquent\Collection;
  * återställningen stannar i kontrollern. Actionen svarar på "vilka rader
  * finns", aldrig på "vem får återställa dem".
  *
- * **Tre typer i tre frågor, och sidan klipps i minnet.** Varje typ hämtar
+ * **Fyra typer i fyra frågor (sedan ADR-0097: relationer), och sidan klipps i minnet.** Varje typ hämtar
  * högst 51 rader efter markören (50 plus en för att veta om det finns mer);
  * de tre mängderna sorteras samman på `deleted_at` fallande och ULID
  * stigande, och de första 50 blir sidan. Sorteringen är total: två rader
@@ -102,7 +104,7 @@ class ListAllTrash
     /** Antalet poster per sida — ADR-0065 § 7. */
     public const PER_PAGE = 50;
 
-    private const TYPES = ['item', 'attachment', 'container'];
+    private const TYPES = ['item', 'attachment', 'container', 'link'];
 
     private const DELETED_ACTIONS = [
         AuditLog::ACTION_ITEM_DELETED,
@@ -132,7 +134,7 @@ class ListAllTrash
      *         agent_deletion_batch: string|null,
      *     }>,
      *     next_cursor: string|null,
-     *     subjects: array<string, Item|Attachment|Container>,
+     *     subjects: array<string, Item|Attachment|Container|ItemLink>,
      * }
      */
     public function handle(?User $user, ?string $type, ?string $q, ?string $cursor): array
@@ -235,6 +237,30 @@ class ListAllTrash
             }
         }
 
+        if ($type === null || $type === 'link') {
+            foreach ($this->links($user, $containers, $unrestricted, $itemIds, $q, $decodedCursor, $cutoff) as $link) {
+                $container = $containers[(int) $link->getAttribute('link_container_id')] ?? null;
+
+                $candidates[] = [
+                    'type' => 'link',
+                    'ulid' => $link->ulid,
+                    'label' => ListTrash::linkLabel(
+                        (string) $link->getAttribute('from_name'),
+                        $link->relation,
+                        (string) $link->getAttribute('to_name'),
+                    ),
+                    'icon' => 'link',
+                    'icon_color' => null,
+                    'container' => $container === null
+                        ? null
+                        : ['ulid' => $container->ulid, 'name' => $container->name],
+                    'item' => null,
+                    'deleted_at' => $link->deleted_at,
+                    'subject' => $link,
+                ];
+            }
+        }
+
         usort($candidates, static function (array $a, array $b): int {
             $byDeletedAt = $b['deleted_at']->getTimestamp() <=> $a['deleted_at']->getTimestamp();
 
@@ -244,7 +270,7 @@ class ListAllTrash
         $page = array_slice($candidates, 0, self::PER_PAGE);
         $hasMore = count($candidates) > self::PER_PAGE;
 
-        $deletedBy = $this->deletedBy($page);
+        $deletedBy = $this->deletedBy($page) + $this->linkDeletedBy($page);
         $agents = $this->agentNames($page);
 
         $entries = [];
@@ -439,6 +465,183 @@ class ListAllTrash
     }
 
     /**
+     * De mjukraderade relationerna vars BÅDA ändar lever, i containrar
+     * användaren når, och som hon får ta bort — `update` på båda ändarna
+     * (ADR-0097 § 3 och 6, issue 71 § Beslut 4). Omfånget skrivs i frågan, så
+     * sidan inte klipps av rader grinden ändå döljer; grinden prövas sedan
+     * i minnet på grindobjekt byggda ur den joinade raden, som bilagans item.
+     *
+     * @param  array<int, Container>  $containers
+     * @param  list<int>  $unrestricted
+     * @param  list<int>  $itemIds
+     * @param  array{deleted_at: string, ulid: string}|null  $cursor
+     * @return list<ItemLink>
+     */
+    private function links(User $user, array $containers, array $unrestricted, array $itemIds, ?string $q, ?array $cursor, Carbon $cutoff): array
+    {
+        $reaches = function (Builder $query, string $alias) use ($unrestricted, $itemIds): void {
+            $query->where(function (Builder $query) use ($alias, $unrestricted, $itemIds): void {
+                if ($unrestricted !== []) {
+                    $query->whereIn($alias.'.container_id', $unrestricted);
+                }
+
+                if ($itemIds !== []) {
+                    $query->orWhereIn($alias.'.id', $itemIds);
+                }
+
+                if ($unrestricted === [] && $itemIds === []) {
+                    $query->whereRaw('0 = 1');
+                }
+            });
+        };
+
+        $fetch = fn (?array $after) => ItemLink::query()->onlyTrashed()
+            ->join('item as from_item', 'from_item.id', '=', 'item_link.from_item_id')
+            ->join('item as to_item', 'to_item.id', '=', 'item_link.to_item_id')
+            ->whereNull('from_item.deleted_at')
+            ->whereNull('to_item.deleted_at')
+            ->where('item_link.deleted_at', '>=', $cutoff)
+            ->tap(fn (Builder $query) => $reaches($query, 'from_item'))
+            ->tap(fn (Builder $query) => $reaches($query, 'to_item'))
+            ->when($q !== null, fn (Builder $query) => $query->where(function (Builder $query) use ($q): void {
+                $query->where('from_item.name', 'like', '%'.$q.'%')
+                    ->orWhere('to_item.name', 'like', '%'.$q.'%');
+            }))
+            ->when($after !== null, fn (Builder $query) => $this->afterCursor($query, 'item_link', $after))
+            ->orderByDesc('item_link.deleted_at')
+            ->orderBy('item_link.ulid')
+            ->limit(self::PER_PAGE + 1)
+            ->get([
+                'item_link.id',
+                'item_link.ulid',
+                'item_link.relation',
+                'item_link.from_item_id',
+                'item_link.to_item_id',
+                'item_link.deleted_at',
+                'item_link.deleted_by_agent_id',
+                'item_link.agent_deletion_batch',
+                'from_item.ulid as from_ulid',
+                'from_item.name as from_name',
+                'from_item.container_id as link_container_id',
+                'to_item.ulid as to_ulid',
+                'to_item.name as to_name',
+                'to_item.container_id as to_container_id',
+            ]);
+
+        $visible = [];
+        $after = $cursor;
+
+        // Grinden prövas i minnet och kan dölja rader; hämta därför nya
+        // omgångar efter den sista råa raden tills sidan är full eller källan
+        // är slut, så ingen synlig relation tappas ur listan.
+        do {
+            $rows = $fetch($after);
+            $last = $rows->last();
+
+            if ($last !== null) {
+                $after = [
+                    'deleted_at' => Carbon::parse($last->deleted_at)->toDateTimeString(),
+                    'ulid' => (string) $last->ulid,
+                ];
+            }
+
+            foreach ($rows as $row) {
+                $container = $containers[(int) $row->getAttribute('link_container_id')] ?? null;
+
+                // Relationen hör till EN container (item_link.cross_container);
+                // en rad som ändå korsar två lämnas utanför.
+                if ($container === null || (int) $row->getAttribute('to_container_id') !== (int) $container->getKey()) {
+                    continue;
+                }
+
+                $from = (new Item)->forceFill([
+                    'id' => (int) $row->from_item_id,
+                    'ulid' => $row->getAttribute('from_ulid'),
+                    'name' => $row->getAttribute('from_name'),
+                    'container_id' => (int) $container->getKey(),
+                ]);
+                $to = (new Item)->forceFill([
+                    'id' => (int) $row->to_item_id,
+                    'ulid' => $row->getAttribute('to_ulid'),
+                    'name' => $row->getAttribute('to_name'),
+                    'container_id' => (int) $container->getKey(),
+                ]);
+                $from->setRelation('container', $container);
+                $to->setRelation('container', $container);
+
+                if (! Gate::forUser($user)->allows('update', $from) || ! Gate::forUser($user)->allows('update', $to)) {
+                    continue;
+                }
+
+                $row->setRelation('fromItem', $from);
+                $row->setRelation('toItem', $to);
+                $visible[] = $row;
+            }
+        } while ($rows->count() > self::PER_PAGE && count($visible) <= self::PER_PAGE);
+
+        return $visible;
+    }
+
+    /**
+     * Vem som tog bort varje relation på sidan, i EN fråga. Relationen har
+     * inget eget subjekt i loggen: `item_link.deleted` bär `meta.from` och
+     * `meta.to` (App\Actions\Item\UnlinkItems) och är knuten till ETT av de
+     * två itemen, så frågan tar händelserna på någon av ändarna och paret
+     * matchas i minnet. Den senaste händelsen vinner.
+     *
+     * @param  list<array{type: string, ulid: string, subject: mixed}>  $rows
+     * @return array<string, string|null> nyckel = `link:{ulid}`
+     */
+    private function linkDeletedBy(array $rows): array
+    {
+        $links = [];
+        $itemIds = [];
+
+        foreach ($rows as $row) {
+            if ($row['type'] !== 'link') {
+                continue;
+            }
+
+            $subject = $row['subject'];
+            $links[] = [
+                'ulid' => $row['ulid'],
+                'from' => (string) $subject->getAttribute('from_ulid'),
+                'to' => (string) $subject->getAttribute('to_ulid'),
+            ];
+            $itemIds[] = (int) $subject->getAttribute('from_item_id');
+            $itemIds[] = (int) $subject->getAttribute('to_item_id');
+        }
+
+        if ($links === []) {
+            return [];
+        }
+
+        $logs = AuditLog::query()
+            ->leftJoin('user', 'user.id', '=', 'audit_log.user_id')
+            ->where('audit_log.action', AuditLog::ACTION_ITEM_LINK_DELETED)
+            ->whereIn('audit_log.item_id', array_values(array_unique($itemIds)))
+            ->orderByDesc('audit_log.created_at')
+            ->orderByDesc('audit_log.id')
+            ->get(['audit_log.id', 'audit_log.meta', 'user.name as user_name']);
+
+        $deletedBy = [];
+
+        foreach ($links as $link) {
+            foreach ($logs as $log) {
+                $meta = $log->meta;
+
+                if (($meta['from'] ?? null) === $link['from'] && ($meta['to'] ?? null) === $link['to']) {
+                    $deletedBy['link:'.$link['ulid']] = $log->getAttribute('user_name');
+
+                    break;
+                }
+            }
+        }
+
+        return $deletedBy;
+    }
+
+    /**
      * De raderade containers vars ägarkonto användaren är medlem i, senast
      * raderad först — samma urval som ListTrashedContainers. En delegerad
      * `container_access` räcker alltså inte.
@@ -497,7 +700,7 @@ class ListAllTrash
      * släpper då taget och kolumnen är null, så raden faller tillbaka på
      * användaren ur händelseloggen.
      *
-     * @param  list<array{type: string, ulid: string, subject: Item|Attachment|Container}>  $rows
+     * @param  list<array{type: string, ulid: string, subject: Item|Attachment|Container|ItemLink}>  $rows
      * @return array<int, string> agentens id → namn
      */
     private function agentNames(array $rows): array
@@ -530,7 +733,7 @@ class ListAllTrash
      * App\Actions\Audit\PresentAuditEvents gör för *a former user*.
      * `item.deleted` matchas även på `item_id`, se klassens docblock.
      *
-     * @param  list<array{type: string, ulid: string, subject: Item|Attachment|Container}>  $rows
+     * @param  list<array{type: string, ulid: string, subject: Item|Attachment|Container|ItemLink}>  $rows
      * @return array<string, string|null> nyckel = `{type}:{ulid}`
      */
     private function deletedBy(array $rows): array
@@ -539,6 +742,10 @@ class ListAllTrash
         $itemIdToUlid = [];
 
         foreach ($rows as $row) {
+            if (! isset($ulids[$row['type']])) {
+                continue;
+            }
+
             $ulids[$row['type']][] = $row['ulid'];
 
             if ($row['type'] === 'item') {

@@ -58,6 +58,8 @@ final class CreatesAgentDeletionNotifications
         AuditLog::ACTION_SCHEDULE_DELETED => 'schedule',
         AuditLog::ACTION_COST_ENTRY_DELETED => 'cost_entry',
         AuditLog::ACTION_FIELD_DELETED => 'field',
+        // ADR-0097 § 8: en borttagen relation räknas som en egen post.
+        AuditLog::ACTION_ITEM_LINK_DELETED => 'link',
     ];
 
     public function __construct(private readonly CreateNotification $createNotification) {}

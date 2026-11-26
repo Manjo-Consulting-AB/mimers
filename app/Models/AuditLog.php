@@ -111,6 +111,13 @@ class AuditLog extends Model
 
     public const ACTION_ITEM_LINK_DELETED = 'item_link.deleted';
 
+    /**
+     * En borttagen relation kom tillbaka ur papperskorgen
+     * ([[ADR-0097 Borttagna relationer i papperskorgen]] § 7). `meta` är
+     * densamma som `item_link.deleted` bär: `{from, to, relation}`.
+     */
+    public const ACTION_ITEM_LINK_RESTORED = 'item_link.restored';
+
     public const ACTION_ATTACHMENT_CREATED = 'attachment.created';
 
     public const ACTION_ATTACHMENT_DELETED = 'attachment.deleted';
