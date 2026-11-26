@@ -48,6 +48,7 @@ use App\Mcp\Tools\SchedulesCreate;
 use App\Mcp\Tools\SchedulesDelete;
 use App\Mcp\Tools\SchedulesList;
 use App\Mcp\Tools\SchedulesUpdate;
+use App\Mcp\Tools\TagsCreate;
 use App\Mcp\Tools\TagsList;
 use App\Mcp\Tools\TagsSet;
 use App\Mcp\Tools\TemplatesList;
@@ -117,6 +118,7 @@ class MimersServer extends Server
         SchedulesList::class,
         SchedulesUpdate::class,
         SchedulesDelete::class,
+        TagsCreate::class,
         TagsList::class,
         TagsSet::class,
         TemplatesList::class,
