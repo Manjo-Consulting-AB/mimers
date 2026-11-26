@@ -64,7 +64,10 @@ class RelationsRemove extends WritesItems
             $audience->forItem($container, $other),
         ))));
 
-        $removed = $this->writeAsAgent(fn (): bool => app(UnlinkItems::class)->handle(
+        // deleteAsAgent och inte writeAsAgent: relationen mjukraderas (ADR-0097)
+        // och ska märkas med agenten och tillfället, och räknas mot taket som
+        // de andra raderingarna. Verktygets slag (Write) och svar är oförändrade.
+        ['result' => $removed] = $this->deleteAsAgent($agent, fn (): bool => app(UnlinkItems::class)->handle(
             $item,
             $other,
             $agent->user,

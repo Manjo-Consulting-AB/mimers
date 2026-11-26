@@ -276,6 +276,7 @@ final class ItemAudience
         }
 
         $rows = DB::table('item_link')
+            ->whereNull('item_link.deleted_at')
             ->join('item', 'item.id', '=', 'item_link.from_item_id')
             ->where('item.container_id', $containerId)
             ->where('item_link.relation', 'parent')

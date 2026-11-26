@@ -381,7 +381,7 @@ it('en länk till ett mjukraderat item syns inte i listningen', function () {
     expect(DB::table('item_link')->count())->toBe(1);
 });
 
-it('radering tar bort raden', function () {
+it('radering mjukraderar raden', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $förälder = Item::factory()->for($container, 'container')->create();
@@ -395,7 +395,9 @@ it('radering tar bort raden', function () {
     $response = deleteJson("/api/containers/{$container->ulid}/items/{$förälder->ulid}/links/{$barn->ulid}", [], $headers);
 
     $response->assertNoContent();
-    expect(DB::table('item_link')->count())->toBe(0);
+    // Raden är mjukraderad (issue 502): kvar i tabellen, osynlig för modellen.
+    expect(ItemLink::query()->count())->toBe(0);
+    expect(DB::table('item_link')->whereNotNull('deleted_at')->count())->toBe(1);
 
     // Paret kan därefter kopplas igen.
     postJson("/api/containers/{$container->ulid}/items/{$förälder->ulid}/links", [

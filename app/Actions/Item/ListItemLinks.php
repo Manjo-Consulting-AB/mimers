@@ -66,7 +66,7 @@ class ListItemLinks
             : $this->resolveItemScope->handle($user, $container);
 
         $links = $item->linksFrom()
-            ->union($item->linksTo()->getQuery())
+            ->union($item->linksTo()->toBase())
             ->get();
 
         $counterpartIds = $links

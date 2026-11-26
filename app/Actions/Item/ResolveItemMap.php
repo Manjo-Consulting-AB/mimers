@@ -341,6 +341,7 @@ class ResolveItemMap
         // två tabeller, och SoftDeletes-scopet sitter på Item — en join förbi
         // modellen filtrerar ingenting av sig själv.
         $rows = DB::table('item_link')
+            ->whereNull('item_link.deleted_at')
             ->join('item as from_item', 'from_item.id', '=', 'item_link.from_item_id')
             ->join('item as to_item', 'to_item.id', '=', 'item_link.to_item_id')
             ->where('from_item.container_id', $container->id)

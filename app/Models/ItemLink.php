@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasUlid;
+use App\Models\Concerns\RecordsAgentDeletion;
 use Database\Factories\ItemLinkFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * En relation mellan två items, se [[Items och organisation]] § item_link och
@@ -14,22 +17,32 @@ use Illuminate\Database\Eloquent\Model;
  * härleds vid läsning, `related` normaliseras till lägst `id` först.
  * Läsningen vänder på relationen per item via relationSeenFromItem().
  *
- * Ingen ULID (§ Beslut 1) och därför inget `#[RouteKey]` — ett par av items
- * har högst en relation, så motpartens ULID identifierar länken, och det
- * finns ingen rutt som identifierar en enskild rad. Alla kolumner är
+ * `ulid` pekar ut raden för papperskorgen (ADR-0097, issue 503) men ingen
+ * rutt binder mot den — ett par av items har högst en relation, så
+ * motpartens ULID identifierar länken i rutterna, och därför inget
+ * `#[RouteKey]`. Alla kolumner är
  * medvetet UTESLUTNA ur `#[Fillable]` — de sätts explicit av
  * App\Actions\Item\LinkItems, aldrig via massildelning, samma resonemang
  * som App\Models\ContainerAccess.
  *
- * Ingen `deleted_at` (§ Beslut 10): raderingen är hård, och en mjukraderad
- * ände döljer bara länken vid läsning genom SoftDeletes globala scope på
- * itemet — raden ligger kvar och kommer tillbaka om itemet återupplivas.
+ * Raderingen är MJUK ([[ADR-0097 Borttagna relationer i papperskorgen]],
+ * som ändrar § Beslut 10): `UnlinkItems` sätter `deleted_at` och märker raden
+ * med agenten via RecordsAgentDeletion. SoftDeletes globala scope döljer
+ * raden för all Eloquent-läsning; de rena `DB::table('item_link')`-frågorna
+ * filtrerar `item_link.deleted_at` själva. En mjukraderad ände på ITEMET
+ * döljer fortfarande länken vid läsning, och raden kommer tillbaka om itemet
+ * återupplivas.
+ *
+ * Det som ska bort på riktigt — en flytt (MoveItem), gallringen av ett item
+ * (PurgeContent) och ett par som länkas på nytt (LinkItems, MoveItem) —
+ * använder `forceDelete()`. UNIQUE `(from_item_id, to_item_id, relation)`
+ * gäller även mjukraderade rader.
  */
 #[Fillable([])]
 class ItemLink extends Model
 {
     /** @use HasFactory<ItemLinkFactory> */
-    use HasFactory;
+    use HasFactory, HasUlid, RecordsAgentDeletion, SoftDeletes;
 
     /**
      * Tabellen heter `item_link`, inte Eloquents standardplural `item_links`.

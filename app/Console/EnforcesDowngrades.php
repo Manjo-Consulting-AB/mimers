@@ -324,6 +324,7 @@ class EnforcesDowngrades
 
         while ($frontier !== []) {
             $children = DB::table('item_link')
+                ->whereNull('item_link.deleted_at')
                 ->where('relation', 'parent')
                 ->whereIn('from_item_id', $frontier)
                 ->pluck('to_item_id')

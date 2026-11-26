@@ -113,16 +113,26 @@ class MoveItem
             $fromUlid = null;
 
             if ($fromParentId !== null) {
+                // Hårt: en flytt är ingen borttagen relation och ska inte
+                // synas i papperskorgen (ADR-0097 Beslut 5).
                 ItemLink::query()
                     ->where('from_item_id', $fromParentId)
                     ->where('to_item_id', $item->id)
                     ->where('relation', 'parent')
-                    ->delete();
+                    ->forceDelete();
 
                 $fromUlid = $fromParent->ulid ?? Item::withTrashed()->whereKey($fromParentId)->value('ulid');
             }
 
             if ($toParent !== null) {
+                // UNIQUE gäller även mjukraderade rader (ADR-0097 Beslut 4):
+                // en borttagen relation för paret ersätts av den nya.
+                ItemLink::onlyTrashed()
+                    ->where(fn ($query) => $query
+                        ->where(fn ($pair) => $pair->where('from_item_id', $toParent->id)->where('to_item_id', $item->id))
+                        ->orWhere(fn ($pair) => $pair->where('from_item_id', $item->id)->where('to_item_id', $toParent->id)))
+                    ->forceDelete();
+
                 $link = new ItemLink;
                 $link->from_item_id = $toParent->id;
                 $link->to_item_id = $item->id;
@@ -198,6 +208,7 @@ class MoveItem
     {
         $rows = ItemLink::query()
             ->join('item', 'item.id', '=', 'item_link.from_item_id')
+            ->whereNull('item_link.deleted_at')
             ->where('item.container_id', $containerId)
             ->where('item_link.relation', 'parent')
             ->get(['item_link.from_item_id', 'item_link.to_item_id']);
