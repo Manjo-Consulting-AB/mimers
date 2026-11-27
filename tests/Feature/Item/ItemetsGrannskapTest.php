@@ -227,11 +227,13 @@ it('tar inte med papperskorgen och inte vandringen genom den', function () {
 });
 
 it('ritar samma grannskap i samma ordning varje gång', function () {
+    // Drivrutinsglapp: SQLite sorterar på byte (Å sist), MariaDB:s utf8mb4_unicode_ci sorterar Å som A.
+    // Namnen är därför ASCII; svensk sortering av Å, Ä och Ö är inte det som prövas här.
     [$anvandare, $container] = grannskapKontext();
 
     $mitt = grannskapItem($container, 'M');
 
-    foreach (['Z', 'B', 'Å', 'A'] as $namn) {
+    foreach (['Z', 'B', 'Y', 'A'] as $namn) {
         grannskapKant($mitt, grannskapItem($container, $namn));
     }
 
@@ -239,7 +241,7 @@ it('ritar samma grannskap i samma ordning varje gång', function () {
     $andra = grannskapSvar($anvandare, grannskapAdress($container, $mitt));
 
     expect($forsta)->toBe($andra)
-        ->and(grannskapNamn($forsta))->toBe(['A', 'B', 'M', 'Z', 'Å']);
+        ->and(grannskapNamn($forsta))->toBe(['A', 'B', 'M', 'Y', 'Z']);
 });
 
 it('är tomt med truncated över taket, och fullt på taket', function () {

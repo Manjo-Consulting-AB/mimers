@@ -205,8 +205,9 @@ it('adressen normaliseras', function () {
 
     $response->assertStatus(200);
 
-    expect(EmailSuppression::where('email', 'anna@example.com')->exists())->toBeTrue();
-    expect(EmailSuppression::where('email', 'Anna@Example.COM')->exists())->toBeFalse();
+    // Drivrutinsglapp: MariaDB:s kollation är skiftlägesokänslig, så en `where` med versaler
+    // träffar den normaliserade raden där. Bevisa det lagrade värdet direkt.
+    expect(EmailSuppression::query()->pluck('email')->all())->toBe(['anna@example.com']);
 });
 
 it('en kropp utan event-data avvisas', function () {

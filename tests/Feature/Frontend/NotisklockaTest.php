@@ -167,7 +167,8 @@ function klockaNotisfragor(User $anvandare): int
     $antal = 0;
 
     DB::listen(function ($query) use (&$antal): void {
-        if (str_contains($query->sql, 'from "notification"')) {
+        // SQLite citerar tabellnamn med ", MySQL-grammatiken med ` — båda formerna ska träffa.
+        if (preg_match('/from ["`]notification["`]/', $query->sql) === 1) {
             $antal++;
         }
     });
