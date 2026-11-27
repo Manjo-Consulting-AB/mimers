@@ -9,6 +9,7 @@ use App\Actions\Item\RenderItemNotes;
 use App\Actions\Item\ResolveItemCover;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Item;
 use App\Models\ItemLink;
@@ -50,7 +51,7 @@ use Throwable;
  * mängden, och items som bara nås via en cykel hamnar på översta nivån.
  * Regeln är deterministisk och stabil.
  *
- * **Kostnader** summeras per valuta, aldrig omräknade ([[Items och
+ * **Finanser** (kostnader och intäkter, ADR-0102) summeras per valuta, aldrig omräknade ([[Items och
  * organisation]] § cost): containerns huvudvaluta står först, övriga i
  * bokstavsordning, och ingen rad lämnas utanför summan. Avrundningen sker vid
  * presentationen, inte per rad.
@@ -407,7 +408,7 @@ class BinderBuilder
         }
 
         if (in_array('costs', $sections, true)) {
-            $with['costs'] = fn ($q) => $q->expenses()->orderBy('incurred_on')->orderBy('id');
+            $with['costs'] = fn ($q) => $q->orderBy('incurred_on')->orderBy('id');
         }
 
         $item->load($with);
@@ -433,28 +434,49 @@ class BinderBuilder
 
         if (in_array('costs', $sections, true)) {
             $main = $container->effectiveCurrency();
-            $sums = [];
+            $expenses = [];
+            $incomes = [];
 
             foreach ($item->costs as $cost) {
-                $sums[$cost->currency] = ($sums[$cost->currency] ?? 0) + (int) $cost->amount;
+                if ($cost->kind === CostEntry::KIND_INCOME) {
+                    $incomes[$cost->currency] = ($incomes[$cost->currency] ?? 0) + (int) $cost->amount;
+                } else {
+                    $expenses[$cost->currency] = ($expenses[$cost->currency] ?? 0) + (int) $cost->amount;
+                }
             }
 
-            uksort($sums, fn (string $x, string $y): int => [$x !== $main, $x] <=> [$y !== $main, $y]);
+            $codes = array_values(array_unique([...array_keys($expenses), ...array_keys($incomes)]));
+            usort($codes, fn (string $x, string $y): int => [$x !== $main, $x] <=> [$y !== $main, $y]);
 
+            // Har itemet intäkter står utgifter, intäkter och netto per
+            // valuta (ADR-0102); annars bara totalen som förut.
+            $hasIncome = $incomes !== [];
             $totals = [];
 
-            foreach ($sums as $code => $sum) {
-                $totals[] = ['currency' => $code, 'amount' => MinorUnits::format($sum, $code).' '.$code];
+            foreach ($codes as $code) {
+                $expense = $expenses[$code] ?? 0;
+                $income = $incomes[$code] ?? 0;
+                $format = fn (int $v): string => MinorUnits::format($v, $code).' '.$code;
+
+                $totals[] = [
+                    'currency' => $code,
+                    'amount' => $format($expense),
+                    'income' => $hasIncome ? $format($income) : null,
+                    'net' => $hasIncome ? $format($income - $expense) : null,
+                ];
             }
 
             $costs = [
                 'rows' => $item->costs->map(fn ($c): array => [
                     'date' => $c->incurred_on->toDateString(),
+                    'kind' => $c->kind === CostEntry::KIND_INCOME ? 'income' : 'expense',
                     'description' => $c->description,
                     'supplier' => $c->counterparty,
+                    'quantity' => $c->quantity === null ? null : rtrim(rtrim((string) $c->quantity, '0'), '.'),
                     'amount' => MinorUnits::format((int) $c->amount, $c->currency).' '.$c->currency,
                 ])->all(),
                 'totals' => $totals,
+                'has_income' => $hasIncome,
             ];
         }
 

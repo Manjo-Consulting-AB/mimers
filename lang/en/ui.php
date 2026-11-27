@@ -5713,7 +5713,7 @@ return [
             'relations' => 'Relations',
             'schedules' => 'Tasks and maintenance',
             'history' => 'History',
-            'costs' => 'Costs',
+            'costs' => 'Finances',
         ],
 
         'status' => [
