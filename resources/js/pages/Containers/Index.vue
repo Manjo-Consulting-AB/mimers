@@ -142,7 +142,8 @@ const isShared = (container) => accountName(container) === null;
 
             <UiCard v-else class="h-full">
                 <template #media>
-                    <div class="aspect-video w-full">
+                    <!-- Zoomen är en `transform` på bilden; utan klippning här täcker den kortets rubrik. -->
+                    <div class="aspect-video w-full overflow-hidden">
                         <ContainerCover
                             :cover="container.cover"
                             :icon="container.icon"
