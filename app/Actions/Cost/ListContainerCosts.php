@@ -103,7 +103,7 @@ final class ListContainerCosts
      * byter radtyp men behåller paginatorns nyckeltyp, och det paret kan
      * PHPStan inte bevisa — märket hade varit en påstådd typ ingen prövar.
      *
-     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null}  $filters
+     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null, counterparty?: string|null, kind?: string|null}  $filters
      */
     public function handle(User $user, Container $container, array $filters = []): LengthAwarePaginator
     {
@@ -111,8 +111,6 @@ final class ListContainerCosts
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
             ->where('cost_entry.container_id', $container->id)
             ->whereNull('cost_entry.deleted_at')
-            // Bara utgifter, som rapportens summor (ADR-0102, issue 527 tar intäkterna).
-            ->where('cost_entry.kind', CostEntry::KIND_EXPENSE)
             ->whereNull('item.deleted_at');
 
         $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
@@ -123,12 +121,19 @@ final class ListContainerCosts
 
         $this->applyFilters($query, $container, $filters);
 
+        // Riktningen (ADR-0102 § Riktning 5): utelämnad eller `all` är båda.
+        if (in_array($filters['kind'] ?? null, [CostEntry::KIND_EXPENSE, CostEntry::KIND_INCOME], true)) {
+            $query->where('cost_entry.kind', $filters['kind']);
+        }
+
         $sidor = $query
             ->select([
                 'cost_entry.ulid',
                 'cost_entry.incurred_on',
                 'cost_entry.description',
                 'cost_entry.counterparty',
+                'cost_entry.kind',
+                'cost_entry.quantity',
                 'cost_entry.amount',
                 'cost_entry.currency',
                 'item.ulid as item_ulid',
@@ -146,6 +151,9 @@ final class ListContainerCosts
             'incurred_on' => substr((string) $rad->incurred_on, 0, 10),
             'description' => (string) $rad->description,
             'supplier' => $rad->counterparty === null ? null : (string) $rad->counterparty,
+            'counterparty' => $rad->counterparty === null ? null : (string) $rad->counterparty,
+            'kind' => (string) $rad->kind,
+            'quantity' => $rad->quantity === null ? null : (string) $rad->quantity,
             'amount' => (int) $rad->amount,
             'currency' => (string) $rad->currency,
             'item' => ['ulid' => (string) $rad->item_ulid, 'name' => (string) $rad->item_name],
@@ -171,7 +179,7 @@ final class ListContainerCosts
      * sqlite lagrar en DATE-kolumn med en tidskomponent, och en datumgräns ska
      * inte bero på klockslaget när frågan körs.
      *
-     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null}  $filters
+     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null, counterparty?: string|null, kind?: string|null}  $filters
      */
     private function applyFilters(Builder $query, Container $container, array $filters): void
     {
@@ -187,8 +195,10 @@ final class ListContainerCosts
             $query->whereIn('item.category_id', $this->resolveCategoryDescendants->handle($category));
         }
 
-        if (($filters['supplier'] ?? null) !== null) {
-            $query->where('cost_entry.counterparty', $filters['supplier']);
+        $counterparty = $filters['counterparty'] ?? $filters['supplier'] ?? null;
+
+        if ($counterparty !== null) {
+            $query->where('cost_entry.counterparty', $counterparty);
         }
 
         if (($filters['from'] ?? null) !== null) {

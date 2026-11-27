@@ -318,14 +318,15 @@ const planUrl = computed(() => `/settings/plan?account=${props.container.account
  * ett. Nycklarna är desamma som filterfältet skickar, och `report` är `null`
  * för en gratisanvändare — då finns inget filter att ärva.
  */
-const FILTER_KEYS = ['from', 'to', 'item', 'category', 'supplier'];
+const FILTER_KEYS = ['from', 'to', 'item', 'category', 'counterparty', 'kind'];
 
 const pageUrl = (page) => {
     const params = new URLSearchParams({ page: String(page) });
     const filter = props.report?.filter;
 
     for (const key of FILTER_KEYS) {
-        if (filter?.[key]) {
+        // `all` är förvalet och hålls utanför adressen.
+        if (filter?.[key] && ! (key === 'kind' && filter[key] === 'all')) {
             params.set(key, filter[key]);
         }
     }
@@ -335,6 +336,14 @@ const pageUrl = (page) => {
 
 const hasRows = computed(() => props.rows.data.length > 0);
 const hasCosts = computed(() => props.costs.totals.length > 0);
+
+/*
+ * Intäkter (issue 1782 · ADR-0102 § Riktning 6): har containern ingen intäkt
+ * ser summan ut som förut, med en total per valuta. Annars tre rader per
+ * valuta — utgifter, intäkter och netto, ur nycklarna `amount`, `income` och
+ * `net` som servern räknat.
+ */
+const hasIncome = computed(() => props.costs.totals.some((total) => (total.income ?? 0) !== 0));
 
 /*
  * Tabellens tomtext. En Pro-användares tabell följer alltid en period, så en
@@ -362,12 +371,31 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
         åt — beloppet bär sin egen valuta.
     -->
     <div class="mt-6 flex flex-wrap gap-4">
-        <UiStat
-            v-for="total in costs.totals"
-            :key="`total-${total.currency}`"
-            :value="formatAmount(total.amount, total.currency)"
-            :label="t('container.costs.total')"
-        />
+        <template v-if="hasIncome">
+            <template v-for="total in costs.totals" :key="`total-${total.currency}`">
+                <UiStat
+                    :value="formatAmount(total.amount, total.currency)"
+                    :label="t('item.cost.total_expenses')"
+                />
+                <UiStat
+                    :value="formatAmount(total.income ?? 0, total.currency)"
+                    :label="t('item.cost.total_income')"
+                />
+                <UiStat
+                    :value="formatAmount(total.net ?? 0, total.currency)"
+                    :label="t('item.cost.total_net')"
+                />
+            </template>
+        </template>
+
+        <template v-else>
+            <UiStat
+                v-for="total in costs.totals"
+                :key="`total-${total.currency}`"
+                :value="formatAmount(total.amount, total.currency)"
+                :label="t('container.costs.total')"
+            />
+        </template>
 
         <UiStat
             v-for="total in yearCosts"

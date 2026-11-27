@@ -91,36 +91,64 @@ const MAX_HEIGHT = 26;
  */
 const MAX_LABELS = 12;
 
+/*
+ * Intäkter (issue 1782 · ADR-0102 § Riktning 5): med `kind=all` bär varje
+ * grupp `expense` och `income` per valuta, och med `kind=income` bara
+ * `income`. Finns en intäkt i perioden får grafen en andra serie bredvid
+ * utgifterna; annars ritas den som förut. Serierna skiljs åt med färg OCH med
+ * text — listan under grafen namnger båda, så färgen bär inget ensam.
+ */
+const expenseOf = (row) => (row === undefined ? 0 : (row.expense ?? ('income' in row ? 0 : row.amount)));
+const incomeOf = (row) => row?.income ?? 0;
+
 const charts = computed(() => props.totals.map((total) => {
-    const bars = props.groups.map((group) => ({
-        period: group.key.period,
-        label: periodLabel(group.key.period),
-        amount: group.totals.find((row) => row.currency === total.currency)?.amount ?? 0,
-    }));
+    const bars = props.groups.map((group) => {
+        const row = group.totals.find((candidate) => candidate.currency === total.currency);
+
+        return {
+            period: group.key.period,
+            label: periodLabel(group.key.period),
+            amount: expenseOf(row),
+            income: incomeOf(row),
+        };
+    });
+
+    const hasIncome = bars.some((bar) => bar.income > 0);
 
     // Skalan är grafens egen: den högsta månaden sätter taket. Noll månader
     // ger en nämnare på 1 i stället för en division med noll.
-    const peak = Math.max(1, ...bars.map((bar) => Math.abs(bar.amount)));
+    const peak = Math.max(1, ...bars.flatMap((bar) => [Math.abs(bar.amount), Math.abs(bar.income)]));
     const step = 100 / Math.max(bars.length, 1);
-    const width = Math.min(step * 0.6, 8);
+    const series = hasIncome ? 2 : 1;
+    const width = Math.min((step * 0.6) / series, 8);
     // Aldrig 0: en tom graf ger ingen stapel att sätta en etikett på, men
     // `index % 0` är NaN och inte falskt.
     const labelStep = Math.max(1, Math.ceil(bars.length / MAX_LABELS));
 
+    const heightOf = (value) => (value > 0 ? Math.max((value / peak) * MAX_HEIGHT, 0.5) : 0);
+
     return {
         currency: total.currency,
-        total: formatAmount(total.amount, total.currency),
+        total: formatAmount(expenseOf(total), total.currency),
+        hasIncome,
+        incomeTotal: formatAmount(incomeOf(total), total.currency),
         bars: bars.map((bar, index) => {
-            const height = bar.amount > 0 ? Math.max((bar.amount / peak) * MAX_HEIGHT, 0.5) : 0;
+            const center = index * step + step / 2;
+            const height = heightOf(bar.amount);
+            const incomeHeight = heightOf(bar.income);
 
             return {
                 ...bar,
                 text: formatAmount(bar.amount, total.currency),
-                x: index * step + (step - width) / 2,
+                incomeText: formatAmount(bar.income, total.currency),
+                x: center - (width * series) / 2,
+                incomeX: center - (width * series) / 2 + width,
                 width,
                 height,
                 y: BASELINE - height,
-                center: index * step + step / 2,
+                incomeHeight,
+                incomeY: BASELINE - incomeHeight,
+                center,
                 showLabel: index % labelStep === 0,
             };
         }),
@@ -144,6 +172,15 @@ const charts = computed(() => props.totals.map((total) => {
                         rx="0.6"
                         class="fill-accent"
                     />
+                    <rect
+                        v-if="bar.incomeHeight > 0"
+                        :x="bar.incomeX"
+                        :y="bar.incomeY"
+                        :width="bar.width"
+                        :height="bar.incomeHeight"
+                        rx="0.6"
+                        class="fill-success"
+                    />
                     <!-- Etiketten ritas för var `labelStep`:te stapel, så att
                          namnen inte går in i varandra när perioden är lång.
                          Alla månader står kvar i listan under grafen. -->
@@ -161,13 +198,17 @@ const charts = computed(() => props.totals.map((total) => {
             <!-- Listan bär grafen som text: månad och belopp, i serverns
                  ordning. Talet i rubriken är periodens total i valutan. -->
             <div>
-                <p class="text-body font-semibold text-ink">
+                <p v-if="chart.hasIncome" class="text-body font-semibold text-ink">
+                    {{ t('item.cost.total_expenses') }}: {{ chart.total }} ·
+                    {{ t('item.cost.total_income') }}: {{ chart.incomeTotal }}
+                </p>
+                <p v-else class="text-body font-semibold text-ink">
                     {{ t('container.costs.total') }}: {{ chart.total }}
                 </p>
 
                 <ul class="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                     <li v-for="bar in chart.bars" :key="bar.period" class="text-meta text-ink-subtle">
-                        {{ bar.label }}: {{ bar.text }}
+                        {{ bar.label }}: {{ bar.text }}<template v-if="chart.hasIncome"> / {{ bar.incomeText }}</template>
                     </li>
                 </ul>
             </div>

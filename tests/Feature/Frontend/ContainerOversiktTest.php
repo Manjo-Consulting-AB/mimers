@@ -1012,7 +1012,7 @@ it('monterar panelerna i rutnätet över lg', function () {
         ->toContain('<ContainerTasksPanel v-if="panel.key === \'tasks\'" :tasks="props.tasks" />')
         ->toContain('import ContainerDetailsPanel from')
         ->toContain('<ContainerDetailsPanel v-else-if="panel.key === \'details\'" :details="props.details" />')
-        ->toContain('import CostDonut from')
+        ->toContain('import CostDonut')
         ->toContain('<CostDonut')
         ->toContain('import HistoryRow from')
         ->toContain('v-for="event in props.events"')
