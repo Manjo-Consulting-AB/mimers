@@ -425,3 +425,34 @@ it('costs_update skriver supplier till counterparty', function () {
 
     expect($kostnad->refresh()->counterparty)->toBe('Svedea');
 });
+
+// ─── transactions_* (issue 1780 · ADR-0102) ──────────────────────────────────
+
+it('transactions_create utan kind skriver en utgift, med kind=income en intäkt', function () {
+    [, $token, , , $item] = skrivMiljo();
+
+    $bas = ['item' => $item->ulid, 'incurred_on' => '2026-04-12', 'amount' => '100', 'currency' => 'SEK', 'description' => 'Försäljning', 'counterparty' => 'Kund AB', 'quantity' => '2.5'];
+
+    $utgift = mcpResultat(mcpVerktyg($token, 'transactions_create', $bas));
+    $intakt = mcpResultat(mcpVerktyg($token, 'transactions_create', $bas + ['kind' => 'income']));
+
+    $rad = CostEntry::query()->where('ulid', $intakt['ulid'])->firstOrFail();
+
+    expect(CostEntry::query()->where('ulid', $utgift['ulid'])->value('kind'))->toBe('expense')
+        ->and($rad->kind)->toBe('income')
+        ->and($rad->counterparty)->toBe('Kund AB')
+        ->and((float) $rad->quantity)->toBe(2.5)
+        ->and($intakt['kind'])->toBe('income');
+});
+
+it('transactions_update och transactions_delete fungerar på en intäktsrad', function () {
+    [, $token, , $container, $item] = skrivMiljo();
+
+    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+
+    mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $intakt->ulid, 'counterparty' => 'Kund AB']));
+    expect($intakt->refresh()->counterparty)->toBe('Kund AB');
+
+    mcpResultat(mcpVerktyg($token, 'transactions_delete', ['transaction' => $intakt->ulid]));
+    expect(CostEntry::query()->find($intakt->id))->toBeNull();
+});

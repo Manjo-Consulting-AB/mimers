@@ -120,14 +120,14 @@ it('ger ingen skrivväg: containers_update med agent_rules lämnar fältet orör
     expect($container->refresh()->agent_rules)->toBe('Orörd')
         ->and($anvandare->refresh()->agent_rules)->toBeNull();
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'));
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'));
     expect($verktyg->filter(fn (array $v): bool => array_key_exists('agent_rules', $v['inputSchema']['properties'] ?? []))->all())->toBe([]);
 });
 
 it('beskriver agent_rules som instruktioner i containers_list och containers_tree', function () {
     [, $token] = mcpAgentMedToken();
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->keyBy('name');
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
 
     foreach (['containers_list', 'containers_tree'] as $namn) {
         expect($verktyg[$namn]['description'])->toContain('agent_rules')->toContain('instructions to you')->toContain('revision')

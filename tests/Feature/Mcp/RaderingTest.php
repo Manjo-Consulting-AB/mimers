@@ -163,7 +163,7 @@ it('avvisar containers_delete på någon annans container', function () {
 it('säger i beskrivningen att innehållet följer med till papperskorgen och ber agenten bekräfta först', function () {
     [, $token] = mcpAgentMedToken();
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))
         ->firstWhere('name', 'containers_delete');
 
     $beskrivning = $verktyg['description'];
