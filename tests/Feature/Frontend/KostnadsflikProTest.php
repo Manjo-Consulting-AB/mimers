@@ -262,12 +262,14 @@ it('en Pro-användare kan välja period och får tabellen, grafen och nedbrytnin
         'item' => null,
         'category' => null,
         'supplier' => null,
+        'counterparty' => null,
+        'kind' => 'all',
     ]);
 
     // Grafen: en post per månad i perioden, i stigande ordning.
     expect(kostnadsflikProGruppnycklar($proppar['report']['period']['groups']))
         ->toBe(['2026-01', '2026-02'])
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 3000, 'count' => 2]]);
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 3000, 'count' => 2, 'expense' => 3000, 'income' => 0, 'net' => -3000, 'income_count' => 0]]);
 
     // Tabellen följer samma period — och nyast först, som i 175.
     expect($proppar['rows']['total'])->toBe(2)
@@ -303,7 +305,7 @@ it('en Pro-användare utan period får innevarande kalendermånad', function () 
     expect($proppar['report']['filter']['from'])->toBe($forsta)
         ->and($proppar['report']['filter']['to'])->toBe($sista)
         ->and($proppar['rows']['total'])->toBe(1)
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 700, 'count' => 1]]);
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 700, 'count' => 1, 'expense' => 700, 'income' => 0, 'net' => -700, 'income_count' => 0]]);
 });
 
 /*
@@ -335,7 +337,7 @@ it('en Pro-användare som bara väljer ett slutdatum får en öppen start', func
         ->and($proppar['report']['filter']['to'])->toBe($slutet)
         // Raden före innevarande månad kommer med; raden efter slutet gör det inte.
         ->and($proppar['rows']['total'])->toBe(2)
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 300, 'count' => 2]])
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 300, 'count' => 2, 'expense' => 300, 'income' => 0, 'net' => -300, 'income_count' => 0]])
         ->and($proppar['report']['comparison'])->toBe([]);
 });
 
@@ -364,7 +366,7 @@ it('en Pro-användare som bara väljer ett startdatum får ett öppet slut', fun
     expect($proppar['report']['filter']['from'])->toBe($starten)
         ->and($proppar['report']['filter']['to'])->toBeNull()
         ->and($proppar['rows']['total'])->toBe(2)
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 600, 'count' => 2]])
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 600, 'count' => 2, 'expense' => 600, 'income' => 0, 'net' => -600, 'income_count' => 0]])
         ->and($proppar['report']['comparison'])->toBe([]);
 });
 
@@ -405,7 +407,7 @@ it('filtren på item, kategori och leverantör kan kombineras', function () {
     ]))->assertOk());
 
     expect($alla['rows']['total'])->toBe(1)
-        ->and($alla['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 111, 'count' => 1]]);
+        ->and($alla['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 111, 'count' => 1, 'expense' => 111, 'income' => 0, 'net' => -111, 'income_count' => 0]]);
 
     // Kategorifiltret tar hela underträdet: föräldern räknar båda itemsen.
     $undertradet = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, $period + [
@@ -413,7 +415,7 @@ it('filtren på item, kategori och leverantör kan kombineras', function () {
     ]))->assertOk());
 
     expect($undertradet['rows']['total'])->toBe(3)
-        ->and($undertradet['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 777, 'count' => 3]])
+        ->and($undertradet['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 777, 'count' => 3, 'expense' => 777, 'income' => 0, 'net' => -777, 'income_count' => 0]])
         ->and(kostnadsflikProGruppnycklar($undertradet['report']['category']['groups'], 'name'))
         ->toBe(['Impeller', 'Kylsystem']);
 
@@ -423,7 +425,7 @@ it('filtren på item, kategori och leverantör kan kombineras', function () {
     ]))->assertOk());
 
     expect($leverantoren['rows']['total'])->toBe(1)
-        ->and($leverantoren['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 444, 'count' => 1]]);
+        ->and($leverantoren['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 444, 'count' => 1, 'expense' => 444, 'income' => 0, 'net' => -444, 'income_count' => 0]]);
 
     // Och en kombination som inte matchar något ger tomma tal, inte ett fel.
     $ingen = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, $period + [
@@ -476,7 +478,7 @@ it('item-filtret tar det enskilda itemet och inte dess underträd', function () 
     // samma radmängd.
     expect($proppar['rows']['total'])->toBe(1)
         ->and($proppar['rows']['data'][0]['item']['name'])->toBe('Motorn')
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]]);
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 /*
@@ -843,10 +845,10 @@ it('brickorna Totalt och I år påverkas inte av filtret', function () {
         ->and($januari['year'])->toBe($denna['year'])
         ->and($januari['rows']['total'])->toBe(1)
         ->and($denna['rows']['total'])->toBe(2)
-        ->and($januari['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 100, 'count' => 1]])
+        ->and($januari['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 100, 'count' => 1, 'expense' => 100, 'income' => 0, 'net' => -100, 'income_count' => 0]])
         ->and($denna['report']['period']['totals'])->toBe([
-            ['currency' => 'EUR', 'amount' => 300, 'count' => 1],
-            ['currency' => 'SEK', 'amount' => 200, 'count' => 1],
+            ['currency' => 'EUR', 'amount' => 300, 'count' => 1, 'expense' => 300, 'income' => 0, 'net' => -300, 'income_count' => 0],
+            ['currency' => 'SEK', 'amount' => 200, 'count' => 1, 'expense' => 200, 'income' => 0, 'net' => -200, 'income_count' => 0],
         ]);
 });
 
@@ -884,7 +886,7 @@ it('en rad på ett item utanför omfånget räknas inte i någon Pro-siffra', fu
 
     expect($proppar['canReport'])->toBeTrue()
         ->and($proppar['rows']['total'])->toBe(1)
-        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1]])
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1, 'expense' => 1111, 'income' => 0, 'net' => -1111, 'income_count' => 0]])
         ->and(kostnadsflikProGruppnycklar($proppar['report']['category']['groups'], 'name'))->toBe(['Motor'])
         ->and($proppar['report']['comparison'])->toBe([
             ['currency' => 'SEK', 'current' => 1111, 'previous' => 100, 'percent' => 1011],
@@ -941,7 +943,7 @@ it('filterfältet submittar querysträngen mot samma rutt', function () {
     $sida = File::get(resource_path('js/pages/Containers/Costs.vue'));
 
     expect($sida)->toContain('new URLSearchParams({ page: String(page) })')
-        ->toContain("const FILTER_KEYS = ['from', 'to', 'item', 'category', 'supplier']")
+        ->toContain("const FILTER_KEYS = ['from', 'to', 'item', 'category', 'counterparty', 'kind']")
         ->toContain('<CostFilterBar')
         ->toContain('<CostTimeChart')
         ->toContain('<CostCategoryBreakdown');
@@ -987,7 +989,7 @@ it('den valda leverantören står i filterfältet även utanför de femtio vanli
     expect(array_slice($lista, 0, 50))->not->toContain('Sällsynta Åkeriet');
 
     // Och filtret gäller fortfarande bara den egna raden.
-    expect($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 20, 'count' => 1]]);
+    expect($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 20, 'count' => 1, 'expense' => 20, 'income' => 0, 'net' => -20, 'income_count' => 0]]);
 });
 
 /*

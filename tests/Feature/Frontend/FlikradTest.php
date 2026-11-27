@@ -477,7 +477,7 @@ it('kostnadsfliken finns i containerns flikrad på sin plats', function () {
 
     // Och etiketten finns i katalogen — `t()` skriver annars nyckeln själv i
     // raden.
-    expect(trans('ui.container.nav.costs', [], 'en'))->toBe('Costs');
+    expect(trans('ui.container.nav.costs', [], 'en'))->toBe('Finances');
 });
 
 /*

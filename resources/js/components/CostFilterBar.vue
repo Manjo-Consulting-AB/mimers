@@ -61,6 +61,7 @@ const to = ref('');
 const item = ref('');
 const category = ref('');
 const supplier = ref('');
+const kind = ref('all');
 
 /*
  * Vänteläget för hela fältet (issue 68a § Beslut 4 och 5): submit och
@@ -77,7 +78,8 @@ watch(
         to.value = filter.to ?? '';
         item.value = filter.item ?? '';
         category.value = filter.category ?? '';
-        supplier.value = filter.supplier ?? '';
+        supplier.value = filter.counterparty ?? filter.supplier ?? '';
+        kind.value = filter.kind ?? 'all';
     },
     { immediate: true, deep: true },
 );
@@ -111,7 +113,12 @@ function apply() {
     }
 
     if (supplier.value !== '') {
-        params.supplier = supplier.value;
+        params.counterparty = supplier.value;
+    }
+
+    // `all` är förvalet och hålls utanför adressen.
+    if (kind.value !== 'all') {
+        params.kind = kind.value;
     }
 
     router.get(`/containers/${props.containerUlid}/costs`, params, {
@@ -130,6 +137,7 @@ function clear() {
     item.value = '';
     category.value = '';
     supplier.value = '';
+    kind.value = 'all';
 
     apply();
 }
@@ -164,6 +172,23 @@ function clear() {
                 :disabled="pending"
                 class="min-h-11 rounded-control border border-border bg-surface px-3 font-normal text-ink"
             >
+        </label>
+
+        <!-- Riktningen (issue 1782 · ADR-0102 § Riktning 6): All, Expenses
+             eller Income. Förvalet är All, och valet skickas som `kind`. -->
+        <label for="cost-filter-kind" class="flex flex-col gap-1 text-meta font-medium text-ink">
+            {{ t('container.costs.filter_kind') }}
+            <select
+                id="cost-filter-kind"
+                v-model="kind"
+                name="kind"
+                :disabled="pending"
+                class="min-h-11 rounded-control border border-border bg-surface px-3 font-normal text-ink"
+            >
+                <option value="all">{{ t('container.costs.filter_all') }}</option>
+                <option value="expense">{{ t('container.costs.kind_expenses') }}</option>
+                <option value="income">{{ t('container.costs.kind_income') }}</option>
+            </select>
         </label>
 
         <!-- Kategorin: samma trädväljare som itemlistans filterrad, byggd ur
@@ -218,11 +243,11 @@ function clear() {
             for="cost-filter-supplier"
             class="flex flex-col gap-1 text-meta font-medium text-ink"
         >
-            {{ t('container.costs.supplier') }}
+            {{ t('container.costs.counterparty') }}
             <select
                 id="cost-filter-supplier"
                 v-model="supplier"
-                name="supplier"
+                name="counterparty"
                 :disabled="pending"
                 class="min-h-11 rounded-control border border-border bg-surface px-3 font-normal text-ink"
             >

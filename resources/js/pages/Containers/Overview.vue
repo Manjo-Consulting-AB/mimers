@@ -5,7 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerDetailsPanel from '../../components/ContainerDetailsPanel.vue';
 import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
-import CostDonut from '../../components/CostDonut.vue';
+import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
 import InfoPanel from '../../components/InfoPanel.vue';
 import OverviewPanelFrame from '../../components/OverviewPanelFrame.vue';
@@ -278,6 +278,7 @@ function resetEditing() {
 }
 
 const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
+const costsHaveIncome = computed(() => props.costs.totals.some((total) => (total.income ?? 0) !== 0));
 const costsUrl = computed(() => `/containers/${props.container.ulid}/costs`);
 const costSliceHref = (ulid) => `/containers/${props.container.ulid}/items/${ulid}`;
 </script>
@@ -386,6 +387,14 @@ const costSliceHref = (ulid) => `/containers/${props.container.ulid}/items/${uli
                     :slice-href="costSliceHref"
                     :href="costsUrl"
                 />
+
+                <!-- Nettot under totalen, bara när containern har en intäkt
+                     (issue 1782 · ADR-0102 § Riktning 6). Donuten är oförändrad. -->
+                <ul v-if="costsHaveIncome" class="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+                    <li v-for="total in props.costs.totals" :key="total.currency" class="text-body text-ink">
+                        {{ t('container.overview.costs_net') }}: {{ formatAmount(total.net ?? 0, total.currency) }}
+                    </li>
+                </ul>
             </UiCard>
 
             <ContainerDetailsPanel v-else-if="panel.key === 'details'" :details="props.details" />

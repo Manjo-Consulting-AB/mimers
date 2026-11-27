@@ -247,7 +247,10 @@ class ContainerCostController extends Controller
                     $scope,
                     $listCategories,
                     $listCostSuppliers,
-                    $filter['supplier'] ?? null,
+                    $filter['counterparty'] ?? $filter['supplier'] ?? null,
+                    in_array($filter['kind'] ?? null, [CostEntry::KIND_EXPENSE, CostEntry::KIND_INCOME], true)
+                        ? $filter['kind']
+                        : null,
                 )
                 : null,
         ]);
@@ -304,18 +307,22 @@ class ContainerCostController extends Controller
         // samma sak som en utelämnad parameter i CostReport::baseQuery(), men
         // en explicit `null` i URL:en vore brus. En öppen gräns faller bort
         // här och lämnas vidare som saknad — det är den som är öppen.
+        $kind = $filter['kind'] ?? 'all';
+        $counterparty = $filter['counterparty'] ?? $filter['supplier'] ?? null;
+
         $params = array_filter([
             'from' => $from,
             'to' => $to,
             'item' => $filter['item'] ?? null,
             'category' => $filter['category'] ?? null,
-            'supplier' => $filter['supplier'] ?? null,
-            // Flikens graf och jämförelse visar fortfarande bara utgifter
-            // tills skärmen följer (issue 529/530); `all` är rapportens förval.
-            'kind' => 'expense',
+            'counterparty' => $counterparty,
         ], static fn (?string $value): bool => $value !== null);
 
-        $period = $report->build($container, $params + ['group_by' => 'period', 'period' => 'month'], $scope);
+        // Grafen följer riktningen (`all` bär både utgift och intäkt);
+        // nedbrytningen och jämförelsen räknar bara utgifter (ADR-0102
+        // § Riktning 5, issue 1782).
+        $period = $report->build($container, $params + ['kind' => $kind, 'group_by' => 'period', 'period' => 'month'], $scope);
+        $params['kind'] = 'expense';
         $category = $report->build($container, $params + ['group_by' => 'category'], $scope);
 
         return [
@@ -328,7 +335,9 @@ class ContainerCostController extends Controller
                 'to' => $to,
                 'item' => $params['item'] ?? null,
                 'category' => $params['category'] ?? null,
-                'supplier' => $params['supplier'] ?? null,
+                'supplier' => $counterparty,
+                'counterparty' => $counterparty,
+                'kind' => $kind,
             ],
             'period' => $period,
             'category' => $category,
@@ -376,6 +385,7 @@ class ContainerCostController extends Controller
         ListCategories $listCategories,
         ListCostSuppliers $listCostSuppliers,
         ?string $selectedSupplier = null,
+        ?string $kind = null,
     ): array {
         $items = $container->items()
             ->inScope($scope)
@@ -384,7 +394,7 @@ class ContainerCostController extends Controller
 
         $suppliers = array_map(
             static fn (array $supplier): string => (string) $supplier['supplier'],
-            $listCostSuppliers->handle($user, $container, CostEntry::KIND_EXPENSE),
+            $listCostSuppliers->handle($user, $container, $kind),
         );
 
         if ($selectedSupplier !== null && ! in_array($selectedSupplier, $suppliers, true)) {

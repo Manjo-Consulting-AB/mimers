@@ -2756,7 +2756,8 @@ return [
             // lives here: the rows, the total, *this year* and the donut per
             // item. The Pro half — the period, the filters and the graph — is
             // issue 176 ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
-            'costs' => 'Costs',
+            // Renamed *Finances* in issue 1782 (ADR-0102 § Riktning 6).
+            'costs' => 'Finances',
             'categories' => 'Categories',
             'tags' => 'Tags',
             // M68 · issue 419 · [[ADR-0089 Egna fält på items]] § Riktning 1:
@@ -2856,7 +2857,10 @@ return [
              * saying the same thing in a third way.
              */
             'tasks' => 'Upcoming tasks',
-            'costs' => 'Costs',
+            // Issue 1782 · ADR-0102 § Riktning 6: the panel is named *Finances*
+            // and shows the net under the total when the container has income.
+            'costs' => 'Finances',
+            'costs_net' => 'Net',
             // The caption inside the cost ring. The dashboard's ring says
             // *This month* because its row set is a month; the container's is
             // the whole container and has no period ([[ADR-0038 Gränsen för
@@ -3330,8 +3334,8 @@ return [
          * here (the same rule as `container.overview.costs`'s slices).
          */
         'costs' => [
-            'title' => 'Costs',
-            'heading' => 'Costs',
+            'title' => 'Finances',
+            'heading' => 'Finances',
 
             'add' => 'Add cost',
             'add_choose_item' => 'Which item?',
@@ -3354,6 +3358,13 @@ return [
             'item' => 'Item',
             'supplier' => 'Supplier',
             'amount' => 'Amount',
+
+            // Issue 1782 · ADR-0102 § Riktning 6: the direction filter and the
+            // counterparty's new name in the filter.
+            'filter_kind' => 'Type',
+            'kind_expenses' => 'Expenses',
+            'kind_income' => 'Income',
+            'counterparty' => 'Counterparty',
 
             // The pagination. `page` is the whole sentence and not the two
             // numbers joined in the view: the order of "page" and "of" is the
@@ -3395,8 +3406,8 @@ return [
             'filter_submit' => 'Apply',
             'filter_clear' => 'Clear',
 
-            'chart' => 'Costs over time',
-            'breakdown' => 'Costs per category',
+            'chart' => 'Expenses over time',
+            'breakdown' => 'Expenses per category',
             'other' => 'Other',
 
             'comparison' => 'Compared with the previous period',

@@ -4,6 +4,7 @@ namespace App\Http\Requests\Cost;
 
 use App\Models\Container;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Validerar kostnadsflikens filterfält, issue 176 · [[ADR-0050
@@ -55,6 +56,11 @@ class ContainerCostFilterRequest extends FormRequest
         return CostReportRequest::filterRules(
             $container,
             $this->filled('from') && $this->filled('to'),
-        );
+        ) + [
+            // Riktningen och motparten (ADR-0102 § Riktning 5, issue 1782);
+            // `supplier` står kvar för gamla länkar.
+            'kind' => ['nullable', 'string', Rule::in(['expense', 'income', 'all'])],
+            'counterparty' => ['nullable', 'string', 'max:255'],
+        ];
     }
 }
