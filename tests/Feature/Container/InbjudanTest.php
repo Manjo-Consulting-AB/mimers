@@ -135,8 +135,10 @@ it('e-postadressen normaliseras till gemener', function () {
 
     $response->assertCreated();
     expect($response->json('data.email'))->toBe('alice@exempel.se');
-    expect(DB::table('invitation')->where('email', 'alice@exempel.se')->exists())->toBeTrue();
-    expect(DB::table('invitation')->where('email', 'Alice@Exempel.se')->count())->toBe(0);
+    // Drivrutinsglapp: MariaDB:s kollation (utf8mb4_unicode_ci) är skiftlägesokänslig, så en
+    // `where('email', 'Alice@…')` träffar den normaliserade raden där. Bevisa det lagrade värdet direkt.
+    expect(DB::table('invitation')->orderByDesc('id')->value('email'))->toBe('alice@exempel.se');
+    expect(DB::table('invitation')->count())->toBe(1);
 });
 
 it('en write-access får aldrig bjuda in', function () {

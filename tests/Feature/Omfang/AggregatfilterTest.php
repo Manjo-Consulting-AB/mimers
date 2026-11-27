@@ -473,7 +473,8 @@ it('leverantörslistan för ägaren är oförändrad — utan join mot item', fu
     $logg = collect(DB::getQueryLog())->pluck('query');
     DB::disableQueryLog();
 
-    $supplierFrågan = $logg->first(fn (string $sql): bool => str_contains($sql, 'from "cost_entry"'));
+    // Drivrutinsglapp: SQLite citerar med ", MySQL/MariaDB med ` — mönstret tillåter båda.
+    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]cost_entry["`]/', $sql) === 1);
     expect($supplierFrågan)->not->toBeNull();
     expect(str_contains(strtolower($supplierFrågan), ' join '))->toBeFalse();
 });
@@ -498,7 +499,8 @@ it('leverantörslistan för en omfångsbegränsad mottagare joins mot item', fun
 
     // Joinen MÅSTE finnas här — utan den läcker hela containerns
     // leverantörshistorik (issue 74 § Beslut 6).
-    $supplierFrågan = $logg->first(fn (string $sql): bool => str_contains($sql, 'from "cost_entry"'));
+    // Drivrutinsglapp: SQLite citerar med ", MySQL/MariaDB med ` — mönstret tillåter båda.
+    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]cost_entry["`]/', $sql) === 1);
     expect($supplierFrågan)->not->toBeNull();
     expect(str_contains(strtolower($supplierFrågan), ' join '))->toBeTrue();
 });
