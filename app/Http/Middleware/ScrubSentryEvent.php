@@ -8,6 +8,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
+use League\OAuth2\Server\Exception\OAuthServerException;
 use Sentry\Breadcrumb;
 use Sentry\Event;
 use Sentry\EventHint;
@@ -69,6 +70,13 @@ final class ScrubSentryEvent
             if ($e instanceof $class) {
                 return true;
             }
+        }
+
+        // Passports TokenGuard rapporterar Leagues undantag via report($e) när
+        // en bearer-token är ogiltig eller utgången (401), innan gaten svarar
+        // oinloggad. Det är klientens fel.
+        if ($e instanceof OAuthServerException) {
+            return $e->getHttpStatusCode() < 500;
         }
 
         // ApiException bär statusen privat och har ingen accessor; svaret

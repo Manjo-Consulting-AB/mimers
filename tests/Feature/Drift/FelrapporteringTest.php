@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
+use League\OAuth2\Server\Exception\OAuthServerException;
 use Sentry\Breadcrumb;
 use Sentry\ClientBuilder;
 use Sentry\Event;
@@ -27,6 +28,7 @@ use Sentry\Transport\TransportInterface;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\call;
 use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
 
 /** Slår på Sentry med ett DSN och en fejkad transport. */
 function felrapporteringPaslagen(?string $dsn = 'https://nyckel@o0.ingest.de.sentry.io/1'): object
@@ -214,7 +216,19 @@ it('bygger ingen text av kommandoraden i brödsmulorna', function () {
 it('har klientfelslistan på ett ställe', function () {
     expect(ScrubSentryEvent::isClientError(ApiException::make('a.b', [], 499)))->toBeTrue()
         ->and(ScrubSentryEvent::isClientError(ApiException::make('a.b', [], 500)))->toBeFalse()
+        ->and(ScrubSentryEvent::isClientError(OAuthServerException::accessDenied()))->toBeTrue()
+        ->and(ScrubSentryEvent::isClientError(OAuthServerException::serverError('x')))->toBeFalse()
         ->and(ScrubSentryEvent::isClientError(new RuntimeException))->toBeFalse();
+});
+
+it('rapporterar inte en ogiltig bearer-token mot /mcp', function () {
+    config(['mcp.enabled' => true]);
+    mcpSakerstallNycklar();
+    $transport = felrapporteringPaslagen();
+
+    postJson('/mcp', [], ['Authorization' => 'Bearer inte-en-giltig-token'])->assertUnauthorized();
+
+    expect($transport->handelser)->toBe([]);
 });
 
 it('transporterar SENTRY_LARAVEL_DSN och SENTRY_ENVIRONMENT i båda utrullningsflödena', function (string $fil) {
