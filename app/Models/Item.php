@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Laravel\Scout\Searchable;
 
 /**
@@ -427,12 +428,13 @@ class Item extends Model
      */
     public function scopeWithAllTags(Builder $query, array $tagIds): Builder
     {
-        return $query
-            ->select('item.*')
-            ->join('item_tag', 'item_tag.item_id', '=', 'item.id')
-            ->whereIn('item_tag.tag_id', $tagIds)
-            ->groupBy('item.id')
-            ->havingRaw('COUNT(DISTINCT item_tag.tag_id) = ?', [count($tagIds)]);
+        $matching = DB::table('item_tag')
+            ->select('item_id')
+            ->whereIn('tag_id', $tagIds)
+            ->groupBy('item_id')
+            ->havingRaw('COUNT(DISTINCT tag_id) = ?', [count($tagIds)]);
+
+        return $query->whereIn('item.id', $matching);
     }
 
     /**

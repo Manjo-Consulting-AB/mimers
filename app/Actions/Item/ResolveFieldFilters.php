@@ -46,8 +46,8 @@ use Throwable;
  * den här frågan.
  *
  * **Sorteringen är en korrelerad underfråga i `ORDER BY`**, så att den kan
- * kombineras med `withAllTags()`:s `GROUP BY` utan att lägga kolumner till
- * grupperingen. `IS NULL ASC` först gör att items utan värde hamnar sist i
+ * kombineras med `withAllTags()` (som grupperar i en underfråga mot
+ * `item_tag`, inte i huvudfrågan) utan att lägga kolumner till frågan. `IS NULL ASC` först gör att items utan värde hamnar sist i
  * BÅDA riktningarna, och kolumnen är typad — tal sorteras som tal och datum
  * som datum.
  *
