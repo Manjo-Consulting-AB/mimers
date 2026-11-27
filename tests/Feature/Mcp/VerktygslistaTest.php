@@ -32,7 +32,7 @@ function verktygslistaNu(): array
     // `tools/list` sidindelas (15 per sida som standard, högst 50), så
     // kontraktet läses i EN sida. Fler verktyg än så fäller provet här i
     // stället för att tyst lämna de sista utanför ögonblicksbilden.
-    $svar = mcpAnropa($token, 'tools/list', ['per_page' => 50])->assertOk();
+    $svar = mcpAnropa($token, 'tools/list', ['per_page' => 100])->assertOk();
 
     expect($svar->json('result.nextCursor'))->toBeNull();
 

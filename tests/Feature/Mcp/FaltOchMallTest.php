@@ -242,7 +242,7 @@ it('har tappat de sex fasta kolumnerna ur items_create och items_update', functi
 
     $sex = ['manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'];
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))
         ->keyBy('name');
 
     foreach (['items_create', 'items_update'] as $namn) {

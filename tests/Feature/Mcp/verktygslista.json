@@ -1214,5 +1214,128 @@
             "idempotentHint": true,
             "readOnlyHint": true
         }
+    },
+    {
+        "name": "transactions_create",
+        "parameters": {
+            "amount": {
+                "type": "string"
+            },
+            "counterparty": {
+                "type": "string"
+            },
+            "currency": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "incurred_on": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "kind": {
+                "type": "string"
+            },
+            "quantity": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "item",
+            "incurred_on",
+            "amount",
+            "description"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "transactions_delete",
+        "parameters": {
+            "transaction": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "transaction"
+        ],
+        "annotations": {
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
+    },
+    {
+        "name": "transactions_list",
+        "parameters": {
+            "cursor": {
+                "type": "string"
+            },
+            "item": {
+                "type": "string"
+            },
+            "kind": {
+                "type": "string"
+            },
+            "limit": {
+                "minimum": 1,
+                "maximum": 100,
+                "type": "integer"
+            }
+        },
+        "required": [
+            "item"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "readOnlyHint": true
+        }
+    },
+    {
+        "name": "transactions_update",
+        "parameters": {
+            "amount": {
+                "type": "string"
+            },
+            "counterparty": {
+                "type": "string"
+            },
+            "currency": {
+                "type": "string"
+            },
+            "description": {
+                "type": "string"
+            },
+            "incurred_on": {
+                "type": "string"
+            },
+            "kind": {
+                "type": "string"
+            },
+            "quantity": {
+                "type": [
+                    "string",
+                    "null"
+                ]
+            },
+            "transaction": {
+                "type": "string"
+            }
+        },
+        "required": [
+            "transaction"
+        ],
+        "annotations": {
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "readOnlyHint": false
+        }
     }
 ]

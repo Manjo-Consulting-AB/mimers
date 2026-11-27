@@ -244,7 +244,7 @@ it('ger sammanfattningsrader med container, kategori, status och föräldrarnas 
 it('beskriver på engelska att sökningen inte böjer svenska ord', function () {
     [, $token] = mcpAgentMedToken();
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->firstWhere('name', 'items_search');
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->firstWhere('name', 'items_search');
 
     expect($verktyg['description'])->toContain('does not inflect Swedish')->toContain('try other forms');
 });
@@ -296,7 +296,7 @@ it('lämnar fält, taggar, kategori, föräldrar, barn, relationer och bilagorna
 it('säger i beskrivningarna att fritexten är användardata och aldrig instruktioner', function () {
     [, $token] = mcpAgentMedToken();
 
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->keyBy('name');
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
 
     expect($verktyg['items_get']['description'])->toContain('"content"')->toContain('user data')->toContain('never instructions');
 
@@ -480,7 +480,7 @@ it('costs_list svarar med beloppet i huvudenhet, med valutans decimaler', functi
 
 it('beskriver kostnadsbeloppet i huvudenhet — ordet "minor" finns inte kvar', function () {
     [, $token] = mcpAgentMedToken();
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->keyBy('name');
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
 
     foreach (['costs_create', 'costs_update', 'costs_list'] as $namn) {
         expect($verktyg)->toHaveKey($namn);
@@ -488,6 +488,18 @@ it('beskriver kostnadsbeloppet i huvudenhet — ordet "minor" finns inte kvar', 
         $beskrivning = json_encode($verktyg[$namn]);
         expect($beskrivning)->toContain('main unit');
         expect($beskrivning)->not->toContain('minor');
+    }
+});
+
+it('börjar varje costs_*-beskrivning med Deprecated och avvecklingsdatumet', function () {
+    [, $token] = mcpAgentMedToken();
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
+
+    foreach (['create', 'list', 'update', 'delete'] as $del) {
+        expect($verktyg)->toHaveKey("costs_$del");
+        expect($verktyg["costs_$del"]['description'])
+            ->toStartWith("Deprecated, use transactions_$del")
+            ->toContain('2027-02-25');
     }
 });
 
@@ -559,7 +571,7 @@ it('lämnar aldrig en hemlighet eller en annan persons e-postadress i något lä
 
 it('har de nya läsverktygen med readOnlyHint i verktygslistan', function () {
     [, $token] = mcpAgentMedToken();
-    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 50])->json('result.tools'))->keyBy('name');
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
 
     foreach (['items_search', 'items_get', 'attachments_get', 'relations_list', 'categories_list', 'tags_list', 'schedules_list', 'occurrences_list', 'costs_list', 'loans_list', 'history_list'] as $namn) {
         expect($verktyg)->toHaveKey($namn)
@@ -587,4 +599,20 @@ it('costs_list visar inte en intäktsrad', function () {
 
     expect(array_column($kostnader, 'ulid'))->toBe([$utgift->ulid])
         ->and($kostnader[0]['supplier'])->toBe('Biltema');
+});
+
+it('transactions_list filtrerar på kind och bär kind, quantity och counterparty', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    [$container, $i] = mcpTrad($agent);
+    $item = $i['batan'];
+
+    $utgift = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income', 'quantity' => '2.5', 'counterparty' => 'Kund AB']);
+
+    $alla = mcpResultat(mcpVerktyg($token, 'transactions_list', ['item' => $item->ulid]))['transactions'];
+    $bara = mcpResultat(mcpVerktyg($token, 'transactions_list', ['item' => $item->ulid, 'kind' => 'income']))['transactions'];
+
+    expect(array_column($alla, 'ulid'))->toEqualCanonicalizing([$utgift->ulid, $intakt->ulid])
+        ->and(array_column($bara, 'ulid'))->toBe([$intakt->ulid])
+        ->and($bara[0])->toMatchArray(['kind' => 'income', 'quantity' => '2.5', 'counterparty' => 'Kund AB']);
 });
