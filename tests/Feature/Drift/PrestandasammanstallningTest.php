@@ -132,3 +132,19 @@ it('väljer rätt element som 95:e percentil för heltalsgränserna', function (
 
     expect(SummarizesPerformance::percentile($lista, 95))->toBe(19.0);
 });
+
+it('räknar en körning som inte skickar som lyckad i schemaläggaren', function () {
+    Mail::fake();
+    config(['monitoring.ops_email' => null]);
+
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn ($e) => $e->description === 'summarize-performance');
+
+    expect($event)->not->toBeNull();
+
+    $event->run(app());
+
+    // Ett återanrop som returnerar false ger exitCode 1 och fäller schedule:run.
+    expect($event->exitCode)->toBe(0);
+    Mail::assertNothingSent();
+});

@@ -562,8 +562,15 @@ Schedule::call(fn () => app(WatchesDeliveryQueues::class)->handle())
  * `Schedule::call`, aldrig `Schedule::command` — se AGENTS.md § Subprocesser
  * i driftmiljön. Posten ligger före hjärtslagsloopen och `drain-queue`, som
  * ska fortsätta ligga sist i filen.
+ *
+ * Återanropet får inte returnera `handle()`s `bool`: Laravel sätter exitCode 1
+ * när ett `call`-återanrop returnerar `false`, och schedule:run kastar då
+ * "Scheduled command [] failed". Att inte skicka (inget OPS_EMAIL, inga rader)
+ * är ingen miss.
  */
-Schedule::call(fn () => app(SummarizesPerformance::class)->handle())
+Schedule::call(function (): void {
+    app(SummarizesPerformance::class)->handle();
+})
     ->weeklyOn(1, '6:00')
     ->name('summarize-performance');
 
