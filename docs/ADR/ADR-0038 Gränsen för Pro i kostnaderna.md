@@ -1,6 +1,6 @@
 # ADR-0038 Gränsen för Pro i kostnaderna
 
-**Status:** Antagen 2026-09-18 · Ersätter Pro-gränsen i [[ADR-0016 Kostnadsregistrering]]; övriga beslut gäller · Donutens indelning och Pro-ingången förtydligade samma dag av [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]] · [[ADR-index]]
+**Status:** Antagen 2026-09-18 · Ersätter Pro-gränsen i [[ADR-0016 Kostnadsregistrering]]; övriga beslut gäller · Donutens indelning och Pro-ingången förtydligade samma dag av [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]] · Vidgad till transaktioner av [[ADR-0102 Transaktioner på items]] · [[ADR-index]]
 
 Fattat vid genomgången av dashboardmockupen. [[ADR-0016 Kostnadsregistrering]] drog gränsen vid *summering*. Den här ADR:n flyttar den till *frågan*.
 
