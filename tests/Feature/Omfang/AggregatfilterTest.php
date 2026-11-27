@@ -306,7 +306,7 @@ it('kostnadsrapporten summerar samma belopp som summan av kostnaderna i hennes e
 
     $rapport->assertOk();
     expect($facit)->toBe(1250);
-    expect($rapport->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => $facit, 'count' => 2]]);
+    expect($rapport->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => $facit, 'count' => 2, 'expense' => $facit, 'income' => 0, 'net' => -$facit, 'income_count' => 0]]);
 
     // Den dolda båtens 5000 syns varken i grupperna eller i totalen.
     expect($rapport->getContent())->not->toContain('Båten');
@@ -334,7 +334,7 @@ it('samma rapport ger samma totalsumma oavsett group_by, och grupperna summerar 
     aggregatGrant($container, $mottagare, $motor);
 
     $url = "/api/containers/{$container->ulid}/costs/report";
-    $total = [['currency' => 'EUR', 'amount' => 1400, 'count' => 2]];
+    $total = [['currency' => 'EUR', 'amount' => 1400, 'count' => 2, 'expense' => 1400, 'income' => 0, 'net' => -1400, 'income_count' => 0]];
 
     // Alla fem grupperingarna bygger på SAMMA basfråga (issue 74 § Beslut 5):
     // ett filter som bara lades i en av dem hade gett delar som inte
@@ -395,7 +395,7 @@ it('en kostnadspost på ett dolt item påverkar varken grupp eller total, i någ
     aggregatGrant($container, $mottagare, $motor);
 
     $url = "/api/containers/{$container->ulid}/costs/report";
-    $total = [['currency' => 'EUR', 'amount' => 1000, 'count' => 1]];
+    $total = [['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]];
 
     foreach (['item', 'supplier', 'category', 'tag'] as $groupBy) {
         $svar = getJson("{$url}?group_by={$groupBy}", $headers);

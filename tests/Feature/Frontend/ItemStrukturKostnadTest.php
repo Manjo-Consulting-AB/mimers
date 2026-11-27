@@ -253,8 +253,8 @@ it('utesluter en ättling som läsaren inte når och räknar den inte i summan',
 
     // Summan byggs ur samma rader som delas, så den osynliga raden räknas
     // aldrig in: 100 000 + 50 000, aldrig 175 000.
-    expect($agarens['costTotals'])->toBe([['currency' => 'SEK', 'amount' => 175000, 'count' => 3]])
-        ->and($gastens['costTotals'])->toBe([['currency' => 'SEK', 'amount' => 150000, 'count' => 2]]);
+    expect($agarens['costTotals'])->toBe([['currency' => 'SEK', 'amount' => 175000, 'count' => 3, 'income' => 0, 'net' => -175000]])
+        ->and($gastens['costTotals'])->toBe([['currency' => 'SEK', 'amount' => 150000, 'count' => 2, 'income' => 0, 'net' => -150000]]);
 });
 
 // --- summorna: det som visas, per valuta ----------------------------------
@@ -278,8 +278,8 @@ it('räknar summorna över de rader som visas', function () {
     // Växeln på: egna plus ättlingarnas, grupperat per valuta och aldrig
     // summerat över två ([[ADR-0040 Underträdets summor]] § Konsekvenser).
     expect($med['costTotals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 20000, 'count' => 1],
-        ['currency' => 'SEK', 'amount' => 150000, 'count' => 2],
+        ['currency' => 'EUR', 'amount' => 20000, 'count' => 1, 'income' => 0, 'net' => -20000],
+        ['currency' => 'SEK', 'amount' => 150000, 'count' => 2, 'income' => 0, 'net' => -150000],
     ]);
 
     $utan = actingAs($anvandare)
@@ -289,8 +289,8 @@ it('räknar summorna över de rader som visas', function () {
 
     // Växeln av: bara itemets egna rader — samma räkning, mindre mängd.
     expect($utan['costTotals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 20000, 'count' => 1],
-        ['currency' => 'SEK', 'amount' => 100000, 'count' => 1],
+        ['currency' => 'EUR', 'amount' => 20000, 'count' => 1, 'income' => 0, 'net' => -20000],
+        ['currency' => 'SEK', 'amount' => 100000, 'count' => 1, 'income' => 0, 'net' => -100000],
     ]);
 });
 

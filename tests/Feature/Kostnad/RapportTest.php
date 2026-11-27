@@ -127,9 +127,9 @@ it('group_by=item grupperar per item med ulid och namn i key', function () {
 
     $motorGrupp = collect($groups)->firstWhere('key.name', 'Motor');
     expect($motorGrupp['key']['ulid'])->toBe($motor->ulid);
-    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2]]);
+    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2, 'expense' => 3000, 'income' => 0, 'net' => -3000, 'income_count' => 0]]);
 
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 8000, 'count' => 3]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 8000, 'count' => 3, 'expense' => 8000, 'income' => 0, 'net' => -8000, 'income_count' => 0]]);
 });
 
 it('group_by=supplier ger en grupp per leverantör plus en null-grupp', function () {
@@ -146,10 +146,10 @@ it('group_by=supplier ger en grupp per leverantör plus en null-grupp', function
     expect($groups)->toHaveCount(2);
 
     $volvo = collect($groups)->firstWhere('key.supplier', 'Volvo Penta');
-    expect($volvo['totals'])->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2]]);
+    expect($volvo['totals'])->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2, 'expense' => 3000, 'income' => 0, 'net' => -3000, 'income_count' => 0]]);
 
     $utanLeverantör = collect($groups)->first(fn (array $g): bool => $g['key'] === null);
-    expect($utanLeverantör['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1]]);
+    expect($utanLeverantör['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1, 'expense' => 500, 'income' => 0, 'net' => -500, 'income_count' => 0]]);
 
     // Null-gruppen sist.
     expect(array_column($groups, 'key'))->toBe([['supplier' => 'Volvo Penta'], null]);
@@ -170,14 +170,14 @@ it('group_by=category räknar en kostnad i sin egen kategori och i varje förfad
 
     $kylsystemGrupp = collect($groups)->firstWhere('key.name', 'Kylsystem');
     expect($kylsystemGrupp['key']['ulid'])->toBe($kylsystem->ulid);
-    expect($kylsystemGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($kylsystemGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 
     $motorGrupp = collect($groups)->firstWhere('key.name', 'Motor');
     expect($motorGrupp['key']['ulid'])->toBe($motor->ulid);
-    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 
     // Toppnivån räknas på RADMÄNGDEN: 1000, inte summan av grupperna (2000).
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('en kategori vars underträd bär kostnader men som saknar egna finns med i svaret', function () {
@@ -194,7 +194,7 @@ it('en kategori vars underträd bär kostnader men som saknar egna finns med i s
     expect($namn)->toContain('Motor', 'El');
 
     $motorGrupp = collect($response->json('data.groups'))->firstWhere('key.name', 'Motor');
-    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 700, 'count' => 1]]);
+    expect($motorGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 700, 'count' => 1, 'expense' => 700, 'income' => 0, 'net' => -700, 'income_count' => 0]]);
 });
 
 it('items utan kategori hamnar i null-gruppen', function () {
@@ -208,7 +208,7 @@ it('items utan kategori hamnar i null-gruppen', function () {
     $groups = $response->json('data.groups');
     expect($groups)->toHaveCount(1);
     expect($groups[0]['key'])->toBeNull();
-    expect($groups[0]['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1]]);
+    expect($groups[0]['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1, 'expense' => 500, 'income' => 0, 'net' => -500, 'income_count' => 0]]);
 });
 
 it('en mjukraderad kategori finns inte i trädet — kostnaden hamnar i null-gruppen', function () {
@@ -223,7 +223,7 @@ it('en mjukraderad kategori finns inte i trädet — kostnaden hamnar i null-gru
     $response->assertOk();
     expect($response->json('data.groups'))->toHaveCount(1);
     expect($response->json('data.groups.0.key'))->toBeNull();
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('group_by=tag räknar en kostnad i varje tagg itemet bär, otaggade i null-gruppen', function () {
@@ -245,12 +245,12 @@ it('group_by=tag räknar en kostnad i varje tagg itemet bär, otaggade i null-gr
     expect($groups)->toHaveCount(3);
 
     expect(collect($groups)->firstWhere('key.name', 'Service')['totals'])
-        ->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+        ->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
     expect(collect($groups)->firstWhere('key.name', 'Motor')['totals'])
-        ->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+        ->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 
     $nullGrupp = collect($groups)->first(fn (array $g): bool => $g['key'] === null);
-    expect($nullGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1]]);
+    expect($nullGrupp['totals'])->toBe([['currency' => 'EUR', 'amount' => 500, 'count' => 1, 'expense' => 500, 'income' => 0, 'net' => -500, 'income_count' => 0]]);
 
     // Namn stigande, null-gruppen sist.
     expect(array_column($groups, 'key'))->toBe([
@@ -259,7 +259,7 @@ it('group_by=tag räknar en kostnad i varje tagg itemet bär, otaggade i null-gr
         null,
     ]);
 
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1500, 'count' => 2]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1500, 'count' => 2, 'expense' => 1500, 'income' => 0, 'net' => -1500, 'income_count' => 0]]);
 });
 
 it('en mjukraderad tagg räknas inte som tagg — kostnaden hamnar i null-gruppen', function () {
@@ -275,7 +275,7 @@ it('en mjukraderad tagg räknas inte som tagg — kostnaden hamnar i null-gruppe
     $response->assertOk();
     expect($response->json('data.groups'))->toHaveCount(1);
     expect($response->json('data.groups.0.key'))->toBeNull();
-    expect($response->json('data.groups.0.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($response->json('data.groups.0.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('group_by=period med period=month ger nycklar på formen 2026-04 i stigande ordning', function () {
@@ -294,7 +294,7 @@ it('group_by=period med period=month ger nycklar på formen 2026-04 i stigande o
         ['period' => '2026-04'],
     ]);
     expect(collect($response->json('data.groups'))->firstWhere('key.period', '2026-03')['totals'])
-        ->toBe([['currency' => 'EUR', 'amount' => 1500, 'count' => 2]]);
+        ->toBe([['currency' => 'EUR', 'amount' => 1500, 'count' => 2, 'expense' => 1500, 'income' => 0, 'net' => -1500, 'income_count' => 0]]);
 });
 
 it('group_by=period med period=year ger nycklar på formen 2026 i stigande ordning', function () {
@@ -311,7 +311,7 @@ it('group_by=period med period=year ger nycklar på formen 2026 i stigande ordni
         ['period' => '2025'],
         ['period' => '2026'],
     ]);
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2, 'expense' => 3000, 'income' => 0, 'net' => -3000, 'income_count' => 0]]);
 });
 
 it('två valutor i samma grupp ger två poster i gruppens totals, aldrig en omräknad summa', function () {
@@ -325,8 +325,8 @@ it('två valutor i samma grupp ger två poster i gruppens totals, aldrig en omr�
     $response->assertOk();
     $motorGrupp = collect($response->json('data.groups'))->firstWhere('key.name', 'Motor');
     expect($motorGrupp['totals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 1000, 'count' => 1],
-        ['currency' => 'SEK', 'amount' => 2000, 'count' => 1],
+        ['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0],
+        ['currency' => 'SEK', 'amount' => 2000, 'count' => 1, 'expense' => 2000, 'income' => 0, 'net' => -2000, 'income_count' => 0],
     ]);
     expect($response->json('data.totals'))->toHaveCount(2);
 });
@@ -345,7 +345,7 @@ it('toppnivåns totals räknas på radmängden, inte som summan av grupperna', f
     // Tre grupper (en per nivå), alla med 1000 — summan av grupperna är 3000.
     expect($response->json('data.groups'))->toHaveCount(3);
     // Men totalen räknas på raderna: 1000.
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('negativa belopp minskar summan', function () {
@@ -357,7 +357,7 @@ it('negativa belopp minskar summan', function () {
     $response = getJson("/api/containers/{$container->ulid}/costs/report?group_by=item", $headers);
 
     $response->assertOk();
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 750, 'count' => 2]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 750, 'count' => 2, 'expense' => 750, 'income' => 0, 'net' => -750, 'income_count' => 0]]);
 });
 
 it('en mjukraderad kostnadsrad räknas inte', function () {
@@ -391,7 +391,7 @@ it('en kostnad på ett item i papperskorgen räknas inte — och räknas igen ef
 
     $efter = getJson("/api/containers/{$container->ulid}/costs/report?group_by=item", $headers);
     $efter->assertOk();
-    expect($efter->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($efter->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('from/to filtrerar på incurred_on med båda gränserna inklusive', function () {
@@ -406,7 +406,7 @@ it('from/to filtrerar på incurred_on med båda gränserna inklusive', function 
         $headers
     );
     $spann->assertOk();
-    expect($spann->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2]]);
+    expect($spann->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2, 'expense' => 3000, 'income' => 0, 'net' => -3000, 'income_count' => 0]]);
 
     // Båda gränserna inklusive: ett spann som börjar och slutar samma dag
     // tar med just den raden.
@@ -415,7 +415,7 @@ it('from/to filtrerar på incurred_on med båda gränserna inklusive', function 
         $headers
     );
     $endaDag->assertOk();
-    expect($endaDag->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2000, 'count' => 1]]);
+    expect($endaDag->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2000, 'count' => 1, 'expense' => 2000, 'income' => 0, 'net' => -2000, 'income_count' => 0]]);
 });
 
 it('category-filtret tar med hela underträdet', function () {
@@ -436,7 +436,7 @@ it('category-filtret tar med hela underträdet', function () {
 
     $response->assertOk();
     expect(collect($response->json('data.groups'))->pluck('key.name')->all())->toBe(['MPPT']);
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 700, 'count' => 1]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 700, 'count' => 1, 'expense' => 700, 'income' => 0, 'net' => -700, 'income_count' => 0]]);
 });
 
 it('tags[] med två taggar tar bara med items som bär båda', function () {
@@ -459,7 +459,7 @@ it('tags[] med två taggar tar bara med items som bär båda', function () {
 
     $response->assertOk();
     expect(collect($response->json('data.groups'))->pluck('key.name')->all())->toBe(['Båda']);
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 });
 
 it('ett ULID som inte finns i containern ger 422, aldrig ett tomt resultat', function () {
@@ -538,11 +538,11 @@ it('rapporten summerar aldrig rader från en annan container', function () {
 
     $rapportA = getJson("/api/containers/{$containerA->ulid}/costs/report?group_by=item", $headers);
     $rapportA->assertOk();
-    expect($rapportA->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($rapportA->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'expense' => 1000, 'income' => 0, 'net' => -1000, 'income_count' => 0]]);
 
     $rapportB = getJson("/api/containers/{$containerB->ulid}/costs/report?group_by=item", $headers);
     $rapportB->assertOk();
-    expect($rapportB->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 250000, 'count' => 1]]);
+    expect($rapportB->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 250000, 'count' => 1, 'expense' => 250000, 'income' => 0, 'net' => -250000, 'income_count' => 0]]);
 });
 
 it('rapporten gör ett konstant antal frågor oavsett datamängden', function () {

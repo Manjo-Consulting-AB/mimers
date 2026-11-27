@@ -87,6 +87,16 @@ class CostReportRequest extends FormRequest
     }
 
     /**
+     * `supplier` tas emot som alias för `counterparty` (ADR-0102 § Riktning 5).
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('supplier') && ! $this->has('counterparty')) {
+            $this->merge(['counterparty' => $this->input('supplier')]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -113,6 +123,10 @@ class CostReportRequest extends FormRequest
         }
 
         $rules['period'] = $periodRules;
+
+        // Riktningen (ADR-0102 § Riktning 5); utelämnad betyder `all`.
+        $rules['kind'] = ['nullable', 'string', Rule::in(['expense', 'income', 'all'])];
+        $rules['counterparty'] = ['nullable', 'string', 'max:255'];
 
         // De fem filterreglerna kommer ur filterRules() — samma definition som
         // kostnadsflikens filterfält använder (issue 176).

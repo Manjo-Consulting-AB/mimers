@@ -293,7 +293,7 @@ it('den fasta kostnadssummeringen är fri medan rapporten kräver cost_reports',
 
     $containern->assertOk();
     $kontot->assertOk();
-    expect($containern->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($containern->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'income' => 0, 'net' => -1000]]);
     expect($kontot->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
 
     $rapporten = getJson("/api/containers/{$container->ulid}/costs/report?group_by=item", $headers);

@@ -306,6 +306,9 @@ class ContainerCostController extends Controller
             'item' => $filter['item'] ?? null,
             'category' => $filter['category'] ?? null,
             'supplier' => $filter['supplier'] ?? null,
+            // Flikens graf och jämförelse visar fortfarande bara utgifter
+            // tills skärmen följer (issue 529/530); `all` är rapportens förval.
+            'kind' => 'expense',
         ], static fn (?string $value): bool => $value !== null);
 
         $period = $report->build($container, $params + ['group_by' => 'period', 'period' => 'month'], $scope);

@@ -225,28 +225,13 @@ it('en intäktsrad ändrar ingen befintlig summa i någon yta', function () {
 
     $c = "/api/containers/{$container->ulid}";
     $webbKostnader = fn (): array => actingAs($user)->get("/containers/{$container->ulid}/costs")->assertOk()->inertiaProps();
-    $itemvy = fn (): array => actingAs($user)->get("/containers/{$container->ulid}/items/{$item->ulid}?tab=costs")->assertOk()->inertiaProps();
 
+    // Bara de ytor som ADR-0102 § Riktning 5 lämnar oförändrade: kontots
+    // summering, containerflikens `yearCosts` och brickan. De som bär
+    // intäkter och netto testas i IntaktSummeringTest.
     $ytor = fn (): array => [
-        // Containerns summa (nedbrytningen ligger i `breakdown`), itemets och kontots.
-        'container' => getJson("{$c}/costs/summary", $headers)->json(),
-        'item' => getJson("{$c}/items/{$item->ulid}/costs/summary", $headers)->json(),
         'konto' => getJson("/api/accounts/{$account->ulid}/costs/summary", $headers)->json(),
-        // Rapporten i alla grupperingar (build()).
-        'rapport_item' => getJson("{$c}/costs/report?group_by=item", $headers)->json(),
-        'rapport_supplier' => getJson("{$c}/costs/report?group_by=supplier", $headers)->json(),
-        'rapport_category' => getJson("{$c}/costs/report?group_by=category", $headers)->json(),
-        'rapport_period' => getJson("{$c}/costs/report?group_by=period&period=month", $headers)->json(),
-        // Webbens containerflik: summaryForContainers (hjälten och brickan),
-        // yearForContainer, build() och comparison() i `report`, samt raderna
-        // (ListContainerCosts).
-        'flik' => (function () use ($webbKostnader): array {
-            $p = $webbKostnader();
-
-            return [$p['costs'], $p['yearCosts'], $p['report'], $p['rows']['data'], $p['rows']['total']];
-        })(),
-        // Itemvyns summor.
-        'itemvy' => $itemvy()['costTotals'],
+        'yearCosts' => $webbKostnader()['yearCosts'],
     ];
 
     // Hjälten på startsidan: monthForContainers() och summaryForContainers().
