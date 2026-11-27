@@ -399,3 +399,29 @@ it('en användare utan åtkomst nekas', function () {
     $response->assertStatus(403);
     expect($response->json('error.code'))->toBe('auth.forbidden');
 });
+
+it('taggfiltret grupperar i en underfråga, inte i huvudfrågan mot item', function () {
+    $account = Account::factory()->create();
+    $container = Container::factory()->for($account, 'account')->create();
+    $a = Tag::factory()->for($container, 'container')->create();
+    $b = Tag::factory()->for($container, 'container')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+    $item->tags()->attach([$a->id, $b->id]);
+
+    $frågor = [];
+    DB::listen(function ($fråga) use (&$frågor) {
+        $frågor[] = $fråga->sql;
+    });
+
+    $ids = Item::query()->withAllTags([$a->id, $b->id])->pluck('item.id')->all();
+
+    expect($ids)->toBe([$item->id]);
+
+    $huvud = collect($frågor)->first(fn ($sql) => preg_match('/from\s+\W?item\W?(\s|$)/i', $sql));
+    expect($huvud)->not->toBeNull();
+    // Allt före underfrågan: huvudfrågan får varken join eller group by.
+    $utanUnderfråga = preg_replace('/\(select .*\)/is', '()', $huvud);
+    expect($utanUnderfråga)->not->toMatch('/group by/i');
+    expect($utanUnderfråga)->not->toMatch('/\bjoin\b/i');
+    expect($huvud)->toMatch('/item_tag/');
+});
