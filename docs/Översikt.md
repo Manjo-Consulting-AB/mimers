@@ -4,7 +4,7 @@ Produkten på fem minuter. Tillbaka till [[00 Index]].
 
 ## Kärnidén
 
-En **container** är ett sammanhang: en båt, en bil, en fastighet, en kund eller ett projekt. I containern lägger ägaren **objekt** — allt från en MPPT-regulator till en garderob. Varje objekt kan ha bilder, text, filer, en kategori, taggar, relationer till andra objekt och ett eller flera **scheman** för återkommande underhåll.
+En **container** är ett sammanhang: en båt, en bil, en fastighet, en kund eller ett projekt. I containern lägger ägaren **objekt** — allt från en värmepump till en garderob. Varje objekt kan ha bilder, text, filer, en kategori, taggar, relationer till andra objekt och ett eller flera **scheman** för återkommande underhåll.
 
 Orden användaren möter — container, objekt, relationer, uppgifter, historik — står i [[ADR-0032 Produktens ord]]. I koden heter objektet `item`, som det alltid gjort.
 
@@ -12,17 +12,17 @@ Systemet vet ingenting om båtar, bilar eller fastigheter. Taggar och kategorier
 
 ## Vem betalar
 
-Segmenten nedan är den första marknaden — inte produktens definition. Containern bär vilket sammanhang som helst.
+Rollerna nedan är den första marknaden — inte produktens definition. De definieras av hur de förhåller sig till containern, inte av vilken bransch de tillhör. Containern bär vilket sammanhang som helst.
 
-| Segment | Äger containern | Betalar för |
+| Roll | Äger containern | Betalar för |
 |---|---|---|
 | Privatperson | Ja | Fler än en container, mer utrymme, PDF-pärmen |
-| Nybyggnadsvarv | Tillfälligt, överlämnar vid leverans | Leveransdokument med egen logotyp |
-| Mäklare | Tillfälligt, överlämnar vid affär | Snabbare due diligence, säljargument |
-| Servicevarv | **Nej** — kunden äger, varvet får delegerad åtkomst | Antal båtar under förvaltning |
-| Charterbolag | Ja, permanent | Flottvy och tvärgående frågor över hundratals båtar |
+| Byggare/leverantör (varv, husbyggare) | Tillfälligt, överlämnar vid leverans | Leveransdokument med egen logotyp |
+| Förmedlare (fastighetsmäklare, båtmäklare) | Tillfälligt, överlämnar vid affär | Snabbare due diligence, säljargument |
+| Förvaltare (servicevarv, fastighetsskötare) | **Nej** — kunden äger, förvaltaren får delegerad åtkomst | Antal containers under förvaltning |
+| Flottägare (charterbolag, bilpool) | Ja, permanent | Flottvy och tvärgående frågor över hundratals containers |
 
-Att servicevarvet inte äger containern är ett medvetet val — se [[ADR-0002 Konto äger container]].
+Att förvaltaren inte äger containern är ett medvetet val — se [[ADR-0002 Konto äger container]]. Rollnamnen och priserna står i [[ADR-0014 Prismodell]] § Tillägg 2026-11-27.
 
 Priser och gränser: [[Planer och kvoter]] och [[ADR-0014 Prismodell]].
 
@@ -55,7 +55,7 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 |---|---|
 | 2D-kartor för position i båten | Dyrast att bygga, och en tagg som heter "akterstuv" fyller samma funktion. Säljargument, inte kärnfunktion. |
 | Betalningsintegration | Rättighetslagret byggs, betalflödet väntar tills det finns någon att fakturera. |
-| B2B-funktioner (flottvy, white-label, personalroller) | Validera med två–tre varv som designpartners först. Kontomodellen är dock förberedd. |
+| B2B-funktioner (flottvy, white-label, personalroller) | Validera med två–tre B2B-kunder som designpartners först. Kontomodellen är dock förberedd. |
 | OCR-sökning i PDF:er | Kostar pengar per sida att köra. Pro-funktion senare. |
 | Web push, mobilappar | Efter MVP. Webhooks täcker behovet under tiden. |
 | Meilisearch | Databasdrivern räcker tills det finns en VPS. |

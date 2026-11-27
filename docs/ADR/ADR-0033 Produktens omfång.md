@@ -1,6 +1,6 @@
 # ADR-0033 Produktens omfång
 
-**Status:** Antagen 2026-09-17 · [[ADR-index]]
+**Status:** Antagen 2026-09-17 · Segmenten blir roller, tillägg 2026-11-27 · [[ADR-index]]
 
 Fattat efter M10, i samma genomgång som gav [[ADR-0032 Produktens ord]]. Där avgjordes *vilka ord* produkten bär. Här avgörs *vad den är till för*.
 
@@ -59,3 +59,9 @@ Tidpunkten är det avgörande. All användarvänd text ska ändå skrivas om, de
 **Bygga två produkter — en för fordon, en för projekt.** Valdes bort. Samma kod, samma datamodell, samma API — två varumärken att underhålla utan att en rad skiljer dem åt.
 
 **Bygga in domänen på riktigt: båtspecifika fält, förvald struktur, kända underhållsintervall.** Det hade gjort den smala positioneringen sann och produkten bättre för en båtägare. Valdes bort — det river [[ADR-0004 Fria taggar och kategorier]], gör det blanka pappret till en lögn, och låser produkten vid en marknad innan någon vet om det är rätt marknad.
+
+## Tillägg 2026-11-27: segmenten blir roller
+
+*Tony 2026-11-27:* Varv-segmenten kommer från tiden då Mimers var en båtpärm. Mimers ska inte utåt framstå som ett båtsystem. B2B-segmenten är **allmänna roller** som definieras av hur de förhåller sig till containern, inte av vilken bransch de tillhör. Rollmodellen från [[ADR-0002 Konto äger container]], med överlämning och delegerad åtkomst, gäller som förut. Båtar och varv får stå kvar som ett exempel bland flera, men inte som en rubrik. Tony når båtfolk först, men det styr inte hur produkten beskrivs.
+
+**Det här ersätter konsekvenspunkten *Prismodellen rörs inte* i den del som gäller vem som betalar.** Punkten ovan står kvar som historik. Den sa att segmenten *varv, mäklare, charterbolag* var den första marknaden. Det som gäller nu är att segmenten är roller: byggare eller leverantör, förmedlare, förvaltare och flottägare. Namnen och siffrorna står i [[ADR-0014 Prismodell]] § Tillägg 2026-11-27, och [[Översikt]] § Vem betalar bär tabellen. Att prismodellen i övrigt inte rörs gäller fortfarande.

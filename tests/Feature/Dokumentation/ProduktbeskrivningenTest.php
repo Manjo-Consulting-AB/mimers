@@ -137,17 +137,18 @@ it('säger engelska i Avgränsning', function () {
     expect(avsnittsText('docs/Översikt.md', 'Avgränsning'))->toContain('- Engelska');
 });
 
-it('säger att segmenten är den första marknaden, med tabellens rader orörda', function () {
+it('säger att segmenten är den första marknaden, med rollerna som tabellens rader', function () {
     $vemBetalar = avsnittsText('docs/Översikt.md', 'Vem betalar');
 
     expect($vemBetalar)
         ->toContain('första marknaden')
         ->toContain('inte produktens definition')
         ->toContain('| Privatperson |')
-        ->toContain('| Nybyggnadsvarv |')
-        ->toContain('| Mäklare |')
-        ->toContain('| Servicevarv |')
-        ->toContain('| Charterbolag |');
+        ->toContain('| Byggare/leverantör ')
+        ->toContain('| Förmedlare ')
+        ->toContain('| Förvaltare ')
+        ->toContain('| Flottägare ');
+    expect($vemBetalar)->not->toContain('| Servicevarv |');
 });
 
 it('bär kvar de fyra argumenten i Konkurrens', function () {
