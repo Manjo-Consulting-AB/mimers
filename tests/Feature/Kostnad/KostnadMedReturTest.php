@@ -186,7 +186,7 @@ it('ritar CostEntryForm med avstängd Save utan item', function () {
         ->toContain("emit('dirty', dirty)")
         ->toContain('{ immediate: true }')
         ->toContain('return: props.returnTo')
-        ->toContain("form.reset('amount', 'description', 'supplier')");
+        ->toContain("form.reset('amount', 'description', 'counterparty', 'quantity')");
 
     $sektion = (string) file_get_contents(resource_path('js/components/ItemCostSection.vue'));
 

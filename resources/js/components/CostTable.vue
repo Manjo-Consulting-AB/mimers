@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { formatAmount } from './CostDonut.vue';
+import { formatSignedAmount, unitPriceParts } from './CostDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -63,7 +63,14 @@ const locale = computed(() => page.props.locale);
    flikrad bygger (issue 168). */
 const itemUrl = (row) => `/containers/${props.containerUlid}/items/${row.item.ulid}?tab=costs`;
 
-const amount = (row) => formatAmount(row.amount, row.currency);
+const amount = (row) => formatSignedAmount(row.amount, row.currency, row.kind);
+
+/* *100 × 12,50* under beloppet, när raden har ett antal (issue 1781). */
+const unitLine = (row) => {
+    const parts = unitPriceParts(row.amount, row.quantity, row.currency);
+
+    return parts === null ? null : t('item.cost.row_unit_price', parts);
+};
 const date = (row) => formatDateOnly(row.incurred_on, locale.value);
 </script>
 
@@ -118,10 +125,17 @@ const date = (row) => formatDateOnly(row.incurred_on, locale.value);
                 <!-- Leverantören är nullbar ([[ADR-0016 Kostnadsregistrering]]):
                     en rad utan leverantör ritar ingen cell med tom text. -->
                 <td class="py-1 pr-4 text-body text-ink-muted">
-                    <template v-if="row.supplier">{{ row.supplier }}</template>
+                    <template v-if="row.counterparty ?? row.supplier">{{ row.counterparty ?? row.supplier }}</template>
                 </td>
 
-                <td class="py-1 text-right text-body text-ink">{{ amount(row) }}</td>
+                <td class="py-1 text-right text-body text-ink">
+                    {{ amount(row) }}
+                    <!-- Märkt med text, inte bara färg (issue 1781). -->
+                    <span v-if="row.kind === 'income'" class="block text-meta text-ink-muted">
+                        {{ t('item.cost.row_income') }}
+                    </span>
+                    <span v-if="unitLine(row)" class="block text-meta text-ink-muted">{{ unitLine(row) }}</span>
+                </td>
             </tr>
         </tbody>
     </table>

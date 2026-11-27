@@ -3345,7 +3345,7 @@ return [
             // and the axis is the item and not the category
             // ([[ADR-0040 Underträdets summor]]: `cost_entry` has no category
             // column, and the slices are the items that carry rows).
-            'donut' => 'Costs per item',
+            'donut' => 'Expenses by item',
 
             'empty' => 'The container has no costs registered.',
 
@@ -4839,8 +4839,11 @@ return [
         // the deletion is soft, but the trash lists four types and `cost_entry`
         // is not one of them (issue 45a decision 9).
         'cost' => [
-            'heading' => 'Costs',
-            'description' => 'What the item has cost.',
+            // The tab's name since issue 1781 · [[ADR-0102 Transaktioner på
+            // items]] § Riktning 6: the tab carries income as well. The tab
+            // key (`?tab=costs`) is unchanged.
+            'heading' => 'Finances',
+            'description' => 'What the item has cost and brought in.',
 
             // Issue 1248 · [[ADR-0068 Itemets sida och skapandet]]
             // § Uppföljning 2026-11-14 punkt 1: the help line under the
@@ -4863,6 +4866,20 @@ return [
             'form_description' => 'Description',
             'form_supplier' => 'Supplier',
             'form_submit' => 'Save',
+
+            // Issue 1781 · ADR-0102 § Riktning 6: direction, quantity and the
+            // counterparty's label, which follows the direction.
+            'form_kind' => 'Type',
+            'kind_expense' => 'Expense',
+            'kind_income' => 'Income',
+            'form_paid_to' => 'Paid to',
+            'form_received_from' => 'Received from',
+            'form_quantity' => 'Quantity',
+            'row_income' => 'Income',
+            'row_unit_price' => ':quantity × :price',
+            'total_expenses' => 'Expenses',
+            'total_income' => 'Income',
+            'total_net' => 'Net',
         ],
 
         // The loan section on the detail view, see issue 67a decisions 2–8. The

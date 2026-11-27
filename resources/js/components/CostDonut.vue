@@ -37,6 +37,29 @@ export function formatAmount(amount, currency) {
 
     return formatter.format(amount / 10 ** digits);
 }
+
+/*
+ * Antal × styckpris (issue 1781 · ADR-0102 § Riktning 6). Styckpriset räknas
+ * fram vid visningen ur beloppet och antalet och avrundas till valutans
+ * decimaler — det lagras aldrig. Returnerar `null` utan ett giltigt antal.
+ */
+export function unitPriceParts(amount, quantity, currency) {
+    const count = Number(quantity);
+
+    if (quantity === null || quantity === undefined || ! Number.isFinite(count) || count <= 0) {
+        return null;
+    }
+
+    return {
+        quantity: new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 6 }).format(count),
+        price: formatAmount(Math.round(Math.abs(amount) / count), currency),
+    };
+}
+
+/* Beloppet med tecken: en intäkt får `+` framför. */
+export function formatSignedAmount(amount, currency, kind) {
+    return `${kind === 'income' ? '+' : ''}${formatAmount(amount, currency)}`;
+}
 </script>
 
 <script setup>

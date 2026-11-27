@@ -87,7 +87,7 @@ it('flyttar fokus till beloppet efter en sparning och låter datum, valuta och i
         ->and($vy)->toContain("document.getElementById('cost-amount')?.focus()");
 
     // Formuläret nollställer bara beloppet, beskrivningen och leverantören.
-    expect($form)->toContain("form.reset('amount', 'description', 'supplier')");
+    expect($form)->toContain("form.reset('amount', 'description', 'counterparty', 'quantity')");
 });
 
 it('skickar createdCost som highlight och ger raden bg-accent-soft i 2000 ms', function () {
@@ -138,7 +138,7 @@ it('flyttar formulärets förval efter en sparning så att dirty blir falsk och 
 
     // defaults() utan argument, direkt efter reset: datum och valuta som står
     // kvar blir nytt förval, så isDirty faller och watch skickar dirty = false.
-    expect($form)->toMatch("/form\.reset\('amount', 'description', 'supplier'\);\s*form\.defaults\(\);/")
+    expect($form)->toMatch("/form\.reset\('amount', 'description', 'counterparty', 'quantity'\);\s*form\.defaults\(\);/")
         ->and($form)->toContain("watch(() => form.isDirty, (dirty) => emit('dirty', dirty)")
         ->and($form)->not->toContain("form.reset('date'")
         ->and($form)->not->toContain("form.reset('currency'");
