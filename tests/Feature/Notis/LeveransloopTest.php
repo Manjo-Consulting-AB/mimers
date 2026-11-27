@@ -349,4 +349,17 @@ it('jobbet är schemalagt varje minut', function () {
     // Cachelåset i withoutOverlapping() (Beslut 1) hindrar två körningar från
     // att läsa samma pending-rader samtidigt.
     expect($händelse->withoutOverlapping)->toBeTrue();
+    expect($händelse->expiresAt)->toBe(10);
+});
+
+it('har ingen schemalagd post med förvalets lås på 1440 minuter', function () {
+    artisan('inspire');
+
+    $medFörval = collect(app(Schedule::class)->events())
+        ->filter(fn ($event) => $event->withoutOverlapping && $event->expiresAt === 1440)
+        ->map(fn ($event) => $event->description ?? $event->getSummaryForDisplay())
+        ->values()
+        ->all();
+
+    expect($medFörval)->toBe([]);
 });

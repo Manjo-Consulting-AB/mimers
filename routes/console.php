@@ -350,6 +350,12 @@ Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
  * `withoutOverlapping()` gör att en långsam körning som fortfarande skickar
  * när nästa minut slår till inte läser samma `pending`-rader en gång till.
  *
+ * Låset har en livslängd på 10 minuter, inte förvalet 1440: en körning som dör
+ * utan att `finally` hinner släppa det (2026-11-25 08:41, 24 timmar utan
+ * leverans, MIMERS-PHP-B) ska bara stoppa posten i högst tio minuter. Tio
+ * minuter är lika långt som CLAIM_TIMEOUT_MINUTES, så två körningar kan ändå
+ * inte skicka samma rad. Se kommentaren vid `drain-queue` för samma resonemang.
+ *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
  * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
  * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
@@ -358,7 +364,7 @@ Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
 Schedule::call(fn () => app(DeliversNotifications::class)->handle())
     ->everyMinute()
     ->name('deliver-notifications')
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Issue 37b · Webhook-leveransloopen: anropar kontons endpoints för de
@@ -370,6 +376,12 @@ Schedule::call(fn () => app(DeliversNotifications::class)->handle())
  * `withoutOverlapping()` gör att en långsam körning som fortfarande anropar
  * när nästa minut slår till inte läser samma `pending`-rader en gång till.
  *
+ * Låset har en livslängd på 10 minuter, inte förvalet 1440: en körning som dör
+ * utan att `finally` hinner släppa det (2026-11-25 08:41, 24 timmar utan
+ * leverans, MIMERS-PHP-B) ska bara stoppa posten i högst tio minuter. Tio
+ * minuter är lika långt som CLAIM_TIMEOUT_MINUTES, så två körningar kan ändå
+ * inte skicka samma rad. Se kommentaren vid `drain-queue` för samma resonemang.
+ *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
  * `->runInBackground()` — båda går via Symfony Process/proc_open, som bara
  * används där en ADR beslutat det, se AGENTS.md § Subprocesser i
@@ -378,7 +390,7 @@ Schedule::call(fn () => app(DeliversNotifications::class)->handle())
 Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
     ->everyMinute()
     ->name('deliver-webhooks')
-    ->withoutOverlapping();
+    ->withoutOverlapping(10);
 
 /*
  * Issue 35 · Veckosammanfattningen: samlar `digest`-markerade leveranser till

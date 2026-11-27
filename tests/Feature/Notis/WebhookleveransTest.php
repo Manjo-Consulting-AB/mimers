@@ -602,6 +602,7 @@ it('jobbet är schemalagt varje minut', function () {
     // Artisan-kommando — se AGENTS.md § Subprocesser i driftmiljön.
     expect($händelse->command ?? null)->toBeNull();
     expect($händelse->withoutOverlapping)->toBeTrue();
+    expect($händelse->expiresAt)->toBe(10);
 });
 
 it('anropar resolvern exakt en gång per leverans och fäster adressen', function () {
