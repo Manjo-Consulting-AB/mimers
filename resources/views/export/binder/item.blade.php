@@ -87,12 +87,18 @@
             @foreach ($costs['rows'] as $row)
                 <tr>
                     <td style="width: 70pt;">{{ $row['date'] }}</td>
-                    <td>{{ $row['description'] }}@if ($row['supplier']) <span class="muted">({{ $row['supplier'] }})</span>@endif</td>
+                    <td>{{ __('export.kind_'.$row['kind']) }}: {{ $row['description'] }}@if ($row['supplier']) <span class="muted">({{ $row['supplier'] }})</span>@endif @if ($row['quantity'] !== null)<span class="muted">&times; {{ $row['quantity'] }}</span>@endif</td>
                     <td style="text-align: right;">{{ $row['amount'] }}</td>
                 </tr>
             @endforeach
             @foreach ($costs['totals'] as $total)
-                <tr><th colspan="2">{{ __('export.costs_total') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['amount'] }}</th></tr>
+                @if ($costs['has_income'])
+                    <tr><th colspan="2">{{ __('export.costs_expenses') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['amount'] }}</th></tr>
+                    <tr><th colspan="2">{{ __('export.costs_income') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['income'] }}</th></tr>
+                    <tr><th colspan="2">{{ __('export.costs_net') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['net'] }}</th></tr>
+                @else
+                    <tr><th colspan="2">{{ __('export.costs_total') }} {{ $total['currency'] }}</th><th style="text-align: right;">{{ $total['amount'] }}</th></tr>
+                @endif
             @endforeach
         </table>
     @endif

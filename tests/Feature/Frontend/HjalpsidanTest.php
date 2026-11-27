@@ -163,7 +163,17 @@ it('låter varje artikel-id vara Str::slug av titeln', function () {
 
     expect($artiklar)->toHaveCount(66);
 
+    // Undantag: titeln på kostnadsartikeln utvidgades (ADR-0102) men id:t
+    // står kvar så att länkarna inte går sönder.
+    $kvarlevande = ['can-i-record-what-things-cost' => 'Can I record what things cost or earn?'];
+
     foreach ($artiklar as $artikel) {
+        if (isset($kvarlevande[$artikel->id])) {
+            expect($artikel->title)->toBe($kvarlevande[$artikel->id]);
+
+            continue;
+        }
+
         expect($artikel->id)->toBe(Str::slug($artikel->title));
     }
 });

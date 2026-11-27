@@ -291,19 +291,37 @@ it('försättsbladet bär containerns bild som medium-variant, aldrig originalet
         ->and($omslag['owner'])->toBe($account->name);
 });
 
-it('pärmen tar med utgifter men inte intäkter', function () {
+it('pärmen visar intäkten som Income med utgifter, intäkter och netto, och antalet', function () {
     [$account, $user, $container] = parmKontext();
     $item = parmItem($container, $account, $user, 'Prylen');
     $rad = ['item_id' => $item->id, 'container_id' => $container->id, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id];
     CostEntry::factory()->create($rad + ['amount' => 12345, 'counterparty' => 'Leverantören']);
-    CostEntry::factory()->create($rad + ['amount' => 99900, 'kind' => 'income', 'counterparty' => 'Köparen']);
+    CostEntry::factory()->create($rad + ['amount' => 99900, 'kind' => 'income', 'quantity' => '10.500000', 'counterparty' => 'Köparen']);
 
     $spion = parmSpion();
     parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
     $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
 
-    expect($data['costs']['rows'])->toHaveCount(1)
-        ->and($data['costs']['rows'][0]['supplier'])->toBe('Leverantören');
+    expect($data['costs']['rows'])->toHaveCount(2)
+        ->and(array_column($data['costs']['rows'], 'kind'))->toContain('income', 'expense')
+        ->and(array_column($data['costs']['rows'], 'quantity'))->toContain('10.5')
+        ->and($data['costs']['has_income'])->toBeTrue()
+        ->and($data['costs']['totals'][0]['income'])->toContain('999')
+        ->and($data['costs']['totals'][0]['net'])->toContain('875');
+});
+
+it('pärmen för ett item utan intäkter har en total som förut', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $rad = ['item_id' => $item->id, 'container_id' => $container->id, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id];
+    CostEntry::factory()->create($rad + ['amount' => 12345]);
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
+    $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
+
+    expect($data['costs']['has_income'])->toBeFalse()
+        ->and($data['costs']['totals'][0]['net'])->toBeNull();
 });
 
 it('options.sections styr vad som tas med och kostnader är av som förval', function () {
