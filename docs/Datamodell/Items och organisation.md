@@ -223,16 +223,20 @@ Kostnader som hör till ett item. En rad per kostnad, precis som i en huvudbok �
 | container_id | FK | Denormaliserad från itemet. Varje rapportfråga scopas till en container och ska inte behöva joina items för att komma åt den. Säkert eftersom ett item aldrig byter container. |
 | item_id | FK | **Obligatorisk.** Ingen kostnad utan item. |
 | incurred_on | DATE | Kostnadens datum, inte registreringsdatumet |
+| kind | ENUM('expense','income') | NOT NULL, förvalt `expense`. Riktningen; tecknet på `amount` gäller inom riktningen. |
+| quantity | DECIMAL(18,6) NULL | Antal, till exempel 100 aktier eller 40 liter. Ändrar ingen summa; styckpriset räknas fram vid visning. |
 | amount | BIGINT | Minsta valutaenhet. Får vara negativt — kreditfaktura, returnerad del, garantiersättning. |
 | currency | CHAR(3) | En aktiv ISO 4217-kod, se nedan. |
 | description | VARCHAR(255) | |
-| supplier | VARCHAR(255) NULL | Fritext med autocomplete, se nedan |
+| counterparty | VARCHAR(255) NULL | Fritext med autocomplete, se nedan. Hette `supplier`; kan vara en leverantör, en kund eller en köpare. |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
 | created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
 | billed_account_id | FK → account | Kontot som betalar för radens byte mot kvoten. Se [[Planer och kvoter]] § usage_counter |
 | deleted_at | | |
 
-Index: `(item_id, deleted_at, incurred_on)`, `(container_id, deleted_at, incurred_on)`, `(container_id, deleted_at, supplier)`.
+Index: `(item_id, deleted_at, incurred_on)`, `(container_id, deleted_at, incurred_on)`, `(container_id, deleted_at, counterparty)`.
+
+**Transaktioner.** Raden kan vara en intäkt och inte bara en kostnad, se [[ADR-0102 Transaktioner på items]]. Tabellen döps om till `item_transaction` i issue 532, och leverantörsfältet nedan heter då motpart; autocomplete hämtar värden från rader med samma `kind`.
 
 **Valutan är en aktiv ISO 4217-kod.** Servern godtar bara koder ur en lista över aktiva valutor; historiska som `DEM` och `FRF` ingår inte. Samma regel gäller `account.currency` ([[Konton och åtkomst]]) och `container.currency`. En befintlig rad med en ogiltig kod står kvar och visas, men en ändring av den kräver en giltig kod. Dessutom gäller containerns urval, se `container_allowed_currency` nedan. Se [[ADR-0078 Valutor ur ISO 4217]].
 

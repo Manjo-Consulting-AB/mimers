@@ -1,6 +1,6 @@
 # ADR-0016 Kostnadsregistrering
 
-**Status:** Antagen 2026-08-04 · Pro-gränsen ersatt av [[ADR-0038 Gränsen för Pro i kostnaderna]]; övriga beslut gäller · [[ADR-index]]
+**Status:** Antagen 2026-08-04 · Pro-gränsen ersatt av [[ADR-0038 Gränsen för Pro i kostnaderna]]; övriga beslut gäller · Vidgad till transaktioner av [[ADR-0102 Transaktioner på items]] · [[ADR-index]]
 
 ## Kontext
 
