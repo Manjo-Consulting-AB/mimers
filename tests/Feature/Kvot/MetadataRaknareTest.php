@@ -238,7 +238,7 @@ it('varje Create-väg sätter betalaren till det agerande kontot', function () {
     expect($tagg->fresh()->billed_account_id)->toBe($gäst->id);
 
     $schema = app(CreateSchedule::class)->handle($item, $gästUser, new Schedule([
-        'title' => 'Service', 'recurrence_type' => 'once', 'is_active' => false, 'lead_days' => 0,
+        'title' => 'Service', 'recurrence_type' => 'none', 'is_active' => false, 'lead_days' => 0,
     ]));
     expect($schema->fresh()->billed_account_id)->toBe($gäst->id);
 
@@ -354,53 +354,103 @@ it('ett ägarbyte flyttar säljarens rader och byte till köparen, men inte en t
 
 // --- § 2: migreringens ifyllning --------------------------------------------
 
-it('migreringen fyller i betalaren enligt reglerna', function () {
-    [$ägare] = metadataKonto();
-    [$författare] = metadataKonto();
-    [$medlem] = metadataKonto();
-    $container = metadataContainer($ägare);
-
-    $medFörfattare = metadataItem($container, $författare);
-    $utanFörfattare = metadataItem($container, $författare);
-    $utanFörfattare->forceFill(['created_by_account_id' => null])->save();
-    $kostnadMed = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => $författare->id]);
-    $kostnadUtan = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => null, 'billed_account_id' => $ägare->id]);
-    $kategori = Category::factory()->for($container, 'container')->create();
-    $tagg = Tag::factory()->for($container, 'container')->create();
-    $schema = Schedule::factory()->for($medFörfattare, 'item')->create();
-    $lån = Loan::factory()->for($medFörfattare, 'item')->create();
-    $medNot = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'ok', 'completed_by_account_id' => $medlem->id]);
-    $medNotUtanKonto = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'ok', 'completed_by_account_id' => null]);
-    $utanNot = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => '', 'completed_by_account_id' => $medlem->id]);
-
-    // Migreringen kör mot en tabell där kolumnen ännu är nullable. Provet
-    // gör kolumnen nullable igen och nollar den, som den såg ut före ifyllningen.
-    // sqlite bygger om tabellen vid change(); främmande nycklar kontrolleras
-    // först vid commit, och provets transaktion rullas tillbaka.
-    DB::statement('PRAGMA defer_foreign_keys = ON');
+/**
+ * Gör `billed_account_id` nullable på de sex tabellerna, som kolumnen såg ut
+ * före ifyllningen, och returnerar en closure som lägger tillbaka NOT NULL.
+ *
+ * Drivrutinsglappet: på SQLite bygger `change()` om tabellen, främmande nycklar
+ * kontrolleras först vid commit, och hela DDL:en rullas tillbaka med testets
+ * transaktion (RefreshDatabase) — SQLite behöver `PRAGMA defer_foreign_keys`.
+ * MariaDB committar implicit vid varje `ALTER TABLE`, så kolumnerna skulle
+ * annars förbli nullable för resten av sviten, och provets rader likaså. Därför
+ * gör MariaDB DDL:en först, innan någon rad finns, stänger av
+ * FOREIGN_KEY_CHECKS under ändringen och öppnar en ny PDO-transaktion som den
+ * returnerade closuren rullar tillbaka innan schemat återställs.
+ *
+ * @return Closure(): void
+ */
+function metadataBetalareNullbar(): Closure
+{
     $tabeller = ['category', 'tag', 'item', 'schedule', 'cost_entry', 'loan'];
-    foreach ($tabeller as $tabell) {
-        Schema::table($tabell, function (Blueprint $table) {
-            $table->unsignedBigInteger('billed_account_id')->nullable()->change();
-        });
-        DB::table($tabell)->update(['billed_account_id' => null]);
+    $ändra = function (bool $nullbar) use ($tabeller): void {
+        foreach ($tabeller as $tabell) {
+            Schema::table($tabell, function (Blueprint $table) use ($nullbar) {
+                $table->unsignedBigInteger('billed_account_id')->nullable($nullbar)->change();
+            });
+        }
+    };
+
+    if (DB::getDriverName() === 'sqlite') {
+        DB::statement('PRAGMA defer_foreign_keys = ON');
+        $ändra(true);
+
+        return fn () => null; // Rullas tillbaka med testets transaktion.
     }
-    DB::table('schedule_occurrence')->update(['billed_account_id' => null]);
 
-    $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
-    $migrering->backfillBilledAccounts();
+    DB::statement('SET FOREIGN_KEY_CHECKS=0');
+    $ändra(true);
+    DB::getPdo()->beginTransaction();
 
-    expect($medFörfattare->fresh()->billed_account_id)->toBe($författare->id);
-    expect($utanFörfattare->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($kostnadMed->fresh()->billed_account_id)->toBe($författare->id);
-    expect($kostnadUtan->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($kategori->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($tagg->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($schema->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($lån->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($medNot->fresh()->billed_account_id)->toBe($medlem->id);
-    expect($medNotUtanKonto->fresh()->billed_account_id)->toBe($ägare->id);
-    expect($utanNot->fresh()->billed_account_id)->toBeNull();
+    return function () use ($ändra): void {
+        $pdo = DB::getPdo();
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        $ändra(false);
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        $pdo->beginTransaction();
+    };
+}
+
+it('migreringen fyller i betalaren enligt reglerna', function () {
+    // Migreringen kör mot en tabell där kolumnen ännu är nullable. Provet
+    // gör kolumnen nullable igen och nollar den, som den såg ut före
+    // ifyllningen. DDL:en görs först av alla, se metadataBetalareNullbar().
+    $återställ = metadataBetalareNullbar();
+
+    try {
+        [$ägare] = metadataKonto();
+        [$författare] = metadataKonto();
+        [$medlem] = metadataKonto();
+        $container = metadataContainer($ägare);
+
+        $medFörfattare = metadataItem($container, $författare);
+        $utanFörfattare = metadataItem($container, $författare);
+        $utanFörfattare->forceFill(['created_by_account_id' => null])->save();
+        $kostnadMed = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => $författare->id]);
+        $kostnadUtan = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => null, 'billed_account_id' => $ägare->id]);
+        $kategori = Category::factory()->for($container, 'container')->create();
+        $tagg = Tag::factory()->for($container, 'container')->create();
+        $schema = Schedule::factory()->for($medFörfattare, 'item')->create();
+        $lån = Loan::factory()->for($medFörfattare, 'item')->create();
+        $medNot = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'ok', 'completed_by_account_id' => $medlem->id]);
+        $medNotUtanKonto = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'ok', 'completed_by_account_id' => null]);
+        $utanNot = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => '', 'completed_by_account_id' => $medlem->id]);
+
+        foreach (['category', 'tag', 'item', 'schedule', 'cost_entry', 'loan'] as $tabell) {
+            DB::table($tabell)->update(['billed_account_id' => null]);
+        }
+        DB::table('schedule_occurrence')->update(['billed_account_id' => null]);
+
+        $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
+        $migrering->backfillBilledAccounts();
+
+        expect($medFörfattare->fresh()->billed_account_id)->toBe($författare->id);
+        expect($utanFörfattare->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($kostnadMed->fresh()->billed_account_id)->toBe($författare->id);
+        expect($kostnadUtan->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($kategori->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($tagg->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($schema->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($lån->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($medNot->fresh()->billed_account_id)->toBe($medlem->id);
+        expect($medNotUtanKonto->fresh()->billed_account_id)->toBe($ägare->id);
+        expect($utanNot->fresh()->billed_account_id)->toBeNull();
+    } finally {
+        $återställ();
+    }
 });
 
 it('migreringen räknar fram metadata_bytes för alla konton, och skapar en rad där den saknas', function () {

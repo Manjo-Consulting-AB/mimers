@@ -282,7 +282,7 @@ it('ett schema följer skapa, ändra, släng, återställ och radera för gott m
     $bas = löpandeByte($ägare);
 
     $schema = app(CreateSchedule::class)->handle($item, $ägarUser, new Schedule([
-        'title' => 'Byt olja', 'recurrence_type' => 'once', 'is_active' => false, 'lead_days' => 0,
+        'title' => 'Byt olja', 'recurrence_type' => 'none', 'is_active' => false, 'lead_days' => 0,
     ]));
     expect(löpandeByte($ägare))->toBe($bas + 256 + 8);
     löpandeStämmer($ägare);

@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 1760, ren testfix — spärren mot SearchUsingFullText är densamma på båda drivrutinerna; provet är grönt på basen.
+
 use App\Models\Container;
 use App\Models\Item;
 use Illuminate\Support\Facades\File;
@@ -335,8 +337,7 @@ it('hittar itemet på ett ord som bara står i anteckningen', function () {
 });
 
 /*
- * Klart när: `#[SearchUsingFullText]` är fortfarande inte satt och testsviten
- * kör på sqlite.
+ * Klart när: `#[SearchUsingFullText]` är fortfarande inte satt.
  *
  * Attributet är det som skulle göra indexet levande, och det är en rad kod bort.
  * Testet står här för att den raden ska behöva tas bort medvetet: Scout sänder
@@ -344,9 +345,11 @@ it('hittar itemet på ett ord som bara står i anteckningen', function () {
  * hela sviten — inte bara den här filen — faller på varje sökning
  * (issue 15b § Beslut 3).
  */
-it('sätter fortfarande inte SearchUsingFullText, och sviten kör på sqlite', function () {
+it('sätter fortfarande inte SearchUsingFullText', function () {
     $attribut = (new ReflectionClass(Item::class))->getAttributes(SearchUsingFullText::class);
 
+    // Spärren gäller attributet och är oberoende av drivrutinen: på MariaDB
+    // skulle `whereFullText` fungera, men sviten delar kod med SQLite-körningen
+    // och sökvägen ska vara densamma på båda.
     expect($attribut)->toBeEmpty();
-    expect(Schema::getConnection()->getDriverName())->toBe('sqlite');
 });

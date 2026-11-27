@@ -230,15 +230,29 @@ it('fyller i en ULID för fler rader än chunk-storleken', function () {
     $nu = now();
     $rader = [];
 
-    foreach (range(1, 1200) as $nummer) {
-        $rader[] = [
-            'from_item_id' => $rad->from_item_id,
-            'to_item_id' => $rad->to_item_id,
-            'relation' => 'x'.$nummer,
-            'ulid' => null,
-            'created_at' => $nu,
-            'updated_at' => $nu,
-        ];
+    // Raderna görs unika på (from, to, relation) med giltiga relationer:
+    // item_link_relation_check avvisar ett påhittat värde på MariaDB, medan
+    // SQLite saknar villkoret. 25 items ger 600 ordnade par, 1 800 med tre
+    // relationer.
+    $items = Item::factory()->count(25)->for($container, 'container')->create();
+
+    foreach ($items as $från) {
+        foreach ($items as $till) {
+            foreach (['parent', 'child', 'related'] as $relation) {
+                if ($från->id === $till->id || count($rader) >= 1200) {
+                    continue;
+                }
+
+                $rader[] = [
+                    'from_item_id' => $från->id,
+                    'to_item_id' => $till->id,
+                    'relation' => $relation,
+                    'ulid' => null,
+                    'created_at' => $nu,
+                    'updated_at' => $nu,
+                ];
+            }
+        }
     }
 
     DB::table('item_link')->update(['ulid' => null]);

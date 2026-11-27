@@ -210,7 +210,9 @@ it('jobbet är schemalagt dagligen med Schedule::call', function () {
 it('en tom körning gör ingenting och loggar inget', function () {
     $logg = Log::spy();
     // En rad som ännu inte är gallringsbar finns, men ingenting att göra.
-    fysiskRaderingGallringsbarFil('2099-01-01 12:00:00');
+    // Före 2038-01-19: purge_after är en TIMESTAMP, och MariaDB avvisar ett
+    // senare värde medan SQLite lagrar vilken sträng som helst.
+    fysiskRaderingGallringsbarFil('2037-01-01 12:00:00');
 
     $antal = (new PurgesExpiredStoredFiles)->handle();
 

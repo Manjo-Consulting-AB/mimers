@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\ItemLink;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -645,26 +646,100 @@ function relationsPar(): array
  * en rad som byter namn ändras inte, och en tidsstämpel som rör sig hade
  * gjort namnbytet till en innehållsändring i historiken.
  */
+/**
+ * Sätter schemat som det såg ut FÖRE migreringen och returnerar en closure som
+ * lägger tillbaka det som migreringen lämnar efter sig.
+ *
+ * Drivrutinsglappet: SQLite har inget CHECK-villkor på `item_link.relation`
+ * (det läggs bara på mysql), så raden med `sibling` kan stoppas in rakt av. På
+ * MariaDB avvisar `item_link_relation_check` värdet, och migreringens `up()`
+ * släpper villkoret och lägger det tillbaka, så provet lägger först villkoret
+ * med den GAMLA definitionen (`sibling`) och `up()` får något att släppa.
+ * Slutläget är den definition som
+ * 2026_09_21_000000_rename_item_link_relation_to_related.php lämnar.
+ *
+ * MariaDB committar dessutom implicit vid varje `ALTER TABLE`, och `up()`
+ * gör två. Provets rader (konton, items, länken) committas därmed och rullas
+ * inte tillbaka med testets transaktion, så closuren tar bort rader med högre
+ * id än vid starten och återställer villkoret även om provet fälls. Med
+ * `$gammaltVillkor = false` lämnas villkoret som det är vid starten: rundturen
+ * kör `down()` och `up()` själv och behöver bara städningen.
+ *
+ * @return Closure(): void
+ */
+function relationsGammaltVillkor(bool $gammaltVillkor = true): Closure
+{
+    if (DB::getDriverName() === 'sqlite') {
+        return fn () => null; // Inget villkor, och allt rullas tillbaka.
+    }
+
+    $läggVillkor = function (string $relationer): void {
+        DB::statement('ALTER TABLE item_link DROP CONSTRAINT IF EXISTS item_link_relation_check');
+        DB::statement("ALTER TABLE item_link ADD CONSTRAINT item_link_relation_check CHECK (relation IN ({$relationer}))");
+    };
+
+    if ($gammaltVillkor) {
+        $läggVillkor("'parent', 'child', 'sibling'");
+    }
+
+    // Högsta id per tabell med en `id`-kolumn, innan provet skriver något.
+    $högsta = [];
+    foreach (Schema::getTableListing() as $tabell) {
+        if (Schema::hasColumn($tabell, 'id')) {
+            $högsta[$tabell] = (int) DB::table($tabell)->max('id');
+        }
+    }
+
+    // ALTER TABLE ovan committade testets transaktion; utan DDL är den kvar.
+    if (! DB::getPdo()->inTransaction()) {
+        DB::getPdo()->beginTransaction();
+    }
+
+    return function () use ($läggVillkor, $högsta): void {
+        $pdo = DB::getPdo();
+
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
+        foreach ($högsta as $tabell => $id) {
+            DB::table($tabell)->where('id', '>', $id)->delete();
+        }
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+        $läggVillkor("'parent', 'child', 'related'");
+
+        $pdo->beginTransaction();
+    };
+}
+
 it('skriver om rader med det gamla värdet till related', function () {
-    [$lägst, $högst] = relationsPar();
+    $återställ = relationsGammaltVillkor();
 
-    DB::table('item_link')->insert([
-        'from_item_id' => $lägst->id,
-        'to_item_id' => $högst->id,
-        'relation' => 'sibling',
-        'created_at' => '2026-09-01 08:00:00',
-        'updated_at' => '2026-09-01 08:00:00',
-    ]);
+    try {
+        [$lägst, $högst] = relationsPar();
 
-    relationsMigreringen()->up();
+        DB::table('item_link')->insert([
+            'from_item_id' => $lägst->id,
+            'to_item_id' => $högst->id,
+            'relation' => 'sibling',
+            'created_at' => '2026-09-01 08:00:00',
+            'updated_at' => '2026-09-01 08:00:00',
+        ]);
 
-    expect(DB::table('item_link')->where('relation', 'sibling')->count())->toBe(0);
-    expect(DB::table('item_link')->where('relation', 'related')->count())->toBe(1);
+        relationsMigreringen()->up();
 
-    $raden = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+        expect(DB::table('item_link')->where('relation', 'sibling')->count())->toBe(0);
+        expect(DB::table('item_link')->where('relation', 'related')->count())->toBe(1);
 
-    expect($raden->relation)->toBe('related');
-    expect($raden->updated_at)->toBe('2026-09-01 08:00:00');
+        $raden = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+
+        expect($raden->relation)->toBe('related');
+        expect($raden->updated_at)->toBe('2026-09-01 08:00:00');
+    } finally {
+        $återställ();
+    }
 });
 
 /*
@@ -674,30 +749,36 @@ it('skriver om rader med det gamla värdet till related', function () {
  * stilla hela vägen.
  */
 it('en migrering fram och tillbaka lämnar relationen intakt', function () {
-    [$lägst, $högst] = relationsPar();
+    $återställ = relationsGammaltVillkor(false);
 
-    DB::table('item_link')->insert([
-        'from_item_id' => $lägst->id,
-        'to_item_id' => $högst->id,
-        'relation' => 'related',
-        'created_at' => '2026-09-01 08:00:00',
-        'updated_at' => '2026-09-01 08:00:00',
-    ]);
+    try {
+        [$lägst, $högst] = relationsPar();
 
-    $migration = relationsMigreringen();
-    $migration->down();
+        DB::table('item_link')->insert([
+            'from_item_id' => $lägst->id,
+            'to_item_id' => $högst->id,
+            'relation' => 'related',
+            'created_at' => '2026-09-01 08:00:00',
+            'updated_at' => '2026-09-01 08:00:00',
+        ]);
 
-    $tillbaka = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+        $migration = relationsMigreringen();
+        $migration->down();
 
-    expect($tillbaka->relation)->toBe('sibling');
-    expect($tillbaka->updated_at)->toBe('2026-09-01 08:00:00');
+        $tillbaka = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
 
-    $migration->up();
+        expect($tillbaka->relation)->toBe('sibling');
+        expect($tillbaka->updated_at)->toBe('2026-09-01 08:00:00');
 
-    $igen = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+        $migration->up();
 
-    expect($igen->relation)->toBe('related');
-    expect($igen->updated_at)->toBe('2026-09-01 08:00:00');
+        $igen = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+
+        expect($igen->relation)->toBe('related');
+        expect($igen->updated_at)->toBe('2026-09-01 08:00:00');
+    } finally {
+        $återställ();
+    }
 });
 
 /*
