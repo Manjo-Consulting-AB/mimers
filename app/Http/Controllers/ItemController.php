@@ -1044,15 +1044,22 @@ class ItemController extends Controller
         // egen fråga: en summa som inte stämmer med listan under sig är
         // precis den andra sanning [[ADR-0040 Underträdets summor]]
         // § Konsekvenser förbjuder.
+        // `amount` och `count` är utgifterna, som förut; `income` och `net`
+        // är tillägget (ADR-0102 § Riktning 5), räknade ur samma rader.
         $costTotals = $costs->concat($descendantCosts)
-            // Summan räknar bara utgifter; en intäkt är inte en kostnad (ADR-0102).
-            ->where('kind', CostEntry::KIND_EXPENSE)
             ->groupBy('currency')
-            ->map(fn (Collection $rows, string $currency): array => [
-                'currency' => $currency,
-                'amount' => (int) $rows->sum('amount'),
-                'count' => $rows->count(),
-            ])
+            ->map(function (Collection $rows, string $currency): array {
+                $expenses = $rows->where('kind', CostEntry::KIND_EXPENSE);
+                $income = (int) $rows->where('kind', CostEntry::KIND_INCOME)->sum('amount');
+
+                return [
+                    'currency' => $currency,
+                    'amount' => (int) $expenses->sum('amount'),
+                    'count' => $expenses->count(),
+                    'income' => $income,
+                    'net' => $income - (int) $expenses->sum('amount'),
+                ];
+            })
             ->sortKeys()
             ->values()
             ->all();

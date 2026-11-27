@@ -1252,7 +1252,7 @@ it('hämtar kostnaden ur den fasta summeringen och räknar den inte själv', fun
 
     expect($vy->inertiaProps()['costs'])->toBe($api->json('data'))
         ->and($vy->inertiaProps()['costs']['totals'])
-        ->toBe([['currency' => 'SEK', 'amount' => 4200, 'count' => 1]]);
+        ->toBe([['currency' => 'SEK', 'amount' => 4200, 'count' => 1, 'income' => 0, 'net' => -4200]]);
 
     $kontroller = File::get(app_path('Http/Controllers/ContainerController.php'));
     $kontroller = (string) preg_replace('#/\*.*?\*/#s', '', $kontroller);

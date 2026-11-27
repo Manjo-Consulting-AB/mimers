@@ -104,7 +104,7 @@ it('en gratisanvändare får containerns fasta summering utan plangrind', functi
     $response = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
 
     $response->assertOk();
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2250, 'count' => 2]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2250, 'count' => 2, 'income' => 0, 'net' => -2250]]);
 });
 
 it('en gratisanvändare får kontots fasta summering utan plangrind', function () {
@@ -148,7 +148,7 @@ it('de fasta ändpunkterna ignorerar okända parametrar och svarar identiskt med
     expect($medKontot->getContent())->toBe($renaKontot->getContent());
 
     // Och utfallet är hela mängden: båda årtalen räknas, ingen period skär bort.
-    expect($medContainern->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2250, 'count' => 2]]);
+    expect($medContainern->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2250, 'count' => 2, 'income' => 0, 'net' => -2250]]);
 });
 
 it('en användare utan åtkomst får auth.forbidden från containerns fasta summering', function () {
@@ -209,7 +209,7 @@ it('en fast summering räknar inte in rader från items användaren inte når', 
     $response = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
 
     $response->assertOk();
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1250, 'count' => 2]]);
+    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1250, 'count' => 2, 'income' => 0, 'net' => -1250]]);
 
     // Den dolda båtens 5000 syns varken i talet eller i kroppen.
     expect($response->getContent())->not->toContain('Båten');
@@ -276,7 +276,10 @@ it('en fast summering över blandade valutor grupperas per valuta och summeras i
 
     $containern->assertOk();
     $kontot->assertOk();
-    expect($containern->json('data.totals'))->toBe($facit);
+    expect($containern->json('data.totals'))->toBe(array_map(
+        static fn (array $rad): array => $rad + ['income' => 0, 'net' => -$rad['amount']],
+        $facit,
+    ));
     expect($kontot->json('data.totals'))->toBe($facit);
 });
 

@@ -431,7 +431,7 @@ it('visar containerns fasta summering och nedbrytning per item', function () {
 
     $kostnader = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk())['costs'];
 
-    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 2500, 'count' => 3]]);
+    expect($kostnader['totals'])->toBe([['currency' => 'SEK', 'amount' => 2500, 'count' => 3, 'income' => 0, 'net' => -2500]]);
 
     // Bitarna är de items som BÄR rader, i namnordning (formatGroups).
     expect(array_column(array_column($kostnader['breakdown'], 'key'), 'name'))->toBe(['Motorn', 'Riggen']);
@@ -976,7 +976,7 @@ it('räknar bara gästens item i kostnader, items och uppgifter', function () {
         ->and($props['items'])->toHaveCount(1)
         ->and($props['items'][0]['name'])->toBe('Motorn')
         ->and(oversiktTitlar($props['tasks']))->toBe(['Min uppgift'])
-        ->and($props['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]]);
+        ->and($props['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1, 'income' => 0, 'net' => -1000]]);
 
     // Ingenting av det hon inte når finns i svaret — varken namnet, beloppet
     // eller ULID:n.

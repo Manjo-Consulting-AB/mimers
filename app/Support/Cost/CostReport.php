@@ -95,6 +95,18 @@ final class CostReport
     /** Bucketnyckel för gruppen "ingen": okategoriserat, otaggat, utan leverantör. */
     private const NULL_KEY = "\0null";
 
+    /** `{currency, amount, count}`: utgifter, som före ADR-0102. */
+    private const MODE_PLAIN = 'plain';
+
+    /** Plain plus `income` och `net`: de fasta summeringarna. */
+    private const MODE_SUMMARY = 'summary';
+
+    private const MODE_EXPENSE = 'expense';
+
+    private const MODE_INCOME = 'income';
+
+    private const MODE_ALL = 'all';
+
     public function __construct(
         private readonly ResolveCategoryDescendants $resolveCategoryDescendants,
         private readonly ResolveItemDescendants $resolveItemDescendants,
@@ -103,20 +115,25 @@ final class CostReport
     /**
      * @param  array<string, mixed>  $params  de validerade parametrarna ur CostReportRequest
      * @param  ItemScope  $scope  omfånget för den anropande användaren, upplöst av CostReportController (issue 74 § Beslut 5)
-     * @return array{group_by: string, period: ?string, groups: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>, totals: list<array{currency: string, amount: int, count: int}>}
+     * @return array{group_by: string, period: ?string, groups: list<array{key: mixed, totals: list<array<string, mixed>>}>, totals: list<array<string, mixed>>}
      */
     public function build(Container $container, array $params, ItemScope $scope): array
     {
         $groupBy = (string) $params['group_by'];
 
+        $kind = (string) ($params['kind'] ?? self::MODE_ALL);
         $base = $this->baseQuery($container, $params, $scope);
 
+        if ($kind !== self::MODE_ALL) {
+            $base->where('cost_entry.kind', $kind);
+        }
+
         $groups = match ($groupBy) {
-            'item' => $this->groupByItem($base),
-            'supplier' => $this->groupBySupplier($base),
-            'category' => $this->groupByCategory($base, $container),
-            'tag' => $this->groupByTag($base),
-            'period' => $this->groupByPeriod($base, (string) $params['period']),
+            'item' => $this->groupByItem($base, $kind),
+            'supplier' => $this->groupBySupplier($base, $kind),
+            'category' => $this->groupByCategory($base, $container, $kind),
+            'tag' => $this->groupByTag($base, $kind),
+            'period' => $this->groupByPeriod($base, (string) $params['period'], $kind),
             default => throw new \LogicException("Okänd group_by: {$groupBy}."),
         };
 
@@ -124,7 +141,7 @@ final class CostReport
             'group_by' => $groupBy,
             'period' => $groupBy === 'period' ? $params['period'] : null,
             'groups' => $groups,
-            'totals' => $this->totals($base),
+            'totals' => $this->totals($base, $kind),
         ];
     }
 
@@ -189,6 +206,10 @@ final class CostReport
             'to' => $previousTo->toDateString(),
         ]), $scope)['totals'];
 
+        // Netto när `kind=all`, annars den valda riktningen (ADR-0102).
+        $kind = (string) ($params['kind'] ?? self::MODE_ALL);
+        $field = $kind === self::MODE_ALL ? 'net' : 'amount';
+
         $comparison = [];
 
         foreach ($current as $total) {
@@ -196,7 +217,7 @@ final class CostReport
 
             foreach ($previous as $row) {
                 if ($row['currency'] === $total['currency']) {
-                    $previousAmount = $row['amount'];
+                    $previousAmount = $row[$field];
 
                     break;
                 }
@@ -204,11 +225,11 @@ final class CostReport
 
             $comparison[] = [
                 'currency' => $total['currency'],
-                'current' => $total['amount'],
+                'current' => $total[$field],
                 'previous' => $previousAmount,
                 'percent' => ($previousAmount === null || $previousAmount <= 0)
                     ? null
-                    : (int) round((($total['amount'] - $previousAmount) / $previousAmount) * 100),
+                    : (int) round((($total[$field] - $previousAmount) / $previousAmount) * 100),
             ];
         }
 
@@ -227,7 +248,7 @@ final class CostReport
      * talen. Det är samma `groupByItem()` som rapporten använder, vilket är
      * vad som gör att bitarna och totalen härrör ur exakt samma radmängd.
      *
-     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     * @return array{totals: list<array{currency: string, amount: int, count: int, income: int, net: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
      */
     public function summary(Container $container, ItemScope $scope): array
     {
@@ -257,7 +278,7 @@ final class CostReport
      * ser allt under det), men regeln ska inte bero på vilken grind som
      * råkar sitta på rutten.
      *
-     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     * @return array{totals: list<array{currency: string, amount: int, count: int, income: int, net: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
      */
     public function forItem(Container $container, Item $item, ItemScope $scope): array
     {
@@ -275,13 +296,15 @@ final class CostReport
      * be om två tal som säger emot varandra — och det är precis vad
      * [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040 förbjöd.
      *
-     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     * @return array{totals: list<array{currency: string, amount: int, count: int, income: int, net: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
      */
     private function summarise(Builder $base): array
     {
         return [
-            'totals' => $this->totals($base),
-            'breakdown' => $this->groupByItem($base),
+            'totals' => $this->totals($base, self::MODE_SUMMARY),
+            // Nedbrytningen räknar bara utgifter, så bitarna summerar till
+            // `amount` bredvid även när det finns intäkter (ADR-0102).
+            'breakdown' => $this->groupByItem($this->onlyExpenses(clone $base)),
         ];
     }
 
@@ -306,7 +329,7 @@ final class CostReport
      */
     public function summaryForContainers(array $scopes): array
     {
-        return $this->totals($this->summaryQuery($scopes));
+        return $this->totals($this->onlyExpenses($this->summaryQuery($scopes)));
     }
 
     /**
@@ -351,7 +374,7 @@ final class CostReport
         $first = Carbon::parse("{$month}-01");
         $last = $first->copy()->endOfMonth();
 
-        $query = $this->summaryQuery($scopes)
+        $query = $this->onlyExpenses($this->summaryQuery($scopes))
             ->whereDate('cost_entry.incurred_on', '>=', $first->toDateString())
             ->whereDate('cost_entry.incurred_on', '<=', $last->toDateString());
 
@@ -394,7 +417,7 @@ final class CostReport
     {
         // Första och sista dagen i årtalet. Ingen `Carbon`-beräkning behövs —
         // den sista december är årets sista dag i varje kalender.
-        $query = $this->summaryQuery([$container->id => $scope])
+        $query = $this->onlyExpenses($this->summaryQuery([$container->id => $scope]))
             ->whereDate('cost_entry.incurred_on', '>=', "{$year}-01-01")
             ->whereDate('cost_entry.incurred_on', '<=', "{$year}-12-31");
 
@@ -462,8 +485,11 @@ final class CostReport
             }
         }
 
-        if (($params['supplier'] ?? null) !== null) {
-            $query->where('cost_entry.counterparty', $params['supplier']);
+        // `counterparty` ersätter `supplier`, som tas emot som alias.
+        $counterparty = $params['counterparty'] ?? $params['supplier'] ?? null;
+
+        if ($counterparty !== null) {
+            $query->where('cost_entry.counterparty', $counterparty);
         }
 
         // `whereDate()`, aldrig en rå kolumnjämförelse: i sqlite lagras
@@ -496,9 +522,9 @@ final class CostReport
         return DB::table('cost_entry')
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
             ->whereNull('cost_entry.deleted_at')
-            // Bara utgifter: en intäkt får inte bli en kostnad i summorna
-            // (ADR-0102). Utgifter, intäkter och netto kommer i issue 527.
-            ->where('cost_entry.kind', CostEntry::KIND_EXPENSE)
+            // Riktningen filtreras INTE här (ADR-0102 § Riktning 5): de fasta
+            // summeringarna och rapporten räknar båda riktningarna, och de som
+            // bara vill ha utgifter anropar `onlyExpenses()`.
             ->whereNull('item.deleted_at');
     }
 
@@ -559,19 +585,18 @@ final class CostReport
      * filtrerade mängd (Beslut 6). Aldrig en summa av grupperna — för
      * `category` och `tag` överlappar de med flit.
      *
-     * @return list<array{currency: string, amount: int, count: int}>
+     * @return list<array<string, mixed>>
      */
-    private function totals(Builder $base): array
+    private function totals(Builder $base, string $mode = self::MODE_PLAIN): array
     {
         $rows = (clone $base)
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('cost_entry.currency')
             ->orderBy('cost_entry.currency')
             ->get();
 
-        return $this->formatCurrencyTotals($rows);
+        return $this->formatCurrencyTotals($rows, $mode);
     }
 
     /**
@@ -594,13 +619,12 @@ final class CostReport
      *
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
-    private function groupByItem(Builder $base): array
+    private function groupByItem(Builder $base, string $mode = self::MODE_PLAIN): array
     {
         $rows = (clone $base)
             ->selectRaw('item.id AS item_id, item.ulid AS item_ulid, item.name AS item_name')
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('item.id', 'item.ulid', 'item.name', 'cost_entry.currency')
             ->get();
 
@@ -614,22 +638,21 @@ final class CostReport
                 'ulid' => $row->item_ulid,
                 'currencies' => [],
             ];
-            $this->addToBucket($buckets[$id], $row->currency, (int) $row->amount, (int) $row->count);
+            $this->addToBucket($buckets[$id], $row);
         }
 
-        return $this->formatGroups($buckets);
+        return $this->formatGroups($buckets, $mode);
     }
 
     /**
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
-    private function groupBySupplier(Builder $base): array
+    private function groupBySupplier(Builder $base, string $mode): array
     {
         $rows = (clone $base)
             ->selectRaw('cost_entry.counterparty AS supplier')
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('cost_entry.counterparty', 'cost_entry.currency')
             ->get();
 
@@ -643,7 +666,7 @@ final class CostReport
                     'ulid' => null,
                     'currencies' => [],
                 ];
-                $this->addToBucket($buckets[self::NULL_KEY], $row->currency, (int) $row->amount, (int) $row->count);
+                $this->addToBucket($buckets[self::NULL_KEY], $row);
 
                 continue;
             }
@@ -654,10 +677,10 @@ final class CostReport
                 'ulid' => null,
                 'currencies' => [],
             ];
-            $this->addToBucket($buckets[$row->supplier], $row->currency, (int) $row->amount, (int) $row->count);
+            $this->addToBucket($buckets[$row->supplier], $row);
         }
 
-        return $this->formatGroups($buckets);
+        return $this->formatGroups($buckets, $mode);
     }
 
     /**
@@ -676,13 +699,12 @@ final class CostReport
      *
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
-    private function groupByCategory(Builder $base, Container $container): array
+    private function groupByCategory(Builder $base, Container $container, string $mode): array
     {
         $rows = (clone $base)
             ->selectRaw('item.category_id AS category_id')
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('item.category_id', 'cost_entry.currency')
             ->get();
 
@@ -709,7 +731,7 @@ final class CostReport
                     'ulid' => null,
                     'currencies' => [],
                 ];
-                $this->addToBucket($buckets[self::NULL_KEY], $row->currency, (int) $row->amount, (int) $row->count);
+                $this->addToBucket($buckets[self::NULL_KEY], $row);
 
                 continue;
             }
@@ -736,11 +758,11 @@ final class CostReport
                     'ulid' => $category->ulid,
                     'currencies' => [],
                 ];
-                $this->addToBucket($buckets[$id], $row->currency, (int) $row->amount, (int) $row->count);
+                $this->addToBucket($buckets[$id], $row);
             }
         }
 
-        return $this->formatGroups($buckets);
+        return $this->formatGroups($buckets, $mode);
     }
 
     /**
@@ -753,7 +775,7 @@ final class CostReport
      *
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
-    private function groupByTag(Builder $base): array
+    private function groupByTag(Builder $base, string $mode): array
     {
         $liveTags = DB::table('item_tag')
             ->join('tag', 'tag.id', '=', 'item_tag.tag_id')
@@ -769,8 +791,7 @@ final class CostReport
             ->leftJoinSub($liveTags, 'live_tag', 'live_tag.item_id', '=', 'item.id')
             ->selectRaw('live_tag.tag_id AS tag_id, live_tag.tag_ulid AS tag_ulid, live_tag.tag_name AS tag_name')
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('live_tag.tag_id', 'live_tag.tag_ulid', 'live_tag.tag_name', 'cost_entry.currency')
             ->get();
 
@@ -784,7 +805,7 @@ final class CostReport
                     'ulid' => null,
                     'currencies' => [],
                 ];
-                $this->addToBucket($buckets[self::NULL_KEY], $row->currency, (int) $row->amount, (int) $row->count);
+                $this->addToBucket($buckets[self::NULL_KEY], $row);
 
                 continue;
             }
@@ -796,10 +817,10 @@ final class CostReport
                 'ulid' => $row->tag_ulid,
                 'currencies' => [],
             ];
-            $this->addToBucket($buckets[$id], $row->currency, (int) $row->amount, (int) $row->count);
+            $this->addToBucket($buckets[$id], $row);
         }
 
-        return $this->formatGroups($buckets);
+        return $this->formatGroups($buckets, $mode);
     }
 
     /**
@@ -813,15 +834,14 @@ final class CostReport
      * @param  string  $period  'month' eller 'year'
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
-    private function groupByPeriod(Builder $base, string $period): array
+    private function groupByPeriod(Builder $base, string $period, string $mode): array
     {
         $length = $period === 'year' ? 4 : 7;
 
         $rows = (clone $base)
             ->selectRaw("substr(cost_entry.incurred_on, 1, {$length}) AS period_key")
             ->selectRaw('cost_entry.currency AS currency')
-            ->selectRaw('SUM(cost_entry.amount) AS amount')
-            ->selectRaw('COUNT(*) AS count')
+            ->selectRaw($this->aggregateSql())
             ->groupBy('period_key', 'cost_entry.currency')
             ->orderBy('period_key')
             ->get();
@@ -835,20 +855,26 @@ final class CostReport
                 'ulid' => null,
                 'currencies' => [],
             ];
-            $this->addToBucket($buckets[$row->period_key], $row->currency, (int) $row->amount, (int) $row->count);
+            $this->addToBucket($buckets[$row->period_key], $row);
         }
 
-        return $this->formatGroups($buckets);
+        return $this->formatGroups($buckets, $mode);
     }
 
     /**
-     * @param  array{currencies: array<string, array{amount: int, count: int}>}  $bucket
+     * @param  array{currencies: array<array{expense: int, income: int, expense_count: int, income_count: int}>}  $bucket
      */
-    private function addToBucket(array &$bucket, string $currency, int $amount, int $count): void
+    private function addToBucket(array &$bucket, object $row): void
     {
-        $bucket['currencies'][$currency] ??= ['amount' => 0, 'count' => 0];
-        $bucket['currencies'][$currency]['amount'] += $amount;
-        $bucket['currencies'][$currency]['count'] += $count;
+        $sums = $bucket['currencies'][$row->currency]
+            ?? ['expense' => 0, 'income' => 0, 'expense_count' => 0, 'income_count' => 0];
+
+        $bucket['currencies'][$row->currency] = [
+            'expense' => $sums['expense'] + (int) $row->expense,
+            'income' => $sums['income'] + (int) $row->income,
+            'expense_count' => $sums['expense_count'] + (int) $row->expense_count,
+            'income_count' => $sums['income_count'] + (int) $row->income_count,
+        ];
     }
 
     /**
@@ -857,10 +883,10 @@ final class CostReport
      * Inte på belopp — med flera valutor i samma grupp finns ingen
      * beloppssortering som betyder något.
      *
-     * @param  array<int|string, array{key: mixed, name: ?string, ulid: ?string, currencies: array<string, array{amount: int, count: int}>}>  $buckets
-     * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
+     * @param  array<int|string, array{key: mixed, name: ?string, ulid: ?string, currencies: array<string, array<string, int>>}>  $buckets
+     * @return list<array{key: mixed, totals: list<array<string, mixed>>}>
      */
-    private function formatGroups(array $buckets): array
+    private function formatGroups(array $buckets, string $mode): array
     {
         usort($buckets, static function (array $a, array $b): int {
             if ($a['name'] === null && $b['name'] === null) {
@@ -879,17 +905,13 @@ final class CostReport
                 ?: strcmp((string) $a['ulid'], (string) $b['ulid']);
         });
 
-        return array_map(function (array $bucket): array {
+        return array_map(function (array $bucket) use ($mode): array {
             ksort($bucket['currencies']);
 
             $totals = [];
 
-            foreach ($bucket['currencies'] as $currency => $aggregate) {
-                $totals[] = [
-                    'currency' => $currency,
-                    'amount' => $aggregate['amount'],
-                    'count' => $aggregate['count'],
-                ];
+            foreach ($bucket['currencies'] as $currency => $sums) {
+                $totals[] = $this->present((string) $currency, $sums, $mode);
             }
 
             return ['key' => $bucket['key'], 'totals' => $totals];
@@ -897,21 +919,73 @@ final class CostReport
     }
 
     /**
-     * @param  iterable<object{currency: string, amount: mixed, count: mixed}>  $rows
-     * @return list<array{currency: string, amount: int, count: int}>
+     * @param  iterable<object>  $rows
+     * @return list<array<string, mixed>>
      */
-    private function formatCurrencyTotals(iterable $rows): array
+    private function formatCurrencyTotals(iterable $rows, string $mode): array
     {
         $totals = [];
 
         foreach ($rows as $row) {
-            $totals[] = [
-                'currency' => $row->currency,
-                'amount' => (int) $row->amount,
-                'count' => (int) $row->count,
-            ];
+            $totals[] = $this->present((string) $row->currency, [
+                'expense' => (int) $row->expense,
+                'income' => (int) $row->income,
+                'expense_count' => (int) $row->expense_count,
+                'income_count' => (int) $row->income_count,
+            ], $mode);
         }
 
         return $totals;
+    }
+
+    /**
+     * Formen på en valutarad. `amount` och `count` betyder UTGIFTER i alla
+     * lägen utom `income` (ADR-0102 § Riktning 5: de befintliga nycklarna
+     * behåller sin betydelse). Netto är intäkter minus utgifter; en negativ
+     * utgift (kreditfaktura) höjer det. Ingen avrundning här.
+     *
+     * @param  array<string, int>  $sums
+     * @return array<string, mixed>
+     */
+    private function present(string $currency, array $sums, string $mode): array
+    {
+        $row = [
+            'currency' => $currency,
+            'amount' => $mode === self::MODE_INCOME ? $sums['income'] : $sums['expense'],
+            'count' => $mode === self::MODE_INCOME ? $sums['income_count'] : $sums['expense_count'],
+        ];
+
+        return match ($mode) {
+            self::MODE_PLAIN => $row,
+            self::MODE_SUMMARY => $row + ['income' => $sums['income'], 'net' => $sums['income'] - $sums['expense']],
+            self::MODE_EXPENSE => $row,
+            self::MODE_INCOME => $row + ['income' => $sums['income']],
+            default => $row + [
+                'expense' => $sums['expense'],
+                'income' => $sums['income'],
+                'net' => $sums['income'] - $sums['expense'],
+                'income_count' => $sums['income_count'],
+            ],
+        };
+    }
+
+    /**
+     * Utgift och intäkt i SAMMA `GROUP BY` (CostReport § Beslut 12): två
+     * villkorliga summor, inga fler frågor.
+     */
+    private function aggregateSql(): string
+    {
+        $expense = CostEntry::KIND_EXPENSE;
+        $income = CostEntry::KIND_INCOME;
+
+        return "SUM(CASE WHEN cost_entry.kind = '{$expense}' THEN cost_entry.amount ELSE 0 END) AS expense, "
+            ."SUM(CASE WHEN cost_entry.kind = '{$income}' THEN cost_entry.amount ELSE 0 END) AS income, "
+            ."SUM(CASE WHEN cost_entry.kind = '{$expense}' THEN 1 ELSE 0 END) AS expense_count, "
+            ."SUM(CASE WHEN cost_entry.kind = '{$income}' THEN 1 ELSE 0 END) AS income_count";
+    }
+
+    private function onlyExpenses(Builder $query): Builder
+    {
+        return $query->where('cost_entry.kind', CostEntry::KIND_EXPENSE);
     }
 }

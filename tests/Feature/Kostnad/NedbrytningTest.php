@@ -46,6 +46,20 @@ function nedbrytningLänk(Item $förälder, Item $barn, string $relation = 'pare
 }
 
 /**
+ * Totalen utan `income` och `net`: det bitarna ska summera till.
+ *
+ * @param  list<array<string, mixed>>  $totals
+ * @return list<array{currency: mixed, amount: mixed, count: mixed}>
+ */
+function nedbrytningUtgifter(array $totals): array
+{
+    return array_map(
+        static fn (array $rad): array => ['currency' => $rad['currency'], 'amount' => $rad['amount'], 'count' => $rad['count']],
+        $totals,
+    );
+}
+
+/**
  * Tårtbitarnas summa per valuta — bitarna är en LISTA, och den ska summeras
  * i testet så att "bitarna summerar till totalen" prövas mot totalen och
  * inte mot ett facit skrivet för hand.
@@ -130,10 +144,10 @@ it('tårtbitarna summerar exakt till totalen', function () {
 
     $data = $response->json('data');
 
-    expect(nedbrytningSumma($data['breakdown']))->toBe($data['totals']);
+    expect(nedbrytningSumma($data['breakdown']))->toBe(nedbrytningUtgifter($data['totals']));
     expect($data['totals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 2700, 'count' => 2],
-        ['currency' => 'SEK', 'amount' => 250000, 'count' => 1],
+        ['currency' => 'EUR', 'amount' => 2700, 'count' => 2, 'income' => 0, 'net' => -2700],
+        ['currency' => 'SEK', 'amount' => 250000, 'count' => 1, 'income' => 0, 'net' => -250000],
     ]);
 });
 
@@ -177,8 +191,8 @@ it('ett item med två föräldrar blir en tårtbit och räknas en gång', functi
     // Varje item som bär rader får sin egen bit — även ett som hänger under
     // ett annat, vilket är hela skillnaden mot toppnivåindelningen.
     expect($data['breakdown'])->toHaveCount(4);
-    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1175, 'count' => 4]]);
-    expect(nedbrytningSumma($data['breakdown']))->toBe($data['totals']);
+    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1175, 'count' => 4, 'income' => 0, 'net' => -1175]]);
+    expect(nedbrytningSumma($data['breakdown']))->toBe(nedbrytningUtgifter($data['totals']));
 });
 
 it('itemets summering bär itemet plus dess ättlingar', function () {
@@ -205,7 +219,7 @@ it('itemets summering bär itemet plus dess ättlingar', function () {
     $data = $response->json('data');
 
     // Barnbarnet räknas in i motorns tal, grannen gör det inte.
-    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1275, 'count' => 3]]);
+    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1275, 'count' => 3, 'income' => 0, 'net' => -1275]]);
 
     expect($data['breakdown'])->toBe([
         [
@@ -222,7 +236,7 @@ it('itemets summering bär itemet plus dess ättlingar', function () {
         ],
     ]);
 
-    expect(nedbrytningSumma($data['breakdown']))->toBe($data['totals']);
+    expect(nedbrytningSumma($data['breakdown']))->toBe(nedbrytningUtgifter($data['totals']));
     expect($response->getContent())->not->toContain('Granne');
 });
 
@@ -255,9 +269,9 @@ it('ett item som nås längs två vägar räknas en gång i itemets summering', 
 
     $data = $response->json('data');
 
-    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1130, 'count' => 4]]);
+    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1130, 'count' => 4, 'income' => 0, 'net' => -1130]]);
     expect($data['breakdown'])->toHaveCount(4);
-    expect(nedbrytningSumma($data['breakdown']))->toBe($data['totals']);
+    expect(nedbrytningSumma($data['breakdown']))->toBe(nedbrytningUtgifter($data['totals']));
 });
 
 it('en related-länk drar aldrig in en kostnad', function () {
@@ -281,7 +295,7 @@ it('en related-länk drar aldrig in en kostnad', function () {
 
     $data = $response->json('data');
 
-    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($data['totals'])->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'income' => 0, 'net' => -1000]]);
     expect($data['breakdown'])->toBe([
         [
             'key' => ['ulid' => $motor->ulid, 'name' => 'Motor'],
@@ -315,8 +329,8 @@ it('en nedbrytning över blandade valutor grupperas per valuta och summeras inte
     // § Konsekvenser): de två valutorna står bredvid varandra, också inuti en
     // och samma tårtbit.
     expect($data['totals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 1500, 'count' => 2],
-        ['currency' => 'SEK', 'amount' => 250000, 'count' => 1],
+        ['currency' => 'EUR', 'amount' => 1500, 'count' => 2, 'income' => 0, 'net' => -1500],
+        ['currency' => 'SEK', 'amount' => 250000, 'count' => 1, 'income' => 0, 'net' => -250000],
     ]);
 
     expect($data['breakdown'])->toBe([
@@ -369,7 +383,7 @@ it('nedbrytningen ignorerar okända parametrar lika fullt som totalen', function
 
     // Och utfallet är hela mängden: båda årtalen räknas, ingen period skär
     // bort något ur nedbrytningen.
-    expect($medMotorn->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1250, 'count' => 2]]);
+    expect($medMotorn->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1250, 'count' => 2, 'income' => 0, 'net' => -1250]]);
     expect($medMotorn->json('data.breakdown'))->toHaveCount(2);
 });
 
@@ -400,8 +414,11 @@ it('svaret bär ingen jämförelse mot en annan period', function () {
 
         expect(array_keys($data)[0])->toBe('totals');
 
+        // Kontots summering är oförändrad (bara utgifter); containerns och itemets bär income och net.
+        $nycklar = str_contains($url, '/accounts/') ? ['currency', 'amount', 'count'] : ['currency', 'amount', 'count', 'income', 'net'];
+
         foreach ($data['totals'] as $rad) {
-            expect(array_keys($rad))->toBe(['currency', 'amount', 'count']);
+            expect(array_keys($rad))->toBe($nycklar);
         }
 
         foreach ($data['breakdown'] ?? [] as $bit) {
@@ -443,7 +460,7 @@ it('en nedbrytning bär varken en rad eller en tårtbit från ett item användar
     $containern->assertOk();
     $motorn->assertOk();
 
-    $facit = [['currency' => 'EUR', 'amount' => 1250, 'count' => 2]];
+    $facit = [['currency' => 'EUR', 'amount' => 1250, 'count' => 2, 'income' => 0, 'net' => -1250]];
 
     expect($containern->json('data.totals'))->toBe($facit);
     expect($motorn->json('data.totals'))->toBe($facit);
@@ -558,7 +575,7 @@ it('ett mjukraderat item blir varken en rad eller en tårtbit', function () {
     $containern = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
     $motorn = getJson("/api/containers/{$container->ulid}/items/{$motor->ulid}/costs/summary", $headers);
 
-    $facit = [['currency' => 'EUR', 'amount' => 1000, 'count' => 1]];
+    $facit = [['currency' => 'EUR', 'amount' => 1000, 'count' => 1, 'income' => 0, 'net' => -1000]];
 
     expect($containern->json('data.totals'))->toBe($facit);
     expect($containern->json('data.breakdown'))->toHaveCount(1);

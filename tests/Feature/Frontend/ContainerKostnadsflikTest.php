@@ -297,7 +297,7 @@ it('en rad på ett item utanför omfånget visas inte och räknas inte', functio
         ->and($proppar['rows']['data'][0]['item']['name'])->toBe('Motorn');
 
     // Brickan och *I år*: bara det egna beloppet.
-    expect($proppar['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1]])
+    expect($proppar['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1, 'income' => 0, 'net' => -1111]])
         ->and($proppar['yearCosts'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1]]);
 
     // Donuten: en bit, och den är det egna itemet.
@@ -310,7 +310,7 @@ it('en rad på ett item utanför omfånget visas inte och räknas inte', functio
     $agarens = kostnadsflikProps(actingAs($agaren)->get(kostnadsflikUrl($container))->assertOk());
 
     expect($agarens['rows']['total'])->toBe(2)
-        ->and($agarens['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 3333, 'count' => 2]]);
+        ->and($agarens['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 3333, 'count' => 2, 'income' => 0, 'net' => -3333]]);
 });
 
 /*
@@ -336,7 +336,7 @@ it('en rad på ett item i papperskorgen visas inte', function () {
 
     expect($proppar['rows']['total'])->toBe(1)
         ->and($proppar['rows']['data'][0]['item']['name'])->toBe('Motorn')
-        ->and($proppar['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]])
+        ->and($proppar['costs']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1, 'income' => 0, 'net' => -1000]])
         ->and($proppar['yearCosts'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]])
         ->and($proppar['costs']['breakdown'])->toHaveCount(1);
 });
@@ -362,8 +362,8 @@ it('brickorna visar en summa per valuta och aldrig en summa över två valutor',
     $proppar = kostnadsflikProps(actingAs($anvandare)->get(kostnadsflikUrl($container))->assertOk());
 
     expect($proppar['costs']['totals'])->toBe([
-        ['currency' => 'EUR', 'amount' => 50, 'count' => 1],
-        ['currency' => 'SEK', 'amount' => 300, 'count' => 2],
+        ['currency' => 'EUR', 'amount' => 50, 'count' => 1, 'income' => 0, 'net' => -50],
+        ['currency' => 'SEK', 'amount' => 300, 'count' => 2, 'income' => 0, 'net' => -300],
     ])->and($proppar['yearCosts'])->toBe([
         ['currency' => 'EUR', 'amount' => 50, 'count' => 1],
         ['currency' => 'SEK', 'amount' => 300, 'count' => 2],

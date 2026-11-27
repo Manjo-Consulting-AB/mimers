@@ -836,8 +836,8 @@ it('brickorna Totalt och I år påverkas inte av filtret', function () {
     // medan tabellen och rapporten svarar på var sin fråga.
     expect($januari['costs'])->toBe($denna['costs'])
         ->and($januari['costs']['totals'])->toBe([
-            ['currency' => 'EUR', 'amount' => 300, 'count' => 1],
-            ['currency' => 'SEK', 'amount' => 300, 'count' => 2],
+            ['currency' => 'EUR', 'amount' => 300, 'count' => 1, 'income' => 0, 'net' => -300],
+            ['currency' => 'SEK', 'amount' => 300, 'count' => 2, 'income' => 0, 'net' => -300],
         ])
         ->and($januari['yearCosts'])->toBe($denna['yearCosts'])
         ->and($januari['year'])->toBe($denna['year'])
