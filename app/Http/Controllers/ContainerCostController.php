@@ -219,7 +219,11 @@ class ContainerCostController extends Controller
                 'allowed_currencies' => $container->allowedCurrencyCodes(),
             ],
             'costSuppliers' => Inertia::optional(
-                fn (): array => $listCostSuppliers->handle($user, $container)
+                fn (): array => $listCostSuppliers->handle(
+                    $user,
+                    $container,
+                    in_array($request->query('kind'), ['expense', 'income'], true) ? $request->query('kind') : null,
+                )
             ),
             // Raden som just skrevs: ULID:en ur flashen `created_cost` som
             // CostEntryController::store() sätter vid en godkänd `return`.

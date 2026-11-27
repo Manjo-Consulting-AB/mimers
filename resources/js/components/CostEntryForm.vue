@@ -88,9 +88,12 @@ const currencyChoicesWithNames = computed(() => currencyChoices.value.map((code)
 })));
 
 function loadSuppliers() {
+    // Motparterna hämtas för formulärets riktning (`kind`, ADR-0102 § Riktning
+    // 6): en intäkts motparter är inte en utgifts leverantörer.
     // Namnen på valutorna behövs bara när containern har ett urval; utan
     // urval visar CurrencyField hela listan och hämtar den själv vid fokus.
     router.reload({
+        data: { kind: form.kind },
         only: allowedCodes.value.length > 0
             ? ['costSuppliers', 'currencies']
             : ['costSuppliers'],
@@ -116,8 +119,17 @@ const form = useForm({
     amount: '',
     currency: props.costDefaults.currency,
     description: '',
-    supplier: '',
+    quantity: '',
+    kind: 'expense',
+    counterparty: '',
 });
+
+/* Motpartens etikett följer riktningen, och förslagen hämtas om när den byts. */
+const counterpartyLabel = computed(() => t(
+    form.kind === 'income' ? 'item.cost.form_received_from' : 'item.cost.form_paid_to',
+));
+
+watch(() => form.kind, loadSuppliers);
 
 watch(() => form.isDirty, (dirty) => emit('dirty', dirty), { immediate: true });
 
@@ -137,7 +149,7 @@ function submit() {
             // ny fråga om samma sak. Förvalet flyttas till det som står kvar
             // (form.defaults()), så nästa rad mäts mot det och isDirty blir falsk.
             onSuccess: () => {
-                form.reset('amount', 'description', 'supplier');
+                form.reset('amount', 'description', 'counterparty', 'quantity');
                 form.defaults();
                 loadSuppliers();
                 emit('created');
@@ -154,6 +166,36 @@ function submit() {
 
 <template>
     <form class="flex flex-col gap-4" @submit.prevent="submit">
+        <!--
+            Riktningen (issue 1781 · ADR-0102 § Riktning 6): ett segmentval av
+            två radioknappar, *Expense* förvald. Etiketten är hela träffytan
+            (minst 44 px) och valet markeras med kantlinje och text, inte bara
+            färg.
+        -->
+        <fieldset class="flex flex-col gap-1">
+            <legend class="text-meta font-medium text-ink">{{ t('item.cost.form_kind') }}</legend>
+
+            <div class="mt-1 grid grid-cols-2 gap-2" role="radiogroup">
+                <label
+                    v-for="option in ['expense', 'income']"
+                    :key="option"
+                    :for="`cost-kind-${option}`"
+                    class="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-control border px-3 text-body font-medium text-ink focus-within:ring-2 focus-within:ring-focus focus-within:ring-offset-2"
+                    :class="form.kind === option ? 'border-accent bg-accent-soft' : 'border-border bg-surface'"
+                >
+                    <input
+                        :id="`cost-kind-${option}`"
+                        v-model="form.kind"
+                        type="radio"
+                        name="cost-kind"
+                        :value="option"
+                        class="sr-only"
+                    />
+                    {{ t(`item.cost.kind_${option}`) }}
+                </label>
+            </div>
+        </fieldset>
+
         <FormField
             v-slot="{ describedBy }"
             :label="t('item.cost.form_incurred_on')"
@@ -177,6 +219,20 @@ function submit() {
             <UiInput
                 id="cost-amount"
                 v-model="form.amount"
+                :described-by="describedBy"
+                inputmode="decimal"
+            />
+        </FormField>
+
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('item.cost.form_quantity')"
+            id="cost-quantity"
+            :error="form.errors.quantity"
+        >
+            <UiInput
+                id="cost-quantity"
+                v-model="form.quantity"
                 :described-by="describedBy"
                 inputmode="decimal"
             />
@@ -241,13 +297,13 @@ function submit() {
         -->
         <FormField
             v-slot="{ describedBy }"
-            :label="t('item.cost.form_supplier')"
+            :label="counterpartyLabel"
             id="cost-supplier"
-            :error="form.errors.supplier"
+            :error="form.errors.counterparty ?? form.errors.supplier"
         >
             <UiInput
                 id="cost-supplier"
-                v-model="form.supplier"
+                v-model="form.counterparty"
                 :described-by="describedBy"
                 list="cost-suppliers"
             />

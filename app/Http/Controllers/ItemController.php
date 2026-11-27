@@ -1374,7 +1374,11 @@ class ItemController extends Controller
             // den hade varit en andra väg till samma läsning och burit med sig
             // autentiseringen dit.
             'costSuppliers' => Inertia::optional(
-                fn (): array => $listCostSuppliers->handle($user, $container)
+                fn (): array => $listCostSuppliers->handle(
+                    $user,
+                    $container,
+                    in_array($request->query('kind'), ['expense', 'income'], true) ? $request->query('kind') : null,
+                )
             ),
 
             // Användarens datum, av samma skäl: "Tillbaka idag" (Beslut 3)

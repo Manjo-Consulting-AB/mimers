@@ -607,3 +607,107 @@ it('ritar registreringen före listan', function () {
     expect($rubrik)->toBeLessThan($formular);
     expect($formular)->toBeLessThan($lista);
 });
+
+// --- issue 1781: Finances, riktning, antal och netto ----------------------
+
+/** Källkoden för en komponent utan kommentarer. */
+function finansKalla(string $fil): string
+{
+    $kod = File::get(resource_path("js/components/{$fil}"));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+}
+
+it('kallar itemets flik Finances och låter ?tab=costs öppna den', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $item] = kostnadsvyKontext();
+
+    expect(Lang::get('ui.item.cost.heading', [], 'en'))->toBe('Finances');
+    expect(File::get(resource_path('js/pages/Containers/Items/Show.vue')))
+        ->toContain("key: 'costs', label: t('item.cost.heading')");
+
+    actingAs($anvandare)->get(kostnadsvyUrl($container, $item).'?tab=costs')->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->has('costs'),
+    );
+});
+
+it('skickar kind=expense som förval och kind=income när Income är valt', function () {
+    $form = finansKalla('CostEntryForm.vue');
+
+    expect($form)
+        ->toContain("kind: 'expense'")
+        ->toContain('quantity:')
+        ->toContain('counterparty:')
+        ->toContain('v-model="form.kind"')
+        ->toContain('value="option"')
+        ->toContain("['expense', 'income']");
+});
+
+it('låter motpartens etikett följa riktningen och skickar kind i uppslaget', function () {
+    $form = finansKalla('CostEntryForm.vue');
+
+    expect($form)
+        ->toContain("'item.cost.form_received_from' : 'item.cost.form_paid_to'")
+        ->toContain('data: { kind: form.kind }');
+    expect(Lang::get('ui.item.cost.form_paid_to', [], 'en'))->toBe('Paid to');
+    expect(Lang::get('ui.item.cost.form_received_from', [], 'en'))->toBe('Received from');
+});
+
+it('föreslår bara motparter med samma riktning som uppslaget ber om', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $item] = kostnadsvyKontext();
+
+    kostnadsvyRad($item, ['counterparty' => 'Volvo Penta']);
+    kostnadsvyRad($item, ['counterparty' => 'Kund AB', 'kind' => 'income']);
+
+    app()->forgetScopedInstances();
+
+    $svar = actingAs($anvandare)->get(kostnadsvyUrl($container, $item).'?kind=income', [
+        'X-Inertia' => 'true',
+        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
+        'X-Inertia-Partial-Component' => 'Containers/Items/Show',
+        'X-Inertia-Partial-Data' => 'costSuppliers',
+    ])->assertOk();
+
+    expect($svar->json('props.costSuppliers'))->toBe([['supplier' => 'Kund AB', 'count' => 1]]);
+});
+
+it('visar antal × styckpris och märker intäkter med ett plus och text', function () {
+    $donut = File::get(resource_path('js/components/CostDonut.vue'));
+    $tabell = finansKalla('CostTable.vue');
+    $sektion = finansKalla('ItemCostSection.vue');
+
+    expect($donut)->toContain('Math.round(Math.abs(amount) / count)');
+    expect($donut)->toContain("kind === 'income' ? '+' : ''");
+    expect(Lang::get('ui.item.cost.row_unit_price', ['quantity' => '100', 'price' => '$12.50'], 'en'))
+        ->toBe('100 × $12.50');
+    expect(Lang::get('ui.item.cost.row_income', [], 'en'))->toBe('Income');
+
+    foreach ([$tabell, $sektion] as $kod) {
+        expect($kod)->toContain('unitPriceParts')->toContain("kind === 'income'")->toContain('item.cost.row_income');
+    }
+});
+
+it('visar en total utan intäkter och utgifter, intäkter och netto med dem', function () {
+    $sektion = finansKalla('ItemCostSection.vue');
+
+    expect($sektion)
+        ->toContain('v-if="!(total.income > 0)"')
+        ->toContain("t('container.costs.total')")
+        ->toContain("t('item.cost.total_expenses')")
+        ->toContain("t('item.cost.total_income')")
+        ->toContain("t('item.cost.total_net')")
+        ->toContain('total.net > 0');
+    expect(Lang::get('ui.container.costs.donut', [], 'en'))->toBe('Expenses by item');
+});
+
+it('håller segmentvalet och fälten på minst 44 px och utan vågrät rullning', function () {
+    $form = finansKalla('CostEntryForm.vue');
+
+    expect($form)->toContain('min-h-11')->toContain('grid-cols-2');
+    expect(str_contains($form, 'overflow-x'))->toBeFalse();
+});

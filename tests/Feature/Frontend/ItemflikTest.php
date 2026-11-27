@@ -300,7 +300,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     // Och de visade orden är ADR:ens.
     expect(array_map(fn (string $nyckel): string => trans("ui.{$nyckel}", [], 'en'), itemflikEtiketter($vy)))
-        ->toBe(['Overview', 'Documents', 'Costs', 'Tasks', 'Loans', 'History']);
+        ->toBe(['Overview', 'Documents', 'Finances', 'Tasks', 'Loans', 'History']);
 
     foreach (itemflikEtiketter($vy) as $nyckel) {
         $mening = trans("ui.{$nyckel}", [], 'en');

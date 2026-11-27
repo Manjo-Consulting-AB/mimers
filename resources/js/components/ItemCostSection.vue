@@ -11,7 +11,7 @@ import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import UiStat from './UiStat.vue';
-import { formatAmount } from './CostDonut.vue';
+import { formatAmount, formatSignedAmount, unitPriceParts } from './CostDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -329,6 +329,12 @@ watch(() => props.costs, (costs) => {
 
 onBeforeUnmount(() => clearTimeout(highlightTimer));
 
+function unitLine(cost) {
+    const parts = unitPriceParts(cost.amount, cost.quantity, cost.currency);
+
+    return parts === null ? null : t('item.cost.row_unit_price', parts);
+}
+
 function url(cost) {
     /*
      * Radens adress går mot RADENS item (issue 1248 · ADR-0068 § Uppföljning
@@ -432,7 +438,8 @@ const editForm = useForm({
     amount: '',
     currency: '',
     description: '',
-    supplier: '',
+    quantity: '',
+    counterparty: '',
 });
 
 function startEdit(cost) {
@@ -443,7 +450,8 @@ function startEdit(cost) {
     editForm.amount = amountInput(cost.amount, cost.currency);
     editForm.currency = cost.currency;
     editForm.description = cost.description;
-    editForm.supplier = cost.supplier ?? '';
+    editForm.quantity = cost.quantity ?? '';
+    editForm.counterparty = cost.counterparty ?? cost.supplier ?? '';
 
     savedAmount = editForm.amount;
     savedCurrency = editForm.currency;
@@ -485,8 +493,12 @@ function patchBody(cost) {
         body.description = editForm.description;
     }
 
-    if ((editForm.supplier ?? '') !== (cost.supplier ?? '')) {
-        body.supplier = editForm.supplier;
+    if ((editForm.counterparty ?? '') !== (cost.counterparty ?? cost.supplier ?? '')) {
+        body.counterparty = editForm.counterparty;
+    }
+
+    if (String(editForm.quantity ?? '') !== String(cost.quantity ?? '')) {
+        body.quantity = editForm.quantity === '' ? null : editForm.quantity;
     }
 
     if (editForm.amount !== savedAmount || editForm.currency !== savedCurrency) {
@@ -594,12 +606,33 @@ function destroy(cost) {
             som kan gå isär från listan under sig.
         -->
         <div v-if="costTotals.length > 0" class="flex flex-wrap gap-4">
-            <UiStat
-                v-for="total in costTotals"
-                :key="`total-${total.currency}`"
-                :value="formatAmount(total.amount, total.currency)"
-                :label="t('container.costs.total')"
-            />
+            <template v-for="total in costTotals" :key="`total-${total.currency}`">
+                <!--
+                    Utan intäkter: en total per valuta, som förut. Med minst en
+                    intäkt (ADR-0102 § Riktning 6): *Expenses*, *Income* och
+                    *Net* per valuta, ur nycklarna `amount`, `income` och
+                    `net`. Nettot visas med tecken.
+                -->
+                <UiStat
+                    v-if="!(total.income > 0)"
+                    :value="formatAmount(total.amount, total.currency)"
+                    :label="t('container.costs.total')"
+                />
+                <template v-else>
+                    <UiStat
+                        :value="formatAmount(total.amount, total.currency)"
+                        :label="t('item.cost.total_expenses')"
+                    />
+                    <UiStat
+                        :value="formatAmount(total.income, total.currency)"
+                        :label="t('item.cost.total_income')"
+                    />
+                    <UiStat
+                        :value="`${total.net > 0 ? '+' : ''}${formatAmount(total.net, total.currency)}`"
+                        :label="t('item.cost.total_net')"
+                    />
+                </template>
+            </template>
         </div>
 
         <!--
@@ -645,10 +678,17 @@ function destroy(cost) {
                         {{ formatDateOnly(cost.incurred_on, locale) }}
                     </span>
 
-                    <span v-if="cost.supplier" class="text-meta text-ink-muted">{{ cost.supplier }}</span>
+                    <span v-if="cost.counterparty ?? cost.supplier" class="text-meta text-ink-muted">{{ cost.counterparty ?? cost.supplier }}</span>
 
-                    <span class="ml-auto text-title font-medium text-ink">
-                        {{ formatAmount(cost.amount, cost.currency) }}
+                    <span class="ml-auto flex flex-col items-end">
+                        <span class="text-title font-medium text-ink">
+                            {{ formatSignedAmount(cost.amount, cost.currency, cost.kind) }}
+                        </span>
+                        <!-- Märkt med text, inte bara färg (issue 1781). -->
+                        <span v-if="cost.kind === 'income'" class="text-meta text-ink-muted">
+                            {{ t('item.cost.row_income') }}
+                        </span>
+                        <span v-if="unitLine(cost)" class="text-meta text-ink-muted">{{ unitLine(cost) }}</span>
                     </span>
                 </div>
 
@@ -687,6 +727,10 @@ function destroy(cost) {
                     class="flex flex-col gap-4 border-t border-border pt-3"
                     @submit.prevent="submitEdit(cost)"
                 >
+                    <p class="text-body font-medium text-ink">
+                        {{ t('item.cost.form_kind') }}: {{ t(`item.cost.kind_${cost.kind === 'income' ? 'income' : 'expense'}`) }}
+                    </p>
+
                     <FormField
                         v-slot="{ describedBy }"
                         :label="t('item.cost.form_incurred_on')"
@@ -725,6 +769,20 @@ function destroy(cost) {
                     -->
                     <FormField
                         v-slot="{ describedBy }"
+                        :label="t('item.cost.form_quantity')"
+                        id="cost-edit-quantity"
+                        :error="editForm.errors.quantity"
+                    >
+                        <UiInput
+                            id="cost-edit-quantity"
+                            v-model="editForm.quantity"
+                            :described-by="describedBy"
+                            inputmode="decimal"
+                        />
+                    </FormField>
+
+                    <FormField
+                        v-slot="{ describedBy }"
                         :label="t('item.cost.form_currency')"
                         id="cost-edit-currency"
                         :error="editForm.errors.currency"
@@ -752,13 +810,13 @@ function destroy(cost) {
 
                     <FormField
                         v-slot="{ describedBy }"
-                        :label="t('item.cost.form_supplier')"
+                        :label="t(cost.kind === 'income' ? 'item.cost.form_received_from' : 'item.cost.form_paid_to')"
                         id="cost-edit-supplier"
-                        :error="editForm.errors.supplier"
+                        :error="editForm.errors.counterparty ?? editForm.errors.supplier"
                     >
                         <UiInput
                             id="cost-edit-supplier"
-                            v-model="editForm.supplier"
+                            v-model="editForm.counterparty"
                             :described-by="describedBy"
                             list="cost-suppliers"
                         />
