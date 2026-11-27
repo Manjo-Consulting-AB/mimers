@@ -266,6 +266,13 @@
     text-decoration: underline;
 }
 
+.field-link {
+    color: var(--color-accent);
+    text-decoration: underline;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+}
+
 .item-notes-content blockquote,
 .help-content blockquote {
     border-left: 3px solid var(--color-border);
