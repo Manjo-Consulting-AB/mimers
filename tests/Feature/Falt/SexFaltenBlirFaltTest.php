@@ -7,6 +7,8 @@ use App\Models\ItemField;
 use App\Models\ItemFieldValue;
 use App\Models\UsageCounter;
 use App\Support\Usage\CountedRows;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 use function Pest\Laravel\getJson;
 
@@ -23,12 +25,49 @@ use function Pest\Laravel\getJson;
  * Sedan issue 425 är kolumnerna borta ur schemat. Proven som matar in värden
  * lägger därför tillbaka dem med sexFaltKolumnerTillbaka(): det är den enda
  * form migreringen någonsin kopierade från, och på en färsk databas kör den
- * före 425 (migrationernas ordning). Kolumnerna rullas tillbaka med testets
- * transaktion (RefreshDatabase).
+ * före 425 (migrationernas ordning).
+ *
+ * Kolumnerna läggs tillbaka i `beforeEach` för varje prov, eftersom `up()`
+ * läser dem oavsett vad provet matar in, och tas bort igen i `afterEach`.
+ * Drivrutinsglappet: på SQLite rullas DDL tillbaka med testets transaktion
+ * (RefreshDatabase), men MariaDB committar implicit vid varje `ALTER TABLE`,
+ * så kolumnerna (och alla rader som provet skrivit) skulle ligga kvar för
+ * resten av sviten. På MariaDB gör därför `beforeEach` DDL:en först, innan
+ * någon rad finns, och öppnar sedan en ny transaktion på PDO-nivå som
+ * `afterEach` rullar tillbaka INNAN kolumnerna släpps. Därefter öppnas en
+ * tom transaktion, så att RefreshDatabase har något att rulla tillbaka.
  *
  * Hjälparna har prefixet `sexFalt` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
  */
+
+beforeEach(function () {
+    sexFaltKolumnerTillbaka();
+
+    if (DB::getDriverName() !== 'sqlite') {
+        // ALTER TABLE committade RefreshDatabase-transaktionen. Det som provet
+        // skriver härifrån ska kunna rullas tillbaka, så en ny öppnas.
+        DB::getPdo()->beginTransaction();
+    }
+});
+
+afterEach(function () {
+    if (DB::getDriverName() === 'sqlite') {
+        return; // Kolumnerna rullas tillbaka med testets transaktion.
+    }
+
+    $pdo = DB::getPdo();
+
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+
+    Schema::dropColumns('item', [
+        'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note',
+    ]);
+
+    $pdo->beginTransaction();
+});
 
 /**
  * En ny instans av migreringen, så `up()` kan köras om i ett test.
@@ -52,8 +91,8 @@ function sexFaltKontext(): array
 /**
  * Ett item med de sex kolumnerna ifyllda. Kolumnerna är inte längre
  * mass-assignbara (issue 420), så de sätts med `forceFill()` — samma väg en
- * MCP-skrivning tog fram till issue 423. Kolumnerna läggs tillbaka först,
- * eftersom issue 425 har tagit bort dem ur schemat.
+ * MCP-skrivning tog fram till issue 423. Kolumnerna finns tack vare
+ * `beforeEach` nedan, eftersom issue 425 har tagit bort dem ur schemat.
  *
  * @param  array<string, mixed>  $kolumner
  */
@@ -65,7 +104,6 @@ function sexFaltItem(Container $container, Account $betalare, array $kolumner = 
     ]);
 
     if ($kolumner !== []) {
-        sexFaltKolumnerTillbaka();
         $item->forceFill($kolumner)->save();
     }
 

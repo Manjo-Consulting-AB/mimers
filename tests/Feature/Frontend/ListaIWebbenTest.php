@@ -83,7 +83,7 @@ function listaIWebbenItemUrl(Container $container, Item $item): string
  * En förekomst i vald lista. Schemat är `none`, samma form produktionen ger
  * en engångsuppgift.
  */
-function listaIWebbenUppgift(Item $item, string $lista = 'inbox'): ScheduleOccurrence
+function listaIWebbenUppgift(Item $item, string $lista = 'next'): ScheduleOccurrence
 {
     $schema = Schedule::factory()->for($item, 'item')->create([
         'title' => 'Byt olja',
@@ -217,7 +217,11 @@ it('raden har väljaren och växeln bakom can.update', function () {
 it('byter lista från raden', function () {
     [$konto, $anvandare, $container, $item] = listaIWebbenKontext();
 
-    $förekomst = listaIWebbenUppgift($item, 'inbox');
+    // 'inbox' är inte längre ett giltigt gtd_list-värde: migreringen
+    // 2026_10_05_010000_remove_inbox_from_gtd_list tog bort det ur
+    // schedule_occurrence_gtd_list_check. SQLite har inget CHECK-villkor och
+    // släpper igenom det, MariaDB avvisar raden. Provet startar därför i 'next'.
+    $förekomst = listaIWebbenUppgift($item, 'next');
 
     actingAs($anvandare)
         ->from('/tasks')
