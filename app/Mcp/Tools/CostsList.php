@@ -48,7 +48,7 @@ class CostsList extends ReadsItems
         $limit = (int) ($args['limit'] ?? Cursor::DEFAULT_LIMIT);
         $after = Cursor::decode($args['cursor'] ?? null, 1)[0] ?? 0;
 
-        $rows = CostEntry::query()->where('item_id', $item->id)
+        $rows = CostEntry::query()->expenses()->where('item_id', $item->id)
             ->where('id', '>', $after)
             ->orderBy('id')
             ->limit($limit + 1)
@@ -63,7 +63,7 @@ class CostsList extends ReadsItems
                 'incurred_on' => $row->incurred_on->toDateString(),
                 'amount' => MinorUnits::format((int) $row->amount, $row->currency),
                 'currency' => $row->currency,
-                'supplier' => $row->supplier,
+                'supplier' => $row->counterparty,
                 'content' => ['description' => $row->description],
             ])->values()->all(),
             'next_cursor' => $more ? Cursor::encode([(int) $rows->last()->id]) : null,

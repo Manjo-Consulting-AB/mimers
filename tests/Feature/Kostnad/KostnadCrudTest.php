@@ -59,7 +59,7 @@ function kostnadsKropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'EUR',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ], $overrides);
 }
 
@@ -140,16 +140,16 @@ it('supplier trimmas vid sparning och blank blir null', function () {
     [, , $headers, $container, $item] = skapaKostnadsItem();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
-    $medBlanksteg = postJson($url, kostnadsKropp(['supplier' => '  Volvo Penta  ']), $headers);
+    $medBlanksteg = postJson($url, kostnadsKropp(['counterparty' => '  Volvo Penta  ']), $headers);
     $medBlanksteg->assertCreated();
     expect($medBlanksteg->json('data.supplier'))->toBe('Volvo Penta');
 
-    $enbartBlank = postJson($url, kostnadsKropp(['supplier' => '   ']), $headers);
+    $enbartBlank = postJson($url, kostnadsKropp(['counterparty' => '   ']), $headers);
     $enbartBlank->assertCreated();
     expect($enbartBlank->json('data.supplier'))->toBeNull();
 
     $rad = CostEntry::where('ulid', $enbartBlank->json('data.ulid'))->first();
-    expect($rad->supplier)->toBeNull();
+    expect($rad->counterparty)->toBeNull();
 });
 
 it('listan sorteras incurred_on fallande med id fallande som andrasortering', function () {

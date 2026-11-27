@@ -23,8 +23,8 @@ use Illuminate\Support\Facades\DB;
  * tvärfältsregler mot radens befintliga tillstånd, så ingen
  * `validationData()`-sammanslagning som UpdateLoanRequest behövde.
  *
- * **`meta` bär fältens NAMN, och gamla och nya värdet för beloppet, valutan
- * och datumet** — aldrig för beskrivningen eller leverantören, som är
+ * **`meta` bär fältens NAMN, och gamla och nya värdet för beloppet, valutan,
+ * datumet och riktningen** — aldrig för beskrivningen eller motparten, som är
  * användarens fritext ([[ADR-0017 Missbruksvektorer]] § 7).
  *
  * En PATCH som inte ändrar något skriver ingen rad: skillnaden mot databasen
@@ -40,13 +40,13 @@ class UpdateCostEntry
     private const DATE_FIELDS = ['incurred_on'];
 
     /**
-     * Fälten vars värde får följa med i `meta`: datumet, valutan och
-     * beloppet. `description` och `supplier` är användarens fritext och
+     * Fälten vars värde får följa med i `meta`: datumet, valutan,
+     * beloppet och riktningen. `description` och `counterparty` är användarens fritext och
      * följer aldrig med — bara deras NAMN står i `changed`.
      *
      * @var list<string>
      */
-    private const VALUED_FIELDS = ['incurred_on', 'currency', 'amount'];
+    private const VALUED_FIELDS = ['incurred_on', 'currency', 'amount', 'kind', 'quantity'];
 
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 
@@ -65,6 +65,11 @@ class UpdateCostEntry
         // annan valuta prövas.
         if (array_key_exists('currency', $data) && $data['currency'] !== $cost->currency) {
             $item->container->ensurePermitsCurrency($data['currency']);
+        }
+
+        // Kolumnen är NOT NULL: ett `null` betyder "rör inte riktningen".
+        if (array_key_exists('kind', $data) && $data['kind'] === null) {
+            unset($data['kind']);
         }
 
         if (array_key_exists('amount', $data)) {

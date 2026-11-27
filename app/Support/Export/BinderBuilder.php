@@ -407,7 +407,7 @@ class BinderBuilder
         }
 
         if (in_array('costs', $sections, true)) {
-            $with['costs'] = fn ($q) => $q->orderBy('incurred_on')->orderBy('id');
+            $with['costs'] = fn ($q) => $q->expenses()->orderBy('incurred_on')->orderBy('id');
         }
 
         $item->load($with);
@@ -451,7 +451,7 @@ class BinderBuilder
                 'rows' => $item->costs->map(fn ($c): array => [
                     'date' => $c->incurred_on->toDateString(),
                     'description' => $c->description,
-                    'supplier' => $c->supplier,
+                    'supplier' => $c->counterparty,
                     'amount' => MinorUnits::format((int) $c->amount, $c->currency).' '.$c->currency,
                 ])->all(),
                 'totals' => $totals,

@@ -291,6 +291,21 @@ it('försättsbladet bär containerns bild som medium-variant, aldrig originalet
         ->and($omslag['owner'])->toBe($account->name);
 });
 
+it('pärmen tar med utgifter men inte intäkter', function () {
+    [$account, $user, $container] = parmKontext();
+    $item = parmItem($container, $account, $user, 'Prylen');
+    $rad = ['item_id' => $item->id, 'container_id' => $container->id, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id];
+    CostEntry::factory()->create($rad + ['amount' => 12345, 'counterparty' => 'Leverantören']);
+    CostEntry::factory()->create($rad + ['amount' => 99900, 'kind' => 'income', 'counterparty' => 'Köparen']);
+
+    $spion = parmSpion();
+    parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
+    $data = collect($spion->rendered)->first(fn (array $r): bool => $r[0] === 'export.binder.item')[1];
+
+    expect($data['costs']['rows'])->toHaveCount(1)
+        ->and($data['costs']['rows'][0]['supplier'])->toBe('Leverantören');
+});
+
 it('options.sections styr vad som tas med och kostnader är av som förval', function () {
     [$account, $user, $container] = parmKontext();
     $item = parmItem($container, $account, $user, 'Prylen');

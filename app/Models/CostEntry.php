@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\CostEntryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,7 +31,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * Tabellen heter `cost_entry`, inte Eloquents standardplural `cost_entries`.
  */
-#[Fillable(['incurred_on', 'currency', 'description', 'supplier'])]
+#[Fillable(['kind', 'quantity', 'incurred_on', 'currency', 'description', 'counterparty'])]
 #[RouteKey('ulid')]
 class CostEntry extends Model
 {
@@ -41,6 +42,11 @@ class CostEntry extends Model
      * Tabellen heter `cost_entry`, inte Eloquents standardplural `cost_entries`.
      */
     protected $table = 'cost_entry';
+
+    /** Riktningen: en utgift (förvalet) eller en intäkt, ADR-0102. */
+    public const KIND_EXPENSE = 'expense';
+
+    public const KIND_INCOME = 'income';
 
     /**
      * Get the attributes that should be cast.
@@ -56,7 +62,30 @@ class CostEntry extends Model
     {
         return [
             'incurred_on' => 'date',
+            'quantity' => 'decimal:6',
         ];
+    }
+
+    /**
+     * Bara utgifter (ADR-0102). Samma form som ContainerAccess::scopeValid().
+     *
+     * @param  Builder<CostEntry>  $query
+     * @return Builder<CostEntry>
+     */
+    public function scopeExpenses(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.kind', self::KIND_EXPENSE);
+    }
+
+    /**
+     * Bara intäkter (ADR-0102).
+     *
+     * @param  Builder<CostEntry>  $query
+     * @return Builder<CostEntry>
+     */
+    public function scopeIncomes(Builder $query): Builder
+    {
+        return $query->where($query->getModel()->getTable().'.kind', self::KIND_INCOME);
     }
 
     /**

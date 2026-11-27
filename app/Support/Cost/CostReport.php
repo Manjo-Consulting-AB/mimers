@@ -5,6 +5,7 @@ namespace App\Support\Cost;
 use App\Actions\Category\ResolveCategoryDescendants;
 use App\Actions\Item\ResolveItemDescendants;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Support\Access\ItemScope;
@@ -462,7 +463,7 @@ final class CostReport
         }
 
         if (($params['supplier'] ?? null) !== null) {
-            $query->where('cost_entry.supplier', $params['supplier']);
+            $query->where('cost_entry.counterparty', $params['supplier']);
         }
 
         // `whereDate()`, aldrig en rå kolumnjämförelse: i sqlite lagras
@@ -495,6 +496,9 @@ final class CostReport
         return DB::table('cost_entry')
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
             ->whereNull('cost_entry.deleted_at')
+            // Bara utgifter: en intäkt får inte bli en kostnad i summorna
+            // (ADR-0102). Utgifter, intäkter och netto kommer i issue 527.
+            ->where('cost_entry.kind', CostEntry::KIND_EXPENSE)
             ->whereNull('item.deleted_at');
     }
 
@@ -622,11 +626,11 @@ final class CostReport
     private function groupBySupplier(Builder $base): array
     {
         $rows = (clone $base)
-            ->selectRaw('cost_entry.supplier AS supplier')
+            ->selectRaw('cost_entry.counterparty AS supplier')
             ->selectRaw('cost_entry.currency AS currency')
             ->selectRaw('SUM(cost_entry.amount) AS amount')
             ->selectRaw('COUNT(*) AS count')
-            ->groupBy('cost_entry.supplier', 'cost_entry.currency')
+            ->groupBy('cost_entry.counterparty', 'cost_entry.currency')
             ->get();
 
         $buckets = [];

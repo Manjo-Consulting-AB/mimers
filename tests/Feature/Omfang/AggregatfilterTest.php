@@ -328,8 +328,8 @@ it('samma rapport ger samma totalsumma oavsett group_by, och grupperna summerar 
     $motor->tags()->attach([$service->id]);
     aggregatKategori($motor, $kategori);
 
-    aggregatKostnad($motor, ['amount' => 1000, 'supplier' => 'Volvo Penta', 'incurred_on' => '2026-04-01']);
-    aggregatKostnad($motor, ['amount' => 400, 'supplier' => 'Skeppshandeln', 'incurred_on' => '2026-04-02']);
+    aggregatKostnad($motor, ['amount' => 1000, 'counterparty' => 'Volvo Penta', 'incurred_on' => '2026-04-01']);
+    aggregatKostnad($motor, ['amount' => 400, 'counterparty' => 'Skeppshandeln', 'incurred_on' => '2026-04-02']);
 
     aggregatGrant($container, $mottagare, $motor);
 
@@ -378,7 +378,7 @@ it('en kostnadspost på ett dolt item påverkar varken grupp eller total, i någ
     aggregatKategori($båt, $hemligKategori);
     aggregatKostnad($båt, [
         'amount' => 999999,
-        'supplier' => 'Advokatbyrån Ek & Partners',
+        'counterparty' => 'Advokatbyrån Ek & Partners',
         'incurred_on' => '2026-01-15',
     ]);
 
@@ -388,7 +388,7 @@ it('en kostnadspost på ett dolt item påverkar varken grupp eller total, i någ
     aggregatKategori($motor, $minKategori);
     aggregatKostnad($motor, [
         'amount' => 1000,
-        'supplier' => 'Volvo Penta',
+        'counterparty' => 'Volvo Penta',
         'incurred_on' => '2026-04-01',
     ]);
 
@@ -427,9 +427,9 @@ it('leverantörslistan innehåller bara leverantörer som förekommer på items 
     $motor = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
     aggregatKant($båt, $motor);
 
-    aggregatKostnad($motor, ['supplier' => 'Volvo Penta']);
-    aggregatKostnad($båt, ['supplier' => 'Advokatbyrån Ek & Partners']);
-    aggregatKostnad($båt, ['supplier' => 'Advokatbyrån Ek & Partners']);
+    aggregatKostnad($motor, ['counterparty' => 'Volvo Penta']);
+    aggregatKostnad($båt, ['counterparty' => 'Advokatbyrån Ek & Partners']);
+    aggregatKostnad($båt, ['counterparty' => 'Advokatbyrån Ek & Partners']);
 
     aggregatGrant($container, $mottagare, $motor);
 
@@ -448,9 +448,9 @@ it('leverantörslistan för ägaren är oförändrad — utan join mot item', fu
     $motor = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
     $raderat = Item::factory()->for($container, 'container')->create(['name' => 'Raderat']);
 
-    aggregatKostnad($motor, ['supplier' => 'Volvo Penta']);
-    aggregatKostnad($motor, ['supplier' => 'Skeppshandeln']);
-    aggregatKostnad($raderat, ['supplier' => 'Båtvarvet']);
+    aggregatKostnad($motor, ['counterparty' => 'Volvo Penta']);
+    aggregatKostnad($motor, ['counterparty' => 'Skeppshandeln']);
+    aggregatKostnad($raderat, ['counterparty' => 'Båtvarvet']);
 
     // Ett värde som bara förekommer på ett raderat item göms INTE: uppslaget
     // är ett inmatningsstöd, inte en summering (issue 45b § Beslut 3).

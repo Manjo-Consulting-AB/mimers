@@ -145,7 +145,7 @@ it('ger containerns flik costDefaults, optional costSuppliers och createdCost', 
 
     [, $anvandare, $container, $item] = kostnadReturKontext();
     CostEntry::factory()->for($item, 'item')->create([
-        'supplier' => 'Båtmäklarn',
+        'counterparty' => 'Båtmäklarn',
         'created_by_account_id' => $container->account_id,
     ]);
 

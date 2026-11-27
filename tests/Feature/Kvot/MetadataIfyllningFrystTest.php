@@ -98,7 +98,7 @@ it('ifyllningen ger samma byte som förut för tabellerna som fanns 2026-11-15',
     Tag::factory()->for($container, 'container')->create(['name' => 'tag', 'billed_account_id' => $konto->id]);                // 3 + 256
     $schema = Schedule::factory()->for($item, 'item')->create(['title' => 'svc', 'notes' => 'note', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
     ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'done', 'billed_account_id' => $konto->id]);   // 4, utan påslag
-    CostEntry::factory()->for($item, 'item')->create(['description' => 'oil', 'supplier' => 'shop', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
+    CostEntry::factory()->for($item, 'item')->create(['description' => 'oil', 'counterparty' => 'shop', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
     Loan::factory()->for($item, 'item')->create(['borrower_name' => 'Ann', 'borrower_email' => 'ann@b.se', 'note' => 'x', 'billed_account_id' => $konto->id]); // 3 + 8 + 1 + 256
 
     // Tabeller som kom EFTER migreringen: de fanns inte när den skrevs och

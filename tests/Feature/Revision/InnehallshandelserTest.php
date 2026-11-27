@@ -267,13 +267,13 @@ it('en kostnadsrad skriver en rad med belopp och valuta men utan beskrivning och
         'amount' => '1200,50',
         'currency' => 'SEK',
         'description' => 'Hemlig beskrivning',
-        'supplier' => 'Hemlig leverantör',
+        'counterparty' => 'Hemlig leverantör',
     ], $headers)->assertCreated();
 
     $skapad = innehallsRad($item, AuditLog::ACTION_COST_ENTRY_CREATED);
     expect($skapad->item_id)->toBe($item->id);
     expect($skapad->user_id)->toBe($anvandare->id);
-    expect(json_decode($skapad->meta, true))->toBe(['amount' => 120050, 'currency' => 'SEK']);
+    expect(json_decode($skapad->meta, true))->toBe(['amount' => 120050, 'currency' => 'SEK', 'kind' => 'expense', 'quantity' => null]);
     expect($skapad->meta)->not->toContain('Hemlig');
 
     $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();

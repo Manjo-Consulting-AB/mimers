@@ -74,7 +74,7 @@ function kostnadsactionKropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'EUR',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ], $overrides);
 }
 
@@ -132,7 +132,7 @@ it('skapar raden och händelsen i en transaktion', function () {
     expect($rad->container_id)->toBe($container->id);
     expect($rad->subject_type)->toBe('cost_entry');
     expect($rad->subject_id)->toBe($kostnad->ulid);
-    expect(json_decode($rad->meta, true))->toBe(['amount' => 120050, 'currency' => 'EUR']);
+    expect(json_decode($rad->meta, true))->toBe(['amount' => 120050, 'currency' => 'EUR', 'kind' => 'expense', 'quantity' => null]);
 });
 
 it('rullar tillbaka raden när händelsen inte kan skrivas', function () {
@@ -217,7 +217,7 @@ it('mjukraderar raden och händelsen i en transaktion', function () {
 
     expect($rader)->toHaveCount(1);
     expect($rader->first()->subject_id)->toBe($kostnad->ulid);
-    expect(json_decode($rader->first()->meta, true))->toBe(['amount' => 120050, 'currency' => 'EUR']);
+    expect(json_decode($rader->first()->meta, true))->toBe(['amount' => 120050, 'currency' => 'EUR', 'kind' => 'expense', 'quantity' => null]);
 
     // Och den fallna loggen river raderingen, samma väg som skapandet.
     $annan = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
@@ -236,10 +236,10 @@ it('listar containerns leverantörer på frekvens', function () {
     $skapa = app(CreateCostEntry::class);
 
     foreach ([
-        ['supplier' => 'Volvo Penta'],
-        ['supplier' => 'Volvo Penta'],
-        ['supplier' => 'Biltema'],
-        ['supplier' => null],
+        ['counterparty' => 'Volvo Penta'],
+        ['counterparty' => 'Volvo Penta'],
+        ['counterparty' => 'Biltema'],
+        ['counterparty' => null],
     ] as $rad) {
         $skapa->handle($container, $item, kostnadsactionKropp($rad), $anvandare);
     }
@@ -257,7 +257,7 @@ it('listar containerns leverantörer på frekvens', function () {
     $annan = Container::factory()->for($container->account, 'account')->create();
     $annatItem = Item::factory()->for($annan, 'container')->create();
 
-    $skapa->handle($annan, $annatItem, kostnadsactionKropp(['supplier' => 'West Marine']), $anvandare);
+    $skapa->handle($annan, $annatItem, kostnadsactionKropp(['counterparty' => 'West Marine']), $anvandare);
 
     expect(app(ListCostSuppliers::class)->handle($anvandare, $container))->toBe($lista);
 });

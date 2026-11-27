@@ -57,6 +57,21 @@ class StoreCostEntryRequest extends FormRequest
             $this->merge(['supplier' => $supplier === '' ? null : $supplier]);
         }
 
+        if (isset($data['counterparty']) && is_string($data['counterparty'])) {
+            $counterparty = trim($data['counterparty']);
+            $this->merge(['counterparty' => $counterparty === '' ? null : $counterparty]);
+        }
+
+        // Aliaset under avvecklingstiden (ADR-0102, ADR-0087 § Riktning 15):
+        // kommer bara `supplier` läses det som `counterparty`.
+        if (! array_key_exists('counterparty', $data) && array_key_exists('supplier', $this->all())) {
+            $this->merge(['counterparty' => $this->input('supplier')]);
+        }
+
+        if (isset($data['quantity']) && is_string($data['quantity'])) {
+            $this->merge(['quantity' => trim($data['quantity'])]);
+        }
+
         // ConvertEmptyStringsToNull gör "" till null innan valideringen. En
         // tom sträng ska nå MinorUnits och bli cost.amount_invalid, inte
         // falla på validation.string — så null återställs till "" här. Ett
@@ -82,7 +97,9 @@ class StoreCostEntryRequest extends FormRequest
             // ([[ADR-0078 Valutor ur ISO 4217]] § 1).
             'currency' => ['nullable', 'string', new IsoCurrency],
             'description' => ['required', 'string', 'max:255'],
-            'supplier' => ['nullable', 'string', 'max:255'],
+            'kind' => ['nullable', 'in:expense,income'],
+            'quantity' => ['nullable', 'numeric', 'gt:0', 'max:999999999999.999999', 'decimal:0,6'],
+            'counterparty' => ['nullable', 'string', 'max:255'],
             // Returadressen (issue 369 · M56). Formen prövas inte här: den
             // avgörs av TaskCreateController::safeReturn() i kontrollern, och
             // en adress som inte godkänns faller tyst tillbaka på itemets flik.

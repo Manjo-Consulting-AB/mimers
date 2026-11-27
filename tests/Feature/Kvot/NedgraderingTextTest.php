@@ -218,7 +218,7 @@ it('steg 4 flyttar bilagor och rader i någon annans container till ägaren och 
         'created_by_account_id' => $gäst->id,
         'billed_account_id' => $gäst->id,
         'description' => 'Reservdel',
-        'supplier' => null,
+        'counterparty' => null,
     ]);
     nedRäkna($gäst, $ägare);
     $text = (int) UsageCounter::query()->where('account_id', $gäst->id)->value('metadata_bytes');
@@ -319,7 +319,7 @@ it('steg 4 raderar inte ett item med en annan medlems bilaga eller kostnadsrad i
         'created_by_account_id' => $medlem->id,
         'billed_account_id' => $medlem->id,
         'description' => 'Deras',
-        'supplier' => null,
+        'counterparty' => null,
     ]);
     nedRäkna($gäst);
     sättPlangräns('free', 'storage_bytes', 0);

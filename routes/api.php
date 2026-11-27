@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\ScheduleDependencyController;
 use App\Http\Controllers\Api\ScheduleOccurrenceController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TodoController;
+use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Api\WebhookEndpointController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -575,6 +576,15 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'store']);
     Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy']);
+
+    // Issue 1778 · M99 · Transaktioner på items (ADR-0102): samma rader som
+    // `/costs`, men med riktning, antal och motpart, och både utgifter och
+    // intäkter. Samma grindar som `/costs`; `/costs` ser bara utgifter.
+    Route::get('/containers/{container}/items/{item}/transactions', [TransactionController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/transactions', [TransactionController::class, 'store']);
+    Route::patch('/containers/{container}/items/{item}/transactions/{transaction}', [TransactionController::class, 'update']);
+    Route::delete('/containers/{container}/items/{item}/transactions/{transaction}', [TransactionController::class, 'destroy']);
+    Route::get('/containers/{container}/transactions/counterparties', [TransactionController::class, 'counterparties']);
 
     // Issue 45b · Leverantörsuppslaget för autocomplete — distinkta
     // leverantörer i containern, sorterade på användningsfrekvens, se

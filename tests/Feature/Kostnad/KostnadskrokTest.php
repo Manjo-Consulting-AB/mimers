@@ -185,7 +185,7 @@ it('en kostnad som skapas med erbjudandets värden hamnar på itemet och rör in
             'amount' => '1250,00',
             'currency' => 'SEK',
             'description' => 'Impeller efter avbockningen',
-            'supplier' => 'Volvo Penta',
+            'counterparty' => 'Volvo Penta',
         ],
         $headers,
     );

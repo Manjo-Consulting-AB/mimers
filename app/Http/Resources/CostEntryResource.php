@@ -43,10 +43,15 @@ class CostEntryResource extends JsonResource
         return [
             'ulid' => $this->ulid,
             'incurred_on' => $this->incurred_on->toDateString(),
+            'kind' => $this->kind,
             'amount' => $this->amount,
+            'quantity' => $this->quantity,
             'currency' => $this->currency,
             'description' => $this->description,
-            'supplier' => $this->supplier,
+            'counterparty' => $this->counterparty,
+            // Aliaset under avvecklingstiden, samma värde som `counterparty`
+            // (ADR-0102; tas bort efter 90 dagar, ADR-0087 § Riktning 15).
+            'supplier' => $this->counterparty,
             'created_by_account' => $this->createdByAccount?->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),

@@ -97,7 +97,7 @@ function kostnadsvyRad(Item $item, array $attribut = []): CostEntry
         'amount' => 120050,
         'currency' => 'SEK',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
         // Raden tillskrivs containerns ägarkonto — formen `CostEntryResource`
         // bär kontots ULID med, och den som skapade raden för hand i provet är
         // ägarkontots medlem.
@@ -123,7 +123,7 @@ function kostnadsvyKropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'EUR',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ], $overrides);
 }
 
@@ -224,7 +224,7 @@ it('lägger till en kostnad från webben och stannar på fliken', function () {
     [, $anvandare, $container, $item] = kostnadsvyKontext();
 
     $svar = actingAs($anvandare)->post(kostnadsvyUrl($container, $item).'/costs', kostnadsvyKropp([
-        'supplier' => 'Volvo Penta',
+        'counterparty' => 'Volvo Penta',
     ]));
 
     // Omdirigeringen bär fliken: en skrivning som landade på översikten hade
@@ -238,7 +238,7 @@ it('lägger till en kostnad från webben och stannar på fliken', function () {
     expect($kostnad->container_id)->toBe($container->id);
     expect($kostnad->amount)->toBe(120050);
     expect($kostnad->currency)->toBe('EUR');
-    expect($kostnad->supplier)->toBe('Volvo Penta');
+    expect($kostnad->counterparty)->toBe('Volvo Penta');
     expect($kostnad->created_by_user_id)->toBe($anvandare->id);
     expect($kostnad->created_by_account_id)->toBe($container->account_id);
 
@@ -333,7 +333,7 @@ it('ändrar en kostnad från webben', function () {
             'amount' => '1500',
             'currency' => 'SEK',
             'description' => 'Ny impeller',
-            'supplier' => 'Biltema',
+            'counterparty' => 'Biltema',
         ])
         ->assertRedirect(kostnadsvyUrl($container, $item).'?tab=costs')
         ->assertSessionHas('status', 'cost-updated');
@@ -342,7 +342,7 @@ it('ändrar en kostnad från webben', function () {
 
     expect($kostnad->amount)->toBe(150000);
     expect($kostnad->description)->toBe('Ny impeller');
-    expect($kostnad->supplier)->toBe('Biltema');
+    expect($kostnad->counterparty)->toBe('Biltema');
     expect($kostnad->incurred_on->toDateString())->toBe('2026-05-01');
 });
 
@@ -424,9 +424,9 @@ it('skickar leverantörerna bara vid en partiell omladdning', function () {
 
     [, $anvandare, $container, $item] = kostnadsvyKontext();
 
-    kostnadsvyRad($item, ['supplier' => 'Volvo Penta']);
-    kostnadsvyRad($item, ['supplier' => 'Volvo Penta']);
-    kostnadsvyRad($item, ['supplier' => 'Biltema']);
+    kostnadsvyRad($item, ['counterparty' => 'Volvo Penta']);
+    kostnadsvyRad($item, ['counterparty' => 'Volvo Penta']);
+    kostnadsvyRad($item, ['counterparty' => 'Biltema']);
 
     // En vanlig sidladdning bär den inte: uppslaget är ett inmatningsstöd för
     // formuläret, och den som bara läser raderna ska inte betala för det
@@ -450,7 +450,7 @@ it('hämtar leverantörerna på nytt efter varje skrivning', function () {
 
     [, $anvandare, $container, $item] = kostnadsvyKontext();
 
-    kostnadsvyRad($item, ['supplier' => 'Volvo Penta']);
+    kostnadsvyRad($item, ['counterparty' => 'Volvo Penta']);
 
     // Varför frågan måste ställas om: en skrivning svarar med en omdirigering
     // tillbaka till itemvyn, och den sidan är en vanlig besökning — samma sida
@@ -459,7 +459,7 @@ it('hämtar leverantörerna på nytt efter varje skrivning', function () {
     // utan en ny fråga stod datalisten tom efter första sparade raden.
     $svar = actingAs($anvandare)->post(
         kostnadsvyUrl($container, $item).'/costs',
-        kostnadsvyKropp(['supplier' => 'Biltema']),
+        kostnadsvyKropp(['counterparty' => 'Biltema']),
     );
 
     $svar->assertRedirect(kostnadsvyUrl($container, $item).'?tab=costs');

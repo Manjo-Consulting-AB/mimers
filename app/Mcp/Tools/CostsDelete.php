@@ -52,7 +52,7 @@ class CostsDelete extends McpTool
     {
         $args = $request->validate(['cost' => ['required', 'string']]);
 
-        $cost = CostEntry::query()->where('ulid', $args['cost'])->first();
+        $cost = CostEntry::query()->expenses()->where('ulid', $args['cost'])->first();
         $item = $cost?->item;
         $container = $item === null ? null : Container::query()->with('account')->find($item->container_id);
 

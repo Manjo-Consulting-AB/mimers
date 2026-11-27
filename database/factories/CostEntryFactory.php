@@ -34,7 +34,7 @@ class CostEntryFactory extends Factory
             'amount' => fake()->numberBetween(100, 100000),
             'currency' => 'EUR',
             'description' => fake()->sentence(3),
-            'supplier' => null,
+            'counterparty' => null,
             'created_by_user_id' => User::factory(),
             'created_by_account_id' => Account::factory(),
             // Betalaren är författaren (ADR-0081 § 3).

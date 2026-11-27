@@ -40,7 +40,7 @@ class DeleteCostEntry
     public function handle(Item $item, CostEntry $cost, User $actor): void
     {
         DB::transaction(function () use ($cost, $item, $actor): void {
-            $meta = ['amount' => $cost->amount, 'currency' => $cost->currency];
+            $meta = ['amount' => $cost->amount, 'currency' => $cost->currency, 'kind' => $cost->kind, 'quantity' => $cost->quantity];
 
             $cost->delete();
 
