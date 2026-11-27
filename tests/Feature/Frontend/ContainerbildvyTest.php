@@ -446,10 +446,10 @@ it('behåller rutans mått och beskärning på alla ställen', function () {
         ->and($ruta)->toContain('class="flex h-full w-full items-center justify-center bg-surface-sunken text-ink-subtle"');
 
     expect(File::get(resource_path('js/components/ContainerCard.vue')))
-        ->toContain('class="aspect-video w-full"');
+        ->toContain('class="aspect-video w-full overflow-hidden"');
 
     expect(File::get(resource_path('js/pages/Containers/Index.vue')))
-        ->toContain('class="aspect-video w-full"');
+        ->toContain('class="aspect-video w-full overflow-hidden"');
 
     expect(File::get(resource_path('js/components/HeroFrame.vue')))
         ->toContain('class="absolute inset-0 overflow-hidden rounded-card"');
@@ -459,6 +459,60 @@ it('behåller rutans mått och beskärning på alla ställen', function () {
 
     expect(File::get(resource_path('js/pages/Containers/Edit.vue')))
         ->toContain('class="h-16 w-16 shrink-0 overflow-hidden rounded-control"');
+});
+
+/*
+ * Klart när: varje anropare av ContainerCover klipper bilden i sin ruta.
+ *
+ * Zoomen är en `transform: scale(…)` på bilden och målas över syskonen om
+ * rutan inte klipper. Provet letar upp varje `<ContainerCover` och kräver
+ * `overflow-hidden` på elementet närmast utanför, så en ny yta kan inte
+ * glömma klippningen.
+ */
+it('klipper bilden i elementet närmast utanför varje ContainerCover', function () {
+    $anropare = [];
+    $saknar = [];
+
+    foreach (File::allFiles(resource_path('js')) as $fil) {
+        if ($fil->getExtension() !== 'vue' || $fil->getFilename() === 'ContainerCover.vue') {
+            continue;
+        }
+
+        $kalla = $fil->getContents();
+        preg_match_all('/<ContainerCover(?![A-Za-z])/', $kalla, $traffar, PREG_OFFSET_CAPTURE);
+
+        foreach ($traffar[0] as [, $pos]) {
+            $anropare[] = $fil->getRelativePathname();
+            $fore = substr($kalla, 0, $pos);
+            // Närmaste öppnande tagg före anropet som inte är stängd.
+            preg_match_all('/<(\/?)([A-Za-z][\w.-]*)((?:[^<>"\']|"[^"]*"|\'[^\']*\')*?)(\/?)>/s', $fore, $taggar, PREG_SET_ORDER);
+            $oppna = [];
+            foreach ($taggar as $t) {
+                if ($t[4] === '/' || in_array(strtolower($t[2]), ['img', 'br', 'input'], true)) {
+                    continue;
+                }
+                if ($t[1] === '/') {
+                    array_pop($oppna);
+                } else {
+                    $oppna[] = $t[0];
+                }
+            }
+            $foralder = (string) end($oppna);
+
+            if (! str_contains($foralder, 'overflow-hidden')) {
+                $saknar[] = $fil->getRelativePathname();
+            }
+        }
+    }
+
+    expect($saknar)->toBe([]);
+
+    $namn = array_map('basename', $anropare);
+    sort($namn);
+
+    expect($namn)->toBe([
+        'ContainerCard.vue', 'ContainerLayout.vue', 'Edit.vue', 'HeroFrame.vue', 'Index.vue', 'ItemMapNode.vue',
+    ]);
 });
 
 /*

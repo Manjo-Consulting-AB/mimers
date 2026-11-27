@@ -80,7 +80,8 @@ const { t } = useTranslations();
 
     <UiCard v-else class="min-w-64 flex-1 relative">
         <template #media>
-            <div class="aspect-video w-full">
+            <!-- Zoomen är en `transform` på bilden; utan klippning här täcker den kortets rubrik. -->
+            <div class="aspect-video w-full overflow-hidden">
                 <ContainerCover
                     :cover="props.container.cover"
                     :icon="props.container.icon"
