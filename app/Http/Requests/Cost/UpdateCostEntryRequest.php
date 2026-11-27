@@ -87,7 +87,7 @@ class UpdateCostEntryRequest extends FormRequest
             'currency' => ['required_with:amount', 'string', new IsoCurrency],
             'description' => ['sometimes', 'string', 'max:255'],
             'kind' => ['sometimes', 'nullable', 'in:expense,income'],
-            'quantity' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'decimal:0,6'],
+            'quantity' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'max:999999999999.999999', 'decimal:0,6'],
             'counterparty' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }

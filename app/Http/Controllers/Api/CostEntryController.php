@@ -190,7 +190,7 @@ class CostEntryController extends Controller
         Gate::authorize('view', $container);
 
         return response()->json([
-            'data' => $listCostSuppliers->handle($request->user(), $container),
+            'data' => $listCostSuppliers->handle($request->user(), $container, CostEntry::KIND_EXPENSE),
         ]);
     }
 

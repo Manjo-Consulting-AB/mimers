@@ -98,7 +98,7 @@ class StoreCostEntryRequest extends FormRequest
             'currency' => ['nullable', 'string', new IsoCurrency],
             'description' => ['required', 'string', 'max:255'],
             'kind' => ['nullable', 'in:expense,income'],
-            'quantity' => ['nullable', 'numeric', 'gt:0', 'decimal:0,6'],
+            'quantity' => ['nullable', 'numeric', 'gt:0', 'max:999999999999.999999', 'decimal:0,6'],
             'counterparty' => ['nullable', 'string', 'max:255'],
             // Returadressen (issue 369 · M56). Formen prövas inte här: den
             // avgörs av TaskCreateController::safeReturn() i kontrollern, och

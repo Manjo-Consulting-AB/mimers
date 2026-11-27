@@ -239,3 +239,14 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
 
     Carbon::setTestNow();
 });
+
+it('ger inte en motpart som bara finns på intäkter i /costs/suppliers', function () {
+    [, , $headers, $container, $item] = leverantorKontext();
+
+    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Köparen AB', 'kind' => 'income']);
+
+    $response = getJson("/api/containers/{$container->ulid}/costs/suppliers", $headers);
+
+    expect($response->json('data'))->toBe([['supplier' => 'Volvo Penta', 'count' => 1]]);
+});

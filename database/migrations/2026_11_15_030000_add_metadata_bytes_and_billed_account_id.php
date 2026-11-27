@@ -217,12 +217,6 @@ return new class extends Migration
     }
 
     /**
-     * Raderna i en räknad tabell, med `id`, `payer_id` och fritextkolumnerna.
-     * Vägen till betalaren skiljer per tabell: `container` betalas av sin
-     * ägare, `schedule_occurrence` går genom schemat och itemet, `schedule`
-     * och `loan` genom itemet, och resten bär `container_id` själva.
-     */
-    /**
      * Fritextkolumnerna för en tabell. `cost_entry.supplier` döptes om till
      * `counterparty` av 2026_11_27_020000 (issue 1778); den frysta listan
      * bär det gamla namnet, så namnet slås upp mot schemat som finns.
@@ -240,6 +234,12 @@ return new class extends Migration
         return $columns;
     }
 
+    /**
+     * Raderna i en räknad tabell, med `id`, `payer_id` och fritextkolumnerna.
+     * Vägen till betalaren skiljer per tabell: `container` betalas av sin
+     * ägare, `schedule_occurrence` går genom schemat och itemet, `schedule`
+     * och `loan` genom itemet, och resten bär `container_id` själva.
+     */
     private function countedQuery(string $table): Builder
     {
         $text = array_map(
