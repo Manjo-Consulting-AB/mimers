@@ -1,6 +1,6 @@
 # ADR-0014 Prismodell
 
-**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · Merchant of record är Paddle, tillägg 2026-11-24 · Billing och nedläggning, tillägg 2026-11-25 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · Konsumentnivåerna och ägarbytets bonus ersatta av [[ADR-0086 Pro, Pro+ och grundarpris]] 2026-11-18; B2B-delen gäller · Merchant of record är Paddle, tillägg 2026-11-24 · Billing och nedläggning, tillägg 2026-11-25 · B2B-spåren blir roller, tillägg 2026-11-27 · [[ADR-index]]
 
 ## Kontext
 
@@ -79,3 +79,14 @@ Paddle finns inte i koden än. Policyn publiceras med § 7 som den är skriven e
 **1. Billing väntar på avtalet med Paddle.** Allt som gäller billing väntar tills avtalet är signerat. Då pekar **Manage billing** på kundens portal hos Paddle, och Mimers bygger ingen egen vy till en början. `/privacy` publiceras med § 7 som den är skriven: ingen kan betala innan flödet finns, och texterna säger redan *or through Paddle*. Knappen byggs när Paddle kopplas på, och ingen backlog-issue skrivs förrän avtalet är signerat.
 
 **2. Nedläggning.** Läggs Mimers ned stängs tjänsten för nya kunder, och gällande prenumerationer får löpa ut innan den stängs. Måste den stängas innan en betald period är slut återbetalas den oanvända delen **proportionellt från dag ett**. Skälet: en trappa som ger mindre än den proportionella delen gäller inte mot en konsument, och Mimers följer konsumentlagen till punkt och pricka. Byggs som issue 500 (#1692) i [[M91 Villkoren och den rättsliga spärren]].
+
+## Tillägg 2026-11-27
+
+*Tony 2026-11-27:* B2B-spåren byter namn och blir allmänna roller, enligt [[ADR-0033 Produktens omfång]] § Tillägg 2026-11-27: segmenten blir roller. Beslutets rad om B2B (*mäklare, varv, charter*) läses med de nya namnen:
+
+- **Förmedlare**, tidigare mäklare: omkring 490 €/år.
+- **Förvaltare**, tidigare varv: 5–8 € per förvaltad container och år, i nivåerna 490 / 990 / 1990 €. Förvaltaren äger inte containern utan får delegerad åtkomst.
+- **Flottägare**, tidigare charter: 15–25 € per container och år.
+- **Byggare eller leverantör**, tidigare nybyggnadsvarv: överlämnar vid leverans.
+
+Siffrorna ändras inte och är fortfarande resonerade uppskattningar. Konsekvenspunkten om att validera med *två–tre varv som designpartners* ska läsas som *två–tre B2B-kunder*.

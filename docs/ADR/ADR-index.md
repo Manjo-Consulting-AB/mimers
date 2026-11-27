@@ -19,7 +19,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link; ett lösenordsbyte bekräftas via mejl, inte med det gamla lösenordet | [[Konton och åtkomst]] |
 | [[ADR-0012 Sök]] | Scout med databasdrivern tills vidare | [[Items och organisation]] |
 | [[ADR-0013 Språk och i18n]] | *Språkuppsättningen ersatt av ADR-0034.* Svenska och engelska, felkoder aldrig meningar | Allt |
-| [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår — konsumentdelen ersatt av ADR-0086; billing väntar på Paddle-avtalet och pekar sedan på Paddles kundportal, nedläggning ger proportionell återbetalning från dag ett *(tillägg 2026-11-25)* | [[Planer och kvoter]] |
+| [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår — konsumentdelen ersatt av ADR-0086; billing väntar på Paddle-avtalet och pekar sedan på Paddles kundportal, nedläggning ger proportionell återbetalning från dag ett *(tillägg 2026-11-25)*; B2B-spåren är roller: förmedlare, förvaltare, flottägare, byggare/leverantör *(tillägg 2026-11-27)* | [[Planer och kvoter]] |
 | [[ADR-0015 Backup]] | Tre nivåer, off-site från inleed | Drift |
 | [[ADR-0016 Kostnadsregistrering]] | *Pro-gränsen ersatt av ADR-0038.* Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
 | [[ADR-0017 Missbruksvektorer]] | Detektera och prissätt, spärra inte i förväg | [[Planer och kvoter]], Drift |
@@ -38,7 +38,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
 | [[ADR-0031 Köarbetaren körs av schemaläggaren]] | Schemalagd `queue:work --stop-when-empty` sist i `routes/console.php`, ingen daemon | Drift, [[Pipeline]] |
 | [[ADR-0032 Produktens ord]] | Container och objekt i gränssnittet, pärmen utgår | Allt |
-| [[ADR-0033 Produktens omfång]] | Generell plats för det du äger, använder eller arbetar med — inte ett båtverktyg | Allt |
+| [[ADR-0033 Produktens omfång]] | Generell plats för det du äger, använder eller arbetar med — inte ett båtverktyg; segmenten är roller, inte branscher *(tillägg 2026-11-27)* | Allt |
 | [[ADR-0034 Engelska vid lansering]] | Engelska enda levererade språk, maskineriet för fler kvar och testat | Allt |
 | [[ADR-0035 Relationen mellan objekt]] | `sibling` heter `related`, tre relationer och inte fyra | [[Items och organisation]] |
 | [[ADR-0036 Containerns art]] | `kind` är fritt med autocomplete, CHECK-villkoret utgår | [[Konton och åtkomst]], [[Items och organisation]] |
