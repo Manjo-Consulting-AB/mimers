@@ -119,9 +119,9 @@ it('har orden för typen och filtret i lang och typen i hjälpartikeln', functio
     $ui = require base_path('lang/en/ui.php');
     $artikel = (string) file_get_contents(base_path('lang/en/help/articles/can-i-add-my-own-fields-to-items.md'));
 
-    expect($ui['field']['type']['boolean'])->toBe('Yes/No')
+    expect($ui['field']['type']['boolean'])->toBe('Checkbox')
         ->and($ui['item']['index']['filter_field_boolean_any'])->toBe('Any')
-        ->and($artikel)->toContain('**Yes/No** – a checkbox for things like "insured" or "serviced".')
+        ->and($artikel)->toContain('**Checkbox** – a checkbox for things like "insured" or "serviced".')
         ->toContain('updated: "2026-11-26"');
 });
 

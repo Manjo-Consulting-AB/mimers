@@ -16,6 +16,6 @@ You can choose between four field types:
 - **Text** – for names, descriptions and other text.
 - **Number** – for quantities, measurements and amounts.
 - **Date** – for dates such as purchases, inspections or renewals.
-- **Yes/No** – a checkbox for things like "insured" or "serviced".
+- **Checkbox** – a checkbox for things like "insured" or "serviced".
 
 Fields are configured at container level and can be used by items within that container. You can also use them to sort and filter your items.
