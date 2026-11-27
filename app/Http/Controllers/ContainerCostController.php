@@ -10,6 +10,7 @@ use App\Http\Requests\Cost\ContainerCostFilterRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Access\ItemScope;
@@ -376,7 +377,7 @@ class ContainerCostController extends Controller
 
         $suppliers = array_map(
             static fn (array $supplier): string => (string) $supplier['supplier'],
-            $listCostSuppliers->handle($user, $container),
+            $listCostSuppliers->handle($user, $container, CostEntry::KIND_EXPENSE),
         );
 
         if ($selectedSupplier !== null && ! in_array($selectedSupplier, $suppliers, true)) {

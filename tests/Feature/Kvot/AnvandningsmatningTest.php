@@ -345,7 +345,7 @@ it('räknar attachment.move, copy och to_inbox i API:et, men inte vid nekad åtk
 
 it('räknar cost.create via webben och API:et, men inte vid valideringsfel', function () {
     [$konto, $anvandare, $headers, $container, $item] = mattApiKonto();
-    $kropp = ['incurred_on' => '2026-04-12', 'amount' => '1200,50', 'currency' => 'EUR', 'description' => 'Impeller', 'supplier' => null];
+    $kropp = ['incurred_on' => '2026-04-12', 'amount' => '1200,50', 'currency' => 'EUR', 'description' => 'Impeller', 'counterparty' => null];
     $webb = "/containers/{$container->ulid}/items/{$item->ulid}/costs";
     $api = "/api{$webb}";
 

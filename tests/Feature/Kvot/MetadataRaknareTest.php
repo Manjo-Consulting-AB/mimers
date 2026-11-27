@@ -134,7 +134,7 @@ function metadataInnehåll(): array
     Tag::factory()->for($container, 'container')->create(['name' => 'röd', 'billed_account_id' => $konto->id]);          // 4 + 256
     $schema = Schedule::factory()->for($item, 'item')->create(['title' => 'Byt olja', 'notes' => null, 'billed_account_id' => $konto->id]); // 8 + 256
     ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'klart', 'billed_account_id' => $konto->id]);     // 5
-    CostEntry::factory()->for($item, 'item')->create(['description' => 'Olja', 'supplier' => 'Åhlens', 'billed_account_id' => $konto->id]); // 4 + 7 + 256
+    CostEntry::factory()->for($item, 'item')->create(['description' => 'Olja', 'counterparty' => 'Åhlens', 'billed_account_id' => $konto->id]); // 4 + 7 + 256
     Loan::factory()->for($item, 'item')->create(['borrower_name' => 'Åsa', 'borrower_email' => null, 'note' => null, 'billed_account_id' => $konto->id]); // 4 + 256
 
     $väntat = 269 + 260 + (5 + 256) + (4 + 256) + (8 + 256) + 5 + (4 + 7 + 256) + (4 + 256);

@@ -18,6 +18,7 @@ use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -80,6 +81,7 @@ class CostEntryController extends Controller
         Gate::authorize('view', $item);
 
         $costs = $item->costs()
+            ->expenses()
             ->with('createdByAccount')
             ->orderByDesc('incurred_on')
             ->orderByDesc('id')
@@ -103,7 +105,7 @@ class CostEntryController extends Controller
     {
         Gate::authorize('create', $item);
 
-        $cost = $createCostEntry->handle($container, $item, $request->validated(), $request->user());
+        $cost = $createCostEntry->handle($container, $item, [...$request->validated(), 'kind' => CostEntry::KIND_EXPENSE], $request->user());
 
         app(CountFeatureUse::class)->handle(Features::COST_CREATE, $request->user());
 
@@ -134,8 +136,10 @@ class CostEntryController extends Controller
     {
         Gate::authorize('update', $item);
 
+        $this->expenseOr404($cost);
+
         return new CostEntryResource(
-            $updateCostEntry->handle($item, $cost, $request->validated(), $request->user())
+            $updateCostEntry->handle($item, $cost, Arr::except($request->validated(), 'kind'), $request->user())
         );
     }
 
@@ -158,6 +162,8 @@ class CostEntryController extends Controller
     public function destroy(Request $request, Container $container, Item $item, CostEntry $cost, DeleteCostEntry $deleteCostEntry): Response
     {
         Gate::authorize('delete', $item);
+
+        $this->expenseOr404($cost);
 
         $deleteCostEntry->handle($item, $cost, $request->user());
 
@@ -186,5 +192,14 @@ class CostEntryController extends Controller
         return response()->json([
             'data' => $listCostSuppliers->handle($request->user(), $container),
         ]);
+    }
+
+    /**
+     * `/costs` ser bara utgifter (ADR-0102): en intäktsrad ger 404, i samma
+     * format som en rad som inte finns. Intäkter nås genom `/transactions`.
+     */
+    private function expenseOr404(CostEntry $cost): void
+    {
+        abort_if($cost->kind !== CostEntry::KIND_EXPENSE, 404);
     }
 }

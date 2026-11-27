@@ -562,14 +562,14 @@ class TestkontoSkapa extends Command
             'amount' => '6495.00',
             'currency' => 'SEK',
             'description' => 'Inköp av diskmaskin',
-            'supplier' => 'Elgiganten',
+            'counterparty' => 'Elgiganten',
         ], $user);
         $costs->handle($container, $diskmaskin, [
             'incurred_on' => $today->copy()->subDays(12)->toDateString(),
             'amount' => '389.50',
             'currency' => 'SEK',
             'description' => 'Nytt filter',
-            'supplier' => 'Elgiganten',
+            'counterparty' => 'Elgiganten',
         ], $user);
 
         app(CreateSchedule::class)->handle($items['Snöslunga'], $user, new Schedule([

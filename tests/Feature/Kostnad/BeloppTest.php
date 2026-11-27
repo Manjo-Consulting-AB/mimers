@@ -33,7 +33,7 @@ function kostnadsbeloppKropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'EUR',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ], $overrides);
 }
 

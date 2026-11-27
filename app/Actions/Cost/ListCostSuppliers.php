@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * leverantörshistorik, och `container_id` är denormaliserad på raden just för
  * att frågan inte ska behöva joina `item`. En enda `GROUP BY` mot
  * `cost_entry` — ingen relation, ingen Eloquent-modell — som indexet
- * `(container_id, deleted_at, supplier)` från 45a gör billig i stället för en
+ * `(container_id, deleted_at, kind, counterparty)` från 45a gör billig i stället för en
  * full scan.
  *
  * `supplier` normaliseras aldrig ([[ADR-0016 Kostnadsregistrering]]): en
@@ -60,12 +60,18 @@ class ListCostSuppliers
     /**
      * @return list<array{supplier: string, count: int}>
      */
-    public function handle(User $user, Container $container): array
+    public function handle(User $user, Container $container, ?string $kind = null): array
     {
         $query = DB::table('cost_entry')
             ->where('cost_entry.container_id', $container->id)
             ->whereNull('cost_entry.deleted_at')
-            ->whereNotNull('cost_entry.supplier');
+            ->whereNotNull('cost_entry.counterparty');
+
+        // Med `kind` föreslås bara motparter från rader med samma riktning
+        // (ADR-0102).
+        if ($kind !== null) {
+            $query->where('cost_entry.kind', $kind);
+        }
 
         $scope = $this->resolveItemScope->handle($user, $container);
         $itemIds = $scope->itemIds();
@@ -76,10 +82,10 @@ class ListCostSuppliers
         }
 
         $rader = $query
-            ->selectRaw('cost_entry.supplier AS supplier, COUNT(*) AS antal')
-            ->groupBy('cost_entry.supplier')
+            ->selectRaw('cost_entry.counterparty AS supplier, COUNT(*) AS antal')
+            ->groupBy('cost_entry.counterparty')
             ->orderByDesc('antal')
-            ->orderBy('cost_entry.supplier')
+            ->orderBy('cost_entry.counterparty')
             ->limit(self::SUPPLIER_SUGGESTION_LIMIT)
             ->get();
 

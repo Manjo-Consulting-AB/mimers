@@ -185,7 +185,9 @@ return new class extends Migration
     {
         $totals = [];
 
-        foreach (self::TEXT_COLUMNS as $table => $columns) {
+        foreach (array_keys(self::TEXT_COLUMNS) as $table) {
+            $columns = $this->textColumns($table);
+
             $this->countedQuery($table)->chunkById(500, function ($rows) use ($table, $columns, &$totals): void {
                 foreach ($rows as $row) {
                     if ($row->payer_id === null) {
@@ -220,11 +222,29 @@ return new class extends Migration
      * ägare, `schedule_occurrence` går genom schemat och itemet, `schedule`
      * och `loan` genom itemet, och resten bär `container_id` själva.
      */
+    /**
+     * Fritextkolumnerna för en tabell. `cost_entry.supplier` döptes om till
+     * `counterparty` av 2026_11_27_020000 (issue 1778); den frysta listan
+     * bär det gamla namnet, så namnet slås upp mot schemat som finns.
+     *
+     * @return list<string>
+     */
+    private function textColumns(string $table): array
+    {
+        $columns = self::TEXT_COLUMNS[$table];
+
+        if ($table === 'cost_entry' && Schema::hasColumn('cost_entry', 'counterparty')) {
+            return ['description', 'counterparty'];
+        }
+
+        return $columns;
+    }
+
     private function countedQuery(string $table): Builder
     {
         $text = array_map(
             fn (string $column): string => "{$table}.{$column}",
-            self::TEXT_COLUMNS[$table],
+            $this->textColumns($table),
         );
 
         if ($table === 'container') {

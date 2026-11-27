@@ -92,7 +92,7 @@ function tillatnaValutorKropp(array $overrides = []): array
         'amount' => '1200,50',
         'currency' => 'AUD',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ], $overrides);
 }
 

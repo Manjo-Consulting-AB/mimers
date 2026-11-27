@@ -390,3 +390,38 @@ it('nekar både rotitem och barn i en inkorg', function () {
 
     expect(Item::query()->where('container_id', $inbox->id)->whereIn('name', ['Rotitem i inkorgen', 'Barn till inkorgens item'])->exists())->toBeFalse();
 });
+
+// ─── costs_* skriver och ser bara utgifter (issue 1778 · ADR-0102) ───────────
+
+it('costs_create skriver supplier till counterparty och raden som expense', function () {
+    [, $token, , , $item] = skrivMiljo();
+
+    $svar = mcpResultat(mcpVerktyg($token, 'costs_create', [
+        'item' => $item->ulid, 'incurred_on' => '2026-04-12', 'amount' => '100', 'currency' => 'SEK',
+        'description' => 'Olja', 'supplier' => 'Biltema',
+    ]));
+
+    $rad = CostEntry::query()->where('ulid', $svar['ulid'])->firstOrFail();
+    expect($rad->kind)->toBe('expense')->and($rad->counterparty)->toBe('Biltema');
+});
+
+it('costs_update och costs_delete ger resource.not_found på en intäktsrad', function () {
+    [, $token, , $container, $item] = skrivMiljo();
+
+    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+
+    expect(mcpFel(mcpVerktyg($token, 'costs_update', ['cost' => $intakt->ulid, 'description' => 'x']))['code'])->toBe('resource.not_found')
+        ->and(mcpFel(mcpVerktyg($token, 'costs_delete', ['cost' => $intakt->ulid]))['code'])->toBe('resource.not_found');
+
+    expect(CostEntry::query()->find($intakt->id))->not->toBeNull();
+});
+
+it('costs_update skriver supplier till counterparty', function () {
+    [, $token, , $container, $item] = skrivMiljo();
+
+    $kostnad = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+
+    mcpResultat(mcpVerktyg($token, 'costs_update', ['cost' => $kostnad->ulid, 'supplier' => 'Svedea']));
+
+    expect($kostnad->refresh()->counterparty)->toBe('Svedea');
+});

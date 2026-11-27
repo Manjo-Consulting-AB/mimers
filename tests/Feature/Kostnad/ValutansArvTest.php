@@ -79,7 +79,7 @@ function valutansArvKropp(?string $valuta = null): array
         'incurred_on' => '2026-04-12',
         'amount' => '1200,50',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
     ];
 
     if ($valuta !== null) {
@@ -229,7 +229,9 @@ it('har varken lagt till eller tagit bort en kolumn i cost_entry', function () {
         'amount',
         'currency',
         'description',
-        'supplier',
+        'counterparty',
+        'kind',
+        'quantity',
         'created_by_user_id',
         'created_by_account_id',
         'billed_account_id',

@@ -136,7 +136,7 @@ function kostnadsflikProRad(
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum,
-        'supplier' => $leverantor,
+        'counterparty' => $leverantor,
         'description' => "Rad {$belopp}",
         'created_by_user_id' => $item->created_by_user_id,
         'created_by_account_id' => $item->created_by_account_id,

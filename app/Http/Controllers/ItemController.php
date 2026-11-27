@@ -1045,6 +1045,8 @@ class ItemController extends Controller
         // precis den andra sanning [[ADR-0040 Underträdets summor]]
         // § Konsekvenser förbjuder.
         $costTotals = $costs->concat($descendantCosts)
+            // Summan räknar bara utgifter; en intäkt är inte en kostnad (ADR-0102).
+            ->where('kind', CostEntry::KIND_EXPENSE)
             ->groupBy('currency')
             ->map(fn (Collection $rows, string $currency): array => [
                 'currency' => $currency,

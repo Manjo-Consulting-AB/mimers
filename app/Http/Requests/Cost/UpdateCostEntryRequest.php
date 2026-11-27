@@ -53,6 +53,21 @@ class UpdateCostEntryRequest extends FormRequest
             $this->merge(['supplier' => $supplier === '' ? null : $supplier]);
         }
 
+        if (isset($data['counterparty']) && is_string($data['counterparty'])) {
+            $counterparty = trim($data['counterparty']);
+            $this->merge(['counterparty' => $counterparty === '' ? null : $counterparty]);
+        }
+
+        // Aliaset under avvecklingstiden (ADR-0102, ADR-0087 § Riktning 15):
+        // kommer bara `supplier` läses det som `counterparty`.
+        if (! array_key_exists('counterparty', $data) && array_key_exists('supplier', $this->all())) {
+            $this->merge(['counterparty' => $this->input('supplier')]);
+        }
+
+        if (isset($data['quantity']) && is_string($data['quantity'])) {
+            $this->merge(['quantity' => trim($data['quantity'])]);
+        }
+
         // ConvertEmptyStringsToNull gör "" till null innan valideringen — se
         // StoreCostEntryRequest. En tom sträng ska nå MinorUnits, inte falla
         // på validation.string.
@@ -71,7 +86,9 @@ class UpdateCostEntryRequest extends FormRequest
             'amount' => ['required_with:currency', 'string'],
             'currency' => ['required_with:amount', 'string', new IsoCurrency],
             'description' => ['sometimes', 'string', 'max:255'],
-            'supplier' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'kind' => ['sometimes', 'nullable', 'in:expense,income'],
+            'quantity' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'decimal:0,6'],
+            'counterparty' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 }

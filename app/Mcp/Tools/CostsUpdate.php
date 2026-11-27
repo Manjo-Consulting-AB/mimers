@@ -62,6 +62,11 @@ class CostsUpdate extends McpTool
             'supplier' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
+        if (array_key_exists('supplier', $fields)) {
+            $fields['counterparty'] = $fields['supplier'];
+            unset($fields['supplier']);
+        }
+
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
         $this->writeAsAgent(fn () => app(UpdateCostEntry::class)->handle(
@@ -82,7 +87,7 @@ class CostsUpdate extends McpTool
      */
     private function costOf(Agent $agent, string $ulid): array
     {
-        $cost = CostEntry::query()->where('ulid', $ulid)->first();
+        $cost = CostEntry::query()->expenses()->where('ulid', $ulid)->first();
         $item = $cost?->item;
         $container = $item === null ? null : Container::query()->with('account')->find($item->container_id);
 

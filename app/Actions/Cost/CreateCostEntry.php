@@ -72,6 +72,10 @@ class CreateCostEntry
         // tolkning av beloppet.
         $container->ensurePermitsCurrency($data['currency']);
 
+        // Riktningen: saknas den, eller kom den som `null`, är raden en
+        // utgift (ADR-0102).
+        $data['kind'] ??= CostEntry::KIND_EXPENSE;
+
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
         unset($data['amount']);
 
@@ -95,7 +99,7 @@ class CreateCostEntry
                 item: $item,
                 subjectType: 'cost_entry',
                 subjectUlid: $cost->ulid,
-                meta: ['amount' => $cost->amount, 'currency' => $cost->currency],
+                meta: ['amount' => $cost->amount, 'currency' => $cost->currency, 'kind' => $cost->kind, 'quantity' => $cost->quantity],
             );
         });
 

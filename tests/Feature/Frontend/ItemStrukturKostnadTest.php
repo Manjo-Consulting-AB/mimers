@@ -91,7 +91,7 @@ function strukturkostnadRad(Item $item, array $attribut = []): CostEntry
         'amount' => 100000,
         'currency' => 'SEK',
         'description' => 'Impeller',
-        'supplier' => null,
+        'counterparty' => null,
         'created_by_account_id' => $item->container->account_id,
     ], $attribut));
 }
@@ -359,7 +359,7 @@ it('postar formuläret för en ny kostnad till itemet man står på', function (
             'amount' => '1200',
             'currency' => 'SEK',
             'description' => 'Nytt inköp',
-            'supplier' => null,
+            'counterparty' => null,
         ])
         ->assertRedirect(strukturkostnadUrl($container, $motorn, 'tab=costs'));
 

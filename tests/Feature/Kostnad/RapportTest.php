@@ -135,9 +135,9 @@ it('group_by=item grupperar per item med ulid och namn i key', function () {
 it('group_by=supplier ger en grupp per leverantör plus en null-grupp', function () {
     [$account, $user, $headers, $container] = rapportProKontext();
     $motor = rapportItem($container, $account, $user, ['name' => 'Motor']);
-    rapportKostnad($motor, ['supplier' => 'Volvo Penta', 'amount' => 1000]);
-    rapportKostnad($motor, ['supplier' => 'Volvo Penta', 'amount' => 2000]);
-    rapportKostnad($motor, ['supplier' => null, 'amount' => 500]);
+    rapportKostnad($motor, ['counterparty' => 'Volvo Penta', 'amount' => 1000]);
+    rapportKostnad($motor, ['counterparty' => 'Volvo Penta', 'amount' => 2000]);
+    rapportKostnad($motor, ['counterparty' => null, 'amount' => 500]);
 
     $response = getJson("/api/containers/{$container->ulid}/costs/report?group_by=supplier", $headers);
 

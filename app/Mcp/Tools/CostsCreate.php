@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Actions\Cost\CreateCostEntry;
 use App\Models\Agent;
+use App\Models\CostEntry;
 use App\Rules\IsoCurrency;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
@@ -59,6 +60,12 @@ class CostsCreate extends WritesItems
             'description' => ['required', 'string', 'max:255'],
             'supplier' => ['nullable', 'string', 'max:255'],
         ]);
+
+        // `supplier` är verktygets parameter; i datan heter den `counterparty`,
+        // och verktyget skriver alltid en utgift (ADR-0102).
+        $args['counterparty'] = $args['supplier'] ?? null;
+        unset($args['supplier']);
+        $args['kind'] = CostEntry::KIND_EXPENSE;
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 

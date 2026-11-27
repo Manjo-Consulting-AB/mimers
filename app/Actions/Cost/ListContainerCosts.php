@@ -5,6 +5,7 @@ namespace App\Actions\Cost;
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Category\ResolveCategoryDescendants;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -110,6 +111,8 @@ final class ListContainerCosts
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
             ->where('cost_entry.container_id', $container->id)
             ->whereNull('cost_entry.deleted_at')
+            // Bara utgifter, som rapportens summor (ADR-0102, issue 527 tar intäkterna).
+            ->where('cost_entry.kind', CostEntry::KIND_EXPENSE)
             ->whereNull('item.deleted_at');
 
         $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
@@ -125,7 +128,7 @@ final class ListContainerCosts
                 'cost_entry.ulid',
                 'cost_entry.incurred_on',
                 'cost_entry.description',
-                'cost_entry.supplier',
+                'cost_entry.counterparty',
                 'cost_entry.amount',
                 'cost_entry.currency',
                 'item.ulid as item_ulid',
@@ -142,7 +145,7 @@ final class ListContainerCosts
             'ulid' => (string) $rad->ulid,
             'incurred_on' => substr((string) $rad->incurred_on, 0, 10),
             'description' => (string) $rad->description,
-            'supplier' => $rad->supplier === null ? null : (string) $rad->supplier,
+            'supplier' => $rad->counterparty === null ? null : (string) $rad->counterparty,
             'amount' => (int) $rad->amount,
             'currency' => (string) $rad->currency,
             'item' => ['ulid' => (string) $rad->item_ulid, 'name' => (string) $rad->item_name],
@@ -185,7 +188,7 @@ final class ListContainerCosts
         }
 
         if (($filters['supplier'] ?? null) !== null) {
-            $query->where('cost_entry.supplier', $filters['supplier']);
+            $query->where('cost_entry.counterparty', $filters['supplier']);
         }
 
         if (($filters['from'] ?? null) !== null) {

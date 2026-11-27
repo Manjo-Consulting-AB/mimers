@@ -572,3 +572,19 @@ it('bygger adressen på filoriginen när en sådan är konfigurerad', function (
     expect(AttachmentDownloadLink::TTL_MINUTES)->toBe(15)
         ->and(AttachmentDownloadLink::host())->toBeNull();
 });
+
+// ─── intäktsrader syns inte i costs_* (issue 1778 · ADR-0102) ────────────────
+
+it('costs_list visar inte en intäktsrad', function () {
+    [$agent, $token] = mcpAgentMedToken();
+    [$container, $i] = mcpTrad($agent);
+    $item = $i['batan'];
+
+    $utgift = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'counterparty' => 'Biltema']);
+    CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+
+    $kostnader = mcpResultat(mcpVerktyg($token, 'costs_list', ['item' => $item->ulid]))['costs'];
+
+    expect(array_column($kostnader, 'ulid'))->toBe([$utgift->ulid])
+        ->and($kostnader[0]['supplier'])->toBe('Biltema');
+});

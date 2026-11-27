@@ -320,11 +320,11 @@ it('en kostnadsrad följer skapa, ändra, släng, återställ och radera för go
     expect(löpandeByte($ägare))->toBe($bas + 256 + 4);
     löpandeStämmer($ägare);
 
-    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'Olja och filter', 'supplier' => 'Åhlens'], $ägarUser);
+    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'Olja och filter', 'counterparty' => 'Åhlens'], $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 15 + 7);
     löpandeStämmer($ägare);
 
-    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'O', 'supplier' => null], $ägarUser);
+    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'O', 'counterparty' => null], $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 1);
     löpandeStämmer($ägare);
 
