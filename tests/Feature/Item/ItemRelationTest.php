@@ -679,13 +679,21 @@ function relationsGammaltVillkor(bool $gammaltVillkor = true): Closure
     };
 
     if ($gammaltVillkor) {
-        $läggVillkor("'parent', 'child', 'sibling'");
+        try {
+            $läggVillkor("'parent', 'child', 'sibling'");
+        } catch (Throwable $e) {
+            // Fälls DDL:en mitt i ska villkoret ändå vara tillbaka.
+            $läggVillkor("'parent', 'child', 'related'");
+
+            throw $e;
+        }
     }
 
-    // Högsta id per tabell med en `id`-kolumn, innan provet skriver något.
+    // Högsta id per tabell med ett heltals-`id`, innan provet skriver något.
+    // Tabeller med strängid (som `sessions`) lämnas ifred.
     $högsta = [];
     foreach (Schema::getTableListing() as $tabell) {
-        if (Schema::hasColumn($tabell, 'id')) {
+        if (Schema::hasColumn($tabell, 'id') && in_array(Schema::getColumnType($tabell, 'id'), ['int', 'integer', 'bigint', 'smallint', 'mediumint', 'tinyint'], true)) {
             $högsta[$tabell] = (int) DB::table($tabell)->max('id');
         }
     }

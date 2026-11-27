@@ -388,7 +388,21 @@ function metadataBetalareNullbar(): Closure
     }
 
     DB::statement('SET FOREIGN_KEY_CHECKS=0');
-    $ändra(true);
+
+    try {
+        $ändra(true);
+    } catch (Throwable $e) {
+        // Fälls DDL:en mitt i får anslutningen inte lämnas med avstängda
+        // främmande nycklar eller halvt nullable tabeller.
+        try {
+            $ändra(false);
+        } finally {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+        }
+
+        throw $e;
+    }
+
     DB::getPdo()->beginTransaction();
 
     return function () use ($ändra): void {
@@ -454,18 +468,44 @@ it('migreringen fyller i betalaren enligt reglerna', function () {
 });
 
 it('migreringen räknar fram metadata_bytes för alla konton, och skapar en rad där den saknas', function () {
-    [$konto, , , $väntat] = metadataInnehåll();
-    [$tomt] = metadataKonto();
-    UsageCounter::factory()->create(['account_id' => $tomt->id, 'metadata_bytes' => 99]);
-
     // Den frysta ifyllningen läser de sex kolumner issue 425 tar bort; på en
     // färsk databas kör den före 425 (migrationernas ordning).
+    // Drivrutinsglappet: på SQLite rullas ALTER TABLE tillbaka med testets
+    // transaktion, men MariaDB committar implicit. DDL:en görs därför först av
+    // alla, en ny PDO-transaktion öppnas för provets rader, och `finally`
+    // rullar tillbaka den innan kolumnerna släpps (som i SexFaltenBlirFaltTest).
     sexFaltKolumnerTillbaka();
 
-    $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
-    $migrering->backfillMetadataBytes();
+    $mariadb = DB::getDriverName() !== 'sqlite';
 
-    expect(metadataByte($konto))->toBe($väntat);
-    // Kontot utan räknade rader finns inte i summorna och rörs inte.
-    expect(metadataByte($tomt))->toBe(99);
+    if ($mariadb) {
+        DB::getPdo()->beginTransaction();
+    }
+
+    try {
+        [$konto, , , $väntat] = metadataInnehåll();
+        [$tomt] = metadataKonto();
+        UsageCounter::factory()->create(['account_id' => $tomt->id, 'metadata_bytes' => 99]);
+
+        $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
+        $migrering->backfillMetadataBytes();
+
+        expect(metadataByte($konto))->toBe($väntat);
+        // Kontot utan räknade rader finns inte i summorna och rörs inte.
+        expect(metadataByte($tomt))->toBe(99);
+    } finally {
+        if ($mariadb) {
+            $pdo = DB::getPdo();
+
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            Schema::dropColumns('item', [
+                'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note',
+            ]);
+
+            $pdo->beginTransaction();
+        }
+    }
 });
