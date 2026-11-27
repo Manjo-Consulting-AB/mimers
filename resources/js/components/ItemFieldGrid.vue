@@ -94,6 +94,15 @@ const fields = computed(() => {
                     {{ field.value }}
                 </span>
             </dd>
+            <dd v-else-if="field.segments" class="text-ink">
+                <template v-for="(segment, index) in field.segments" :key="index"><a
+                    v-if="segment.href"
+                    :href="segment.href"
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    class="field-link"
+                >{{ segment.text }}</a><template v-else>{{ segment.text }}</template></template>
+            </dd>
             <dd v-else class="text-ink">{{ field.value }}</dd>
         </div>
     </dl>

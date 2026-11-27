@@ -123,6 +123,14 @@ export function customFieldRows(item, locale, t = (key) => key) {
                 value: formatFieldValue(field, locale, t),
             };
 
+            if (field.type === 'text') {
+                const segments = linkSegments(row.value);
+
+                if (segments.some((segment) => segment.href !== undefined)) {
+                    row.segments = segments;
+                }
+            }
+
             if (field.type === 'boolean') {
                 row.type = 'boolean';
                 row.fieldId = field.id;
@@ -160,6 +168,66 @@ export function formatFieldValue(field, locale, t = (key) => key) {
     }
 
     return field.value;
+}
+
+/**
+ * Delar ett textvärde i segment: `{ text }` eller `{ text, href }`. En adress
+ * börjar med `http://`, `https://` eller `www.` och slutar vid blanktecken;
+ * skiljetecken i slutet hör inte till den, och en `)` stannar kvar bara om
+ * adressen har en `(` före den. `www.` får `https://` framför sig i `href`.
+ * Inget annat protokoll blir en länk. Vue escapar texten, ingen `v-html`.
+ *
+ * @param {string|null} text
+ * @returns {Array<{text: string, href?: string}>}
+ */
+export function linkSegments(text) {
+    const value = String(text ?? '');
+    const segments = [];
+    const pattern = /(?<![\w])(?:https?:\/\/|www\.)\S+/gi;
+    let last = 0;
+    let match;
+
+    const push = (part) => {
+        if (part === '') {
+            return;
+        }
+
+        const previous = segments[segments.length - 1];
+
+        if (previous && previous.href === undefined) {
+            previous.text += part;
+        } else {
+            segments.push({ text: part });
+        }
+    };
+
+    while ((match = pattern.exec(value)) !== null) {
+        let url = match[0];
+
+        while (/[.,;:!?)]$/.test(url)) {
+            if (url.endsWith(')') && url.split('(').length >= url.split(')').length) {
+                break;
+            }
+
+            url = url.slice(0, -1);
+        }
+
+        if (/^(?:https?:\/\/|www\.)$/i.test(url)) {
+            continue;
+        }
+
+        push(value.slice(last, match.index));
+        segments.push({
+            text: url,
+            href: /^www\./i.test(url) ? `https://${url}` : url,
+        });
+        last = match.index + url.length;
+        pattern.lastIndex = last;
+    }
+
+    push(value.slice(last));
+
+    return segments;
 }
 
 /**

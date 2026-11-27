@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: anteckningen länkar redan bara adresser; provet låser beteendet, koden ändras inte (issue 1741).
+
 use App\Actions\Item\RenderItemNotes;
 
 /*
@@ -95,4 +97,13 @@ it('ger null för en tom eller blank anteckning', function () {
     expect($action->handle(null))->toBeNull();
     expect($action->handle(''))->toBeNull();
     expect($action->handle(" \n\t "))->toBeNull();
+});
+
+it('gör bara https:// och www.-adresser till länkar som öppnas i en ny flik', function () {
+    $html = (new RenderItemNotes)->handle('se https://example.com/a och www.example.org');
+
+    expect($html)->toContain('href="https://example.com/a"');
+    expect($html)->toContain('href="http://www.example.org"');
+    expect($html)->toContain('target="_blank"');
+    expect($html)->toMatch('/rel="[^"]*noopener/');
 });
