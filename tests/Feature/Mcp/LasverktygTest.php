@@ -491,6 +491,18 @@ it('beskriver kostnadsbeloppet i huvudenhet — ordet "minor" finns inte kvar', 
     }
 });
 
+it('börjar varje costs_*-beskrivning med Deprecated och avvecklingsdatumet', function () {
+    [, $token] = mcpAgentMedToken();
+    $verktyg = collect(mcpAnropa($token, 'tools/list', ['per_page' => 100])->json('result.tools'))->keyBy('name');
+
+    foreach (['create', 'list', 'update', 'delete'] as $del) {
+        expect($verktyg)->toHaveKey("costs_$del");
+        expect($verktyg["costs_$del"]['description'])
+            ->toStartWith("Deprecated, use transactions_$del")
+            ->toContain('2027-02-25');
+    }
+});
+
 it('lämnar aldrig en hemlighet eller en annan persons e-postadress i något läsverktyg', function () {
     [$agent, $token, $anvandare] = mcpAgentMedToken();
     [$container, $i] = mcpTrad($agent);

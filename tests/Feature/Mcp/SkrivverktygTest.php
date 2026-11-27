@@ -456,3 +456,42 @@ it('transactions_update och transactions_delete fungerar på en intäktsrad', fu
     mcpResultat(mcpVerktyg($token, 'transactions_delete', ['transaction' => $intakt->ulid]));
     expect(CostEntry::query()->find($intakt->id))->toBeNull();
 });
+
+it('transactions_update byter riktning, rensar quantity och lämnar riktningen orörd vid kind=null', function () {
+    [, $token, , $container, $item] = skrivMiljo();
+
+    $rad = CostEntry::factory()->create([
+        'item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'expense', 'quantity' => '3',
+    ]);
+
+    mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $rad->ulid, 'kind' => 'income']));
+    expect($rad->refresh()->kind)->toBe('income');
+
+    mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $rad->ulid, 'kind' => 'expense']));
+    expect($rad->refresh()->kind)->toBe('expense');
+
+    mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $rad->ulid, 'kind' => 'income']));
+    mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $rad->ulid, 'kind' => null, 'quantity' => null]));
+    $rad->refresh();
+    expect($rad->kind)->toBe('income')->and($rad->quantity)->toBeNull();
+});
+
+it('avvisar transactions_* med agent.forbidden när kostnadsgruppen bara är läsbar', function () {
+    [$agent, $token, , $container, $item] = skrivMiljo();
+
+    $rad = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+
+    $fall = [
+        'transactions_create' => ['item' => $item->ulid, 'incurred_on' => '2026-03-01', 'amount' => '10', 'currency' => 'SEK', 'description' => 'x'],
+        'transactions_update' => ['transaction' => $rad->ulid, 'description' => 'y'],
+        'transactions_delete' => ['transaction' => $rad->ulid],
+    ];
+
+    skrivNiva($agent, $container, 'costs', 'read');
+
+    foreach ($fall as $namn => $args) {
+        expect(mcpFel(mcpVerktyg($token, $namn, $args))['code'])->toBe('agent.forbidden', $namn);
+    }
+
+    expect(CostEntry::query()->find($rad->id))->not->toBeNull();
+});
