@@ -785,7 +785,7 @@ return [
             'text' => 'Text',
             'number' => 'Number',
             'date' => 'Date',
-            'boolean' => 'Yes/No',
+            'boolean' => 'Checkbox',
         ],
         // A yes/no field is always shown; no row means No (ADR-0099).
         'value' => [
