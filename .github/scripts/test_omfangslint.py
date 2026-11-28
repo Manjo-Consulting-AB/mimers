@@ -14,6 +14,7 @@ och lokalt med:
 """
 import os
 import sys
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import omfangslint as l
@@ -292,6 +293,22 @@ def test_typ_med_en_rad_utan_sammanhang_ger_rad_trots_felkodsrad():
         "- [ ] `agent.example` skickas en gång per användare\n- [ ] felkod `agent.example` loggas",
     )
     assert _notisrader(kropp) != []
+
+
+@pytest.mark.parametrize("sammanhang", [
+    "kolumnen `agent.example` finns redan",
+    "migration lägger `agent.example`",
+    "`agent.example` är inte en notistyp",
+    "tidsstämpeln `agent.example_at` sätts",
+])
+def test_tillagg_stanger_bara_sin_egen_rad(sammanhang):
+    """Varje undantag utöver felkod/ruttnamn gäller bara raden det står på:
+    en äkta förekomst på en annan rad håller typen kvar."""
+    kropp = NOTISTYP_KROPP.replace(
+        "- [ ] `agent.example` skickas en gång per användare",
+        "- [ ] `agent.example` skickas en gång per användare\n- [ ] " + sammanhang,
+    )
+    assert any("NotificationTarget.php" in rad for rad in _notisrader(kropp))
 
 
 # =====================================================================
