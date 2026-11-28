@@ -127,6 +127,8 @@ body:
       description: >
         Testbara påståenden, ett per rad som kryssruta. Varje punkt ska motsvaras av ett test i PR:en.
         Kan ett test inte bevisa punkten är den inte färdigtänkt.
+        Låser en punkt beteende som redan finns är provet grönt redan före ändringen. Har repot en grind
+        som kräver att nya prov är röda på basen, skriv i punkten vilken undantagsmarkör provet ska bära.
       value: |
         - [ ] 
         - [ ] 
