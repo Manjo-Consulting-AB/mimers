@@ -2,9 +2,9 @@
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
@@ -286,7 +286,7 @@ it('den fasta kostnadssummeringen är fri medan rapporten kräver cost_reports',
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $account->id,
     ]);
-    CostEntry::factory()->for($item, 'item')->create(['amount' => 1000]);
+    ItemTransaction::factory()->for($item, 'item')->create(['amount' => 1000]);
 
     $containern = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
     $kontot = getJson("/api/accounts/{$account->ulid}/costs/summary", $headers);

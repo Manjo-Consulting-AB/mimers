@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\Cost;
+namespace App\Actions\Transaction;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Models\Container;
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  * som registrerar en kostnad på ett nytt item ska få containerns hela
  * leverantörshistorik, och `container_id` är denormaliserad på raden just för
  * att frågan inte ska behöva joina `item`. En enda `GROUP BY` mot
- * `cost_entry` — ingen relation, ingen Eloquent-modell — som indexet
+ * `item_transaction` — ingen relation, ingen Eloquent-modell — som indexet
  * `(container_id, deleted_at, kind, counterparty)` från 45a gör billig i stället för en
  * full scan.
  *
@@ -36,7 +36,7 @@ use Illuminate\Support\Facades\DB;
  * av motorn inte ska veta (issue 74 § Beslut 6). För en OMFÅNGSBEGRÄNSAD
  * mottagare joinas därför `item` in och omfånget styr raderna. För ett
  * OMFATTANDE omfång läggs ingen join till: den befintliga frågan mot bara
- * `cost_entry` är billigare (indexet från 45a), och de två fallen är två
+ * `item_transaction` är billigare (indexet från 45a), och de två fallen är två
  * grenar med flit — en join som alltid görs hade kostat ägaren en join i
  * onödan. Raderna är desamma som förut; bara urvalet skiljer.
  *
@@ -62,30 +62,30 @@ class ListCostSuppliers
      */
     public function handle(User $user, Container $container, ?string $kind = null): array
     {
-        $query = DB::table('cost_entry')
-            ->where('cost_entry.container_id', $container->id)
-            ->whereNull('cost_entry.deleted_at')
-            ->whereNotNull('cost_entry.counterparty');
+        $query = DB::table('item_transaction')
+            ->where('item_transaction.container_id', $container->id)
+            ->whereNull('item_transaction.deleted_at')
+            ->whereNotNull('item_transaction.counterparty');
 
         // Med `kind` föreslås bara motparter från rader med samma riktning
         // (ADR-0102).
         if ($kind !== null) {
-            $query->where('cost_entry.kind', $kind);
+            $query->where('item_transaction.kind', $kind);
         }
 
         $scope = $this->resolveItemScope->handle($user, $container);
         $itemIds = $scope->itemIds();
 
         if ($itemIds !== null) {
-            $query->join('item', 'item.id', '=', 'cost_entry.item_id')
+            $query->join('item', 'item.id', '=', 'item_transaction.item_id')
                 ->whereIn('item.id', $itemIds);
         }
 
         $rader = $query
-            ->selectRaw('cost_entry.counterparty AS supplier, COUNT(*) AS antal')
-            ->groupBy('cost_entry.counterparty')
+            ->selectRaw('item_transaction.counterparty AS supplier, COUNT(*) AS antal')
+            ->groupBy('item_transaction.counterparty')
             ->orderByDesc('antal')
-            ->orderBy('cost_entry.counterparty')
+            ->orderBy('item_transaction.counterparty')
             ->limit(self::SUPPLIER_SUGGESTION_LIMIT)
             ->get();
 

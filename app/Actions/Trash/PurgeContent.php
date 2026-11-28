@@ -5,10 +5,10 @@ namespace App\Actions\Trash;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Models\Attachment;
 use App\Models\Category;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\Tag;
@@ -94,7 +94,7 @@ class PurgeContent
      *    hårt — en länk kan peka på itemet från andra hållet, och en hasMany
      *    i en riktning hittar bara hälften,
      * 10. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
-     *    withTrashed() (issue 45a § Beslut 10): cost_entry.item_id är
+     *    withTrashed() (issue 45a § Beslut 10): item_transaction.item_id är
      *    ON DELETE RESTRICT, så utan den här raden skulle forceDelete på
      *    itemet falla på ett främmandenyckelfel,
      * 11. itemåtkomsterna — container_access- och invitation-raderna med
@@ -154,7 +154,7 @@ class PurgeContent
             MetadataLedger::releaseWhere('schedule_occurrence', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
             MetadataLedger::releaseWhere('schedule', fn (Builder $query) => $query->where('schedule.item_id', $itemId));
             MetadataLedger::releaseWhere('loan', fn (Builder $query) => $query->where('loan.item_id', $itemId));
-            MetadataLedger::releaseWhere('cost_entry', fn (Builder $query) => $query->where('cost_entry.item_id', $itemId));
+            MetadataLedger::releaseWhere('item_transaction', fn (Builder $query) => $query->where('item_transaction.item_id', $itemId));
             MetadataLedger::releaseWhere('item_version', fn (Builder $query) => $query->where('item_version.item_id', $itemId));
             MetadataLedger::releaseWhere('item', fn (Builder $query) => $query->where('item.id', $itemId));
 
@@ -213,7 +213,7 @@ class PurgeContent
             // annars, och den måste med (issue 45a § Beslut 10). Rader som
             // följer med ett mjukraderat item i papperskorgen har ofta
             // deleted_at satt.
-            CostEntry::withTrashed()->where('item_id', $itemId)->forceDelete();
+            ItemTransaction::withTrashed()->where('item_id', $itemId)->forceDelete();
 
             // Itemåtkomsterna (issue 69): båda kolumnerna är ON DELETE
             // RESTRICT, och ett item som har — eller har haft — en

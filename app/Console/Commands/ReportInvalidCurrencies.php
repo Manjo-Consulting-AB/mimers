@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Support\Cost\Currencies;
+use App\Support\Transaction\Currencies;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -21,9 +21,9 @@ use Illuminate\Support\Facades\DB;
  * Rapporten läser tre kolumner och skriver en tabell per kolumn som har
  * träffar:
  *
- * - `cost_entry.currency` — antal rader, mjukraderade och summan av `amount`
+ * - `item_transaction.currency` — antal rader, mjukraderade och summan av `amount`
  *   per kod. `amount` lagras redan i minsta enhet
- *   (App\Support\Cost\MinorUnits), så summan är i minsta enhet och aldrig i
+ *   (App\Support\Transaction\MinorUnits), så summan är i minsta enhet och aldrig i
  *   huvudenhet.
  * - `container.currency` — antal rader och mjukraderade. Kolumnen är NULLBAR;
  *   `NULL` är ingen kod och varken giltig eller ogiltig, så de raderna
@@ -62,7 +62,7 @@ class ReportInvalidCurrencies extends Command
 
         if ($costEntries !== []) {
             $found = true;
-            $this->line('cost_entry.currency');
+            $this->line('item_transaction.currency');
             $this->table(['kod', 'rader', 'mjukraderade', 'summa (minsta enhet)'], $costEntries);
         }
 
@@ -107,8 +107,8 @@ class ReportInvalidCurrencies extends Command
     }
 
     /**
-     * Ogiltiga koder i `cost_entry`, med antal, mjukraderade och summa i
-     * minsta enhet. Frågan går via DB::table och inte CostEntry::query(),
+     * Ogiltiga koder i `item_transaction`, med antal, mjukraderade och summa i
+     * minsta enhet. Frågan går via DB::table och inte ItemTransaction::query(),
      * eftersom modellens SoftDeletes-scope annars hade tystat de
      * mjukraderade raderna — och de ska räknas.
      *
@@ -119,7 +119,7 @@ class ReportInvalidCurrencies extends Command
     {
         $currency = $this->binaryCurrencyExpression();
 
-        $rows = DB::table('cost_entry')
+        $rows = DB::table('item_transaction')
             ->selectRaw($currency.' as currency, COUNT(*) as row_count, SUM(CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END) as deleted_count, SUM(amount) as amount_sum')
             ->groupByRaw($currency)
             ->orderByRaw($currency)

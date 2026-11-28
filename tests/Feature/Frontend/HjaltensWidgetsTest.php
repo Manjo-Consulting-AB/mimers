@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -329,7 +329,7 @@ it('staplar två valutor i HeroCosts och låter radens höjd följa den högsta'
     ]);
 
     foreach ([['SEK', 1000], ['EUR', 2000]] as [$valuta, $belopp]) {
-        CostEntry::factory()->for($item, 'item')->create([
+        ItemTransaction::factory()->for($item, 'item')->create([
             'amount' => $belopp,
             'currency' => $valuta,
             'incurred_on' => '2026-11-24',

@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Schema;
 
@@ -33,7 +33,7 @@ use function Pest\Laravel\postJson;
  * är ytan användaren kan skriva på, och en invariant som bara prövas mot
  * modellen säger ingenting om vad formuläret gör.
  *
- * `cost_entry` ändras inte av issuen: ingen kolumn läggs till och ingen tas
+ * `item_transaction` ändras inte av issuen: ingen kolumn läggs till och ingen tas
  * bort, och tabellen prövas mot sin exakta kolumnlista just därför. `item`
  * får ingen valutakolumn — itemet är stället formuläret öppnas, inte en nivå
  * i arvet.
@@ -109,7 +109,7 @@ it('föreslår containerns egen valuta när kroppen inte skickar någon', functi
     $response->assertCreated();
     expect($response->json('data.currency'))->toBe('EUR');
 
-    $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    $kostnad = ItemTransaction::query()->where('item_id', $item->id)->firstOrFail();
     expect($kostnad->currency)->toBe('EUR');
 });
 
@@ -128,7 +128,7 @@ it('föreslår kontots valuta när containern saknar en egen', function () {
     $response->assertCreated();
     expect($response->json('data.currency'))->toBe('NOK');
 
-    $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    $kostnad = ItemTransaction::query()->where('item_id', $item->id)->firstOrFail();
     expect($kostnad->currency)->toBe('NOK');
 });
 
@@ -164,7 +164,7 @@ it('avvisar en skickad valuta som inte är tre bokstäver', function () {
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'validation.failed');
 
-    expect(CostEntry::query()->where('item_id', $item->id)->count())->toBe(0);
+    expect(ItemTransaction::query()->where('item_id', $item->id)->count())->toBe(0);
 });
 
 it('låter användaren välja en annan valuta på den enskilda raden och sparar den', function () {
@@ -177,7 +177,7 @@ it('låter användaren välja en annan valuta på den enskilda raden och sparar 
     $response->assertCreated();
     expect($response->json('data.currency'))->toBe('USD');
 
-    $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    $kostnad = ItemTransaction::query()->where('item_id', $item->id)->firstOrFail();
     expect($kostnad->currency)->toBe('USD');
 
     // Och den går att ändra i efterhand, med beloppet — valutan och beloppet
@@ -193,7 +193,7 @@ it('låter användaren välja en annan valuta på den enskilda raden och sparar 
 it('lämnar befintliga kostnadsrader oförändrade när containerns valuta byts', function () {
     [$account, $user, $headers, $container, $item] = valutansArvKontext('SEK', 'EUR');
 
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'currency' => 'EUR',
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $account->id,
@@ -215,12 +215,12 @@ it('lämnar befintliga kostnadsrader oförändrade när containerns valuta byts'
     expect($kostnad->fresh()->currency)->toBe('EUR');
 });
 
-it('har varken lagt till eller tagit bort en kolumn i cost_entry', function () {
+it('har varken lagt till eller tagit bort en kolumn i item_transaction', function () {
     // Den exakta listan, inte en delmängd: en ny kolumn gör testet rött lika
     // säkert som en borttagen. Att flytta valutan till containern är det
     // "förenkling" issuen uttryckligen förbjuder — den hade gjort arvet till
     // en datamigrering och rivit regeln att en rad bär vad som betalades.
-    expect(Schema::getColumnListing('cost_entry'))->toEqualCanonicalizing([
+    expect(Schema::getColumnListing('item_transaction'))->toEqualCanonicalizing([
         'id',
         'ulid',
         'container_id',

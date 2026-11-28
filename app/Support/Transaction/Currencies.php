@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Support\Cost;
+namespace App\Support\Transaction;
 
 use ResourceBundle;
 

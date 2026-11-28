@@ -6,8 +6,8 @@ use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\UsageCounter;
@@ -1221,7 +1221,7 @@ it('räknar uppgifter och underhåll som ett tal', function () {
  *
  * Fram till issue 172 saknade översikten en kostnadspropp helt, och provet
  * förbjöd en. Sedan issue 172 bär `costs` containerns fasta summering — men
- * den kommer ur App\Support\Cost\CostReport::summary(), alltså exakt samma
+ * den kommer ur App\Support\Transaction\CostReport::summary(), alltså exakt samma
  * svar som `/api/containers/{container}/costs/summary` ger. En egen `SUM` här
  * hade varit en andra väg till samma tal, och de två hade glidit isär
  * ([[ADR-0039 Containerns översikt]] § Konsekvenser).
@@ -1229,7 +1229,7 @@ it('räknar uppgifter och underhåll som ett tal', function () {
  * Provet är därför tvådelat: svaret är ordagrant API:ets, och kontrollerns KOD
  * rör ingen kostnadskälla. Kodprovet läser filen med kommentarerna
  * bortskalade, samma grepp som SprakTest använder på Vue-filerna: docblocken
- * nämner både `cost_entry` och `CostReport` i prosa, och en råtextkontroll
+ * nämner både `item_transaction` och `CostReport` i prosa, och en råtextkontroll
  * hade fällt på en mening i stället för på en fråga.
  */
 it('hämtar kostnaden ur den fasta summeringen och räknar den inte själv', function () {
@@ -1239,7 +1239,7 @@ it('hämtar kostnaden ur den fasta summeringen och räknar den inte själv', fun
 
     $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
 
-    CostEntry::factory()->for($motorn, 'item')->create([
+    ItemTransaction::factory()->for($motorn, 'item')->create([
         'amount' => 4200,
         'currency' => 'SEK',
         'incurred_on' => Carbon::today()->toDateString(),
@@ -1258,8 +1258,8 @@ it('hämtar kostnaden ur den fasta summeringen och räknar den inte själv', fun
     $kontroller = (string) preg_replace('#/\*.*?\*/#s', '', $kontroller);
     $kontroller = (string) preg_replace('#^[ \t]*//.*$#m', '', $kontroller);
 
-    expect($kontroller)->not->toContain('CostEntry');
-    expect($kontroller)->not->toContain('cost_entry');
+    expect($kontroller)->not->toContain('ItemTransaction');
+    expect($kontroller)->not->toContain('item_transaction');
     expect($kontroller)->not->toContain('SUM(');
 });
 

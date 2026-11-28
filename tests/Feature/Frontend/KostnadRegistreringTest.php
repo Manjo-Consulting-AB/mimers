@@ -24,7 +24,7 @@ function kostregKod(string $sokvag): string
     return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
 }
 
-it('har ingen details-meny i huvudet och ritar InlineCreate efter brickorna och före CostTable', function () {
+it('har ingen details-meny i huvudet och ritar InlineCreate efter brickorna och före TransactionTable', function () {
     $vy = kostregKod('pages/Containers/Costs.vue');
 
     // Rubriken står ensam: ingen länk till itemets kostnadsflik och ingen meny i huvudet.
@@ -32,9 +32,9 @@ it('har ingen details-meny i huvudet och ritar InlineCreate efter brickorna och 
         ->and($vy)->not->toContain('justify-between gap-4');
 
     $brickor = strpos($vy, '<UiStat');
-    $donut = strpos($vy, '<CostDonut');
+    $donut = strpos($vy, '<TransactionDonut');
     $rad = strpos($vy, '<InlineCreate');
-    $tabell = strpos($vy, '<CostTable');
+    $tabell = strpos($vy, '<TransactionTable');
 
     expect($brickor)->not->toBeFalse()
         ->and($donut)->not->toBeFalse()
@@ -69,10 +69,10 @@ it('väljaren är en enda details-knapp som listar items och ett val navigerar i
         ->and($vy)->not->toContain('chosen.value = null');
 });
 
-it('ger CostEntryForm itemets ULID, förvalen och page.url som returadress', function () {
+it('ger TransactionForm itemets ULID, förvalen och page.url som returadress', function () {
     $vy = kostregKod('pages/Containers/Costs.vue');
 
-    expect($vy)->toMatch('/<CostEntryForm\b/')
+    expect($vy)->toMatch('/<TransactionForm\b/')
         ->and($vy)->toContain(':item-ulid="selected?.ulid ?? null"')
         ->and($vy)->toContain(':cost-defaults="costDefaults"')
         ->and($vy)->toContain(':return-to="page.url"')
@@ -81,7 +81,7 @@ it('ger CostEntryForm itemets ULID, förvalen och page.url som returadress', fun
 
 it('flyttar fokus till beloppet efter en sparning och låter datum, valuta och item stå kvar', function () {
     $vy = kostregKod('pages/Containers/Costs.vue');
-    $form = kostregKod('components/CostEntryForm.vue');
+    $form = kostregKod('components/TransactionForm.vue');
 
     expect($vy)->toContain('@created="onCreated"')
         ->and($vy)->toContain("document.getElementById('cost-amount')?.focus()");
@@ -92,7 +92,7 @@ it('flyttar fokus till beloppet efter en sparning och låter datum, valuta och i
 
 it('skickar createdCost som highlight och ger raden bg-accent-soft i 2000 ms', function () {
     $vy = kostregKod('pages/Containers/Costs.vue');
-    $tabell = kostregKod('components/CostTable.vue');
+    $tabell = kostregKod('components/TransactionTable.vue');
 
     expect($vy)->toContain('createdCost: { type: String, default: null }')
         ->and($vy)->toContain(':highlight="highlight"')
@@ -134,7 +134,7 @@ it('stänger med Escape eller Cancel och frågar först när formuläret har osp
 });
 
 it('flyttar formulärets förval efter en sparning så att dirty blir falsk och slår till igen vid en ändring', function () {
-    $form = kostregKod('components/CostEntryForm.vue');
+    $form = kostregKod('components/TransactionForm.vue');
 
     // defaults() utan argument, direkt efter reset: datum och valuta som står
     // kvar blir nytt förval, så isDirty faller och watch skickar dirty = false.

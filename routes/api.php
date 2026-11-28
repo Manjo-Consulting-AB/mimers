@@ -562,7 +562,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::delete('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'destroy']);
 
     // Issue 45a · Kostnadsregistrering — vad ett item har kostat, se
-    // App\Http\Controllers\Api\CostEntryController och App\Models\CostEntry.
+    // App\Http\Controllers\Api\CostEntryController och App\Models\ItemTransaction.
     // {item} nästlas under {container} som items ovan, och {cost} binds av
     // gruppens scopeBindings() genom App\Models\Item::costs() — hela skyddet
     // mot en kostnad på ett annat item, eller ett item i en annan container:
@@ -592,14 +592,14 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // [[Items och organisation]] § Leverantörsfältet. Ytan ligger på
     // CONTAINERN, inte på itemet (issue 45b § Beslut 1): den som registrerar
     // en kostnad på ett nytt item ska få containerns hela historia, och
-    // frågan mot cost_entry ska inte behöva joina item. Grinden är den
+    // frågan mot item_transaction ska inte behöva joina item. Grinden är den
     // befintliga view() på App\Policies\ContainerPolicy — ingen ny
     // policymetod (§ Beslut 2). Bara GET: uppslaget är en läsyta.
     Route::get('/containers/{container}/costs/suppliers', [CostEntryController::class, 'suppliers']);
 
     // Issue 46 · Kostnadsrapporten — grupperad summering av containerns
     // kostnadsrader, se App\Http\Controllers\Api\CostReportController och
-    // App\Support\Cost\CostReport. En rutt, en container (issue 46 § Beslut
+    // App\Support\Transaction\CostReport. En rutt, en container (issue 46 § Beslut
     // 1): rapporten är alltid scopad till en container, och kriteriet
     // "summerar aldrig rader från containers användaren saknar åtkomst till"
     // uppfylls av routebindningen plus grinden. Två grindar — view() följt
@@ -614,7 +614,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // Issue 86 · De fasta kostnadssummeringarna — containerns, itemets och
     // kontots summering utan parametrar, se
     // App\Http\Controllers\Api\CostSummaryController och
-    // App\Support\Cost\CostReport::summary()/forItem()/summaryForContainers().
+    // App\Support\Transaction\CostReport::summary()/forItem()/summaryForContainers().
     // [[ADR-0038 Gränsen för Pro i kostnaderna]] flyttade gränsen från
     // summering till fråga: den fasta summeringen är fri och bär därför
     // INGEN plangrind — bara behörigheten. Containerrutten frågar view(),

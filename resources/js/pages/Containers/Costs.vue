@@ -3,12 +3,12 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
-import CostCategoryBreakdown from '../../components/CostCategoryBreakdown.vue';
-import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
-import CostFilterBar from '../../components/CostFilterBar.vue';
-import CostEntryForm from '../../components/CostEntryForm.vue';
-import CostTable from '../../components/CostTable.vue';
-import CostTimeChart from '../../components/CostTimeChart.vue';
+import TransactionCategoryBreakdown from '../../components/TransactionCategoryBreakdown.vue';
+import TransactionDonut, { formatAmount } from '../../components/TransactionDonut.vue';
+import TransactionFilterBar from '../../components/TransactionFilterBar.vue';
+import TransactionForm from '../../components/TransactionForm.vue';
+import TransactionTable from '../../components/TransactionTable.vue';
+import TransactionTimeChart from '../../components/TransactionTimeChart.vue';
 import InlineCreate from '../../components/InlineCreate.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiConfirmDialog from '../../components/UiConfirmDialog.vue';
@@ -35,9 +35,9 @@ defineOptions({
  * container*.
  *
  * **Sidan räknar ingenting** ([[ADR-0024 Tunna controllers och actions]]).
- * Talen kommer färdigsummerade ur App\Support\Cost\CostReport — `costs` är
+ * Talen kommer färdigsummerade ur App\Support\Transaction\CostReport — `costs` är
  * `summary()` och `yearCosts` är `yearForContainer()` — och raderna ur
- * App\Actions\Cost\ListContainerCosts. Vyn ritar, formaterar och länkar; den
+ * App\Actions\Transaction\ListContainerCosts. Vyn ritar, formaterar och länkar; den
  * summerar aldrig två valutor och sorterar aldrig en rad.
  *
  * **Brickorna är en per valuta och aldrig en summa över två.** Valutor
@@ -125,7 +125,7 @@ const props = defineProps({
     /* Årtalet *I år* räknar, räknat på servern ur användarens tidszon. */
     year: { type: Number, required: true },
     /*
-     * En sida rader, nyast först, ur App\Actions\Cost\ListContainerCosts —
+     * En sida rader, nyast först, ur App\Actions\Transaction\ListContainerCosts —
      * formen är Laravels paginator, så `data`, `current_page` och `last_page`
      * kommer rakt igenom.
      */
@@ -434,7 +434,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
         bildens: först det man ställer frågan med, sedan svaret.
     -->
     <template v-if="canReport && report">
-        <CostFilterBar
+        <TransactionFilterBar
             :container-ulid="container.ulid"
             :filter="report.filter"
             :options="filterOptions"
@@ -465,7 +465,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             <UiCard>
                 <template #heading>{{ t('container.costs.chart') }}</template>
 
-                <CostTimeChart :groups="report.period.groups" :totals="report.period.totals" />
+                <TransactionTimeChart :groups="report.period.groups" :totals="report.period.totals" />
             </UiCard>
         </div>
 
@@ -473,12 +473,12 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
              utan kategori ([[ADR-0040 Underträdets summor]]). Staplar och
              ingen ring: motorns grupper rullas upp över underträdet och
              överlappar, så en andel av totalen hade påstått en partition —
-             se CostCategoryBreakdown. -->
+             se TransactionCategoryBreakdown. -->
         <div v-if="report.category.groups.length > 0" class="mt-8">
             <UiCard>
                 <template #heading>{{ t('container.costs.breakdown') }}</template>
 
-                <CostCategoryBreakdown
+                <TransactionCategoryBreakdown
                     :totals="report.category.totals"
                     :groups="report.category.groups"
                 />
@@ -491,7 +491,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
         <UiCard>
             <template #heading>{{ t('container.costs.donut') }}</template>
 
-            <CostDonut
+            <TransactionDonut
                 :totals="costs.totals"
                 :breakdown="costs.breakdown"
                 :label="t('container.costs.total')"
@@ -543,7 +543,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
                     </div>
                 </details>
 
-                <CostEntryForm
+                <TransactionForm
                     :key="formKey"
                     :container-ulid="container.ulid"
                     :item-ulid="selected?.ulid ?? null"
@@ -571,7 +571,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             {{ emptyText }}
         </p>
 
-        <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" :highlight="highlight" />
+        <TransactionTable v-else :rows="rows.data" :container-ulid="container.ulid" :highlight="highlight" />
 
         <!--
             Sidnumreringen. Länkarna ritas bara när det finns en sida att

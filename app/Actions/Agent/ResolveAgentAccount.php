@@ -13,7 +13,7 @@ use App\Models\User;
  * och förbrukningen belastar personkontot precis som en uppladdning personen
  * gör själv. Flera personkonton är en patologi; lägst `id` vinner,
  * deterministiskt — samma förval som App\Support\Account\ActingAccount och
- * App\Actions\Cost\CreateCostEntry::attributedAccountId().
+ * App\Actions\Transaction\CreateItemTransaction::attributedAccountId().
  *
  * Saknas ett personkonto faller vi tillbaka på användarens första konto, av
  * samma skäl som ActingAccount: handlingen måste ha ett konto. Saknas även

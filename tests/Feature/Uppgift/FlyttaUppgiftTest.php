@@ -6,8 +6,8 @@ use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Notification;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
@@ -363,7 +363,7 @@ it('kostnadsraderna stannar på källan', function () {
 
     $schema = flyttUppgiftSkapa($anvandare, $container, $item, flyttUppgiftKropp());
 
-    $kostnad = CostEntry::factory()->create([
+    $kostnad = ItemTransaction::factory()->create([
         'item_id' => $item->id,
         'container_id' => $container->id,
     ]);

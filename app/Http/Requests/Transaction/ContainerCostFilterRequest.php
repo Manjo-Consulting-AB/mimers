@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Cost;
+namespace App\Http\Requests\Transaction;
 
 use App\Models\Container;
 use Illuminate\Foundation\Http\FormRequest;

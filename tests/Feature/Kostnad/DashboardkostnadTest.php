@@ -3,11 +3,11 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use App\Support\Access\ItemScope;
-use App\Support\Cost\CostReport;
+use App\Support\Transaction\CostReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
@@ -20,7 +20,7 @@ use function Pest\Laravel\withoutVite;
 /*
  * Issue 125 · Kostnaderna på dashboarden, se
  * App\Http\Controllers\DashboardController,
- * App\Support\Cost\CostReport::monthForContainers(),
+ * App\Support\Transaction\CostReport::monthForContainers(),
  * resources/js/components/HeroCosts.vue och lang/en/ui.php.
  *
  * Filen bevisar månadens kostnadssummering — sedan issue 474 bara totalerna,
@@ -90,9 +90,9 @@ function kostnadItem(Container $container, string $namn): Item
 /**
  * En kostnadsrad på itemet, med känt belopp och känt datum.
  */
-function kostnadRad(Item $item, int $belopp, string $datum, string $valuta = 'SEK'): CostEntry
+function kostnadRad(Item $item, int $belopp, string $datum, string $valuta = 'SEK'): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create([
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum,

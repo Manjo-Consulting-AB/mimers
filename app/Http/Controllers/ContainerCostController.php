@@ -4,18 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Category\ListCategories;
-use App\Actions\Cost\ListContainerCosts;
-use App\Actions\Cost\ListCostSuppliers;
-use App\Http\Requests\Cost\ContainerCostFilterRequest;
+use App\Actions\Transaction\ListContainerCosts;
+use App\Actions\Transaction\ListCostSuppliers;
+use App\Http\Requests\Transaction\ContainerCostFilterRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use App\Support\Access\ItemScope;
-use App\Support\Cost\CostReport;
 use App\Support\Frontend\CreateTarget;
+use App\Support\Transaction\CostReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -47,7 +47,7 @@ use Inertia\Response;
  * **Filtret gäller tabellen, grafen och nedbrytningen — men inte brickorna.**
  * *Totalt* och *I år* är fasta summeringar: de är desamma varje gång de visas
  * och påverkas därför inte av en period (ADR-0038 § Beslut). Talen under
- * `report` räknas ur SAMMA radmängd som tabellen, i App\Support\Cost\
+ * `report` räknas ur SAMMA radmängd som tabellen, i App\Support\Transaction\
  * CostReport, så de två inte kan säga olika saker om vilka rader som finns —
  * därav `$filters` in i både `build()` och ListContainerCosts.
  *
@@ -55,9 +55,9 @@ use Inertia\Response;
  * containerns flikar (ContainerHistoryController, ContainerTaskController):
  * en främling får 403 och inte en tom tabell — en tom lista hade sagt "inga
  * kostnader" om en container hon inte når. Grinden svarar på om hon når
- * containern; VILKA rader hon sedan ser svarar App\Actions\Cost\
+ * containern; VILKA rader hon sedan ser svarar App\Actions\Transaction\
  * ListContainerCosts på, och vilka tal brickorna och donuten räknar svarar
- * App\Support\Cost\CostReport på — båda genom samma `ResolveItemScope` som
+ * App\Support\Transaction\CostReport på — båda genom samma `ResolveItemScope` som
  * `Api\CostEntryController::suppliers()` och CostReportController använder.
  *
  * **Kontrollern räknar ingenting själv** ([[ADR-0024 Tunna controllers och
@@ -226,7 +226,7 @@ class ContainerCostController extends Controller
                 )
             ),
             // Raden som just skrevs: ULID:en ur flashen `created_cost` som
-            // CostEntryController::store() sätter vid en godkänd `return`.
+            // ItemTransactionController::store() sätter vid en godkänd `return`.
             'createdCost' => $this->createdCost($request),
             'canReport' => $canReport,
             'canUpgrade' => Gate::forUser($user)->allows('viewStorage', $container->account),
@@ -248,7 +248,7 @@ class ContainerCostController extends Controller
                     $listCategories,
                     $listCostSuppliers,
                     $filter['counterparty'] ?? $filter['supplier'] ?? null,
-                    in_array($filter['kind'] ?? null, [CostEntry::KIND_EXPENSE, CostEntry::KIND_INCOME], true)
+                    in_array($filter['kind'] ?? null, [ItemTransaction::KIND_EXPENSE, ItemTransaction::KIND_INCOME], true)
                         ? $filter['kind']
                         : null,
                 )
@@ -273,7 +273,7 @@ class ContainerCostController extends Controller
      * (Beslut 3). `period` är `group_by=period&period=month` — en post per
      * månad och valuta, som grafen ritar. `category` är `group_by=category` —
      * nedbrytningen per ITEMETS kategori ([[ADR-0040 Underträdets summor]]:
-     * ingen kategorikolumn på `cost_entry`), och rader på items utan kategori
+     * ingen kategorikolumn på `item_transaction`), och rader på items utan kategori
      * kommer ur motorn med `key: null` och ritas av vyn som *Övrigt*.
      * `comparison` är CostReport::comparison(), som anropar `build()` två
      * gånger och räknar kvoten: regeln är en pengaregel och bor i motorn, inte
@@ -356,7 +356,7 @@ class ContainerCostController extends Controller
      * fliken filtrerar på exakt det itemlistan filtrerar på. Att hämta items
      * genom App\Actions\Item\ListItems hade dragit med kategorier, taggar och
      * skapare per rad: en väljare behöver ULID och namn och ingenting mer.
-     * Leverantörerna kommer ur App\Actions\Cost\ListCostSuppliers — samma
+     * Leverantörerna kommer ur App\Actions\Transaction\ListCostSuppliers — samma
      * lista som autocomplete i kostnadsformuläret får (issue 45b) — och är
      * containerns, för en leverantör är en egenskap hos raden och inte hos
      * itemet.

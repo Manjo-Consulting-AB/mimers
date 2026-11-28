@@ -30,13 +30,13 @@ use App\Models\ContainerTemplate;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\User;
-use App\Support\Cost\CostReport;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Frontend\CreateTarget;
 use App\Support\Template\MimersTemplate;
 use App\Support\Template\MimersTemplates;
 use App\Support\Tips;
+use App\Support\Transaction\CostReport;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -229,7 +229,7 @@ class ContainerController extends Controller
      * dashboardens brickor (issue 134).
      *
      * **Kostnaden räknas inte här.** `costs`-proppen kom med issue 172, men
-     * den bär samma App\Support\Cost\CostReport::summary() som
+     * den bär samma App\Support\Transaction\CostReport::summary() som
      * `/api/containers/{container}/costs/summary` svarar med — kontrollern
      * formulerar ingen `SUM` och ingen egen radmängd.
      *
@@ -262,7 +262,7 @@ class ContainerController extends Controller
      *   App\Actions\Schedule\ListTodo::forContainer() — samma urval, samma
      *   ordning och samma rad som `/tasks`, avgränsat till containern.
      * - `costs` är den fasta summeringen och nedbrytningen per item, ur
-     *   App\Support\Cost\CostReport::summary(). Ingen plangrind: en fast
+     *   App\Support\Transaction\CostReport::summary(). Ingen plangrind: en fast
      *   summering är fri ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
      * - `items` är samma App\Actions\Item\ListItems-svar som `counts.items`
      *   räknar, klippt till `ITEM_LIMIT` rader. Listan hämtas EN gång och
@@ -735,7 +735,7 @@ class ContainerController extends Controller
      * ändrar aldrig ägaren (ägarbyte är issue 39).
      *
      * **Valutan som skrivs här märker aldrig om en skriven kostnadsrad.**
-     * `cost_entry.currency` rörs inte av den här metoden, av requesten eller
+     * `item_transaction.currency` rörs inte av den här metoden, av requesten eller
      * av någon migration i issue 85: det som står i en rad är vad som
      * betalades ([[ADR-0037 Valutans arv]] § Beslut). En tömd ruta lagrar
      * `null`, och containern ÄRVER då kontots valuta igen

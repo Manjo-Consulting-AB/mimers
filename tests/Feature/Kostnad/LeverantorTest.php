@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -51,10 +51,10 @@ it('ger containerns distinkta leverantörer sorterade på antal fallande', funct
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
 
     $response = getJson($url, $headers);
 
@@ -69,10 +69,10 @@ it('sorterar leverantörer med samma antal på namn stigande', function () {
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Skeppshandeln']);
 
     $response = getJson($url, $headers);
 
@@ -92,8 +92,8 @@ it('en leverantör som bara finns i en annan container syns inte', function () {
         'created_by_account_id' => $account->id,
     ]);
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($annatItem, 'item')->create(['counterparty' => 'Skeppshandeln']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($annatItem, 'item')->create(['counterparty' => 'Skeppshandeln']);
 
     $response = getJson("/api/containers/{$container->ulid}/costs/suppliers", $headers);
 
@@ -107,8 +107,8 @@ it('en leverantör som bara finns på en mjukraderad kostnad syns inte', functio
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    $mjukraderad = CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Oljehamnen']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    $mjukraderad = ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Oljehamnen']);
     $mjukraderad->delete();
 
     $response = getJson($url, $headers);
@@ -123,9 +123,9 @@ it('kostnader utan leverantör ger ingen post i listan', function () {
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => null]);
-    CostEntry::factory()->for($item, 'item')->create();
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => null]);
+    ItemTransaction::factory()->for($item, 'item')->create();
 
     $response = getJson($url, $headers);
 
@@ -139,7 +139,7 @@ it('en leverantör som bara finns på ett raderat item syns fortfarande', functi
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
 
     $item->delete();
 
@@ -156,7 +156,7 @@ it('begränsar listan till 50 leverantörer', function () {
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
     foreach (range(1, 55) as $i) {
-        CostEntry::factory()->for($item, 'item')->create(['counterparty' => sprintf('Leverantor %02d', $i)]);
+        ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => sprintf('Leverantor %02d', $i)]);
     }
 
     $response = getJson($url, $headers);
@@ -192,7 +192,7 @@ it('en användare utan åtkomst till containern nekas', function () {
 it('ett read_only-konto får läsa listan', function () {
     [$account, , $headers, $container, $item] = leverantorKontext();
     $account->update(['status' => 'read_only']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
 
     $response = getJson("/api/containers/{$container->ulid}/costs/suppliers", $headers);
 
@@ -204,7 +204,7 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
     [, , $headers, $container, $item] = leverantorKontext();
     $url = "/api/containers/{$container->ulid}/costs/suppliers";
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
 
     // Frys tiden runt mätningarna så UpdateLastActiveAt skriver
     // deterministiskt (issue 80), se FastSummeringTest. Middlewaren sparar
@@ -228,7 +228,7 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
     $medEnLeverantör = $frågor;
 
     foreach (range(1, 30) as $i) {
-        CostEntry::factory()->for($item, 'item')->create(['counterparty' => "Leverantor $i"]);
+        ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => "Leverantor $i"]);
     }
 
     $frågor = 0;
@@ -243,8 +243,8 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
 it('ger inte en motpart som bara finns på intäkter i /costs/suppliers', function () {
     [, , $headers, $container, $item] = leverantorKontext();
 
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
-    CostEntry::factory()->for($item, 'item')->create(['counterparty' => 'Köparen AB', 'kind' => 'income']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Volvo Penta']);
+    ItemTransaction::factory()->for($item, 'item')->create(['counterparty' => 'Köparen AB', 'kind' => 'income']);
 
     $response = getJson("/api/containers/{$container->ulid}/costs/suppliers", $headers);
 

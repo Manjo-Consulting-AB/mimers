@@ -65,7 +65,7 @@ use Inertia\Response;
  *
  * **Kostnaderna kom med issue 125**, som sin egen propp: `costs` bär
  * månadens totalsumma per valuta ur
- * App\Support\Cost\CostReport::monthForContainers(). Sedan issue 474 bär den
+ * App\Support\Transaction\CostReport::monthForContainers(). Sedan issue 474 bär den
  * bara `totals` — hjälten ritar en rad per valuta och ingen nedbrytning
  * ([[ADR-0090 Dashboardens hjälte]] § Tillägg 2026-11-24). Månaden är
  * INNEVARANDE KALENDARMÅNAD och servern bestämmer den — sidan tar ingen

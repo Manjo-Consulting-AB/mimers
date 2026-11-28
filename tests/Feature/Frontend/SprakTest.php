@@ -695,7 +695,7 @@ it('hämtar agentraderingens meningar ur ui.php', function () {
  * legend har ingen nyckel alls: en tårtbit namnges av containerns eget namn,
  * som skrivs ordagrant och aldrig slås upp.
  *
- * `HeroCosts` kom med issue 474 och slår upp `hero.costs.*`; `CostDonut` står
+ * `HeroCosts` kom med issue 474 och slår upp `hero.costs.*`; `TransactionDonut` står
  * kvar med sin standardetikett `dashboard.costs.month` för en anropare som
  * inte skickar en egen.
  *
@@ -713,13 +713,13 @@ it('hämtar dashboardens strängar ur ui.php', function () {
         // Hjälten (issue 435) äger hälsningen, undertiteln och rubriken, och
         // `AppHero` formulerar inga egna strängar — den får dem som proppar.
         // Den delade formen (issue 437) äger brickorna, och
-        // kostnadssummeringen (issue 474) äger `hero.costs.*`; `CostDonut` bär
+        // kostnadssummeringen (issue 474) äger `hero.costs.*`; `TransactionDonut` bär
         // sin standardetikett.
         'js/components/DashboardHero.vue',
         'js/components/DashboardStats.vue',
         'js/components/HeroCosts.vue',
         'js/components/ContainerCard.vue',
-        'js/components/CostDonut.vue',
+        'js/components/TransactionDonut.vue',
         'js/components/DashboardActivityPanel.vue',
         // Informationsytan (issue 128) står på dashboarden och på containerns
         // översikt. Dess rubrik och brödtext kommer ur `tips.{nyckel}.*` och
@@ -827,8 +827,8 @@ it('hämtar uppgiftsflikens strängar ur ui.php', function () {
  * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
  * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
  * skrivs om. Fem filer läses, för tabellen och Pro-delens tre delar är sina
- * egna komponenter (CostTable, CostFilterBar, CostTimeChart,
- * CostCategoryBreakdown) — och en rubrik som glöms i den ena hade blivit
+ * egna komponenter (TransactionTable, TransactionFilterBar, TransactionTimeChart,
+ * TransactionCategoryBreakdown) — och en rubrik som glöms i den ena hade blivit
  * `container.costs.supplier` på skärmen.
  *
  * **`container.costs.this_year` bär `:year`**, och det prövas inte bara att
@@ -841,11 +841,11 @@ it('hämtar kostnadsflikens strängar ur ui.php', function () {
 
     $filer = [
         'js/pages/Containers/Costs.vue',
-        'js/components/CostTable.vue',
+        'js/components/TransactionTable.vue',
         // Pro-delen, issue 176.
-        'js/components/CostFilterBar.vue',
-        'js/components/CostTimeChart.vue',
-        'js/components/CostCategoryBreakdown.vue',
+        'js/components/TransactionFilterBar.vue',
+        'js/components/TransactionTimeChart.vue',
+        'js/components/TransactionCategoryBreakdown.vue',
     ];
 
     foreach ($filer as $fil) {

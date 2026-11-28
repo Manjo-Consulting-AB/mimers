@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Cost\CreateCostEntry;
-use App\Actions\Cost\DeleteCostEntry;
-use App\Actions\Cost\ListCostSuppliers;
-use App\Actions\Cost\UpdateCostEntry;
+use App\Actions\Transaction\CreateItemTransaction;
+use App\Actions\Transaction\DeleteItemTransaction;
+use App\Actions\Transaction\ListCostSuppliers;
+use App\Actions\Transaction\UpdateItemTransaction;
 use App\Actions\Usage\CountFeatureUse;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Cost\StoreCostEntryRequest;
-use App\Http\Requests\Cost\UpdateCostEntryRequest;
-use App\Http\Resources\CostEntryResource;
+use App\Http\Requests\Transaction\StoreItemTransactionRequest;
+use App\Http\Requests\Transaction\UpdateItemTransactionRequest;
+use App\Http\Resources\ItemTransactionResource;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Support\Usage\Features;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Gate;
 /**
  * `/transactions` — kostnadsraderna med riktning, antal och motpart, se
  * [[ADR-0102 Transaktioner på items]] och issue 1778 (M99). Raden är samma
- * `cost_entry`-rad som `/costs` bär; skillnaden är att den här ytan visar och
+ * `item_transaction`-rad som `/costs` bär; skillnaden är att den här ytan visar och
  * skriver BÅDE utgifter och intäkter, medan `/costs` bara ser utgifter.
  *
  * Samma grindar som App\Http\Controllers\Api\CostEntryController — itemets
@@ -47,29 +47,29 @@ class TransactionController extends Controller
 
         $kind = $request->validate(['kind' => ['nullable', 'in:expense,income']])['kind'] ?? null;
 
-        $rows = $item->costs()
-            ->when($kind !== null, fn ($query) => $query->where('cost_entry.kind', $kind))
+        $rows = $item->transactions()
+            ->when($kind !== null, fn ($query) => $query->where('item_transaction.kind', $kind))
             ->with('createdByAccount')
             ->orderByDesc('incurred_on')
             ->orderByDesc('id')
             ->get();
 
-        return CostEntryResource::collection($rows)->response();
+        return ItemTransactionResource::collection($rows)->response();
     }
 
     /**
      * POST …/items/{item}/transactions — 201. Saknas `kind` blir raden en
      * utgift.
      */
-    public function store(StoreCostEntryRequest $request, Container $container, Item $item, CreateCostEntry $createCostEntry): JsonResponse
+    public function store(StoreItemTransactionRequest $request, Container $container, Item $item, CreateItemTransaction $createItemTransaction): JsonResponse
     {
         Gate::authorize('create', $item);
 
-        $cost = $createCostEntry->handle($container, $item, $request->validated(), $request->user());
+        $cost = $createItemTransaction->handle($container, $item, $request->validated(), $request->user());
 
         app(CountFeatureUse::class)->handle(Features::COST_CREATE, $request->user());
 
-        return (new CostEntryResource($cost))
+        return (new ItemTransactionResource($cost))
             ->response()
             ->setStatusCode(201);
     }
@@ -77,23 +77,23 @@ class TransactionController extends Controller
     /**
      * PATCH …/items/{item}/transactions/{transaction} — 200.
      */
-    public function update(UpdateCostEntryRequest $request, Container $container, Item $item, string $transaction, UpdateCostEntry $updateCostEntry): CostEntryResource
+    public function update(UpdateItemTransactionRequest $request, Container $container, Item $item, string $transaction, UpdateItemTransaction $updateItemTransaction): ItemTransactionResource
     {
         Gate::authorize('update', $item);
 
-        return new CostEntryResource(
-            $updateCostEntry->handle($item, $this->find($item, $transaction), $request->validated(), $request->user())
+        return new ItemTransactionResource(
+            $updateItemTransaction->handle($item, $this->find($item, $transaction), $request->validated(), $request->user())
         );
     }
 
     /**
      * DELETE …/items/{item}/transactions/{transaction} — 204.
      */
-    public function destroy(Request $request, Container $container, Item $item, string $transaction, DeleteCostEntry $deleteCostEntry): Response
+    public function destroy(Request $request, Container $container, Item $item, string $transaction, DeleteItemTransaction $deleteItemTransaction): Response
     {
         Gate::authorize('delete', $item);
 
-        $deleteCostEntry->handle($item, $this->find($item, $transaction), $request->user());
+        $deleteItemTransaction->handle($item, $this->find($item, $transaction), $request->user());
 
         return response()->noContent();
     }
@@ -117,8 +117,8 @@ class TransactionController extends Controller
         ]);
     }
 
-    private function find(Item $item, string $ulid): CostEntry
+    private function find(Item $item, string $ulid): ItemTransaction
     {
-        return $item->costs()->where('cost_entry.ulid', $ulid)->firstOrFail();
+        return $item->transactions()->where('item_transaction.ulid', $ulid)->firstOrFail();
     }
 }

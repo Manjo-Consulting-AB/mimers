@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { formatAmount } from './CostDonut.vue';
+import { formatAmount } from './TransactionDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -18,7 +18,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * färdigsummerad ur App\Actions\Dashboard\HeroFigures — samma form som
  * `CostReport::monthForContainers()` ger — och filen varken summerar eller
  * växlar valutorna. Beloppet formateras med `formatAmount()` ur
- * `CostDonut.vue`, så att summeringen och kostnadsvyerna visar samma tal med
+ * `TransactionDonut.vue`, så att summeringen och kostnadsvyerna visar samma tal med
  * samma decimaler; en egen formatering hade varit en andra sanning om vad ett
  * belopp är.
  *

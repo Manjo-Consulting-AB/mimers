@@ -7,10 +7,10 @@ use App\Models\AuditLog;
 use App\Models\CalendarFeed;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\ImageDerivative;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -423,7 +423,7 @@ it('listar relationer, kategorier, taggar, scheman, förekomster, kostnader, lå
     foreach (range(1, 3) as $n) {
         Tag::factory()->create(['container_id' => $container->id]);
         Category::factory()->create(['container_id' => $container->id]);
-        CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+        ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
         Loan::factory()->create(['item_id' => $item->id, 'returned_at' => '2026-01-01', 'lent_at' => '2025-12-01']);
         $schema = Schedule::factory()->create(['item_id' => $item->id]);
         ScheduleOccurrence::factory()->create(['schedule_id' => $schema->id]);
@@ -462,11 +462,11 @@ it('costs_list svarar med beloppet i huvudenhet, med valutans decimaler', functi
     [$container, $i] = mcpTrad($agent);
     $item = $i['batan'];
 
-    CostEntry::factory()->create([
+    ItemTransaction::factory()->create([
         'item_id' => $item->id, 'container_id' => $container->id,
         'amount' => 10000, 'currency' => 'SEK',
     ]);
-    CostEntry::factory()->create([
+    ItemTransaction::factory()->create([
         'item_id' => $item->id, 'container_id' => $container->id,
         'amount' => 100, 'currency' => 'JPY',
     ]);
@@ -592,8 +592,8 @@ it('costs_list visar inte en intäktsrad', function () {
     [$container, $i] = mcpTrad($agent);
     $item = $i['batan'];
 
-    $utgift = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'counterparty' => 'Biltema']);
-    CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+    $utgift = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'counterparty' => 'Biltema']);
+    ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
 
     $kostnader = mcpResultat(mcpVerktyg($token, 'costs_list', ['item' => $item->ulid]))['costs'];
 
@@ -606,8 +606,8 @@ it('transactions_list filtrerar på kind och bär kind, quantity och counterpart
     [$container, $i] = mcpTrad($agent);
     $item = $i['batan'];
 
-    $utgift = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
-    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income', 'quantity' => '2.5', 'counterparty' => 'Kund AB']);
+    $utgift = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+    $intakt = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income', 'quantity' => '2.5', 'counterparty' => 'Kund AB']);
 
     $alla = mcpResultat(mcpVerktyg($token, 'transactions_list', ['item' => $item->ulid]))['transactions'];
     $bara = mcpResultat(mcpVerktyg($token, 'transactions_list', ['item' => $item->ulid, 'kind' => 'income']))['transactions'];

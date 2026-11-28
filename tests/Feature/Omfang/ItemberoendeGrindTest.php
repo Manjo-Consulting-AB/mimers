@@ -5,9 +5,9 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -119,9 +119,9 @@ function beroendeGrant(Container $container, User $user, Item $item, string $niv
  * En kostnadsrad på $item, skriven förbi API:et — testerna här prövar grinden,
  * inte registreringen.
  */
-function beroendeKostnad(Item $item): CostEntry
+function beroendeKostnad(Item $item): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12']);
+    return ItemTransaction::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12']);
 }
 
 /**
@@ -302,11 +302,11 @@ it('en create-mottagare skapar schema, kostnadsrad och utlåning men nekas PATCH
 
     // En nekad grind får inte ha hunnit skriva något.
     expect(Schedule::query()->where('ulid', $schemaUlid)->value('title'))->toBe('Byt impeller');
-    expect(CostEntry::query()->where('ulid', $kostnadUlid)->value('description'))->toBe('Impeller');
+    expect(ItemTransaction::query()->where('ulid', $kostnadUlid)->value('description'))->toBe('Impeller');
     expect(Loan::query()->where('ulid', $lånUlid)->value('returned_at'))->toBeNull();
 
     expect(Schedule::query()->where('ulid', $schemaUlid)->value('deleted_at'))->toBeNull();
-    expect(CostEntry::query()->where('ulid', $kostnadUlid)->value('deleted_at'))->toBeNull();
+    expect(ItemTransaction::query()->where('ulid', $kostnadUlid)->value('deleted_at'))->toBeNull();
     expect(Loan::query()->where('ulid', $lånUlid)->value('deleted_at'))->toBeNull();
 });
 
@@ -389,7 +389,7 @@ it('en delete-mottagare raderar schema, lån och kostnadsrad på sitt item', fun
     expect($kostnad->fresh()->deleted_at)->not->toBeNull();
     expect(DB::table('schedule')->where('id', $schema->id)->exists())->toBeTrue();
     expect(DB::table('loan')->where('id', $lån->id)->exists())->toBeTrue();
-    expect(DB::table('cost_entry')->where('id', $kostnad->id)->exists())->toBeTrue();
+    expect(DB::table('item_transaction')->where('id', $kostnad->id)->exists())->toBeTrue();
 });
 
 // --- beroendena: write i båda ändar -------------------------------------

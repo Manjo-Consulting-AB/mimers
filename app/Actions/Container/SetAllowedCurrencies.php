@@ -7,7 +7,7 @@ use App\Exceptions\Api\ApiException;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\User;
-use App\Support\Cost\Currencies;
+use App\Support\Transaction\Currencies;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\DB;
  * "inga" (ADR-0078 § 4). Standardvalutan behöver inte stå i listan; den är
  * alltid tillåten genom App\Models\Container::permitsCurrency().
  *
- * **Koderna prövas mot App\Support\Cost\Currencies::codes() även här**, och
+ * **Koderna prövas mot App\Support\Transaction\Currencies::codes() även här**, och
  * inte bara i requesten. Actionen är det kontrakt testsviten och varje
  * framtida anropare möter, och en kod utanför ISO 4217 ska aldrig kunna
  * lagras — samma försvar på två nivåer som App\Rules\IsoCurrency och

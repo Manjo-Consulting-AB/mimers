@@ -41,7 +41,7 @@ const GAP = 0.8;
 
 /*
  * Färgerna är åtta validerade steg, i fast ordning — samma värden och samma
- * skäl som CostDonut.vue: designtokens i resources/css/app.css bär roller och
+ * skäl som TransactionDonut.vue: designtokens i resources/css/app.css bär roller och
  * ingen kategorisk skala, och en nionde typ får den första färgen igen.
  * Legenden bär identiteten, så ingen läsare behöver skilja två nyanser åt.
  */

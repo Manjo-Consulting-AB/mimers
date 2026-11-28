@@ -2,7 +2,7 @@
 /*
  * Månadsnamnen kommer ur `Intl` och inte ur en egen lista. `en` är den enda
  * katalogen som levereras ([[ADR-0034 Engelska vid lansering]]), och samma
- * skäl som `formatAmount` i CostDonut.vue har: CLDR bär orden, och en egen
+ * skäl som `formatAmount` i TransactionDonut.vue har: CLDR bär orden, och en egen
  * tabell hade varit en andra sanning om vad en månad heter. Årtalet står med
  * två siffror, för en period kan spänna över ett årsskifte och *Sep* ensamt
  * hade varit tvetydigt så snart spannet är längre än tolv månader.
@@ -24,7 +24,7 @@ export function periodLabel(period) {
 
 <script setup>
 import { computed } from 'vue';
-import { formatAmount } from './CostDonut.vue';
+import { formatAmount } from './TransactionDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -32,7 +32,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * § 9 och `docs/Design/kostnader.png`.
  *
  * **SVG för hand, inget diagrampaket** (Beslut 4). Staplarna är `<rect>` i en
- * `viewBox`, precis som CostDonut ritar sina bågar, och det finns inget nytt
+ * `viewBox`, precis som TransactionDonut ritar sina bågar, och det finns inget nytt
  * npm-beroende att hålla uppdaterat. Komponenten är sin egen fil och inte
  * markup inuti Costs.vue, av samma skäl som donuten: ritreglerna ska gå att
  * läsa för sig.
@@ -49,7 +49,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **En negativ månad ritas inte som en stapel.** En återbetalning kan göra en
  * månads netto negativt, och en stapel med negativ höjd är ingen stapel;
  * månaden blir då tom i ringen, och listan bredvid visar talet som det är —
- * samma val som CostDonut gör för en negativ tårtbit.
+ * samma val som TransactionDonut gör för en negativ tårtbit.
  *
  * **Staplarna är dekorativa och dolda för skärmläsaren.** En bildbeskrivning
  * av ett stapeldiagram är inget någon kan formulera ur data, så listan under

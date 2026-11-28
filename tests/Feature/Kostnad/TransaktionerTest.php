@@ -2,8 +2,8 @@
 
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +20,7 @@ use function Pest\Laravel\withoutVite;
  * Issue 1778 · M99 Transaktioner på items — riktning, antal och motpart på
  * kostnadsraden och ytan `/transactions`. Se [[ADR-0102 Transaktioner på
  * items]], App\Http\Controllers\Api\TransactionController och
- * App\Models\CostEntry. Varje "Klart när"-punkt har ett test här; MCP-delen
+ * App\Models\ItemTransaction. Varje "Klart när"-punkt har ett test här; MCP-delen
  * ligger i tests/Feature/Mcp/.
  */
 
@@ -53,25 +53,53 @@ function transaktionsKropp(array $overrides = []): array
     ], $overrides);
 }
 
+it('namnbytet flyttar tabellen till item_transaction och down() återställer cost_entry, raderna följer med', function () {
+    [, $container, $item] = transaktionsMiljo();
+    $rad = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id]);
+
+    $namnbyte = require base_path('database/migrations/2026_11_28_000000_rename_cost_entry_to_item_transaction.php');
+
+    $namnbyte->down();
+    expect(Schema::hasTable('cost_entry'))->toBeTrue()
+        ->and(Schema::hasTable('item_transaction'))->toBeFalse()
+        ->and(DB::table('cost_entry')->where('ulid', $rad->ulid)->exists())->toBeTrue()
+        ->and(collect(Schema::getIndexes('cost_entry'))->pluck('name')->contains('cost_entry_ulid_unique'))->toBeTrue();
+
+    $namnbyte->up();
+    expect(Schema::hasTable('item_transaction'))->toBeTrue()
+        ->and(Schema::hasTable('cost_entry'))->toBeFalse()
+        ->and(DB::table('item_transaction')->where('ulid', $rad->ulid)->exists())->toBeTrue()
+        ->and(collect(Schema::getIndexes('item_transaction'))->pluck('name')->contains('item_transaction_ulid_unique'))->toBeTrue();
+})->skip(
+    fn (): bool => DB::getDriverName() !== 'sqlite',
+    'DDL i testtransaktionen är bara säkert på SQLite.',
+);
+
 it('migreringen gör varje befintlig rad till expense och flyttar supplier till counterparty, och down() återställer båda', function () {
     [, $container, $item] = transaktionsMiljo();
-    $rad = CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Volvo Penta']);
+    $rad = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Volvo Penta']);
 
     $migrering = require base_path('database/migrations/2026_11_27_020000_add_kind_quantity_counterparty_to_cost_entry.php');
+    $namnbyte = require base_path('database/migrations/2026_11_28_000000_rename_cost_entry_to_item_transaction.php');
 
+    // Den äldre migrationen talar om `cost_entry`, så namnbytet backas först.
+    $namnbyte->down();
     $migrering->down();
-    expect(Schema::hasColumn('cost_entry', 'supplier'))->toBeTrue()
-        ->and(Schema::hasColumn('cost_entry', 'counterparty'))->toBeFalse()
-        ->and(Schema::hasColumn('cost_entry', 'kind'))->toBeFalse()
-        ->and(Schema::hasColumn('cost_entry', 'quantity'))->toBeFalse();
+    $namnbyte->up();
+    expect(Schema::hasColumn('item_transaction', 'supplier'))->toBeTrue()
+        ->and(Schema::hasColumn('item_transaction', 'counterparty'))->toBeFalse()
+        ->and(Schema::hasColumn('item_transaction', 'kind'))->toBeFalse()
+        ->and(Schema::hasColumn('item_transaction', 'quantity'))->toBeFalse();
 
+    $namnbyte->down();
     $migrering->up();
+    $namnbyte->up();
     $rad->refresh();
 
     expect($rad->kind)->toBe('expense')
         ->and($rad->counterparty)->toBe('Volvo Penta')
         ->and($rad->quantity)->toBeNull()
-        ->and(Schema::hasColumn('cost_entry', 'supplier'))->toBeFalse();
+        ->and(Schema::hasColumn('item_transaction', 'supplier'))->toBeFalse();
 })->skip(
     fn (): bool => DB::getDriverName() !== 'sqlite',
     // DDL gör implicit commit på MariaDB/MySQL: down() och up() i provets
@@ -108,7 +136,7 @@ it('avvisar quantity med 0, ett negativt tal eller 7 decimaler med 422', functio
         $headers,
     )->assertStatus(422);
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 })->with([0, -5, '0.1234567', '-0.5', '1000000000000', '1e13', '10000000000000']);
 
 it('avvisar en okänd kind med 422 och godtar 6 decimaler', function () {
@@ -131,12 +159,12 @@ it('en request med bara supplier sparar värdet i counterparty, och resursen bä
     $svar->assertCreated();
     expect($svar->json('data.counterparty'))->toBe('Volvo Penta')
         ->and($svar->json('data.supplier'))->toBe('Volvo Penta')
-        ->and(CostEntry::query()->firstOrFail()->counterparty)->toBe('Volvo Penta');
+        ->and(ItemTransaction::query()->firstOrFail()->counterparty)->toBe('Volvo Penta');
 });
 
 it('en PATCH med bara supplier ändrar counterparty, och counterparty går före supplier', function () {
     [$headers, $container, $item] = transaktionsMiljo();
-    $rad = CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Gammal']);
+    $rad = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Gammal']);
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs/{$rad->ulid}";
 
     patchJson($url, ['supplier' => 'Ny'], $headers)->assertOk();
@@ -148,8 +176,8 @@ it('en PATCH med bara supplier ändrar counterparty, och counterparty går före
 
 it('get costs listar inte intäktsrader, och PATCH och DELETE på en intäktsrad ger 404', function () {
     [$headers, $container, $item] = transaktionsMiljo();
-    $utgift = CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id]);
-    $intakt = CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'kind' => 'income']);
+    $utgift = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id]);
+    $intakt = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'kind' => 'income']);
     $bas = "/api/containers/{$container->ulid}/items/{$item->ulid}";
 
     $lista = getJson("{$bas}/costs", $headers);
@@ -162,7 +190,7 @@ it('get costs listar inte intäktsrader, och PATCH och DELETE på en intäktsrad
 
     deleteJson("{$bas}/costs/{$intakt->ulid}", [], $headers)->assertNotFound();
 
-    expect(CostEntry::query()->find($intakt->id))->not->toBeNull()
+    expect(ItemTransaction::query()->find($intakt->id))->not->toBeNull()
         ->and($intakt->refresh()->description)->not->toBe('x');
 
     $alla = getJson("{$bas}/transactions", $headers);
@@ -180,22 +208,22 @@ it('post costs skriver alltid expense, även när kind=income skickas', function
 
 it('transactions kan ändra och radera en intäktsrad', function () {
     [$headers, $container, $item] = transaktionsMiljo();
-    $intakt = CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'kind' => 'income']);
+    $intakt = ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'kind' => 'income']);
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/transactions/{$intakt->ulid}";
 
     patchJson($url, ['quantity' => '2.5', 'counterparty' => 'Kund'], $headers)->assertOk();
     expect($intakt->refresh()->quantity)->toBe('2.500000')->and($intakt->counterparty)->toBe('Kund');
 
     deleteJson($url, [], $headers)->assertNoContent();
-    expect(CostEntry::query()->find($intakt->id))->toBeNull();
+    expect(ItemTransaction::query()->find($intakt->id))->toBeNull();
 
     deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/transactions/{$intakt->ulid}", [], $headers)->assertNotFound();
 });
 
 it('motpartsuppslaget med kind=income föreslår inte en motpart som bara finns på utgifter', function () {
     [$headers, $container, $item] = transaktionsMiljo();
-    CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Leverantören']);
-    CostEntry::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Kunden', 'kind' => 'income']);
+    ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Leverantören']);
+    ItemTransaction::factory()->for($item, 'item')->create(['container_id' => $container->id, 'counterparty' => 'Kunden', 'kind' => 'income']);
     $url = "/api/containers/{$container->ulid}/transactions/counterparties";
 
     expect(getJson("{$url}?kind=income", $headers)->json('data'))->toBe([['counterparty' => 'Kunden', 'count' => 1]])
@@ -217,7 +245,7 @@ it('en intäktsrad ändrar ingen befintlig summa i någon yta', function () {
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $account->id,
     ]);
-    CostEntry::factory()->for($item, 'item')->create([
+    ItemTransaction::factory()->for($item, 'item')->create([
         'container_id' => $container->id, 'amount' => 5000, 'currency' => 'EUR',
         'incurred_on' => '2026-06-01', 'counterparty' => 'Leverantören',
         'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id,
@@ -242,7 +270,7 @@ it('en intäktsrad ändrar ingen befintlig summa i någon yta', function () {
     postJson("{$c}/items/{$item->ulid}/transactions", transaktionsKropp([
         'kind' => 'income', 'amount' => '900', 'currency' => 'EUR', 'incurred_on' => '2026-06-10', 'counterparty' => 'Köparen',
     ]), $headers)->assertCreated();
-    expect(CostEntry::query()->count())->toBe(2);
+    expect(ItemTransaction::query()->count())->toBe(2);
 
     expect($ytor())->toBe($for)
         ->and($dash())->toBe($fordash);
@@ -264,7 +292,7 @@ it('webbens store och update tar emot kind, quantity och counterparty, och itemv
         'kind' => 'income', 'quantity' => '3.5', 'counterparty' => 'Köparen AB',
     ]))->assertRedirect("{$bas}?tab=costs");
 
-    $rad = CostEntry::query()->sole();
+    $rad = ItemTransaction::query()->sole();
     expect($rad->kind)->toBe('income')
         ->and($rad->quantity)->toBe('3.500000')
         ->and($rad->counterparty)->toBe('Köparen AB');

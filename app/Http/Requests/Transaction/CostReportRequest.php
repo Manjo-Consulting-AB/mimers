@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Cost;
+namespace App\Http\Requests\Transaction;
 
 use App\Models\Container;
 use App\Models\Tag;
@@ -26,7 +26,7 @@ use Illuminate\Validation\Rule;
  * **Sedan issue 176 bor de fem FILTERREGLERNA i `filterRules()`** — `from`,
  * `to`, `supplier`, `category` och `item`. Containerns kostnadsflik validerar
  * samma fem parametrar i querysträngen
- * (App\Http\Requests\Cost\ContainerCostFilterRequest), och två uppräkningar
+ * (App\Http\Requests\Transaction\ContainerCostFilterRequest), och två uppräkningar
  * av samma regel glider isär: den ena hade förr eller senare glömt
  * `after_or_equal`, eller släppt in en ULID ur en annan container. Reglerna
  * bor här därför att det är den här requesten som är deras ursprung; den

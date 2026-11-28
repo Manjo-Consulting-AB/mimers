@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Cost;
+namespace App\Http\Requests\Transaction;
 
 use App\Rules\IsoCurrency;
 use Illuminate\Foundation\Http\FormRequest;
@@ -31,7 +31,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * in, bara stå kvar (ADR-0078 § 1). `alpha|size:3` ersattes av
  * App\Rules\IsoCurrency i issue 1253.
  */
-class UpdateCostEntryRequest extends FormRequest
+class UpdateItemTransactionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -69,7 +69,7 @@ class UpdateCostEntryRequest extends FormRequest
         }
 
         // ConvertEmptyStringsToNull gör "" till null innan valideringen — se
-        // StoreCostEntryRequest. En tom sträng ska nå MinorUnits, inte falla
+        // StoreItemTransactionRequest. En tom sträng ska nå MinorUnits, inte falla
         // på validation.string.
         if (array_key_exists('amount', $data) && $data['amount'] === null) {
             $this->merge(['amount' => '']);

@@ -8,8 +8,8 @@ use App\Models\AgentContainerGrant;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -212,7 +212,7 @@ it('avvisar kostnads- och utlåningsverktygen med agent.forbidden utan nivån, o
         'costs_update' => [
             'grupp' => 'costs', 'niva' => 'write',
             'forbered' => fn (): array => [
-                'cost' => CostEntry::factory()->create([
+                'cost' => ItemTransaction::factory()->create([
                     'item_id' => $item->id, 'container_id' => $container->id, 'currency' => 'SEK',
                 ]),
             ],
@@ -254,7 +254,7 @@ it('avvisar kostnads- och utlåningsverktygen med agent.forbidden utan nivån, o
 
 // ─── kostnadsbeloppet: huvudenhet, inte minsta enhet (issue 1478) ────────────
 //
-// Skrivvägen var redan rätt på basen: CreateCostEntry och UpdateCostEntry
+// Skrivvägen var redan rätt på basen: CreateItemTransaction och UpdateItemTransaction
 // tolkar amount med MinorUnits::parse(), alltså huvudenhet. Det som var fel
 // var verktygsbeskrivningarna, och de prövas i LasverktygTest. Proven här är
 // därför regressionsvakter för kontraktet — de ska vara gröna även utan
@@ -269,7 +269,7 @@ it('costs_create sparar "100" SEK som 10000', function () {
         'amount' => '100', 'currency' => 'SEK', 'description' => 'Varmkorv',
     ]));
 
-    expect((int) CostEntry::query()->sole()->amount)->toBe(10000);
+    expect((int) ItemTransaction::query()->sole()->amount)->toBe(10000);
 });
 
 // vakt: parse() tog både punkt och komma redan på basen — vaktar att kontraktet består.
@@ -283,15 +283,15 @@ it('costs_create tolkar både punkt och komma — "125.50" och "125,50" blir 125
         ]));
     }
 
-    expect(CostEntry::query()->orderBy('id')->pluck('amount')->map(fn ($a): int => (int) $a)->all())
+    expect(ItemTransaction::query()->orderBy('id')->pluck('amount')->map(fn ($a): int => (int) $a)->all())
         ->toBe([12550, 12550]);
 });
 
-// vakt: UpdateCostEntry tolkade redan "100" som 10000 på basen — beskrivningen var felet, inte koden.
+// vakt: UpdateItemTransaction tolkade redan "100" som 10000 på basen — beskrivningen var felet, inte koden.
 it('costs_update sparar amount "100" SEK som 10000', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
-    $kostnad = CostEntry::factory()->create([
+    $kostnad = ItemTransaction::factory()->create([
         'item_id' => $item->id, 'container_id' => $container->id,
         'amount' => 99900, 'currency' => 'SEK',
     ]);
@@ -401,25 +401,25 @@ it('costs_create skriver supplier till counterparty och raden som expense', func
         'description' => 'Olja', 'supplier' => 'Biltema',
     ]));
 
-    $rad = CostEntry::query()->where('ulid', $svar['ulid'])->firstOrFail();
+    $rad = ItemTransaction::query()->where('ulid', $svar['ulid'])->firstOrFail();
     expect($rad->kind)->toBe('expense')->and($rad->counterparty)->toBe('Biltema');
 });
 
 it('costs_update och costs_delete ger resource.not_found på en intäktsrad', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
-    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+    $intakt = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
 
     expect(mcpFel(mcpVerktyg($token, 'costs_update', ['cost' => $intakt->ulid, 'description' => 'x']))['code'])->toBe('resource.not_found')
         ->and(mcpFel(mcpVerktyg($token, 'costs_delete', ['cost' => $intakt->ulid]))['code'])->toBe('resource.not_found');
 
-    expect(CostEntry::query()->find($intakt->id))->not->toBeNull();
+    expect(ItemTransaction::query()->find($intakt->id))->not->toBeNull();
 });
 
 it('costs_update skriver supplier till counterparty', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
-    $kostnad = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+    $kostnad = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
 
     mcpResultat(mcpVerktyg($token, 'costs_update', ['cost' => $kostnad->ulid, 'supplier' => 'Svedea']));
 
@@ -436,9 +436,9 @@ it('transactions_create utan kind skriver en utgift, med kind=income en intäkt'
     $utgift = mcpResultat(mcpVerktyg($token, 'transactions_create', $bas));
     $intakt = mcpResultat(mcpVerktyg($token, 'transactions_create', $bas + ['kind' => 'income']));
 
-    $rad = CostEntry::query()->where('ulid', $intakt['ulid'])->firstOrFail();
+    $rad = ItemTransaction::query()->where('ulid', $intakt['ulid'])->firstOrFail();
 
-    expect(CostEntry::query()->where('ulid', $utgift['ulid'])->value('kind'))->toBe('expense')
+    expect(ItemTransaction::query()->where('ulid', $utgift['ulid'])->value('kind'))->toBe('expense')
         ->and($rad->kind)->toBe('income')
         ->and($rad->counterparty)->toBe('Kund AB')
         ->and((float) $rad->quantity)->toBe(2.5)
@@ -448,19 +448,19 @@ it('transactions_create utan kind skriver en utgift, med kind=income en intäkt'
 it('transactions_update och transactions_delete fungerar på en intäktsrad', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
-    $intakt = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
+    $intakt = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'income']);
 
     mcpResultat(mcpVerktyg($token, 'transactions_update', ['transaction' => $intakt->ulid, 'counterparty' => 'Kund AB']));
     expect($intakt->refresh()->counterparty)->toBe('Kund AB');
 
     mcpResultat(mcpVerktyg($token, 'transactions_delete', ['transaction' => $intakt->ulid]));
-    expect(CostEntry::query()->find($intakt->id))->toBeNull();
+    expect(ItemTransaction::query()->find($intakt->id))->toBeNull();
 });
 
 it('transactions_update byter riktning, rensar quantity och lämnar riktningen orörd vid kind=null', function () {
     [, $token, , $container, $item] = skrivMiljo();
 
-    $rad = CostEntry::factory()->create([
+    $rad = ItemTransaction::factory()->create([
         'item_id' => $item->id, 'container_id' => $container->id, 'kind' => 'expense', 'quantity' => '3',
     ]);
 
@@ -479,7 +479,7 @@ it('transactions_update byter riktning, rensar quantity och lämnar riktningen o
 it('avvisar transactions_* med agent.forbidden när kostnadsgruppen bara är läsbar', function () {
     [$agent, $token, , $container, $item] = skrivMiljo();
 
-    $rad = CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
+    $rad = ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id]);
 
     $fall = [
         'transactions_create' => ['item' => $item->ulid, 'incurred_on' => '2026-03-01', 'amount' => '10', 'currency' => 'SEK', 'description' => 'x'],
@@ -493,5 +493,5 @@ it('avvisar transactions_* med agent.forbidden när kostnadsgruppen bara är lä
         expect(mcpFel(mcpVerktyg($token, $namn, $args))['code'])->toBe('agent.forbidden', $namn);
     }
 
-    expect(CostEntry::query()->find($rad->id))->not->toBeNull();
+    expect(ItemTransaction::query()->find($rad->id))->not->toBeNull();
 });

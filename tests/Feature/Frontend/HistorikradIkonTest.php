@@ -69,7 +69,7 @@ it('ritar UiIcon med rutan i icon-sloten', function () {
  * Klart när: domänen läses ur `row.action` före första punkten.
  *
  * Handlingens fulla namn är `cost_entry.created`; domänen är ledet före
- * punkten, `cost_entry`, och det är den mappningen känner. Ett uppslag på hela
+ * punkten, `item_transaction`, och det är den mappningen känner. Ett uppslag på hela
  * handlingen hade fallit tillbaka på `history` för varje rad.
  */
 it('läser domänen ur row.action före första punkten', function () {

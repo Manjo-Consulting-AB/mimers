@@ -4,9 +4,9 @@ use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
@@ -21,11 +21,11 @@ use function Pest\Laravel\withoutVite;
  * Issue 176 · Kostnadsflikens Pro-del, se
  * app/Http/Controllers/ContainerCostController.php,
  * app/Http/Requests/Cost/ContainerCostFilterRequest.php,
- * App\Support\Cost\CostReport::build(), routes/web.php,
+ * App\Support\Transaction\CostReport::build(), routes/web.php,
  * resources/js/pages/Containers/Costs.vue,
- * resources/js/components/CostFilterBar.vue,
- * resources/js/components/CostTimeChart.vue,
- * resources/js/components/CostCategoryBreakdown.vue och
+ * resources/js/components/TransactionFilterBar.vue,
+ * resources/js/components/TransactionTimeChart.vue,
+ * resources/js/components/TransactionCategoryBreakdown.vue och
  * [[ADR-0050 Desktopdesignen]] § 9–11.
  *
  * Filen bevisar Pro-halvan och att gränsen håller
@@ -45,7 +45,7 @@ use function Pest\Laravel\withoutVite;
  *    *I år* påverkas inte av filtret — det är hela skillnaden mellan en
  *    summering och en fråga.
  * 4. **Nedbrytningen grupperar på ITEMETS kategori** (Beslut 3,
- *    [[ADR-0040 Underträdets summor]]: ingen kategorikolumn på `cost_entry`),
+ *    [[ADR-0040 Underträdets summor]]: ingen kategorikolumn på `item_transaction`),
  *    och rader på items utan kategori kommer ur motorn med `key: null` och
  *    ritas av vyn som *Övrigt*.
  * 5. **Jämförelsen är en lika lång period direkt före**, per valuta
@@ -131,8 +131,8 @@ function kostnadsflikProRad(
     string $datum,
     string $valuta = 'SEK',
     ?string $leverantor = null,
-): CostEntry {
-    return CostEntry::factory()->for($item, 'item')->create([
+): ItemTransaction {
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum,
@@ -610,7 +610,7 @@ it('ett filter på en kategori i en annan container nekas', function () {
  * kategori hamnar under *Övrigt*.
  *
  * Motorn räknar på `item.category_id` ([[ADR-0040 Underträdets summor]]:
- * `cost_entry` har ingen kategorikolumn) och rullar upp över underträdet, så
+ * `item_transaction` har ingen kategorikolumn) och rullar upp över underträdet, så
  * en kostnad i en underkategori räknas också i sin förfader. Raden på itemet
  * utan kategori kommer ur motorn med `key: null` — den är ingen kategori i
  * containern, den är de rader som inte har någon — och *Övrigt* är VYN:s ord
@@ -652,7 +652,7 @@ it('nedbrytningen grupperar på itemets kategori och rader utan kategori hamnar 
 
     // Och vyn ritar gruppen utan nyckel som *Övrigt*: ordet kommer ur
     // katalogen och aldrig ur en literal i komponenten.
-    $vy = File::get(resource_path('js/components/CostCategoryBreakdown.vue'));
+    $vy = File::get(resource_path('js/components/TransactionCategoryBreakdown.vue'));
 
     expect($vy)->toContain("t('container.costs.other')")
         ->toContain('group.key?.ulid ??')
@@ -711,12 +711,12 @@ it('nedbrytningen ritar motorns alla grupper som staplar och ingen andel av tota
 
     // Och komponenten ritar staplar för den listan, allihop: ingen ring, ingen
     // procentandel och inget kategoriträd att gömma överlappande grupper med.
-    $vy = File::get(resource_path('js/components/CostCategoryBreakdown.vue'));
+    $vy = File::get(resource_path('js/components/TransactionCategoryBreakdown.vue'));
 
     expect($vy)->toContain('props.groups')
         ->toContain('<svg')
         ->toContain('<rect')
-        ->and($vy)->not->toContain('<CostDonut')
+        ->and($vy)->not->toContain('<TransactionDonut')
         ->and($vy)->not->toContain('props.categories');
 });
 
@@ -929,7 +929,7 @@ it('filterfältet submittar querysträngen mot samma rutt', function () {
         ->and($proppar['filterOptions']['categories'])->toBe([])
         ->and($proppar['filterOptions']['suppliers'])->toBe([]);
 
-    $vy = File::get(resource_path('js/components/CostFilterBar.vue'));
+    $vy = File::get(resource_path('js/components/TransactionFilterBar.vue'));
 
     expect($vy)->toContain('router.get(`/containers/${props.containerUlid}/costs`')
         ->toContain('onStart:')
@@ -944,9 +944,9 @@ it('filterfältet submittar querysträngen mot samma rutt', function () {
 
     expect($sida)->toContain('new URLSearchParams({ page: String(page) })')
         ->toContain("const FILTER_KEYS = ['from', 'to', 'item', 'category', 'counterparty', 'kind']")
-        ->toContain('<CostFilterBar')
-        ->toContain('<CostTimeChart')
-        ->toContain('<CostCategoryBreakdown');
+        ->toContain('<TransactionFilterBar')
+        ->toContain('<TransactionTimeChart')
+        ->toContain('<TransactionCategoryBreakdown');
 });
 
 /*
@@ -1018,8 +1018,8 @@ it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
         expect($beroenden)->not->toContain($forbjudet);
     }
 
-    $graf = File::get(resource_path('js/components/CostTimeChart.vue'));
-    $nedbrytning = File::get(resource_path('js/components/CostCategoryBreakdown.vue'));
+    $graf = File::get(resource_path('js/components/TransactionTimeChart.vue'));
+    $nedbrytning = File::get(resource_path('js/components/TransactionCategoryBreakdown.vue'));
 
     expect($graf)->toContain('<svg')
         ->toContain('<rect')
@@ -1037,5 +1037,5 @@ it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
     expect($nedbrytning)->toContain('<svg')
         ->toContain('<rect')
         ->toContain('viewBox')
-        ->and($nedbrytning)->not->toContain('<CostDonut');
+        ->and($nedbrytning)->not->toContain('<TransactionDonut');
 });

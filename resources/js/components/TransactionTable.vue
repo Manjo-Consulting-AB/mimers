@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import { formatSignedAmount, unitPriceParts } from './CostDonut.vue';
+import { formatSignedAmount, unitPriceParts } from './TransactionDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -10,7 +10,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `docs/Design/kostnader.png`.
  *
  * **Tabellen är den fria delen, och den räknar ingenting.** Raderna kommer
- * färdiga ur App\Actions\Cost\ListContainerCosts — nyast först, tjugofem per
+ * färdiga ur App\Actions\Transaction\ListContainerCosts — nyast först, tjugofem per
  * sida, redan avgränsade till containern och till användarens omfång — och
  * den här filen sorterar dem inte, filtrerar dem inte och summerar dem inte.
  * En sortering här hade varit en andra sanning om vad "nyast först" betyder,
@@ -22,7 +22,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * parameter i itemvyn. Bildens *Senaste kostnader* är de första raderna i den
  * här tabellen och får ingen egen panel (Beslut 1).
  *
- * **Beloppet formateras av `formatAmount` ur CostDonut.vue**, samma funktion
+ * **Beloppet formateras av `formatAmount` ur TransactionDonut.vue**, samma funktion
  * som donuten och dashboardens bricka ritar sina tal med (issue 168 §
  * Beslut 3): servern skickar heltalet i minsta valutaenhet
  * ([[ADR-0016 Kostnadsregistrering]] § Konsekvenser) och avrundningen sker
@@ -43,7 +43,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  */
 const props = defineProps({
     /*
-     * En sida rader ur App\Actions\Cost\ListContainerCosts:
+     * En sida rader ur App\Actions\Transaction\ListContainerCosts:
      * `{ulid, incurred_on, description, supplier, amount, currency,
      * item: {ulid, name}}`. `supplier` är nullbar och ritas då inte alls.
      */

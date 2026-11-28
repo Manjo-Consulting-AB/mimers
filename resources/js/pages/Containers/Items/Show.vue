@@ -342,13 +342,13 @@ const props = defineProps({
     today: { type: String, required: true },
     /*
      * Itemets kostnadsrader (issue 168 § Beslut 3) ur
-     * App\Http\Resources\CostEntryResource, nyast först — samma ordning och
+     * App\Http\Resources\ItemTransactionResource, nyast först — samma ordning och
      * samma format som `Api\CostEntryController::index()` svarar med.
      */
     costs: { type: Array, required: true },
     /*
      * Ättlingarnas kostnadsrader (issue 1248 · [[ADR-0068 Itemets sida och
-     * skapandet]] § Uppföljning 2026-11-14 punkt 2), ur CostEntryResource med
+     * skapandet]] § Uppföljning 2026-11-14 punkt 2), ur ItemTransactionResource med
      * `item: {ulid, name}` och radens `can`. Finns BARA när fliken *Costs* är
      * aktiv och växeln är på — servern lämnar nyckeln helt annars (se
      * ItemController::show()), och standarden är en tom lista: sektionen ritas
@@ -1441,7 +1441,7 @@ function toggleFavorite() {
                 formuläret ritas, se ItemCostSection.vue.
 
                 Serverns regler är API:ets, och skrivningarna går mot
-                App\Http\Controllers\CostEntryController. Rubriken är samma
+                App\Http\Controllers\ItemTransactionController. Rubriken är samma
                 ord som flikens etikett, så raden och ytan under den inte
                 kan säga olika saker.
             -->

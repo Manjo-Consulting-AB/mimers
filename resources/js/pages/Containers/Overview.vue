@@ -5,7 +5,7 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerDetailsPanel from '../../components/ContainerDetailsPanel.vue';
 import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
-import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
+import TransactionDonut, { formatAmount } from '../../components/TransactionDonut.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
 import InfoPanel from '../../components/InfoPanel.vue';
 import OverviewPanelFrame from '../../components/OverviewPanelFrame.vue';
@@ -110,7 +110,7 @@ defineOptions({
  *   *Items* ritar `ItemRow` — samma rad som itemlistan (issue 285 ·
  *   [[M32 Formspråket]]) — i två kolumner över `lg:` och en under. Servern
  *   skickar `covers` för exakt de sex rader panelen visar.
- * - *Kostnader* ritas av `CostDonut` — samma komponent som dashboardens — och
+ * - *Kostnader* ritas av `TransactionDonut` — samma komponent som dashboardens — och
  *   panelen ritas inte alls när containern saknar kostnadsrader: en rubrik över
  *   en tom ring är en yta som påstår att det finns något att visa.
  * - *Senaste aktiviteter* ritar `HistoryRow`, och den ber INTE om
@@ -379,7 +379,7 @@ const costSliceHref = (ulid) => `/containers/${props.container.ulid}/items/${uli
                     {{ t('container.overview.costs_empty') }}
                 </UiEmptyState>
 
-                <CostDonut
+                <TransactionDonut
                     v-else
                     :totals="props.costs.totals"
                     :breakdown="props.costs.breakdown"

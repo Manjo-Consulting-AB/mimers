@@ -2,10 +2,10 @@
 
 namespace App\Mcp\Tools;
 
-use App\Actions\Cost\DeleteCostEntry;
+use App\Actions\Transaction\DeleteItemTransaction;
 use App\Models\Agent;
 use App\Models\Container;
-use App\Models\CostEntry;
+use App\Models\ItemTransaction;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
 use App\Support\Mcp\McpToolException;
@@ -21,7 +21,7 @@ use Laravel\Mcp\Server\Attributes\Name;
  * `costs_delete` — mjukraderar en kostnadsrad, se [[ADR-0087 MCP-server för
  * agenter]] Riktning 7, 8 och 9 och issue 406 § 1.
  *
- * Samma action som appen (App\Actions\Cost\DeleteCostEntry). Raden
+ * Samma action som appen (App\Actions\Transaction\DeleteItemTransaction). Raden
  * mjukraderas — den listas inte i papperskorgen (issue 20a § Beslut 3) —
  * och loggen bär belopp och valuta, aldrig beskrivningen eller leverantören.
  */
@@ -38,7 +38,7 @@ class CostsDelete extends McpTool
      */
     public function actions(): array
     {
-        return [DeleteCostEntry::class];
+        return [DeleteItemTransaction::class];
     }
 
     public function schema(JsonSchema $schema): array
@@ -52,7 +52,7 @@ class CostsDelete extends McpTool
     {
         $args = $request->validate(['cost' => ['required', 'string']]);
 
-        $cost = CostEntry::query()->expenses()->where('ulid', $args['cost'])->first();
+        $cost = ItemTransaction::query()->expenses()->where('ulid', $args['cost'])->first();
         $item = $cost?->item;
         $container = $item === null ? null : Container::query()->with('account')->find($item->container_id);
 
@@ -64,7 +64,7 @@ class CostsDelete extends McpTool
 
         ['batch' => $batch] = $this->deleteAsAgent(
             $agent,
-            fn () => app(DeleteCostEntry::class)->handle($item, $cost, $agent->user),
+            fn () => app(DeleteItemTransaction::class)->handle($item, $cost, $agent->user),
         );
 
         return Response::structured([

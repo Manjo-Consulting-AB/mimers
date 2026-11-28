@@ -39,7 +39,7 @@ final class ActingAccount
         // användare som skapats utanför inbjudan har alltid ett
         // (App\Actions\Auth\CreatesUserWithPersonalAccount). Flera
         // personkonton är en patologi; lägst `id` vinner, deterministiskt —
-        // samma förval som App\Actions\Cost\CreateCostEntry::attributedAccountId().
+        // samma förval som App\Actions\Transaction\CreateItemTransaction::attributedAccountId().
         $personal = $user->accounts()
             ->where('account.type', 'personal')
             ->orderBy('account.id')

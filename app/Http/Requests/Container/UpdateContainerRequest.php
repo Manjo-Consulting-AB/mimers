@@ -30,13 +30,13 @@ use Illuminate\Validation\Rule;
  * (App\Models\Container::effectiveCurrency()).
  *
  * **Valutan normaliseras till versaler** och prövas mot de aktiva ISO
- * 4217-koderna i App\Support\Cost\Currencies genom App\Rules\IsoCurrency —
- * samma regel som i App\Http\Requests\Cost\StoreCostEntryRequest
+ * 4217-koderna i App\Support\Transaction\Currencies genom App\Rules\IsoCurrency —
+ * samma regel som i App\Http\Requests\Transaction\StoreItemTransactionRequest
  * ([[ADR-0078 Valutor ur ISO 4217]] § 1). En tom ruta blir `null` och betyder
  * fortfarande "ärv kontot"; listan prövas bara när ett värde är där.
  *
  * **Containerns valuta ändrar aldrig en skriven kostnadsrad.**
- * `cost_entry.currency` rörs inte av den här requesten, av kontrollern eller
+ * `item_transaction.currency` rörs inte av den här requesten, av kontrollern eller
  * av någon migration i issue 85 — det som står i en rad är vad som betalades
  * ([[ADR-0037 Valutans arv]] § Beslut).
  *

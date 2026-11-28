@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -84,7 +84,7 @@ function hjalkostKontext(): array
         'created_by_account_id' => $konto->id,
     ]);
 
-    CostEntry::factory()->for($item, 'item')->create([
+    ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => 12345,
         'currency' => 'SEK',
         'incurred_on' => now()->toDateString(),
@@ -103,7 +103,7 @@ function hjalkostKontext(): array
  *
  * Raden ritas ur `props.totals` och bär valutan som text, så två valutor ger
  * två rader och aldrig en tredje summa. Beloppet formateras med
- * `formatAmount()` ur `CostDonut.vue` — samma tal och samma decimaler som
+ * `formatAmount()` ur `TransactionDonut.vue` — samma tal och samma decimaler som
  * kostnadsvyerna.
  */
 it('ritar rubriken, perioden och en rad per valuta med valutan utskriven', function () {
@@ -114,7 +114,7 @@ it('ritar rubriken, perioden och en rad per valuta med valutan utskriven', funct
         ->toContain('v-for="total in props.totals"')
         ->toContain('{{ total.currency }}')
         ->toContain('formatAmount(total.amount, total.currency)')
-        ->toContain("import { formatAmount } from './CostDonut.vue'");
+        ->toContain("import { formatAmount } from './TransactionDonut.vue'");
 
     // Ingen summa över valutorna: komponenten ritar raderna och räknar inte.
     expect($summeringen)->not->toContain('reduce');
@@ -131,7 +131,7 @@ it('ritar rubriken, perioden och en rad per valuta med valutan utskriven', funct
 it('har ingen donut, ingen länk, ingen knapp och ingen klickhanterare', function () {
     $summeringen = hjalkostUtanKommentarer(File::get(resource_path('js/components/HeroCosts.vue')));
 
-    expect($summeringen)->not->toContain('<CostDonut');
+    expect($summeringen)->not->toContain('<TransactionDonut');
     expect($summeringen)->not->toContain('<a ');
     expect($summeringen)->not->toContain('<Link');
     expect($summeringen)->not->toContain('<button');
@@ -250,7 +250,7 @@ it('ritar brickorna före summeringen i hjälten och ingen donut', function () {
 
     expect($hjalten)->toContain('<DashboardStats')
         ->toContain('<HeroCosts');
-    expect($hjalten)->not->toContain('<CostDonut');
+    expect($hjalten)->not->toContain('<TransactionDonut');
     expect($hjalten)->not->toContain("t('dashboard.costs.heading')");
 
     expect(strpos($hjalten, '<DashboardStats'))
@@ -273,7 +273,7 @@ it('ritar brickorna och summeringen under bandet på dashboarden', function () {
     expect($sida)->toContain('md:hidden')
         ->toContain('<DashboardStats')
         ->toContain('<HeroCosts');
-    expect($sida)->not->toContain('<CostDonut');
+    expect($sida)->not->toContain('<TransactionDonut');
     expect($sida)->not->toContain("t('dashboard.costs.heading')");
 
     expect(strpos($sida, '<DashboardStats'))
@@ -309,19 +309,19 @@ it('håller hjälten på samma höjd med en eller ingen valuta', function () {
 /*
  * Klart när: containerns kostnadsflik ritar som förut.
  *
- * `CostDonut` står kvar för containerns kostnadsflik och de andra
+ * `TransactionDonut` står kvar för containerns kostnadsflik och de andra
  * kostnadsvyerna, och de använder `formatAmount()` därifrån. Issue 475 sätter
  * `HeroCosts` i containerns hjälte; fliken rörs inte här.
  */
 it('lämnar containerns kostnadsflik orörd', function () {
     $fliken = hjalkostUtanKommentarer(File::get(resource_path('js/pages/Containers/Costs.vue')));
 
-    expect($fliken)->toContain("import CostDonut, { formatAmount } from '../../components/CostDonut.vue'")
-        ->toContain('<CostDonut');
+    expect($fliken)->toContain("import TransactionDonut, { formatAmount } from '../../components/TransactionDonut.vue'")
+        ->toContain('<TransactionDonut');
     expect($fliken)->not->toContain('HeroCosts');
 
     // Och donuten själv finns kvar med sin formatering.
-    $donuten = hjalkostUtanKommentarer(File::get(resource_path('js/components/CostDonut.vue')));
+    $donuten = hjalkostUtanKommentarer(File::get(resource_path('js/components/TransactionDonut.vue')));
 
     expect($donuten)->toContain('export function formatAmount')
         ->toContain('<svg');
@@ -357,7 +357,7 @@ it('räknar fortfarande månaden i användarens tidszon', function () {
     ]);
 
     foreach ([[1111, '2026-10-01'], [2222, '2026-09-30']] as [$belopp, $datum]) {
-        CostEntry::factory()->for($item, 'item')->create([
+        ItemTransaction::factory()->for($item, 'item')->create([
             'amount' => $belopp,
             'currency' => 'SEK',
             'incurred_on' => $datum,

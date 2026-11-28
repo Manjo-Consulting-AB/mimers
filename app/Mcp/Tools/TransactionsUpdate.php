@@ -2,11 +2,11 @@
 
 namespace App\Mcp\Tools;
 
-use App\Actions\Cost\UpdateCostEntry;
+use App\Actions\Transaction\UpdateItemTransaction;
 use App\Models\Agent;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Rules\IsoCurrency;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
@@ -33,7 +33,7 @@ class TransactionsUpdate extends McpTool
      */
     public function actions(): array
     {
-        return [UpdateCostEntry::class];
+        return [UpdateItemTransaction::class];
     }
 
     public function schema(JsonSchema $schema): array
@@ -68,7 +68,7 @@ class TransactionsUpdate extends McpTool
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $this->writeAsAgent(fn () => app(UpdateCostEntry::class)->handle(
+        $this->writeAsAgent(fn () => app(UpdateItemTransaction::class)->handle(
             $item,
             $cost,
             $fields,
@@ -83,11 +83,11 @@ class TransactionsUpdate extends McpTool
     }
 
     /**
-     * @return array{0: CostEntry, 1: Item, 2: Container}
+     * @return array{0: ItemTransaction, 1: Item, 2: Container}
      */
     private function transactionOf(Agent $agent, string $ulid): array
     {
-        $cost = CostEntry::query()->where('ulid', $ulid)->first();
+        $cost = ItemTransaction::query()->where('ulid', $ulid)->first();
         $item = $cost?->item;
         $container = $item === null ? null : Container::query()->with('account')->find($item->container_id);
 

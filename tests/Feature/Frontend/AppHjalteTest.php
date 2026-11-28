@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -104,7 +104,7 @@ function apphjalteKontext(): array
         'created_by_account_id' => $konto->id,
     ]);
 
-    CostEntry::factory()->for($item, 'item')->create([
+    ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => 12345,
         'currency' => 'SEK',
         'incurred_on' => now()->toDateString(),

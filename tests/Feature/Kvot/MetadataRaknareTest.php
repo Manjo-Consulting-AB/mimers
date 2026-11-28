@@ -2,7 +2,6 @@
 
 use App\Actions\Account\DeleteAccount;
 use App\Actions\Category\CreateCategory;
-use App\Actions\Cost\CreateCostEntry;
 use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Item\CreateItem;
 use App\Actions\Loan\CreateLoan;
@@ -10,13 +9,14 @@ use App\Actions\Schedule\CloseOccurrence;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\ReopenOccurrence;
 use App\Actions\Tag\CreateTag;
+use App\Actions\Transaction\CreateItemTransaction;
 use App\Actions\Usage\AdjustUsage;
 use App\Console\ReconcilesUsageCounters;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -134,7 +134,7 @@ function metadataInnehåll(): array
     Tag::factory()->for($container, 'container')->create(['name' => 'röd', 'billed_account_id' => $konto->id]);          // 4 + 256
     $schema = Schedule::factory()->for($item, 'item')->create(['title' => 'Byt olja', 'notes' => null, 'billed_account_id' => $konto->id]); // 8 + 256
     ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'klart', 'billed_account_id' => $konto->id]);     // 5
-    CostEntry::factory()->for($item, 'item')->create(['description' => 'Olja', 'counterparty' => 'Åhlens', 'billed_account_id' => $konto->id]); // 4 + 7 + 256
+    ItemTransaction::factory()->for($item, 'item')->create(['description' => 'Olja', 'counterparty' => 'Åhlens', 'billed_account_id' => $konto->id]); // 4 + 7 + 256
     Loan::factory()->for($item, 'item')->create(['borrower_name' => 'Åsa', 'borrower_email' => null, 'note' => null, 'billed_account_id' => $konto->id]); // 4 + 256
 
     $väntat = 269 + 260 + (5 + 256) + (4 + 256) + (8 + 256) + 5 + (4 + 7 + 256) + (4 + 256);
@@ -242,7 +242,7 @@ it('varje Create-väg sätter betalaren till det agerande kontot', function () {
     ]));
     expect($schema->fresh()->billed_account_id)->toBe($gäst->id);
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, [
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, [
         'incurred_on' => '2026-01-01', 'amount' => '10.00', 'description' => 'Olja',
     ], $gästUser);
     expect($kostnad->fresh()->billed_account_id)->toBe($gäst->id);
@@ -371,7 +371,7 @@ it('ett ägarbyte flyttar säljarens rader och byte till köparen, men inte en t
  */
 function metadataBetalareNullbar(): Closure
 {
-    $tabeller = ['category', 'tag', 'item', 'schedule', 'cost_entry', 'loan'];
+    $tabeller = ['category', 'tag', 'item', 'schedule', 'item_transaction', 'loan'];
     $ändra = function (bool $nullbar) use ($tabeller): void {
         foreach ($tabeller as $tabell) {
             Schema::table($tabell, function (Blueprint $table) use ($nullbar) {
@@ -433,8 +433,8 @@ it('migreringen fyller i betalaren enligt reglerna', function () {
         $medFörfattare = metadataItem($container, $författare);
         $utanFörfattare = metadataItem($container, $författare);
         $utanFörfattare->forceFill(['created_by_account_id' => null])->save();
-        $kostnadMed = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => $författare->id]);
-        $kostnadUtan = CostEntry::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => null, 'billed_account_id' => $ägare->id]);
+        $kostnadMed = ItemTransaction::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => $författare->id]);
+        $kostnadUtan = ItemTransaction::factory()->for($medFörfattare, 'item')->create(['created_by_account_id' => null, 'billed_account_id' => $ägare->id]);
         $kategori = Category::factory()->for($container, 'container')->create();
         $tagg = Tag::factory()->for($container, 'container')->create();
         $schema = Schedule::factory()->for($medFörfattare, 'item')->create();
@@ -443,13 +443,16 @@ it('migreringen fyller i betalaren enligt reglerna', function () {
         $medNotUtanKonto = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'ok', 'completed_by_account_id' => null]);
         $utanNot = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => '', 'completed_by_account_id' => $medlem->id]);
 
-        foreach (['category', 'tag', 'item', 'schedule', 'cost_entry', 'loan'] as $tabell) {
+        foreach (['category', 'tag', 'item', 'schedule', 'item_transaction', 'loan'] as $tabell) {
             DB::table($tabell)->update(['billed_account_id' => null]);
         }
         DB::table('schedule_occurrence')->update(['billed_account_id' => null]);
 
         $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
+        // Den frysta ifyllningen talar om `cost_entry` (issue 1784).
+        Schema::rename('item_transaction', 'cost_entry');
         $migrering->backfillBilledAccounts();
+        Schema::rename('cost_entry', 'item_transaction');
 
         expect($medFörfattare->fresh()->billed_account_id)->toBe($författare->id);
         expect($utanFörfattare->fresh()->billed_account_id)->toBe($ägare->id);
@@ -488,7 +491,10 @@ it('migreringen räknar fram metadata_bytes för alla konton, och skapar en rad 
         UsageCounter::factory()->create(['account_id' => $tomt->id, 'metadata_bytes' => 99]);
 
         $migrering = require base_path('database/migrations/2026_11_15_030000_add_metadata_bytes_and_billed_account_id.php');
+        // Den frysta ifyllningen talar om `cost_entry` (issue 1784).
+        Schema::rename('item_transaction', 'cost_entry');
         $migrering->backfillMetadataBytes();
+        Schema::rename('cost_entry', 'item_transaction');
 
         expect(metadataByte($konto))->toBe($väntat);
         // Kontot utan räknade rader finns inte i summorna och rörs inte.

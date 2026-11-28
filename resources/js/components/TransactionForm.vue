@@ -11,7 +11,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 /*
  * Formuläret för en ny kostnadsrad — utbrutet ur ItemCostSection.vue (issue
  * 369 · M56) så att containerns *Costs*-flik kan rita samma formulär. Reglerna
- * är oförändrade: de bor i App\Actions\Cost och prövas på servern, och ett
+ * är oförändrade: de bor i App\Actions\Transaction och prövas på servern, och ett
  * domänfel kommer tillbaka som ett fältfel.
  *
  * **`itemUlid` är `null` när ytan inte vet vilket item raden hör till.** Då är
@@ -19,7 +19,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * aldrig mot en adress utan item.
  *
  * **`returnTo` är returadressen.** Sätts den skickas den som `return`, och
- * servern (App\Http\Controllers\CostEntryController::store) låter svaret landa
+ * servern (App\Http\Controllers\ItemTransactionController::store) låter svaret landa
  * där om adressen godkänns av TaskCreateController::safeReturn().
  *
  * **Datumet kan förifyllas ur adressen**: kostnadskroken

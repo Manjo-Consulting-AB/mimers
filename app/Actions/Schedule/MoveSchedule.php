@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * inte en fråga per nivå och riktning, men den täcker alla fyra fallen.
  *
  * **Kostnadsraderna stannar på sitt item** (ADR-0053 § 6): de bokfördes där,
- * och `cost_entry` hänger på itemet, inte på schemat — flytten rör dem inte.
+ * och `item_transaction` hänger på itemet, inte på schemat — flytten rör dem inte.
  * `completed_by_account_id` på avklarade förekomster rörs inte heller: det
  * var det kontot som utförde arbetet.
  *

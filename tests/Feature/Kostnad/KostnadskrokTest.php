@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
@@ -161,7 +161,7 @@ it('en klient som ignorerar erbjudandet får ett avslut utan kostnadsrad', funct
     // Svaret bär erbjudandet, men ingenting skapas av att det finns — det är
     // hela kontraktet (issue 47 § Beslut 5).
     expect($response->json('data.cost_prompt'))->not->toBeNull();
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 
     $stängd = $occurrence->fresh();
     expect($stängd->status)->toBe('completed');
@@ -191,7 +191,7 @@ it('en kostnad som skapas med erbjudandets värden hamnar på itemet och rör in
     );
 
     $skapat->assertCreated();
-    $rad = CostEntry::where('ulid', $skapat->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $skapat->json('data.ulid'))->first();
     expect($rad)->not->toBeNull();
     expect($rad->item_id)->toBe($item->id);
     expect($rad->incurred_on->toDateString())->toBe($erbjudande['incurred_on']);
@@ -206,8 +206,8 @@ it('en kostnad som skapas med erbjudandets värden hamnar på itemet och rör in
     expect(ScheduleOccurrence::where('schedule_id', $schedule->id)->where('status', 'open')->count())->toBe(1);
 });
 
-it('cost_entry har ingen kolumn som pekar på en förekomst', function () {
-    $kolumner = Schema::getColumnListing('cost_entry');
+it('item_transaction har ingen kolumn som pekar på en förekomst', function () {
+    $kolumner = Schema::getColumnListing('item_transaction');
 
     expect(collect($kolumner)->filter(
         fn (string $kolumn): bool => str_contains(strtolower($kolumn), 'occurrence')

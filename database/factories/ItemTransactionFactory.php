@@ -4,15 +4,15 @@ namespace Database\Factories;
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<CostEntry>
+ * @extends Factory<ItemTransaction>
  */
-class CostEntryFactory extends Factory
+class ItemTransactionFactory extends Factory
 {
     /**
      * Define the model's default state.

@@ -147,6 +147,16 @@ class AuditLog extends Model
     public const ACTION_COST_ENTRY_DELETED = 'cost_entry.deleted';
 
     /*
+     * Namnen följer begreppet sedan issue 1784. De LAGRADE värdena är oförändrade
+     * (`cost_entry.*`): raderna i revisionsloggen är historik och skrivs inte om.
+     */
+    public const ACTION_TRANSACTION_CREATED = self::ACTION_COST_ENTRY_CREATED;
+
+    public const ACTION_TRANSACTION_UPDATED = self::ACTION_COST_ENTRY_UPDATED;
+
+    public const ACTION_TRANSACTION_DELETED = self::ACTION_COST_ENTRY_DELETED;
+
+    /*
      * Uppgifts- och utlåningshändelserna (issue 110). Scheman, förekomster,
      * beroenden och lån — allt som skrivs på en uppgift eller en utlåning.
      * Varje rad bär `item_id`; [[ADR-0043 Tre loggar]] § Händelseloggen.

@@ -3,8 +3,8 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
@@ -90,9 +90,9 @@ function containerhjaltItem(Container $container, string $namn): Item
 /**
  * En kostnadsrad på itemet, med känt belopp, datum och valuta.
  */
-function containerhjaltRad(Item $item, int $belopp, string $datum, string $valuta = 'SEK'): CostEntry
+function containerhjaltRad(Item $item, int $belopp, string $datum, string $valuta = 'SEK'): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create([
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum,

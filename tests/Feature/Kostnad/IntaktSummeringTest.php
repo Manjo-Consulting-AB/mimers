@@ -2,9 +2,9 @@
 
 use App\Actions\Access\ResolveItemScope;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
-use App\Support\Cost\CostReport;
+use App\Models\ItemTransaction;
+use App\Support\Transaction\CostReport;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
@@ -29,7 +29,7 @@ function intaktScenario(): array
 
     rapportKostnad($item, ['amount' => 1000, 'currency' => 'SEK', 'counterparty' => 'Verkstan', 'incurred_on' => '2026-04-01']);
     rapportKostnad($item, ['amount' => -200, 'currency' => 'SEK', 'counterparty' => 'Verkstan', 'incurred_on' => '2026-04-02']);
-    rapportKostnad($item, ['amount' => 1500, 'currency' => 'SEK', 'counterparty' => 'Köparen', 'kind' => CostEntry::KIND_INCOME, 'incurred_on' => '2026-04-03']);
+    rapportKostnad($item, ['amount' => 1500, 'currency' => 'SEK', 'counterparty' => 'Köparen', 'kind' => ItemTransaction::KIND_INCOME, 'incurred_on' => '2026-04-03']);
 
     return [$headers, $container, $item];
 }
@@ -110,7 +110,7 @@ it('jämförelsen räknar netto för kind=all och annars den valda riktningen', 
     $item = rapportItem($container, $account, $user);
 
     rapportKostnad($item, ['amount' => 1000, 'currency' => 'SEK', 'incurred_on' => '2026-03-10']);
-    rapportKostnad($item, ['amount' => 3000, 'currency' => 'SEK', 'kind' => CostEntry::KIND_INCOME, 'incurred_on' => '2026-04-10']);
+    rapportKostnad($item, ['amount' => 3000, 'currency' => 'SEK', 'kind' => ItemTransaction::KIND_INCOME, 'incurred_on' => '2026-04-10']);
     rapportKostnad($item, ['amount' => 500, 'currency' => 'SEK', 'incurred_on' => '2026-04-11']);
 
     $scope = app()->build(ResolveItemScope::class)->handle($user, $container);
@@ -138,7 +138,7 @@ it('frågeantalet för summeringen är detsamma med och utan intäkter', functio
     };
 
     $med = $anropa();
-    CostEntry::query()->where('kind', CostEntry::KIND_INCOME)->delete();
+    ItemTransaction::query()->where('kind', ItemTransaction::KIND_INCOME)->delete();
 
     expect($anropa())->toBe($med);
 });

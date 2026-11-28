@@ -21,11 +21,11 @@ function itemKostnadMall(): string
     return substr($kod, strpos($kod, '<template>'));
 }
 
-it('ritar InlineCreate före listan med CostEntryForm inuti och ingen Register a cost-rubrik', function () {
+it('ritar InlineCreate före listan med TransactionForm inuti och ingen Register a cost-rubrik', function () {
     $mall = itemKostnadMall();
 
     $skal = strpos($mall, '<InlineCreate');
-    $formular = strpos($mall, '<CostEntryForm');
+    $formular = strpos($mall, '<TransactionForm');
     $stang = strpos($mall, '</InlineCreate>');
     $lista = strpos($mall, '<ul v-else');
 
@@ -38,7 +38,7 @@ it('ritar InlineCreate före listan med CostEntryForm inuti och ingen Register a
     expect(File::get(base_path('lang/en/ui.php')))->not->toContain("'form_heading' => 'Register a cost'");
 });
 
-it('ger formuläret etiketten Add cost och tar dirty från CostEntryForm', function () {
+it('ger formuläret etiketten Add cost och tar dirty från TransactionForm', function () {
     $mall = itemKostnadMall();
 
     expect($mall)->toContain(":label=\"t('item.show.add_cost')\"");
@@ -90,5 +90,5 @@ it('ritar formuläret och knappen bara bakom can.create', function () {
 
     expect($mall)->toMatch('/<div v-if="can\.create">\s*<InlineCreate/');
     expect(substr_count($mall, '<InlineCreate'))->toBe(1);
-    expect(substr_count($mall, '<CostEntryForm'))->toBe(1);
+    expect(substr_count($mall, '<TransactionForm'))->toBe(1);
 });

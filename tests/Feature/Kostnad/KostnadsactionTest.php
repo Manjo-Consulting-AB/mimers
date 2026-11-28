@@ -1,15 +1,15 @@
 <?php
 
 use App\Actions\Audit\RecordAuditEvent;
-use App\Actions\Cost\CreateCostEntry;
-use App\Actions\Cost\DeleteCostEntry;
-use App\Actions\Cost\ListCostSuppliers;
-use App\Actions\Cost\UpdateCostEntry;
+use App\Actions\Transaction\CreateItemTransaction;
+use App\Actions\Transaction\DeleteItemTransaction;
+use App\Actions\Transaction\ListCostSuppliers;
+use App\Actions\Transaction\UpdateItemTransaction;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -62,7 +62,7 @@ function kostnadsactionKontext(): array
 }
 
 /**
- * En kropp för CreateCostEntry::handle(), som requesten hade lämnat den.
+ * En kropp för CreateItemTransaction::handle(), som requesten hade lämnat den.
  *
  * @param  array<string, mixed>  $overrides
  * @return array<string, mixed>
@@ -108,7 +108,7 @@ function kostnadsactionFallaLoggen(): void
 it('skapar raden och händelsen i en transaktion', function () {
     [, $anvandare, $container, $item] = kostnadsactionKontext();
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
 
     expect($kostnad->exists)->toBeTrue();
     expect($kostnad->item_id)->toBe($item->id);
@@ -118,7 +118,7 @@ it('skapar raden och händelsen i en transaktion', function () {
     expect($kostnad->created_by_user_id)->toBe($anvandare->id);
     expect($kostnad->created_by_account_id)->toBe($container->account_id);
 
-    // Relationen är laddad, så CostEntryResource inte kör en lazy load i
+    // Relationen är laddad, så ItemTransactionResource inte kör en lazy load i
     // `/api`s svar (issue 45a § Beslut 14).
     expect($kostnad->relationLoaded('createdByAccount'))->toBeTrue();
 
@@ -140,19 +140,19 @@ it('rullar tillbaka raden när händelsen inte kan skrivas', function () {
 
     kostnadsactionFallaLoggen();
 
-    expect(fn () => app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare))
+    expect(fn () => app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare))
         ->toThrow(RuntimeException::class);
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
     expect(DB::table('audit_log')->count())->toBe(0);
 });
 
 it('ändrar raden och loggar de ändrade fälten, och ingenting när ingenting ändras', function () {
     [, $anvandare, $container, $item] = kostnadsactionKontext();
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
 
-    app(UpdateCostEntry::class)->handle($item, $kostnad, [
+    app(UpdateItemTransaction::class)->handle($item, $kostnad, [
         'amount' => '1500',
         'currency' => 'SEK',
         'description' => 'Ny impeller',
@@ -178,7 +178,7 @@ it('ändrar raden och loggar de ändrade fälten, och ingenting när ingenting �
     // En PATCH som inte ändrar något skriver ingen rad: skillnaden mot
     // databasen läses innan raden sparas. Beskrivningen sätts till sitt eget
     // värde, så det är ärligt en ändring som inte ändrar något.
-    app(UpdateCostEntry::class)->handle($item, $kostnad->fresh(), [
+    app(UpdateItemTransaction::class)->handle($item, $kostnad->fresh(), [
         'description' => 'Ny impeller',
     ], $anvandare);
 
@@ -188,11 +188,11 @@ it('ändrar raden och loggar de ändrade fälten, och ingenting när ingenting �
 it('rullar tillbaka ändringen när händelsen inte kan skrivas', function () {
     [, $anvandare, $container, $item] = kostnadsactionKontext();
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
 
     kostnadsactionFallaLoggen();
 
-    expect(fn () => app(UpdateCostEntry::class)->handle($item, $kostnad, [
+    expect(fn () => app(UpdateItemTransaction::class)->handle($item, $kostnad, [
         'amount' => '1500',
         'currency' => 'SEK',
     ], $anvandare))->toThrow(RuntimeException::class);
@@ -204,14 +204,14 @@ it('rullar tillbaka ändringen när händelsen inte kan skrivas', function () {
 it('mjukraderar raden och händelsen i en transaktion', function () {
     [, $anvandare, $container, $item] = kostnadsactionKontext();
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
 
-    app(DeleteCostEntry::class)->handle($item, $kostnad, $anvandare);
+    app(DeleteItemTransaction::class)->handle($item, $kostnad, $anvandare);
 
     // Mjuk radering: raden ligger kvar med `deleted_at` satt, och den hamnar
     // inte i papperskorgen — den listar fyra typer och behåller fyra.
-    expect(CostEntry::query()->count())->toBe(0);
-    expect(CostEntry::withTrashed()->whereKey($kostnad->id)->exists())->toBeTrue();
+    expect(ItemTransaction::query()->count())->toBe(0);
+    expect(ItemTransaction::withTrashed()->whereKey($kostnad->id)->exists())->toBeTrue();
 
     $rader = kostnadsactionRader($item, AuditLog::ACTION_COST_ENTRY_DELETED);
 
@@ -220,11 +220,11 @@ it('mjukraderar raden och händelsen i en transaktion', function () {
     expect(json_decode($rader->first()->meta, true))->toBe(['amount' => 120050, 'currency' => 'EUR', 'kind' => 'expense', 'quantity' => null]);
 
     // Och den fallna loggen river raderingen, samma väg som skapandet.
-    $annan = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
+    $annan = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $anvandare);
 
     kostnadsactionFallaLoggen();
 
-    expect(fn () => app(DeleteCostEntry::class)->handle($item, $annan, $anvandare))
+    expect(fn () => app(DeleteItemTransaction::class)->handle($item, $annan, $anvandare))
         ->toThrow(RuntimeException::class);
 
     expect($annan->fresh()->deleted_at)->toBeNull();
@@ -233,7 +233,7 @@ it('mjukraderar raden och händelsen i en transaktion', function () {
 it('listar containerns leverantörer på frekvens', function () {
     [, $anvandare, $container, $item] = kostnadsactionKontext();
 
-    $skapa = app(CreateCostEntry::class);
+    $skapa = app(CreateItemTransaction::class);
 
     foreach ([
         ['counterparty' => 'Volvo Penta'],
@@ -273,7 +273,7 @@ it('tillskriver en managed-skribent det mottagande kontot', function () {
 
     beviljaAccess($container, $mottagarKonto, 'write', 'managed');
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, kostnadsactionKropp(), $mottagare);
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, kostnadsactionKropp(), $mottagare);
 
     expect($kostnad->created_by_account_id)->toBe($mottagarKonto->id);
 });

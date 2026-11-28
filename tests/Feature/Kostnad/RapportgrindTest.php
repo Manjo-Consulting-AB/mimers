@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 
@@ -102,7 +102,7 @@ it('en gratis gäst hos en pro-ägare får rapporten — planen som räknas är 
     Subscription::factory()->for($ägarKonto)->for($pro)->create();
     $container = Container::factory()->for($ägarKonto, 'account')->create();
     $item = Item::factory()->for($container, 'container')->create();
-    CostEntry::factory()->for($item, 'item')->create(['amount' => 1000]);
+    ItemTransaction::factory()->for($item, 'item')->create(['amount' => 1000]);
 
     [, $gäst, $headers] = kontoMedMedlem(); // gästens EGNA konto är gratis
     beviljaAccess($container, $gäst, 'read', 'member');

@@ -31,7 +31,7 @@ use RuntimeException;
  *
  * Värdet sätts av kolumnens default när kontot skapas — registreringen frågar
  * aldrig efter det ([[ADR-0037 Valutans arv]] § Konsekvenser) — och en
- * ändring gäller bara NYA poster: ingen befintlig `cost_entry`-rad märks
+ * ändring gäller bara NYA poster: ingen befintlig `item_transaction`-rad märks
  * någonsin om, för det som står i en rad är vad som betalades.
  */
 #[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'currency', 'status', 'read_only_reason', 'registration_ip'])]

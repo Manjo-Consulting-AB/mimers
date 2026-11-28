@@ -6,9 +6,9 @@ use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use App\Support\Export\ContainerExportBuilder;
 use Illuminate\Support\Facades\DB;
@@ -127,7 +127,7 @@ it('nekar en otillåten valuta i API:et med currency.not_allowed', function () {
         ->assertJsonPath('error.data.currency', 'AUD')
         ->assertJsonPath('error.data.allowed', 'EUR, SEK');
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 });
 
 it('nekar en otillåten valuta på webben med ett fältfel på currency', function () {
@@ -181,7 +181,7 @@ it('låter en befintlig rad behålla sin valuta men inte byta till en annan otil
 
     // Raden skrevs innan AUD togs bort ur urvalet — den står kvar, och är
     // sanningen om vad som betalades (ADR-0037 och ADR-0078 § 3).
-    $rad = CostEntry::factory()->for($item, 'item')->create([
+    $rad = ItemTransaction::factory()->for($item, 'item')->create([
         'currency' => 'AUD',
         'amount' => 120050,
         'description' => 'Hamnavgift',

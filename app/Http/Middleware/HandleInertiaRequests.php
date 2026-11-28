@@ -29,10 +29,10 @@ use App\Models\RecentVisit;
 use App\Models\ScheduleOccurrence;
 use App\Models\UsageCounter;
 use App\Models\User;
-use App\Support\Cost\Currencies;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Invitation\PendingInvitation;
 use App\Support\Notification\NotificationTarget;
+use App\Support\Transaction\Currencies;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Http\Request;
@@ -169,7 +169,7 @@ use Inertia\Middleware;
  * utan valbara items utelämnas.
  *
  * **`currencies` kom med issue 1253** — de aktiva ISO 4217-koderna med namn
- * på användarens språk, ur App\Support\Cost\Currencies
+ * på användarens språk, ur App\Support\Transaction\Currencies
  * ([[ADR-0078 Valutor ur ISO 4217]] § 1 och 2). Proppen är den SJÄTTE
  * optionala och följer de fem andras mönster: listan behövs bara när ett
  * valutafält får fokus, och sökrutan hämtar den med en partiell omladdning av

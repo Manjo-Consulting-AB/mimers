@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
@@ -43,9 +43,9 @@ function finansvyKontext(bool $pro = true): array
     return [$anvandare, $container, $item];
 }
 
-function finansvyRad(Item $item, int $belopp, string $riktning, ?string $motpart = null): CostEntry
+function finansvyRad(Item $item, int $belopp, string $riktning, ?string $motpart = null): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create([
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'kind' => $riktning,
         'amount' => $belopp,
         'currency' => 'SEK',
@@ -92,7 +92,7 @@ it('bär utgifter, intäkter och netto i summan, och bara en total utan intäkte
 });
 
 it('skickar kind och counterparty från filtret och döljer det för en gratisanvändare', function () {
-    $filter = finansvyKalla('components/CostFilterBar.vue');
+    $filter = finansvyKalla('components/TransactionFilterBar.vue');
 
     expect($filter)->toContain('name="kind"')
         ->toContain('params.kind = kind.value')
@@ -145,7 +145,7 @@ it('räknar nedbrytningen bara på utgifter och ger grafen en intäktsserie', fu
     expect(trans('ui.container.costs.breakdown', [], 'en'))->toContain('Expenses')
         ->and(trans('ui.container.costs.chart', [], 'en'))->toContain('Expenses');
 
-    $graf = finansvyKalla('components/CostTimeChart.vue');
+    $graf = finansvyKalla('components/TransactionTimeChart.vue');
 
     expect($graf)->toContain('fill-success')
         ->toContain('chart.hasIncome')
@@ -168,7 +168,7 @@ it('visar nettot under totalen i överblickens panel när containern har intäkt
 });
 
 it('ger valen en träffyta på minst 44 px och ingen vågrät rullning', function () {
-    $filter = finansvyKalla('components/CostFilterBar.vue');
+    $filter = finansvyKalla('components/TransactionFilterBar.vue');
 
     expect(substr_count($filter, 'min-h-11'))->toBeGreaterThanOrEqual(7)
         ->and($filter)->not->toContain('overflow-x')

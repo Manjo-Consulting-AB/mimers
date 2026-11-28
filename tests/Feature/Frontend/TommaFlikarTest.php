@@ -95,9 +95,9 @@ it('låter åtgärden nå flikens formulär', function () {
 
         if ($falt === 'cost-incurred-on') {
             // Kostnadsfliken fäller ut det infällbara formuläret (issue 1211);
-            // InlineCreate sätter fokus i det. Fältet bor i CostEntryForm.
+            // InlineCreate sätter fokus i det. Fältet bor i TransactionForm.
             expect($kod)->toContain('createOpen.value = true');
-            expect(tommaFlikarKod('components/CostEntryForm.vue'))->toContain("id=\"{$falt}\"");
+            expect(tommaFlikarKod('components/TransactionForm.vue'))->toContain("id=\"{$falt}\"");
 
             continue;
         }

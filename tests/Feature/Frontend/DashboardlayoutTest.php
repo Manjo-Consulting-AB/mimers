@@ -192,7 +192,7 @@ it('ritar ingen kostnadssummering utan kostnader', function () {
 
         // Ingen egen rubrik och ingen donut kvar på ytan.
         expect($kod)->not->toContain("t('dashboard.costs.heading')");
-        expect($kod)->not->toContain('<CostDonut');
+        expect($kod)->not->toContain('<TransactionDonut');
     }
 });
 

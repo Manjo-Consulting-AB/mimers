@@ -200,8 +200,8 @@ it('diagrammen räknar samma händelser som listan med samma filter', function (
     [$konto, $ägare, $pärm] = historikdiagramKontext();
     $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
 
-    historikdiagramRad($pärm, $konto, $ägare, $motorn, 'cost_entry', now()->subDays(2));
-    historikdiagramRad($pärm, $konto, $ägare, $motorn, 'cost_entry', now()->subDay());
+    historikdiagramRad($pärm, $konto, $ägare, $motorn, 'item_transaction', now()->subDays(2));
+    historikdiagramRad($pärm, $konto, $ägare, $motorn, 'item_transaction', now()->subDay());
     historikdiagramRad($pärm, $konto, $ägare, $motorn, 'loan', now());
     historikdiagramRad($pärm, $konto, $ägare, null, 'container', now());
 
@@ -214,12 +214,12 @@ it('diagrammen räknar samma händelser som listan med samma filter', function (
         ->and($stats['topItems'])->toBe([['ulid' => $motorn->ulid, 'name' => 'Motorn', 'count' => 3]]);
 
     // Samma fråga, med ett filter: listan och talen följer båda urvalet.
-    $filtrerat = historikdiagramProps($ägare, $pärm, ['type' => 'cost_entry']);
+    $filtrerat = historikdiagramProps($ägare, $pärm, ['type' => 'item_transaction']);
     $filtrerade = historikdiagramStats($filtrerat);
 
     expect(historikdiagramRader($filtrerat))->toBe(2)
         ->and(historikdiagramDagsumma($filtrerade['perDay']))->toBe(2)
-        ->and($filtrerade['perType'])->toBe([['type' => 'cost_entry', 'count' => 2]])
+        ->and($filtrerade['perType'])->toBe([['type' => 'item_transaction', 'count' => 2]])
         ->and($filtrerade['topItems'])->toBe([['ulid' => $motorn->ulid, 'name' => 'Motorn', 'count' => 2]]);
 });
 
@@ -238,7 +238,7 @@ it('aggregaten räknar fler än hundra händelser', function () {
     [$konto, $ägare, $pärm] = historikdiagramKontext();
 
     for ($i = 0; $i < 105; $i++) {
-        historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', now()->subMinutes($i));
+        historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', now()->subMinutes($i));
     }
 
     $proppar = historikdiagramProps($ägare, $pärm);
@@ -246,7 +246,7 @@ it('aggregaten räknar fler än hundra händelser', function () {
 
     expect(historikdiagramRader($proppar))->toBe(100)
         ->and(historikdiagramDagsumma($stats['perDay']))->toBe(105)
-        ->and($stats['perType'])->toBe([['type' => 'cost_entry', 'count' => 105]]);
+        ->and($stats['perType'])->toBe([['type' => 'item_transaction', 'count' => 105]]);
 });
 
 /*
@@ -267,15 +267,15 @@ it('en gäst räknar bara de händelser hen får se', function () {
     $gäst = historikdiagramItemGast($pärm, $gästensItem, 'Bo');
     $ägarensItem = Item::factory()->for($pärm, 'container')->create(['name' => 'Seglet']);
 
-    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'cost_entry', now()->subDay());
-    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'cost_entry', now()->subDays(2));
-    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'cost_entry', now()->subDays(3));
-    historikdiagramRad($pärm, $konto, $gäst, $gästensItem, 'cost_entry', now());
+    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'item_transaction', now()->subDay());
+    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'item_transaction', now()->subDays(2));
+    historikdiagramRad($pärm, $konto, $ägare, $ägarensItem, 'item_transaction', now()->subDays(3));
+    historikdiagramRad($pärm, $konto, $gäst, $gästensItem, 'item_transaction', now());
 
     $gästens = historikdiagramStats(historikdiagramProps($gäst, $pärm));
 
     expect(historikdiagramDagsumma($gästens['perDay']))->toBe(1)
-        ->and($gästens['perType'])->toBe([['type' => 'cost_entry', 'count' => 1]])
+        ->and($gästens['perType'])->toBe([['type' => 'item_transaction', 'count' => 1]])
         ->and(historikdiagramUlids($gästens['topItems']))->toBe([$gästensItem->ulid]);
 
     // Ägaren ser allt fyra, och i fallande antal.
@@ -304,10 +304,10 @@ it('ett item utanför omfånget förekommer inte i Senaste aktiva items', functi
     $främmandeItem = Item::factory()->for($pärm, 'container')->create(['name' => 'Seglet']);
 
     foreach (range(1, 5) as $ignorera) {
-        historikdiagramRad($pärm, $konto, $ägare, $främmandeItem, 'cost_entry', now());
+        historikdiagramRad($pärm, $konto, $ägare, $främmandeItem, 'item_transaction', now());
     }
 
-    historikdiagramRad($pärm, $konto, $gäst, $gästensItem, 'cost_entry', now());
+    historikdiagramRad($pärm, $konto, $gäst, $gästensItem, 'item_transaction', now());
 
     $gästens = historikdiagramStats(historikdiagramProps($gäst, $pärm));
 
@@ -338,10 +338,10 @@ it('ett item i papperskorgen förekommer inte i Senaste aktiva items', function 
     $kvar = Item::factory()->for($pärm, 'container')->create(['name' => 'Seglet']);
 
     foreach (range(1, 3) as $ignorera) {
-        historikdiagramRad($pärm, $konto, $ägare, $gallrat, 'cost_entry', now());
+        historikdiagramRad($pärm, $konto, $ägare, $gallrat, 'item_transaction', now());
     }
 
-    historikdiagramRad($pärm, $konto, $ägare, $kvar, 'cost_entry', now());
+    historikdiagramRad($pärm, $konto, $ägare, $kvar, 'item_transaction', now());
 
     $gallrat->delete();
 
@@ -371,8 +371,8 @@ it('perDay följer användarens tidszon', function () {
 
     [$konto, $ägare, $pärm] = historikdiagramKontext('Europe/Stockholm');
 
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 21:30:00'));
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 23:30:00'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-26 21:30:00'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-26 23:30:00'));
 
     $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
         'from' => '2026-09-26',
@@ -402,9 +402,9 @@ it('perDay delar en timme som spänner över midnatt i en halvtimmeszon', functi
     [$konto, $ägare, $pärm] = historikdiagramKontext('Asia/Kolkata');
 
     // 23:59 lokal tid den 26:e.
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 18:29:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-26 18:29:00', 'UTC'));
     // 00:01 lokal tid den 27:e — samma UTC-timme som raden ovan.
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 18:31:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-26 18:31:00', 'UTC'));
 
     $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
         'from' => '2026-09-26',
@@ -431,8 +431,8 @@ it('en dag utan händelser får noll i perDay', function () {
 
     [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
 
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 12:00:00', 'UTC'));
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-28 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-26 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-28 12:00:00', 'UTC'));
 
     $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
         'from' => '2026-09-26',
@@ -461,7 +461,7 @@ it('from utan to och to utan from ger var sin ände', function () {
 
     [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
 
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-20 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-20 12:00:00', 'UTC'));
 
     // `from` ensam: börjar där och slutar i användarens idag.
     $från = historikdiagramStats(historikdiagramProps($ägare, $pärm, ['from' => '2026-09-19']))['perDay'];
@@ -497,13 +497,13 @@ it('en rad utan subject_type räknas som sin egen post i perType', function () {
 
     historikdiagramRad($pärm, $konto, $ägare, null, null);
     historikdiagramRad($pärm, $konto, $ägare, null, null);
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry');
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction');
 
     $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm));
 
     expect($stats['perType'])->toBe([
         ['type' => null, 'count' => 2],
-        ['type' => 'cost_entry', 'count' => 1],
+        ['type' => 'item_transaction', 'count' => 1],
     ]);
 });
 
@@ -556,8 +556,8 @@ it('perDay läser bara dagarna i spannet', function () {
 
     // Sextio dagar bakom de trettio som ritas — utanför `perDay` även utan
     // datumfilter.
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-08-01 12:00:00', 'UTC'));
-    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-29 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-08-01 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'item_transaction', Carbon::parse('2026-09-29 12:00:00', 'UTC'));
 
     $fragor = [];
 
@@ -617,7 +617,7 @@ it('aggregaten kostar ett konstant antal frågor', function () {
     $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
 
     foreach (range(1, 3) as $ignorera) {
-        historikdiagramRad($pärm, $konto, $ägare, $motorn, 'cost_entry', now());
+        historikdiagramRad($pärm, $konto, $ägare, $motorn, 'item_transaction', now());
     }
 
     // Värm upp: första anropet laddar relationer som sedan är memoiserade.
@@ -634,7 +634,7 @@ it('aggregaten kostar ett konstant antal frågor', function () {
     $få = $frågor;
 
     foreach (range(1, 60) as $ignorera) {
-        historikdiagramRad($pärm, $konto, $ägare, $motorn, 'cost_entry', now());
+        historikdiagramRad($pärm, $konto, $ägare, $motorn, 'item_transaction', now());
     }
 
     $frågor = 0;
@@ -647,7 +647,7 @@ it('aggregaten kostar ett konstant antal frågor', function () {
 /*
  * Klart när: inget nytt npm-paket har lagts till (Beslut 3).
  *
- * Diagrammen ritas som SVG för hand, precis som CostDonut: `<rect>` och
+ * Diagrammen ritas som SVG för hand, precis som TransactionDonut: `<rect>` och
  * `<circle>` i en `viewBox`. Provet läser paketfilen — samma form som
  * KostnadsflikProTest prövar *inget diagrambibliotek* — och källkoden, så att
  * en ritning som bytts mot ett paket faller på båda sidorna.
