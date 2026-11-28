@@ -43,7 +43,7 @@ Sidofynd under arbetet, inte specifikt för Deepseek: en genuin, leverantörsobe
 ## Konsekvenser
 
 - **`AGENTS.md` och `agent_task.yml` namnger leverantör, inte roll.** En framtida modellväxling inom samma leverantör (t.ex. en ny Claude-modell för den förhöjda bucketen) är en enkel textändring i båda filerna, inte en ADR i sig — men ett leverantörsbyte som detta är det.
-- **`session-usage.py` måste prissätta varje modell som faktiskt körs.** Ett nytt leverantörsnamn utan en rad i `PRICES` ger ett odiagnostiserat `cost_usd: null`; se `opriced`-fältet i loggen för vilken modell som saknas.
+- **`session-usage.py` måste prissätta varje modell som faktiskt körs.** Ett nytt leverantörsnamn utan en rad i `PRICES` ger ett odiagnostiserat `cost_usd: null`; se `opriced`-fältet i loggen för vilken modell som saknas. *Borttagen 2026-11-28: köns sessioner loggade aldrig dit, och retron mäter inte längre kostnad per issue.*
 - **`model-routing.md` i `Manjo-Consulting-AB/ai-standards` måste hållas i synk manuellt.** Det är inte samma repo och ingår inte i den synkade AGENTS.md-blocket ([[AGENTS.md]] rad 25–53) — en ändring här uppdaterar inte den filen automatiskt.
 - **Mätning finns nu framåt, se § Uppföljning.** Issue 8 hade redan en mergad Sonnet-lösning (utan loggad kostnad, se tabellen) och kördes om isolerat som ett rent kvalitetsprov; 13a och 13b var båda oimplementerade och kördes fräscht på båda modellerna parallellt, med jämförbar kostnad för första gången.
 
