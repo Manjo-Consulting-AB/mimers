@@ -56,15 +56,14 @@ class HuvudtradetTest(unittest.TestCase):
         git(other, "push", "-q", "origin", "main")
         git(self.repo, "fetch", "-q")
 
-    def test_settings_registrerar_hooken_och_behaller_sessionend(self):
+    def test_settings_registrerar_hooken(self):
         import json
         hooks = json.loads(
             HOOK.parent.with_name("settings.json").read_text()
         )["hooks"]
         start = [h["command"] for g in hooks["SessionStart"] for h in g["hooks"]]
-        end = [h["command"] for g in hooks["SessionEnd"] for h in g["hooks"]]
         self.assertIn("python3 .claude/hooks/huvudtradet.py", start)
-        self.assertIn("python3 .claude/hooks/session-usage.py", end)
+        self.assertNotIn("SessionEnd", hooks)
 
     def test_ci_kor_testfilen_i_pipelinens_enhetstester(self):
         ci = HOOK.parents[2].joinpath(".github/workflows/ci.yml").read_text()
