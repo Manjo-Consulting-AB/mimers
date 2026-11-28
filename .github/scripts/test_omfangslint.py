@@ -300,6 +300,12 @@ def test_typ_med_en_rad_utan_sammanhang_ger_rad_trots_felkodsrad():
     "migration lägger `agent.example`",
     "`agent.example` är inte en notistyp",
     "tidsstämpeln `agent.example_at` sätts",
+    "tabellen `agent.example` finns",
+    "the table `agent.example` exists",
+    "`agent.example` är ingen ny notis",
+    "`agent.example` is not a notification",
+    "filen `app/agent.example/x.php` ändras",
+    "se `agent.example.md`",
 ])
 def test_tillagg_stanger_bara_sin_egen_rad(sammanhang):
     """Varje undantag utöver felkod/ruttnamn gäller bara raden det står på:
@@ -309,6 +315,14 @@ def test_tillagg_stanger_bara_sin_egen_rad(sammanhang):
         "- [ ] `agent.example` skickas en gång per användare\n- [ ] " + sammanhang,
     )
     assert any("NotificationTarget.php" in rad for rad in _notisrader(kropp))
+
+
+def test_regel_3_agent_deleted_och_versioning_skipped_ger_rader():
+    """#1422 (issue 1393) och #1448 (issue 1405), som kropparna såg ut före typerna."""
+    fix = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+    for nummer in (1393, 1405):
+        with open(os.path.join(fix, f"issue-{nummer}.md"), encoding="utf-8") as f:
+            assert _notisrader(f.read()) != [], nummer
 
 
 # =====================================================================

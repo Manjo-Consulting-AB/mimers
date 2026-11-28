@@ -147,12 +147,26 @@ FILANDEL = frozenset((
 # sammanhang: en rad med `"code"`, felkod, error code eller ordet code; en rad
 # med route('..'), rutt eller route; eller (tillägg, issue 1520) en rad om en
 # kolumn eller migration. En enda förekomst utan sammanhang håller typen kvar.
+# Undantagen (arkitektsvar på #1796) bygger alla på att issuen själv visar att
+# `x.y` är något annat än en notistyp, och gäller bara raden de står på:
+#   - felkod:   `"code"`, felkod, error code, code - en felkod är ingen händelse.
+#   - ruttnamn: route(..), rutt, route, eller namn i ruttabellen.
+#   - `_at`:    `y` slutar på `_at` - en tidsstämpel, aldrig ett particip.
+#   - kolumn:   kolumn, column, migration, tabell, table på raden (ordgräns).
+#   - nekande:  "inte en notistyp", "not a notification", "ingen ny notis".
+#   - sökväg:   `/` direkt före eller efter namnet, eller en filändelse efter.
+# Regel 3 gäller över alla: `agent.deleted` (#1422) och `versioning.skipped`
+# (#1448) ger fortfarande rader (fixtures/issue-1393.md, issue-1405.md).
 FELKODSRAD = re.compile(r"\"code\"|felkod|error code|\bcode\b", re.IGNORECASE)
 RUTTNAMNSRAD = re.compile(r"route\(|\brutt|\broute", re.IGNORECASE)
-KOLUMNRAD = re.compile(r"\bkolumn|\bcolumn|\bmigration", re.IGNORECASE)
+KOLUMNRAD = re.compile(r"\bkolumn|\bcolumn|\bmigration|\btabell|\btable\b", re.IGNORECASE)
 # Issuen säger själv att det inte är en notistyp (issue 1582), eller använder
 # namnet som sista segment i en sökväg (`/help/context/container.sharing`).
-NEKARAD = re.compile(r"inte\s+(?:en\s+)?notistyp|not\s+(?:a\s+)?notification type", re.IGNORECASE)
+NEKARAD = re.compile(
+    r"inte\s+(?:en\s+)?notistyp|not\s+(?:a\s+)?notification|ingen\s+ny\s+notis",
+    re.IGNORECASE,
+)
+SOKVAGSFILANDELSER = "php|vue|md|js|json|yml|yaml"
 KALLKATALOGER = ("app", "routes", "database", "lang", "resources", "config")
 KALLANDELSER = (".php", ".js", ".ts", ".tsx", ".jsx", ".vue", ".json", ".css",
                 ".xml", ".yml", ".yaml", ".neon")
@@ -324,6 +338,13 @@ def kalltexten(rot: str = REPO_ROOT) -> str:
     return "\n".join(bitar)
 
 
+def _sokvagsled(namn: str, rad: str) -> bool:
+    """`x.y` ingår i en sökväg: `/` före eller efter, eller en filändelse efter."""
+    n = re.escape(namn)
+    return bool(re.search(rf"/{n}(?![\w.])|(?<![\w.]){n}/|(?<![\w.]){n}\.(?:{SOKVAGSFILANDELSER})\b", rad)
+                or re.search(rf"/{n}(?=[`'\s]|$)", rad))
+
+
 def _forklarad_av_sammanhang(namn: str, kropp: str, ruttnamn: set[str]) -> bool:
     """Sant när varje rad som nämner `namn` ger det en annan roll än notistyp."""
     # `user.totp_confirmed_at`: en tidsstämpelkolumn, aldrig en händelse (issue 1520).
@@ -332,7 +353,7 @@ def _forklarad_av_sammanhang(namn: str, kropp: str, ruttnamn: set[str]) -> bool:
     rader = [rad for rad in kropp.splitlines() if f"`{namn}`" in rad or f"'{namn}'" in rad]
     return bool(rader) and all(
         FELKODSRAD.search(rad) or RUTTNAMNSRAD.search(rad)
-        or KOLUMNRAD.search(rad) or NEKARAD.search(rad) or f"/{namn}`" in rad
+        or KOLUMNRAD.search(rad) or NEKARAD.search(rad) or _sokvagsled(namn, rad)
         for rad in rader
     )
 
