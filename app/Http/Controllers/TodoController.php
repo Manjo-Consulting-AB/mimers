@@ -161,7 +161,7 @@ class TodoController extends Controller
      * **Bara det som gäller skrivs ut.** *Active* är frånvaron av `list`, ett
      * filter som inte tillämpades är `null` i `filters`, och `due_asc` är
      * sorteringens förval — ingen av dem bär något i adressen. Regeln är
-     * `CostFilterBar`s och `Containers/Tasks.vue`s: en URL utan brus går att
+     * `TransactionFilterBar`s och `Containers/Tasks.vue`s: en URL utan brus går att
      * läsa och att dela.
      *
      * Parameternamnen kommer ur actionens konstanter, så den som skriver

@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
-use App\Support\Cost\CostReport;
+use App\Support\Transaction\CostReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -54,7 +54,7 @@ use Illuminate\Support\Facades\Gate;
  * beroende av vad samma PHP-process råkade ha löst upp tidigare.
  *
  * Ingen summeringslogik bor här ([[ADR-0024 Tunna controllers och
- * actions]]): App\Support\Cost\CostReport äger radmängden och räknar i
+ * actions]]): App\Support\Transaction\CostReport äger radmängden och räknar i
  * databasen. Kontrollern gör grindarna, löser upp omfånget och lämnar över.
  */
 class CostSummaryController extends Controller
@@ -68,7 +68,7 @@ class CostSummaryController extends Controller
      * Sedan issue 91 bär svaret också nedbrytningen: `breakdown` är en
      * tårtbit per item som BÄR kostnadsrader, och bitarna summerar exakt
      * till `totals` — båda ur samma Builder, se
-     * App\Support\Cost\CostReport::summarise(). Underträdet är hela
+     * App\Support\Transaction\CostReport::summarise(). Underträdet är hela
      * containern ([[ADR-0040 Underträdets summor]]), och den del av den
      * användaren når.
      */

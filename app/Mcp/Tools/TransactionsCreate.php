@@ -2,9 +2,9 @@
 
 namespace App\Mcp\Tools;
 
-use App\Actions\Cost\CreateCostEntry;
+use App\Actions\Transaction\CreateItemTransaction;
 use App\Models\Agent;
-use App\Models\CostEntry;
+use App\Models\ItemTransaction;
 use App\Rules\IsoCurrency;
 use App\Support\Access\AccessLevel;
 use App\Support\Agent\AgentGroup;
@@ -30,7 +30,7 @@ class TransactionsCreate extends WritesItems
      */
     public function actions(): array
     {
-        return [CreateCostEntry::class];
+        return [CreateItemTransaction::class];
     }
 
     public function schema(JsonSchema $schema): array
@@ -65,11 +65,11 @@ class TransactionsCreate extends WritesItems
             'counterparty' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $args['kind'] ??= CostEntry::KIND_EXPENSE;
+        $args['kind'] ??= ItemTransaction::KIND_EXPENSE;
 
         $this->guardCopy($agent, app(ItemAudience::class)->forItem($container, $item));
 
-        $cost = $this->writeAsAgent(fn () => app(CreateCostEntry::class)->handle(
+        $cost = $this->writeAsAgent(fn () => app(CreateItemTransaction::class)->handle(
             $container,
             $item,
             $args,

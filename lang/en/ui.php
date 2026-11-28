@@ -1286,9 +1286,9 @@ return [
         ],
 
         // The cost codes, see issue 168. They come from
-        // App\Support\Cost\MinorUnits as App\Exceptions\Api\ApiException and
+        // App\Support\Transaction\MinorUnits as App\Exceptions\Api\ApiException and
         // become a field error on `amount` in
-        // App\Http\Controllers\CostEntryController — never a raw JSON body in
+        // App\Http\Controllers\ItemTransactionController — never a raw JSON body in
         // the middle of a page (same rule as issue 54 decision 4).
         //
         // Two sentences and not one: the client cannot mark the right field or
@@ -3347,7 +3347,7 @@ return [
             // The donut panel's heading. It names the BREAKDOWN and not the
             // total, because the ring's own caption already says *Total* —
             // and the axis is the item and not the category
-            // ([[ADR-0040 Underträdets summor]]: `cost_entry` has no category
+            // ([[ADR-0040 Underträdets summor]]: `item_transaction` has no category
             // column, and the slices are the items that carry rows).
             'donut' => 'Expenses by item',
 
@@ -3388,7 +3388,7 @@ return [
              * this date* is answered as asked and never silently made into a
              * reversed, empty period.
              *
-             * `category` is the item's category — `cost_entry` has no category
+             * `category` is the item's category — `item_transaction` has no category
              * column ([[ADR-0040 Underträdets summor]]) — and `other` is the
              * bucket the engine returns with a null key for rows on items
              * without one. It is not a category in the container: it is the
@@ -4838,7 +4838,7 @@ return [
         // not colour the rest of the page.
         //
         // The four fields are the API's own: `amount` is a string in major
-        // units that App\Support\Cost\MinorUnits parses, `currency` is
+        // units that App\Support\Transaction\MinorUnits parses, `currency` is
         // pre-filled from the container and may be overridden
         // ([[ADR-0037 Valutans arv]]), `supplier` is free text with
         // autocomplete from the container's own values, and `incurred_on` is
@@ -4847,7 +4847,7 @@ return [
         // other ([[ADR-0016 Kostnadsregistrering]]).
         //
         // `destroy_confirm` says the row disappears and promises no restore:
-        // the deletion is soft, but the trash lists four types and `cost_entry`
+        // the deletion is soft, but the trash lists four types and `item_transaction`
         // is not one of them (issue 45a decision 9).
         'cost' => [
             // The tab's name since issue 1781 · [[ADR-0102 Transaktioner på
@@ -5391,7 +5391,7 @@ return [
         // ([[ADR-0038 Gränsen för Pro i kostnaderna]]). `month` therefore
         // states which period the numbers belong to. Since issue 474 the
         // dashboard's hero draws `hero.costs.month` instead; this string
-        // survives as `CostDonut`'s default label for a caller that does not
+        // survives as `TransactionDonut`'s default label for a caller that does not
         // pass one.
         //
         // There is no legend string: a slice is named by the container's own

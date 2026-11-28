@@ -4,10 +4,10 @@ use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerTemplate;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemFieldValue;
+use App\Models\ItemTransaction;
 use App\Models\ItemVersion;
 use App\Models\Loan;
 use App\Models\Schedule;
@@ -15,6 +15,7 @@ use App\Models\ScheduleOccurrence;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /*
  * Issue 1460 · Migreringen 2026_11_15_030000 fyller i `metadata_bytes` med
@@ -98,7 +99,7 @@ it('ifyllningen ger samma byte som förut för tabellerna som fanns 2026-11-15',
     Tag::factory()->for($container, 'container')->create(['name' => 'tag', 'billed_account_id' => $konto->id]);                // 3 + 256
     $schema = Schedule::factory()->for($item, 'item')->create(['title' => 'svc', 'notes' => 'note', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
     ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['completion_note' => 'done', 'billed_account_id' => $konto->id]);   // 4, utan påslag
-    CostEntry::factory()->for($item, 'item')->create(['description' => 'oil', 'counterparty' => 'shop', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
+    ItemTransaction::factory()->for($item, 'item')->create(['description' => 'oil', 'counterparty' => 'shop', 'billed_account_id' => $konto->id]); // 3 + 4 + 256
     Loan::factory()->for($item, 'item')->create(['borrower_name' => 'Ann', 'borrower_email' => 'ann@b.se', 'note' => 'x', 'billed_account_id' => $konto->id]); // 3 + 8 + 1 + 256
 
     // Tabeller som kom EFTER migreringen: de fanns inte när den skrevs och
@@ -119,10 +120,13 @@ it('ifyllningen ger samma byte som förut för tabellerna som fanns 2026-11-15',
         + (3 + 256)                  // tag
         + (3 + 4 + 256)              // schedule
         + 4                          // schedule_occurrence
-        + (3 + 4 + 256)              // cost_entry
+        + (3 + 4 + 256)              // item_transaction
         + (3 + 8 + 1 + 256);         // loan
 
+    // Den frysta ifyllningen talar om `cost_entry` (issue 1784).
+    Schema::rename('item_transaction', 'cost_entry');
     frystMigreringen()->backfillMetadataBytes();
+    Schema::rename('cost_entry', 'item_transaction');
 
     expect(frystByte($konto))->toBe($väntat);
 });
@@ -148,7 +152,10 @@ it('ifyllningen räknar ingen rad i tabellerna som kom efter migreringen', funct
     ]);
     ContainerTemplate::factory()->forAccount($ny)->create(['name' => 'mall', 'content' => []]);
 
+    // Den frysta ifyllningen talar om `cost_entry` (issue 1784).
+    Schema::rename('item_transaction', 'cost_entry');
     frystMigreringen()->backfillMetadataBytes();
+    Schema::rename('cost_entry', 'item_transaction');
 
     expect(DB::table('usage_counter')->where('account_id', $ny->id)->exists())->toBeFalse();
 });

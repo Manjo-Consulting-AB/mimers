@@ -14,7 +14,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ett filtrerat läge är en adress man kan spara, dela och backa ur med
  * webbläsarens bakåtknapp. Ingen POST och ingen egen filtrerad vy. Adressen
  * stavas ut — komponenten känner inte sin egen rutt, samma grepp som
- * `CostFilterBar`.
+ * `TransactionFilterBar`.
  *
  * **Fliken följer med, och markören nollställs** (Beslut 5). `list` läggs i
  * varje anrop, så ett filterbyte stannar i samma flik; markören (`after`/
@@ -35,7 +35,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * en väljare som inte gör något är värre än ingen väljare.
  *
  * **Containerväljaren ritas bara när det finns något att välja** (samma regel
- * som `CostFilterBar` § Ett fält utan alternativ): en meny med bara *All
+ * som `TransactionFilterBar` § Ett fält utan alternativ): en meny med bara *All
  * containers* är brus, och `containers` bär redan bara de containrar användaren
  * når och ser — inboxen är inte ett val (Beslut 1 och 5).
  *

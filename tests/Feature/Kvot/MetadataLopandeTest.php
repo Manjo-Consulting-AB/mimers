@@ -6,9 +6,6 @@ use App\Actions\Category\UpdateCategory;
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
 use App\Actions\Container\UpdateContainer;
-use App\Actions\Cost\CreateCostEntry;
-use App\Actions\Cost\DeleteCostEntry;
-use App\Actions\Cost\UpdateCostEntry;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\UpdateItem;
@@ -24,6 +21,9 @@ use App\Actions\Schedule\UpdateSchedule;
 use App\Actions\Tag\CreateTag;
 use App\Actions\Tag\DeleteTag;
 use App\Actions\Tag\UpdateTag;
+use App\Actions\Transaction\CreateItemTransaction;
+use App\Actions\Transaction\DeleteItemTransaction;
+use App\Actions\Transaction\UpdateItemTransaction;
 use App\Actions\Trash\EmptyTrash;
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
@@ -35,8 +35,8 @@ use App\Console\ReconcilesUsageCounters;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -314,25 +314,25 @@ it('en kostnadsrad följer skapa, ändra, släng, återställ och radera för go
     [$ägare, $ägarUser, $container, $item] = löpandeMiljö();
     $bas = löpandeByte($ägare);
 
-    $kostnad = app(CreateCostEntry::class)->handle($container, $item, [
+    $kostnad = app(CreateItemTransaction::class)->handle($container, $item, [
         'incurred_on' => '2026-01-01', 'amount' => '10.00', 'description' => 'Olja',
     ], $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 4);
     löpandeStämmer($ägare);
 
-    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'Olja och filter', 'counterparty' => 'Åhlens'], $ägarUser);
+    app(UpdateItemTransaction::class)->handle($item, $kostnad, ['description' => 'Olja och filter', 'counterparty' => 'Åhlens'], $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 15 + 7);
     löpandeStämmer($ägare);
 
-    app(UpdateCostEntry::class)->handle($item, $kostnad, ['description' => 'O', 'counterparty' => null], $ägarUser);
+    app(UpdateItemTransaction::class)->handle($item, $kostnad, ['description' => 'O', 'counterparty' => null], $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 1);
     löpandeStämmer($ägare);
 
-    app(DeleteCostEntry::class)->handle($item, $kostnad, $ägarUser);
+    app(DeleteItemTransaction::class)->handle($item, $kostnad, $ägarUser);
     expect(löpandeByte($ägare))->toBe($bas + 256 + 1);
     löpandeStämmer($ägare);
 
-    CostEntry::withTrashed()->find($kostnad->id)->restore();
+    ItemTransaction::withTrashed()->find($kostnad->id)->restore();
     löpandeStämmer($ägare);
 
     app(PurgeContent::class)->item($item);
@@ -414,7 +414,7 @@ it('att radera ett item för gott minskar räknaren även för dess scheman, fö
     $schema = löpandeSchema($item, $ägare, 'Service');
     $förekomst = ScheduleOccurrence::factory()->for($schema, 'schedule')->create(['billed_account_id' => null]);
     app(CloseOccurrence::class)->handle($schema, $förekomst, $ägarUser, $ägare, ScheduleOccurrence::STATUS_COMPLETED, 'Klart');
-    app(CreateCostEntry::class)->handle($container, $item, [
+    app(CreateItemTransaction::class)->handle($container, $item, [
         'incurred_on' => '2026-01-01', 'amount' => '10.00', 'description' => 'Olja',
     ], $ägarUser);
     app(CreateLoan::class)->handle($item, $ägarUser, new Loan(['borrower_name' => 'Åsa', 'lent_at' => '2026-01-01']));
@@ -427,7 +427,7 @@ it('att radera ett item för gott minskar räknaren även för dess scheman, fö
     app(PurgeContent::class)->item(Item::withTrashed()->find($item->id));
 
     expect(löpandeByte($ägare))->toBe($bas);
-    expect(DB::table('schedule')->count() + DB::table('schedule_occurrence')->count() + DB::table('cost_entry')->count() + DB::table('loan')->count())->toBe(0);
+    expect(DB::table('schedule')->count() + DB::table('schedule_occurrence')->count() + DB::table('item_transaction')->count() + DB::table('loan')->count())->toBe(0);
     löpandeStämmer($ägare);
 });
 
@@ -438,7 +438,7 @@ it('att radera en container för gott minskar räknaren för varje betalare med 
 
     app(CreateCategory::class)->handle($container, 'Motor', null, null, $gästUser);
     app(CreateTag::class)->handle($container, 'röd', null, $gästUser);
-    app(CreateCostEntry::class)->handle($container, $item, [
+    app(CreateItemTransaction::class)->handle($container, $item, [
         'incurred_on' => '2026-01-01', 'amount' => '10.00', 'description' => 'Olja',
     ], $gästUser);
     app(CreateLoan::class)->handle($item, $gästUser, new Loan(['borrower_name' => 'Åsa', 'lent_at' => '2026-01-01']));

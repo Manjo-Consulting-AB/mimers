@@ -13,10 +13,10 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\LegalHold;
 use App\Models\Notification as NotificationModel;
 use App\Models\NotificationDelivery;
@@ -668,7 +668,7 @@ it('innehåll personen skapat i en annans container står kvar med författaren 
         'billed_account_id' => $personensKonto->id,
     ]);
 
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'container_id' => $container->id,
         'created_by_user_id' => $person->id,
         'created_by_account_id' => $personensKonto->id,

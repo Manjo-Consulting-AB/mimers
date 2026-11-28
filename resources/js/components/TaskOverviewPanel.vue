@@ -27,12 +27,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * som `todo.group.*`), aldrig en egen uppräkning här.
  *
  * **Summan i mitten är en ritregel, inte ett tal ur data.** Den räknas ur de
- * tal servern gav — samma grepp som CostDonut och ActivityTypeChart tar för
+ * tal servern gav — samma grepp som TransactionDonut och ActivityTypeChart tar för
  * ringens andelar — och den hade inte gått att få ur listan utan att bläddra.
  *
  * **Färgen är sex validerade steg, ett per grupp.** Designtokens i
  * resources/css/app.css bär roller och ingen kategorisk skala, så paletten
- * står här — samma värden och samma skäl som CostDonut.vue och
+ * står här — samma värden och samma skäl som TransactionDonut.vue och
  * ActivityTypeChart.vue. Legenden bär identiteten: namn och tal står som text
  * för varje rad, så ingen läsare behöver skilja två nyanser åt. *Done* får
  * den neutrala grå, för den är utanför ringen.

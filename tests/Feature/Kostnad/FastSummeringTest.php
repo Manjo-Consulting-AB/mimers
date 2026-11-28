@@ -3,14 +3,14 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Support\Access\ItemScope;
-use App\Support\Cost\CostReport;
+use App\Support\Transaction\CostReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -49,9 +49,9 @@ function summaItem(Container $container, Account $account, User $user, string $n
 /**
  * En kostnadsrad direkt på itemet, med samma skapare som itemet.
  */
-function summaKostnad(Item $item, array $attribut = []): CostEntry
+function summaKostnad(Item $item, array $attribut = []): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(array_merge([
+    return ItemTransaction::factory()->for($item, 'item')->create(array_merge([
         'created_by_user_id' => $item->created_by_user_id,
         'created_by_account_id' => $item->created_by_account_id,
     ], $attribut));
@@ -374,7 +374,7 @@ it('kontosummeringen löser upp omfånget en gång per request — konstant anta
 /*
  * ---------------------------------------------------------------------------
  * Issue 175 · *I år* — den tredje fasta perioden, se
- * App\Support\Cost\CostReport::yearForContainer(), resources/js/pages/
+ * App\Support\Transaction\CostReport::yearForContainer(), resources/js/pages/
  * Containers/Costs.vue och [[ADR-0050 Desktopdesignen]] § 9.
  *
  * **Perioden är fast och därför fri** ([[ADR-0038 Gränsen för Pro i

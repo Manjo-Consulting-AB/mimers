@@ -200,7 +200,7 @@ class Container extends Model
      * billigare än att varje anropare själv ska komma ihåg `with('account')`.
      *
      * Ändras containerns eller kontots valuta ändras svaret härifrån, men
-     * aldrig en redan skriven `cost_entry`-rad: det som står i en rad är vad
+     * aldrig en redan skriven `item_transaction`-rad: det som står i en rad är vad
      * som betalades ([[ADR-0037 Valutans arv]] § Beslut).
      */
     public function effectiveCurrency(): string

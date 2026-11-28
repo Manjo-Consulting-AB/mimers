@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Support\Cost;
+namespace App\Support\Transaction;
 
 use App\Exceptions\Api\ApiException;
 
 /**
  * Tolkar ett belopp som en användare skrivit i HUVUDENHET — en sträng som
- * "1200,50" — till heltalet i MINSTA enhet (120050) som cost_entry.amount
+ * "1200,50" — till heltalet i MINSTA enhet (120050) som item_transaction.amount
  * lagrar, se issue 45a § Beslut 4 och [[ADR-0016 Kostnadsregistrering]].
  *
  * Hela poängen med klassen är att omvandlingen aldrig förlorar ett öre:

@@ -3,9 +3,9 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
@@ -80,13 +80,13 @@ function strukturkostnadKant(Item $fran, Item $till, string $relation = 'parent'
 
 /**
  * En kostnadsrad på itemet. Varje fält kan överstyras — beloppet är heltalet
- * i minsta enhet, som CostEntryResource bär det.
+ * i minsta enhet, som ItemTransactionResource bär det.
  *
  * @param  array<string, mixed>  $attribut
  */
-function strukturkostnadRad(Item $item, array $attribut = []): CostEntry
+function strukturkostnadRad(Item $item, array $attribut = []): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(array_merge([
+    return ItemTransaction::factory()->for($item, 'item')->create(array_merge([
         'incurred_on' => '2026-04-12',
         'amount' => 100000,
         'currency' => 'SEK',
@@ -160,7 +160,7 @@ it('ger ättlingarnas kostnader när växeln är på', function () {
 
     $barnetsRad = $rader->firstWhere('ulid', $barnets->ulid);
 
-    // Formen är CostEntryResource plus `item` och radens `can` — samma grepp
+    // Formen är ItemTransactionResource plus `item` och radens `can` — samma grepp
     // som `descendantAttachments` (issue 1247).
     expect($barnetsRad['item'])->toBe(['ulid' => $impellern->ulid, 'name' => 'Impellern'])
         ->and($barnetsRad['amount'])->toBe(50000)
@@ -363,7 +363,7 @@ it('postar formuläret för en ny kostnad till itemet man står på', function (
         ])
         ->assertRedirect(strukturkostnadUrl($container, $motorn, 'tab=costs'));
 
-    $kostnad = CostEntry::query()->where('description', 'Nytt inköp')->firstOrFail();
+    $kostnad = ItemTransaction::query()->where('description', 'Nytt inköp')->firstOrFail();
 
     expect($kostnad->item_id)->toBe($motorn->id);
 

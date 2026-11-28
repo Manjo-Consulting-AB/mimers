@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Actions\Cost;
+namespace App\Actions\Transaction;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
-use App\Support\Cost\MinorUnits;
+use App\Support\Transaction\MinorUnits;
 use App\Support\Usage\MetadataLedger;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  *
  * **Beloppet tolkas här.** Det som kommer in är en sträng i huvudenhet
  * ("1200,50") och det som lagras är heltalet i minsta enhet (120050) från
- * App\Support\Cost\MinorUnits::parse() — som kastar
+ * App\Support\Transaction\MinorUnits::parse() — som kastar
  * `cost.amount_invalid`/`cost.amount_decimals` innan en rad skapas
  * ([[ADR-0016 Kostnadsregistrering]]).
  *
@@ -46,7 +46,7 @@ use Illuminate\Support\Facades\DB;
  * utanför kunde överleva ett rollback och beskriva en kostnad som inte
  * finns.
  */
-class CreateCostEntry
+class CreateItemTransaction
 {
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 
@@ -56,12 +56,12 @@ class CreateCostEntry
      *                       `created_by_user_id` och `user_id` på loggraden.
      *                       Behörigheten är redan prövad.
      */
-    public function handle(Container $container, Item $item, array $data, User $actor): CostEntry
+    public function handle(Container $container, Item $item, array $data, User $actor): ItemTransaction
     {
         // `??=` och inte en `if`: en nyckel som saknas OCH en nyckel som kom
         // in som `null` (tom ruta, ConvertEmptyStringsToNull) betyder samma
         // sak — containern föreslår. Se klassdokumentationen i
-        // StoreCostEntryRequest.
+        // StoreItemTransactionRequest.
         $data['currency'] ??= $container->effectiveCurrency();
 
         // Containerns urval av valutor (issue 1254 · [[ADR-0078 Valutor ur
@@ -74,12 +74,12 @@ class CreateCostEntry
 
         // Riktningen: saknas den, eller kom den som `null`, är raden en
         // utgift (ADR-0102).
-        $data['kind'] ??= CostEntry::KIND_EXPENSE;
+        $data['kind'] ??= ItemTransaction::KIND_EXPENSE;
 
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
         unset($data['amount']);
 
-        $cost = new CostEntry($data);
+        $cost = new ItemTransaction($data);
         $cost->amount = $amount;
         $cost->item_id = $item->id;
         $cost->container_id = $item->container_id;

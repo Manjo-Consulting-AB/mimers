@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Cost;
+namespace App\Http\Requests\Transaction;
 
 use App\Rules\IsoCurrency;
 use Illuminate\Foundation\Http\FormRequest;
@@ -12,7 +12,7 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * `amount` är en STRÄNG i huvudenhet och valideras bara som `present|string`
  * här — själva formen (komma eller punkt, decimalgräns, BIGINT-gräns) tolkas
- * av App\Support\Cost\MinorUnits i kontrollern och kastas som
+ * av App\Support\Transaction\MinorUnits i kontrollern och kastas som
  * `cost.amount_invalid`/`cost.amount_decimals`, inte som validation.failed
  * (§ Beslut 5). `present` i stället för `required`: en tom sträng ska nå
  * MinorUnits och bli `cost.amount_invalid` (Klart när), medan ett helt
@@ -35,7 +35,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * versaler och `supplier` trimmas i prepareForValidation() (§ Beslut 11); en
  * leverantör som bara består av blanktecken blir `null`, inte en tom sträng.
  */
-class StoreCostEntryRequest extends FormRequest
+class StoreItemTransactionRequest extends FormRequest
 {
     public function authorize(): bool
     {

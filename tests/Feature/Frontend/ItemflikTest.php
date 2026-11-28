@@ -342,7 +342,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
  * Klart när: "fliken Kostnader finns i itemets flikrad".
  *
  * Fliken är bildens *Kostnader* och kom med issue 168, när ytan den visar
- * byggdes — den rad issue 102 lämnade utanför därför att `cost_entry` bara
+ * byggdes — den rad issue 102 lämnade utanför därför att `item_transaction` bara
  * nåddes genom `/api`. Den ligger näst sist, före historiken, precis som i
  * containerns egen flikrad ([[ADR-0050 Desktopdesignen]] § 4), och den bär
  * sitt eget ord: etiketten är `item.cost.heading`, samma rubrik som sektionen

@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Cost\CreateCostEntry;
-use App\Actions\Cost\DeleteCostEntry;
-use App\Actions\Cost\UpdateCostEntry;
+use App\Actions\Transaction\CreateItemTransaction;
+use App\Actions\Transaction\DeleteItemTransaction;
+use App\Actions\Transaction\UpdateItemTransaction;
 use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
-use App\Http\Requests\Cost\StoreCostEntryRequest;
-use App\Http\Requests\Cost\UpdateCostEntryRequest;
+use App\Http\Requests\Transaction\StoreItemTransactionRequest;
+use App\Http\Requests\Transaction\UpdateItemTransactionRequest;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Usage\Features;
 use Illuminate\Http\RedirectResponse;
@@ -38,11 +38,11 @@ use Illuminate\Validation\ValidationException;
  * som bara har `read` ser raderna men ingen skrivyta och får 403 om hon
  * postar ändå.
  *
- * **Ingen ny FormRequest.** `StoreCostEntryRequest` och
- * `UpdateCostEntryRequest` delas rakt av — formen, valutanormaliseringen och
+ * **Ingen ny FormRequest.** `StoreItemTransactionRequest` och
+ * `UpdateItemTransactionRequest` delas rakt av — formen, valutanormaliseringen och
  * trimningen av leverantören är desamma i vyn som på `/api`.
  *
- * **Logiken bor i App\Actions\Cost** sedan issue 168: kontrollern prövar
+ * **Logiken bor i App\Actions\Transaction** sedan issue 168: kontrollern prövar
  * grinden, översätter ett domänfel och svarar. Att raden och händelseloggen
  * skrivs i samma transaktion är actionens sak, och den är prövad i
  * tests/Feature/Kostnad/KostnadsactionTest.php.
@@ -59,27 +59,27 @@ use Illuminate\Validation\ValidationException;
  * landade på översikten hade tappat läsarens plats. Flash-koden är `status`
  * och ingenting annat, mönstret från issue 51 § Beslut 5.
  */
-class CostEntryController extends Controller
+class ItemTransactionController extends Controller
 {
     /**
      * POST /containers/{container}/items/{item}/costs — 302 till itemvyns
      * kostnadsflik.
      *
-     * `{cost}` finns inte i rutten: raden skapas här. `item_id` och
+     * `{transaction}` finns inte i rutten: raden skapas här. `item_id` och
      * `container_id` sätts av actionen ur itemet och aldrig via
      * massilldelning, samma regel som på `/api`.
      */
     public function store(
-        StoreCostEntryRequest $request,
+        StoreItemTransactionRequest $request,
         Container $container,
         Item $item,
         ApiErrorTranslator $translator,
-        CreateCostEntry $createCostEntry,
+        CreateItemTransaction $createItemTransaction,
     ): RedirectResponse {
         Gate::authorize('create', $item);
 
         try {
-            $cost = $createCostEntry->handle($container, $item, Arr::except($request->validated(), 'return'), $request->user());
+            $cost = $createItemTransaction->handle($container, $item, Arr::except($request->validated(), 'return'), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 $this->fieldFor($e) => $translator->message($e),
@@ -105,11 +105,11 @@ class CostEntryController extends Controller
     }
 
     /**
-     * PATCH /containers/{container}/items/{item}/costs/{cost} — 302 till
+     * PATCH /containers/{container}/items/{item}/costs/{transaction} — 302 till
      * itemvyns kostnadsflik.
      *
      * `amount` och `currency` kommer alltid tillsammans:
-     * UpdateCostEntryRequest kräver paret med `required_with` åt båda
+     * UpdateItemTransactionRequest kräver paret med `required_with` åt båda
      * hållen, så formuläret skickar båda så snart någon av dem rörs.
      *
      * **Formuläret skickar bara de fält som ändrats** (ItemCostSection.vue,
@@ -124,17 +124,17 @@ class CostEntryController extends Controller
      * i actionen.
      */
     public function update(
-        UpdateCostEntryRequest $request,
+        UpdateItemTransactionRequest $request,
         Container $container,
         Item $item,
-        CostEntry $cost,
+        ItemTransaction $transaction,
         ApiErrorTranslator $translator,
-        UpdateCostEntry $updateCostEntry,
+        UpdateItemTransaction $updateItemTransaction,
     ): RedirectResponse {
         Gate::authorize('update', $item);
 
         try {
-            $updateCostEntry->handle($item, $cost, $request->validated(), $request->user());
+            $updateItemTransaction->handle($item, $transaction, $request->validated(), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 $this->fieldFor($e) => $translator->message($e),
@@ -147,7 +147,7 @@ class CostEntryController extends Controller
     }
 
     /**
-     * DELETE /containers/{container}/items/{item}/costs/{cost} — 302 till
+     * DELETE /containers/{container}/items/{item}/costs/{transaction} — 302 till
      * itemvyns kostnadsflik.
      *
      * Grinden är ITEMETS `delete`: `write` ändrar en rad men tar inte bort
@@ -159,12 +159,12 @@ class CostEntryController extends Controller
         Request $request,
         Container $container,
         Item $item,
-        CostEntry $cost,
-        DeleteCostEntry $deleteCostEntry,
+        ItemTransaction $transaction,
+        DeleteItemTransaction $deleteItemTransaction,
     ): RedirectResponse {
         Gate::authorize('delete', $item);
 
-        $deleteCostEntry->handle($item, $cost, $request->user());
+        $deleteItemTransaction->handle($item, $transaction, $request->user());
 
         return redirect()
             ->route('containers.items.show', [$container, $item, 'tab' => 'costs'])
@@ -179,7 +179,7 @@ class CostEntryController extends Controller
      * valutafältet och inte beloppet. Alla andra domänfel här gäller
      * beloppet (`cost.amount_invalid`, `cost.amount_decimals`), som förut.
      * Att välja fält i kontrollern och inte i actionen håller
-     * App\Actions\Cost fri från webbens fältnamn: `/api` svarar med koden,
+     * App\Actions\Transaction fri från webbens fältnamn: `/api` svarar med koden,
      * webben med ett fältfel.
      */
     private function fieldFor(ApiException $e): string

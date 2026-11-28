@@ -3,8 +3,8 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia;
 
@@ -13,7 +13,7 @@ use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 369 · M56 — kostnadsformuläret får en returadress. Se
- * App\Http\Controllers\CostEntryController::store() och
+ * App\Http\Controllers\ItemTransactionController::store() och
  * App\Http\Controllers\ContainerCostController, samt
  * App\Http\Controllers\TaskCreateController::safeReturn().
  */
@@ -64,7 +64,7 @@ it('landar på en godkänd return med status och created_cost', function () {
         kostnadReturKropp(['return' => $mal]),
     );
 
-    $rad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    $rad = ItemTransaction::query()->where('item_id', $item->id)->firstOrFail();
 
     $svar->assertRedirect($mal)
         ->assertSessionHas('status', 'cost-created')
@@ -88,7 +88,7 @@ it('faller tillbaka på itemets kostnadsflik för en extern return', function ()
         ->assertSessionHas('status', 'cost-created');
 
     expect(session('created_cost'))->toBeNull();
-    expect(CostEntry::query()->where('item_id', $item->id)->count())->toBe(1);
+    expect(ItemTransaction::query()->where('item_id', $item->id)->count())->toBe(1);
 });
 
 // vakt: svaret utan return är oförändrat.
@@ -127,7 +127,7 @@ it('nekar en läsare med och utan return och lämnar valideringen oförändrad',
         ->post(kostnadReturUrl($container, $item), kostnadReturKropp(['return' => "/containers/{$container->ulid}/costs"]))
         ->assertForbidden();
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 });
 
 // vakt: valideringen är oförändrad; en return ändrar inte 422-fallet.
@@ -144,7 +144,7 @@ it('ger containerns flik costDefaults, optional costSuppliers och createdCost', 
     withoutVite();
 
     [, $anvandare, $container, $item] = kostnadReturKontext();
-    CostEntry::factory()->for($item, 'item')->create([
+    ItemTransaction::factory()->for($item, 'item')->create([
         'counterparty' => 'Båtmäklarn',
         'created_by_account_id' => $container->account_id,
     ]);
@@ -175,8 +175,8 @@ it('bär ULID:en ur flashen created_cost till createdCost', function () {
             ->where('createdCost', '01HZZZZZZZZZZZZZZZZZZZZZZZ'));
 });
 
-it('ritar CostEntryForm med avstängd Save utan item', function () {
-    $kod = (string) file_get_contents(resource_path('js/components/CostEntryForm.vue'));
+it('ritar TransactionForm med avstängd Save utan item', function () {
+    $kod = (string) file_get_contents(resource_path('js/components/TransactionForm.vue'));
     $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
     $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
 
@@ -190,6 +190,6 @@ it('ritar CostEntryForm med avstängd Save utan item', function () {
 
     $sektion = (string) file_get_contents(resource_path('js/components/ItemCostSection.vue'));
 
-    expect($sektion)->toContain('<CostEntryForm');
+    expect($sektion)->toContain('<TransactionForm');
     expect($sektion)->not->toContain('return-to');
 });

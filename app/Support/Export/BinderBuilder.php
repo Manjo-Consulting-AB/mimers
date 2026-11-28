@@ -9,13 +9,13 @@ use App\Actions\Item\RenderItemNotes;
 use App\Actions\Item\ResolveItemCover;
 use App\Models\Attachment;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Support\Access\ItemScope;
-use App\Support\Cost\MinorUnits;
 use App\Support\Notification\LocaleResolver;
+use App\Support\Transaction\MinorUnits;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -408,7 +408,7 @@ class BinderBuilder
         }
 
         if (in_array('costs', $sections, true)) {
-            $with['costs'] = fn ($q) => $q->orderBy('incurred_on')->orderBy('id');
+            $with['transactions'] = fn ($q) => $q->orderBy('incurred_on')->orderBy('id');
         }
 
         $item->load($with);
@@ -437,8 +437,8 @@ class BinderBuilder
             $expenses = [];
             $incomes = [];
 
-            foreach ($item->costs as $cost) {
-                if ($cost->kind === CostEntry::KIND_INCOME) {
+            foreach ($item->transactions as $cost) {
+                if ($cost->kind === ItemTransaction::KIND_INCOME) {
                     $incomes[$cost->currency] = ($incomes[$cost->currency] ?? 0) + (int) $cost->amount;
                 } else {
                     $expenses[$cost->currency] = ($expenses[$cost->currency] ?? 0) + (int) $cost->amount;
@@ -467,9 +467,9 @@ class BinderBuilder
             }
 
             $costs = [
-                'rows' => $item->costs->map(fn ($c): array => [
+                'rows' => $item->transactions->map(fn ($c): array => [
                     'date' => $c->incurred_on->toDateString(),
-                    'kind' => $c->kind === CostEntry::KIND_INCOME ? 'income' : 'expense',
+                    'kind' => $c->kind === ItemTransaction::KIND_INCOME ? 'income' : 'expense',
                     'description' => $c->description,
                     'supplier' => $c->counterparty,
                     'quantity' => $c->quantity === null ? null : rtrim(rtrim((string) $c->quantity, '0'), '.'),

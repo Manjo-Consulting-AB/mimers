@@ -5,8 +5,8 @@ use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -19,12 +19,12 @@ use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 168 · Kostnadsraderna i webben — itemets kostnadsflik. Se
- * app/Http/Controllers/CostEntryController.php, app/Actions/Cost/*,
+ * app/Http/Controllers/ItemTransactionController.php, app/Actions/Cost/*,
  * resources/js/components/ItemCostSection.vue, [[ADR-0050 Desktopdesignen]]
  * § 8, [[ADR-0016 Kostnadsregistrering]] och [[ADR-0037 Valutans arv]].
  *
  * **Ytan är webben, och logiken är API:ets.** Rader, valutaarv, beloppstolkning
- * och leverantörsuppslag bor i App\Actions\Cost sedan issue 168, och provet
+ * och leverantörsuppslag bor i App\Actions\Transaction sedan issue 168, och provet
  * här prövar den väg en webbläsare tar: formuläret, omdirigeringen och
  * fältfelet. Att `/api` beter sig oförändrat prövas av KostnadCrudTest och
  * LeverantorTest — de filerna är orörda av issuen och körs som de är.
@@ -90,15 +90,15 @@ function kostnadsvyMottagare(Container $container, Item $item, string $niva): ar
  *
  * @param  array<string, mixed>  $attribut
  */
-function kostnadsvyRad(Item $item, array $attribut = []): CostEntry
+function kostnadsvyRad(Item $item, array $attribut = []): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(array_merge([
+    return ItemTransaction::factory()->for($item, 'item')->create(array_merge([
         'incurred_on' => '2026-04-12',
         'amount' => 120050,
         'currency' => 'SEK',
         'description' => 'Impeller',
         'counterparty' => null,
-        // Raden tillskrivs containerns ägarkonto — formen `CostEntryResource`
+        // Raden tillskrivs containerns ägarkonto — formen `ItemTransactionResource`
         // bär kontots ULID med, och den som skapade raden för hand i provet är
         // ägarkontots medlem.
         'created_by_account_id' => $item->container->account_id,
@@ -135,9 +135,9 @@ function kostnadsvyKropp(array $overrides = []): array
 function kostnadsvyKomponent(): string
 {
     // Sektionen och formuläret som sektionen ritar (issue 369: formuläret bor i
-    // CostEntryForm.vue). Provens mönster söker i båda.
+    // TransactionForm.vue). Provens mönster söker i båda.
     $kod = File::get(resource_path('js/components/ItemCostSection.vue'))
-        .File::get(resource_path('js/components/CostEntryForm.vue'));
+        .File::get(resource_path('js/components/TransactionForm.vue'));
     $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
     $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
 
@@ -189,7 +189,7 @@ it('bär itemets kostnadsrader nyast först', function () {
             ->where('costs.0.ulid', $senast->ulid)
             ->where('costs.1.ulid', $forst->ulid)
             ->where('costs.2.ulid', $aldst->ulid)
-            // Formen är CostEntryResource, samma som `/api` svarar med:
+            // Formen är ItemTransactionResource, samma som `/api` svarar med:
             // beloppet är heltalet i minsta enhet och kontot följer med.
             ->where('costs.0.amount', 120050)
             ->where('costs.0.currency', 'SEK')
@@ -232,7 +232,7 @@ it('lägger till en kostnad från webben och stannar på fliken', function () {
     $svar->assertRedirect(kostnadsvyUrl($container, $item).'?tab=costs');
     $svar->assertSessionHas('status', 'cost-created');
 
-    $kostnad = CostEntry::query()->firstOrFail();
+    $kostnad = ItemTransaction::query()->firstOrFail();
 
     expect($kostnad->item_id)->toBe($item->id);
     expect($kostnad->container_id)->toBe($container->id);
@@ -256,13 +256,13 @@ it('ger en kostnad utan valuta containerns valuta', function () {
 
     // Fältet är förifyllt, men en klient som skickar tomt ska få samma svar
     // som den som skickar containerns värde: arvet ligger i
-    // App\Actions\Cost\CreateCostEntry, och tomt betyder "containern
+    // App\Actions\Transaction\CreateItemTransaction, och tomt betyder "containern
     // föreslår" ([[ADR-0037 Valutans arv]]).
     actingAs($anvandare)
         ->post(kostnadsvyUrl($container, $item).'/costs', kostnadsvyKropp(['currency' => '']))
         ->assertRedirect();
 
-    expect(CostEntry::query()->firstOrFail()->currency)->toBe('NOK');
+    expect(ItemTransaction::query()->firstOrFail()->currency)->toBe('NOK');
 });
 
 it('låter en vald valuta vinna över arvet', function () {
@@ -276,7 +276,7 @@ it('låter en vald valuta vinna över arvet', function () {
 
     // Värdet sparas ordagrant, versalnormaliserat av den delade requesten —
     // arvet är ett förslag, aldrig ett tvång.
-    expect(CostEntry::query()->firstOrFail()->currency)->toBe('USD');
+    expect(ItemTransaction::query()->firstOrFail()->currency)->toBe('USD');
 });
 
 it('sparar ett negativt belopp', function () {
@@ -294,7 +294,7 @@ it('sparar ett negativt belopp', function () {
         ]))
         ->assertRedirect();
 
-    expect(CostEntry::query()->firstOrFail()->amount)->toBe(-120050);
+    expect(ItemTransaction::query()->firstOrFail()->amount)->toBe(-120050);
 });
 
 it('gör ett ogiltigt belopp till ett fältfel och inte en JSON-kropp', function () {
@@ -317,7 +317,7 @@ it('gör ett ogiltigt belopp till ett fältfel och inte en JSON-kropp', function
     $mening = session('errors')->get('amount')[0];
 
     expect($mening)->toBe(Lang::get('ui.error.cost.amount_invalid', [], 'en'));
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 });
 
 it('ändrar en kostnad från webben', function () {
@@ -410,7 +410,7 @@ it('tar bort en kostnad från webben', function () {
     // Mjuk radering: raden ligger kvar med `deleted_at` satt och hamnar inte i
     // papperskorgen — den listar fyra typer och behåller fyra (Beslut 2).
     expect($kostnad->fresh()->deleted_at)->not->toBeNull();
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 
     actingAs($anvandare)->get(kostnadsvyUrl($container, $item))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->has('costs', 0),
@@ -527,7 +527,7 @@ it('visar raderna för en läsare men nekar alla tre skrivningarna', function ()
         ->post(kostnadsvyUrl($container, $item).'/costs', kostnadsvyKropp())
         ->assertForbidden();
 
-    $kostnad = CostEntry::query()->firstOrFail();
+    $kostnad = ItemTransaction::query()->firstOrFail();
 
     actingAs($lasare)
         ->patch(kostnadsvyUrl($container, $item)."/costs/{$kostnad->ulid}", ['description' => 'Något annat'])
@@ -537,7 +537,7 @@ it('visar raderna för en läsare men nekar alla tre skrivningarna', function ()
         ->delete(kostnadsvyUrl($container, $item)."/costs/{$kostnad->ulid}")
         ->assertForbidden();
 
-    expect(CostEntry::query()->count())->toBe(1);
+    expect(ItemTransaction::query()->count())->toBe(1);
     expect($kostnad->fresh()->deleted_at)->toBeNull();
 
     actingAs($lasare)->get(kostnadsvyUrl($container, $item))->assertOk()->assertInertia(
@@ -635,7 +635,7 @@ it('kallar itemets flik Finances och låter ?tab=costs öppna den', function () 
 });
 
 it('skickar kind=expense som förval och kind=income när Income är valt', function () {
-    $form = finansKalla('CostEntryForm.vue');
+    $form = finansKalla('TransactionForm.vue');
 
     expect($form)
         ->toContain("kind: 'expense'")
@@ -647,7 +647,7 @@ it('skickar kind=expense som förval och kind=income när Income är valt', func
 });
 
 it('låter motpartens etikett följa riktningen och skickar kind i uppslaget', function () {
-    $form = finansKalla('CostEntryForm.vue');
+    $form = finansKalla('TransactionForm.vue');
 
     expect($form)
         ->toContain("'item.cost.form_received_from' : 'item.cost.form_paid_to'")
@@ -677,8 +677,8 @@ it('föreslår bara motparter med samma riktning som uppslaget ber om', function
 });
 
 it('visar antal × styckpris och märker intäkter med ett plus och text', function () {
-    $donut = File::get(resource_path('js/components/CostDonut.vue'));
-    $tabell = finansKalla('CostTable.vue');
+    $donut = File::get(resource_path('js/components/TransactionDonut.vue'));
+    $tabell = finansKalla('TransactionTable.vue');
     $sektion = finansKalla('ItemCostSection.vue');
 
     expect($donut)->toContain('Math.round(Math.abs(amount) / count)');
@@ -706,7 +706,7 @@ it('visar en total utan intäkter och utgifter, intäkter och netto med dem', fu
 });
 
 it('håller segmentvalet och fälten på minst 44 px och utan vågrät rullning', function () {
-    $form = finansKalla('CostEntryForm.vue');
+    $form = finansKalla('TransactionForm.vue');
 
     expect($form)->toContain('min-h-11')->toContain('grid-cols-2');
     expect(str_contains($form, 'overflow-x'))->toBeFalse();

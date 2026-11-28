@@ -13,7 +13,7 @@
  * byggs i JavaScript — den hade varit en andra sanning om vad en krona är.
  *
  * `Intl` kastar på en kod den inte känner igen, och `currency` valideras som
- * tre bokstäver och inget annat (StoreCostEntryRequest), så en okänd kod är
+ * tre bokstäver och inget annat (StoreItemTransactionRequest), så en okänd kod är
  * möjlig i databasen. Då visas talet med två decimaler i stället för att
  * kasta: en felaktig decimal är ett mindre fel än en startsida som inte
  * ritas alls.
@@ -78,7 +78,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ligger bakom.
  *
  * **Komponenten räknar ingenting.** Talen kommer färdigsummerade ur
- * App\Support\Cost\CostReport::monthForContainers() — både ringens total och
+ * App\Support\Transaction\CostReport::monthForContainers() — både ringens total och
  * bitarnas belopp — och den här filen summerar dem inte, den fördelar dem
  * över cirkeln. Det enda som beräknas här är andelen av ringen, och den är
  * en ritregel och inte en summa.

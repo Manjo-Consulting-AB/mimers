@@ -6,9 +6,9 @@ use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\ImageDerivative;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -150,9 +150,9 @@ function oversiktUppgift(Item $item, string $due, string $titel): ScheduleOccurr
 /**
  * En kostnadsrad på itemet, med känt belopp och valuta.
  */
-function oversiktKostnad(Item $item, int $belopp, string $valuta = 'SEK', ?string $datum = null): CostEntry
+function oversiktKostnad(Item $item, int $belopp, string $valuta = 'SEK', ?string $datum = null): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create([
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum ?? oversiktDatum(0),
@@ -411,7 +411,7 @@ it('visar inte en uppgift i en annan container', function () {
  * Den fasta summeringen har ingen period ([[ADR-0038 Gränsen för Pro i
  * kostnaderna]]): en rad från i fjol räknas som en rad från i dag, och det är
  * skillnaden mot dashboardens månadssumma. Nedbrytningen är items och inte
- * items i underträd — `cost_entry` bär sitt `item_id`, ogrupperat
+ * items i underträd — `item_transaction` bär sitt `item_id`, ogrupperat
  * ([[ADR-0040 Underträdets summor]] § Beslut, [[ADR-0041 Itemets vy]]
  * § Rättelsen).
  */
@@ -485,7 +485,7 @@ it('saknar kostnadspanelen när containern inte har några rader', function () {
 it('ger kostnadsdonuten länkar till itemen och till kostnadssidan', function () {
     $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
 
-    preg_match('/<CostDonut\b.*?\/>/s', $vy, $anrop);
+    preg_match('/<TransactionDonut\b.*?\/>/s', $vy, $anrop);
 
     expect($anrop)->not->toBeEmpty();
     expect($anrop[0])->toContain(':slice-href="costSliceHref"')
@@ -501,7 +501,7 @@ it('ger kostnadsdonuten länkar till itemen och till kostnadssidan', function ()
  * katalogen, och utan proppar ritas donuten som förut.
  */
 it('ritar legendlänken som en itemrad utan att ändra legendens storlek', function () {
-    $donut = File::get(resource_path('js/components/CostDonut.vue'));
+    $donut = File::get(resource_path('js/components/TransactionDonut.vue'));
 
     expect(Lang::get('ui.container.overview.costs_open', [], 'en'))->toBe('Open costs');
 
@@ -1012,8 +1012,8 @@ it('monterar panelerna i rutnätet över lg', function () {
         ->toContain('<ContainerTasksPanel v-if="panel.key === \'tasks\'" :tasks="props.tasks" />')
         ->toContain('import ContainerDetailsPanel from')
         ->toContain('<ContainerDetailsPanel v-else-if="panel.key === \'details\'" :details="props.details" />')
-        ->toContain('import CostDonut')
-        ->toContain('<CostDonut')
+        ->toContain('import TransactionDonut')
+        ->toContain('<TransactionDonut')
         ->toContain('import HistoryRow from')
         ->toContain('v-for="event in props.events"')
         ->toContain('v-for="item in props.items"');

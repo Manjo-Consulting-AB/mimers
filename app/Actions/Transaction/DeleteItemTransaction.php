@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Actions\Cost;
+namespace App\Actions\Transaction;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Models\AuditLog;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\DB;
  * Behörigheten prövas av anroparen: itemets `delete`, en egen pinne — en
  * `write`-mottagare ändrar en kostnadsrad men tar inte bort den.
  */
-class DeleteCostEntry
+class DeleteItemTransaction
 {
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 
@@ -37,7 +37,7 @@ class DeleteCostEntry
      * @param  User  $actor  Den som raderar; blir `user_id` på loggraden.
      *                       Behörigheten är redan prövad.
      */
-    public function handle(Item $item, CostEntry $cost, User $actor): void
+    public function handle(Item $item, ItemTransaction $cost, User $actor): void
     {
         DB::transaction(function () use ($cost, $item, $actor): void {
             $meta = ['amount' => $cost->amount, 'currency' => $cost->currency, 'kind' => $cost->kind, 'quantity' => $cost->quantity];

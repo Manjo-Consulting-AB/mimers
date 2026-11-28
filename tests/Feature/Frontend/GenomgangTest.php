@@ -393,7 +393,7 @@ it('ger varje knapp och länk i en radlista en träffyta på minst 44 px', funct
     $undantagna = [
         // Legenden är en kompakt förklaring till ringen och ingen radlista, och
         // den behåller sin höjd enligt Tonys beslut 2026-11-12 (#1119).
-        'components/CostDonut.vue',
+        'components/TransactionDonut.vue',
     ];
 
     foreach (genomgangKod() as $sokvag => $kod) {

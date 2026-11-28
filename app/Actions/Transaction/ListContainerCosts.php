@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Actions\Cost;
+namespace App\Actions\Transaction;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Category\ResolveCategoryDescendants;
 use App\Models\Container;
-use App\Models\CostEntry;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -16,11 +16,11 @@ use Illuminate\Support\Facades\DB;
  * containerns kostnadsflik (issue 175 · [[ADR-0050 Desktopdesignen]] § 9).
  *
  * **Radmängden är rapportens, rad för rad** ([[ADR-0016 Kostnadsregistrering]]
- * § Vad som ingår): `cost_entry` i containern, mjukraderade rader bort, och
+ * § Vad som ingår): `item_transaction` i containern, mjukraderade rader bort, och
  * bara rader på LEVANDE items — en kostnad på ett raderat item är osynlig i
  * listning, sök och todo, och ska inte dyka upp i en tabell användaren inte
  * kan klicka sig fram till. Det är samma två `whereNull` som
- * App\Support\Cost\CostReport::rowSet() ställer, och av samma skäl: en
+ * App\Support\Transaction\CostReport::rowSet() ställer, och av samma skäl: en
  * tabell som visade fler rader än brickan ovanför räknar hade varit två svar
  * på frågan *vilka rader finns*.
  *
@@ -40,7 +40,7 @@ use Illuminate\Support\Facades\DB;
  * tabellen länkar varje rad till itemets kostnadsflik (issue 168) — och
  * itemet måste alltså läsas i båda fallen. Papperskorgen är den andra halvan
  * av samma join: `item.deleted_at IS NULL` filtrerar bort raderna på ett
- * raderat item, vilket ingen annan kolumn i `cost_entry` kan avgöra.
+ * raderat item, vilket ingen annan kolumn i `item_transaction` kan avgöra.
  *
  * **Ordningen är densamma som itemets kostnadsflik har** (issue 45a
  * § Beslut 7): `incurred_on` fallande med
@@ -54,7 +54,7 @@ use Illuminate\Support\Facades\DB;
  * är samma tal som bilden ritar i tabellen utan att räkna.
  *
  * **Raden är en array och inte en modell.** Formen är tabellens och inte
- * API:ets: `CostEntryResource` är `/api`s svar och bär varken itemets namn
+ * API:ets: `ItemTransactionResource` är `/api`s svar och bär varken itemets namn
  * eller dess ULID (den nästlade rutten vet redan vilket itemet är). Att lägga
  * ett `item`-fält i resursen hade varit att ändra API:ets kontrakt för en
  * webbvy, vilket [[ADR-0021 Frontendteknik]] lägger i kontrollern —
@@ -69,7 +69,7 @@ use Illuminate\Support\Facades\DB;
  * Kostnadsregistrering]] § Konsekvenser).
  *
  * **Sedan issue 176 följer tabellen Pro-filtret.** `$filters` är de fem
- * validerade parametrarna ur App\Http\Requests\Cost\ContainerCostFilterRequest
+ * validerade parametrarna ur App\Http\Requests\Transaction\ContainerCostFilterRequest
  * — `from`, `to`, `item`, `category` och `supplier` — och de tillämpas med
  * EXAKT samma betydelse som CostReport::baseQuery() ger dem, så att tabellen
  * och talen ovanför den svarar på samma fråga. Särskilt `category`: filtret
@@ -107,10 +107,10 @@ final class ListContainerCosts
      */
     public function handle(User $user, Container $container, array $filters = []): LengthAwarePaginator
     {
-        $query = DB::table('cost_entry')
-            ->join('item', 'item.id', '=', 'cost_entry.item_id')
-            ->where('cost_entry.container_id', $container->id)
-            ->whereNull('cost_entry.deleted_at')
+        $query = DB::table('item_transaction')
+            ->join('item', 'item.id', '=', 'item_transaction.item_id')
+            ->where('item_transaction.container_id', $container->id)
+            ->whereNull('item_transaction.deleted_at')
             ->whereNull('item.deleted_at');
 
         $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
@@ -122,25 +122,25 @@ final class ListContainerCosts
         $this->applyFilters($query, $container, $filters);
 
         // Riktningen (ADR-0102 § Riktning 5): utelämnad eller `all` är båda.
-        if (in_array($filters['kind'] ?? null, [CostEntry::KIND_EXPENSE, CostEntry::KIND_INCOME], true)) {
-            $query->where('cost_entry.kind', $filters['kind']);
+        if (in_array($filters['kind'] ?? null, [ItemTransaction::KIND_EXPENSE, ItemTransaction::KIND_INCOME], true)) {
+            $query->where('item_transaction.kind', $filters['kind']);
         }
 
         $sidor = $query
             ->select([
-                'cost_entry.ulid',
-                'cost_entry.incurred_on',
-                'cost_entry.description',
-                'cost_entry.counterparty',
-                'cost_entry.kind',
-                'cost_entry.quantity',
-                'cost_entry.amount',
-                'cost_entry.currency',
+                'item_transaction.ulid',
+                'item_transaction.incurred_on',
+                'item_transaction.description',
+                'item_transaction.counterparty',
+                'item_transaction.kind',
+                'item_transaction.quantity',
+                'item_transaction.amount',
+                'item_transaction.currency',
                 'item.ulid as item_ulid',
                 'item.name as item_name',
             ])
-            ->orderByDesc('cost_entry.incurred_on')
-            ->orderByDesc('cost_entry.id')
+            ->orderByDesc('item_transaction.incurred_on')
+            ->orderByDesc('item_transaction.id')
             ->paginate(self::PER_PAGE);
 
         // Raden byggs med uttryckliga omvandlingar: en `DB::table`-rad är
@@ -198,15 +198,15 @@ final class ListContainerCosts
         $counterparty = $filters['counterparty'] ?? $filters['supplier'] ?? null;
 
         if ($counterparty !== null) {
-            $query->where('cost_entry.counterparty', $counterparty);
+            $query->where('item_transaction.counterparty', $counterparty);
         }
 
         if (($filters['from'] ?? null) !== null) {
-            $query->whereDate('cost_entry.incurred_on', '>=', $filters['from']);
+            $query->whereDate('item_transaction.incurred_on', '>=', $filters['from']);
         }
 
         if (($filters['to'] ?? null) !== null) {
-            $query->whereDate('cost_entry.incurred_on', '<=', $filters['to']);
+            $query->whereDate('item_transaction.incurred_on', '<=', $filters['to']);
         }
     }
 }

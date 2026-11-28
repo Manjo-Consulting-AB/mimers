@@ -61,7 +61,7 @@ final class MetadataSize
         'item_field_value' => ['value_text'],
         'schedule' => ['title', 'notes'],
         'schedule_occurrence' => ['completion_note'],
-        'cost_entry' => ['description', 'counterparty'],
+        'item_transaction' => ['description', 'counterparty'],
         'loan' => ['borrower_name', 'borrower_email', 'note'],
     ];
 

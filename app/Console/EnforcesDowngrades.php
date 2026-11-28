@@ -345,7 +345,7 @@ class EnforcesDowngrades
 
         return $foreign('item', 'id')
             || $foreign('schedule')
-            || $foreign('cost_entry')
+            || $foreign('item_transaction')
             || $foreign('loan')
             || $foreign('attachment')
             || DB::table('schedule_occurrence')

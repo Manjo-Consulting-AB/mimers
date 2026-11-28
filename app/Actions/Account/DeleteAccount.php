@@ -535,7 +535,7 @@ class DeleteAccount
             ->where('created_by_account_id', $accountId)
             ->update(['created_by_account_id' => null, 'updated_at' => now()]);
 
-        DB::table('cost_entry')
+        DB::table('item_transaction')
             ->where('created_by_account_id', $accountId)
             ->update(['created_by_account_id' => null, 'updated_at' => now()]);
 

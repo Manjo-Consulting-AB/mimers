@@ -2,7 +2,7 @@
 
 namespace App\Http\Resources;
 
-use App\Models\CostEntry;
+use App\Models\ItemTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,9 +31,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * § Beslut 2) — samma regel som ItemResource: nyckeln står kvar med sitt
  * `null`, och resursen hittar inget namn.
  *
- * @mixin CostEntry
+ * @mixin ItemTransaction
  */
-class CostEntryResource extends JsonResource
+class ItemTransactionResource extends JsonResource
 {
     /**
      * @return array<string, mixed>

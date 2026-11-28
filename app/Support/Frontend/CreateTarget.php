@@ -44,7 +44,7 @@ use Illuminate\Contracts\Auth\Access\Gate;
  * **Menyraden *Kostnad* kom med issue 168.** [[ADR-0048 Mobilen och
  * plusknappen]] § 2 räknar upp fem rader, och den femte leder till
  * kostnadsraden. Fram till issue 168 fanns ingen webbyta som skapade en
- * kostnadsrad — `cost_entry` nåddes bara genom `POST /api/containers/
+ * kostnadsrad — `item_transaction` nåddes bara genom `POST /api/containers/
  * {container}/items/{item}/costs` — och raden byggdes därför inte: en menyrad
  * dit hade varit en död länk, och en yta ingen hittar är samma sak som en yta
  * som inte finns. Nu finns ytan, och raden pekar på itemets kostnadsflik.
@@ -267,7 +267,7 @@ final class CreateTarget
             // eller dokument* leder till sina — `tabHref` bär därför den
             // aktuella förekomsten vidare, så ett flikbyte stannar på samma
             // väg. Grinden är itemets `create`, samma pinne som
-            // App\Http\Controllers\CostEntryController::store() prövar.
+            // App\Http\Controllers\ItemTransactionController::store() prövar.
             $rows[] = ['key' => 'cost', 'href' => $this->tabHref($base, $path, 'costs').'&create=1'];
         }
 

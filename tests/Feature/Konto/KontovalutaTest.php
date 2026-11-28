@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Notification;
@@ -182,7 +182,7 @@ it('lämnar befintliga kostnadsrader oförändrade när kontots valuta byts på 
         'created_by_user_id' => $anvandare->id,
         'created_by_account_id' => $konto->id,
     ]);
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'currency' => 'SEK',
         'created_by_user_id' => $anvandare->id,
         'created_by_account_id' => $konto->id,

@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -14,8 +14,8 @@ use function Pest\Laravel\postJson;
 
 /*
  * Issue 45a · Kostnadsregistrering — CRUD-ytan under itemet. Se
- * App\Http\Controllers\Api\CostEntryController, App\Http\Requests\Cost\*,
- * App\Http\Resources\CostEntryResource och App\Models\CostEntry.
+ * App\Http\Controllers\Api\CostEntryController, App\Http\Requests\Transaction\*,
+ * App\Http\Resources\ItemTransactionResource och App\Models\ItemTransaction.
  *
  * kontoMedMedlem(), beviljaAccess() och skapaForekomstKontext() är globala
  * testhjälpare i tests/Support/Testhjalpare.php. Beloppets form och
@@ -80,7 +80,7 @@ it('post skapar en kostnad och svarar utan löpnummer', function () {
     expect($response->json('data.item_id'))->toBeNull();
     expect($response->json('data.container_id'))->toBeNull();
 
-    $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $response->json('data.ulid'))->first();
     expect($rad)->not->toBeNull();
     expect($rad->item_id)->toBe($item->id);
     expect($rad->container_id)->toBe($item->container_id);
@@ -107,7 +107,7 @@ it('en managed-skribent tillskrivs det mottagande kontot, inte ägarkontot', fun
     $response->assertCreated();
     expect($response->json('data.created_by_account'))->toBe($mottagandeKonto->ulid);
 
-    $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $response->json('data.ulid'))->first();
     expect($rad->created_by_account_id)->toBe($mottagandeKonto->id);
     expect($rad->created_by_account_id)->not->toBe($container->account_id);
 });
@@ -130,7 +130,7 @@ it('container_id i kroppen ignoreras och raden får itemets container', function
     ]), $headers);
 
     $response->assertCreated();
-    $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $response->json('data.ulid'))->first();
     expect($rad->item_id)->toBe($item->id);
     expect($rad->container_id)->toBe($item->container_id);
     expect($rad->created_by_user_id)->toBe($user->id);
@@ -148,7 +148,7 @@ it('supplier trimmas vid sparning och blank blir null', function () {
     $enbartBlank->assertCreated();
     expect($enbartBlank->json('data.supplier'))->toBeNull();
 
-    $rad = CostEntry::where('ulid', $enbartBlank->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $enbartBlank->json('data.ulid'))->first();
     expect($rad->counterparty)->toBeNull();
 });
 
@@ -156,9 +156,9 @@ it('listan sorteras incurred_on fallande med id fallande som andrasortering', fu
     [, , $headers, $container, $item] = skapaKostnadsItem();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
-    CostEntry::factory()->for($item, 'item')->create(['incurred_on' => '2026-05-01', 'description' => 'Maj']);
-    CostEntry::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12', 'description' => 'April A']);
-    CostEntry::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12', 'description' => 'April B']);
+    ItemTransaction::factory()->for($item, 'item')->create(['incurred_on' => '2026-05-01', 'description' => 'Maj']);
+    ItemTransaction::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12', 'description' => 'April A']);
+    ItemTransaction::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12', 'description' => 'April B']);
 
     $response = getJson($url, $headers);
 
@@ -199,7 +199,7 @@ it('delete mjukraderar raden', function () {
     $raderat = deleteJson("{$url}/{$ulid}", [], $headers);
     $raderat->assertNoContent();
 
-    $rad = DB::table('cost_entry')->where('ulid', $ulid)->first();
+    $rad = DB::table('item_transaction')->where('ulid', $ulid)->first();
     expect($rad)->not->toBeNull();
     expect($rad->deleted_at)->not->toBeNull();
 
@@ -212,7 +212,7 @@ it('ett read_only ägarkonto får lista men nekas post, patch och delete', funct
     [$account, $user, $headers, $container, $item] = skapaKostnadsItem();
     $account->update(['status' => 'read_only']);
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
-    $kostnad = CostEntry::factory()->for($item, 'item')->create();
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create();
 
     $lista = getJson($url, $headers);
     $lista->assertOk();
@@ -234,7 +234,7 @@ it('en användare utan åtkomst till containern nekas alla fyra rutterna', funct
     [$ägare] = kontoMedMedlem();
     $container = Container::factory()->for($ägare, 'account')->create();
     $item = Item::factory()->for($container, 'container')->create();
-    $kostnad = CostEntry::factory()->for($item, 'item')->create();
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
     [, , $främmandeHeaders] = kontoMedMedlem();
@@ -266,7 +266,7 @@ it('ett item i en annan container nås inte via den här rutten', function () {
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $account->id,
     ]);
-    $kostnad = CostEntry::factory()->for($itemB, 'item')->create();
+    $kostnad = ItemTransaction::factory()->for($itemB, 'item')->create();
 
     $skapa = postJson(
         "/api/containers/{$containerA->ulid}/items/{$itemB->ulid}/costs",
@@ -314,7 +314,7 @@ it('ett mjukraderat item ger 404 på costs och återställs med raderna orörda'
     expect($lista->json('data'))->toHaveCount(2);
     expect(array_column($lista->json('data'), 'ulid'))->toContain($första, $andra);
 
-    $rader = CostEntry::whereIn('ulid', [$första, $andra])->get();
+    $rader = ItemTransaction::whereIn('ulid', [$första, $andra])->get();
     expect($rader->pluck('description')->sort()->values()->all())->toBe(['Impeller', 'Olja']);
     expect($rader->whereNotNull('deleted_at'))->toBeEmpty();
 });
@@ -323,7 +323,7 @@ it('svaret bär varken id, item_id eller container_id', function () {
     [, , $headers, $container, $item] = skapaKostnadsItem();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
-    CostEntry::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12']);
+    ItemTransaction::factory()->for($item, 'item')->create(['incurred_on' => '2026-04-12']);
 
     $response = getJson($url, $headers);
 

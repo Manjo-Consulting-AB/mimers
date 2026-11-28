@@ -6,10 +6,10 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\OwnershipTransfer;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -68,7 +68,7 @@ function nollstalldaKolumner(): array
         'item' => ['created_by_user_id', 'created_by_account_id'],
         'attachment' => ['uploaded_by_user_id'],
         'schedule_occurrence' => ['completed_by_user_id', 'completed_by_account_id'],
-        'cost_entry' => ['created_by_user_id', 'created_by_account_id'],
+        'item_transaction' => ['created_by_user_id', 'created_by_account_id'],
         'container_access' => ['granted_by_user_id'],
         'invitation' => ['invited_by_user_id'],
         'ownership_transfer' => ['initiated_by_user_id'],
@@ -204,7 +204,7 @@ it('kör migreringen över befintliga rader utan att röra ett enda värde', fun
             'billed_account_id' => $konto->id,
         ]);
 
-        CostEntry::factory()->create([
+        ItemTransaction::factory()->create([
             'container_id' => $container->id,
             'item_id' => $item->id,
             'created_by_user_id' => $anvandare->id,
@@ -249,6 +249,10 @@ it('kör migreringen över befintliga rader utan att röra ett enda värde', fun
     // raden var `--step 1` till dess att issue 145 lade
     // `create_user_deletion_table` efter den, och rullade då tillbaka fel
     // migrering.
+    // Den äldre migrationen talar om `cost_entry`; tabellen heter
+    // `item_transaction` sedan issue 1784, så namnet backas medan den kör.
+    Schema::connection('nollstalld')->rename('item_transaction', 'cost_entry');
+
     artisan('migrate:rollback', [
         '--database' => 'nollstalld',
         '--path' => 'database/migrations/2026_09_26_010000_make_author_columns_nullable.php',
@@ -261,6 +265,8 @@ it('kör migreringen över befintliga rader utan att röra ett enda värde', fun
         ->toBeFalse('rollback körde inte — jämförelsen nedan är tom');
 
     artisan('migrate', ['--database' => 'nollstalld', '--force' => true]);
+
+    Schema::connection('nollstalld')->rename('cost_entry', 'item_transaction');
 
     expect(nollstalldNullbar('nollstalld', 'item', 'created_by_account_id'))->toBeTrue();
 
@@ -309,7 +315,7 @@ it('svarar null för ett item vars tillskrivna konto är borta', function () {
 it('svarar null för en kostnadsrad vars tillskrivna konto är borta', function () {
     [, $anvandare, $container, $item] = nollstalldKontext();
 
-    $kostnad = CostEntry::factory()->create([
+    $kostnad = ItemTransaction::factory()->create([
         'container_id' => $container->id,
         'item_id' => $item->id,
         'created_by_user_id' => $anvandare->id,

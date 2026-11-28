@@ -1481,7 +1481,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/versions/{version}/restore',
         'containers/{container}/items/{item}/favorite',
         'containers/{container}/items/{item}/loans',
-        // Issue 168: kostnadsraden. Den skriver en `cost_entry`-rad och rör
+        // Issue 168: kostnadsraden. Den skriver en `item_transaction`-rad och rör
         // inga `container_access`-rader alls — grinden är itemets `create`,
         // samma pinne som relationen och bilagan använder. Ingen ny läsare
         // och ingen ny mottagare läggs till.

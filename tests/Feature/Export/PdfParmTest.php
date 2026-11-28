@@ -6,11 +6,11 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\Schedule;
@@ -295,8 +295,8 @@ it('pärmen visar intäkten som Income med utgifter, intäkter och netto, och an
     [$account, $user, $container] = parmKontext();
     $item = parmItem($container, $account, $user, 'Prylen');
     $rad = ['item_id' => $item->id, 'container_id' => $container->id, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id];
-    CostEntry::factory()->create($rad + ['amount' => 12345, 'counterparty' => 'Leverantören']);
-    CostEntry::factory()->create($rad + ['amount' => 99900, 'kind' => 'income', 'quantity' => '10.500000', 'counterparty' => 'Köparen']);
+    ItemTransaction::factory()->create($rad + ['amount' => 12345, 'counterparty' => 'Leverantören']);
+    ItemTransaction::factory()->create($rad + ['amount' => 99900, 'kind' => 'income', 'quantity' => '10.500000', 'counterparty' => 'Köparen']);
 
     $spion = parmSpion();
     parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
@@ -314,7 +314,7 @@ it('pärmen för ett item utan intäkter har en total som förut', function () {
     [$account, $user, $container] = parmKontext();
     $item = parmItem($container, $account, $user, 'Prylen');
     $rad = ['item_id' => $item->id, 'container_id' => $container->id, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id];
-    CostEntry::factory()->create($rad + ['amount' => 12345]);
+    ItemTransaction::factory()->create($rad + ['amount' => 12345]);
 
     $spion = parmSpion();
     parmKör(parmRad($container, $user, ['options' => ['costs' => true]]));
@@ -334,7 +334,7 @@ it('options.sections styr vad som tas med och kostnader är av som förval', fun
         'to_item_id' => max($item->id, $annat->id),
         'relation' => 'related',
     ]);
-    CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'amount' => 12345, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+    ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'amount' => 12345, 'currency' => $container->effectiveCurrency(), 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
 
     // Förval: allt utom kostnader.
     $spion = parmSpion();
@@ -489,7 +489,7 @@ it('kostnader summeras per valuta med huvudvalutan först och ingen rad utelämn
     $andra = $main === 'EUR' ? 'USD' : 'EUR';
 
     foreach ([[$andra, 500], [$main, 1000], [$main, 250]] as [$valuta, $belopp]) {
-        CostEntry::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'amount' => $belopp, 'currency' => $valuta, 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
+        ItemTransaction::factory()->create(['item_id' => $item->id, 'container_id' => $container->id, 'amount' => $belopp, 'currency' => $valuta, 'created_by_user_id' => $user->id, 'created_by_account_id' => $account->id]);
     }
 
     $spion = parmSpion();

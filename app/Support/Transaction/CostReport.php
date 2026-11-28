@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Support\Cost;
+namespace App\Support\Transaction;
 
 use App\Actions\Category\ResolveCategoryDescendants;
 use App\Actions\Item\ResolveItemDescendants;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Tag;
 use App\Support\Access\ItemScope;
 use Illuminate\Database\Query\Builder;
@@ -23,8 +23,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Rapportens fråga är alltid samma mängd rader (Beslut 4):
  *
- *     cost_entry.container_id = {container}
- *     AND cost_entry.deleted_at IS NULL
+ *     item_transaction.container_id = {container}
+ *     AND item_transaction.deleted_at IS NULL
  *     AND item.deleted_at IS NULL
  *     AND item.id IN {det anropande kontots omfång}   (issue 74 § Beslut 5)
  *
@@ -68,7 +68,7 @@ use Illuminate\Support\Facades\DB;
  * grupperat per item*. De är samma regel med olika startpunkt — hela
  * containern respektive itemet plus dess ättlingar — och de delar därför
  * `groupByItem()` med rapporten. Tårtbitarna är de items som BÄR
- * kostnadsraderna och inte underträdets toppnivå: varje `cost_entry` har
+ * kostnadsraderna och inte underträdets toppnivå: varje `item_transaction` har
  * exakt ett `item_id`, så varje rad hamnar i exakt en bit och bitarna
  * summerar alltid precis till totalen bredvid — också i den DAG `LinkItems`
  * tillåter, där ett item kan nås längs två vägar.
@@ -125,7 +125,7 @@ final class CostReport
         $base = $this->baseQuery($container, $params, $scope);
 
         if ($kind !== self::MODE_ALL) {
-            $base->where('cost_entry.kind', $kind);
+            $base->where('item_transaction.kind', $kind);
         }
 
         $groups = match ($groupBy) {
@@ -285,7 +285,7 @@ final class CostReport
         $subtree = $this->resolveItemDescendants->handle($item);
 
         $query = $this->summaryQuery([$container->id => $scope])
-            ->whereIn('cost_entry.item_id', $subtree);
+            ->whereIn('item_transaction.item_id', $subtree);
 
         return $this->summarise($query);
     }
@@ -375,8 +375,8 @@ final class CostReport
         $last = $first->copy()->endOfMonth();
 
         $query = $this->onlyExpenses($this->summaryQuery($scopes))
-            ->whereDate('cost_entry.incurred_on', '>=', $first->toDateString())
-            ->whereDate('cost_entry.incurred_on', '<=', $last->toDateString());
+            ->whereDate('item_transaction.incurred_on', '>=', $first->toDateString())
+            ->whereDate('item_transaction.incurred_on', '<=', $last->toDateString());
 
         return $this->totals($query);
     }
@@ -418,8 +418,8 @@ final class CostReport
         // Första och sista dagen i årtalet. Ingen `Carbon`-beräkning behövs —
         // den sista december är årets sista dag i varje kalender.
         $query = $this->onlyExpenses($this->summaryQuery([$container->id => $scope]))
-            ->whereDate('cost_entry.incurred_on', '>=', "{$year}-01-01")
-            ->whereDate('cost_entry.incurred_on', '<=', "{$year}-12-31");
+            ->whereDate('item_transaction.incurred_on', '>=', "{$year}-01-01")
+            ->whereDate('item_transaction.incurred_on', '<=', "{$year}-12-31");
 
         return ['totals' => $this->totals($query)];
     }
@@ -439,7 +439,7 @@ final class CostReport
      */
     private function summaryQuery(array $scopes): Builder
     {
-        $query = $this->rowSet()->whereIn('cost_entry.container_id', array_keys($scopes));
+        $query = $this->rowSet()->whereIn('item_transaction.container_id', array_keys($scopes));
 
         $this->applyScope($query, $scopes);
 
@@ -448,7 +448,7 @@ final class CostReport
 
     private function baseQuery(Container $container, array $params, ItemScope $scope): Builder
     {
-        $query = $this->rowSet()->where('cost_entry.container_id', $container->id);
+        $query = $this->rowSet()->where('item_transaction.container_id', $container->id);
 
         $this->applyScope($query, [$container->id => $scope]);
 
@@ -458,7 +458,7 @@ final class CostReport
                 ->where('ulid', $params['item'])
                 ->value('id');
 
-            $query->where('cost_entry.item_id', $itemId);
+            $query->where('item_transaction.item_id', $itemId);
         }
 
         if (! empty($params['category'])) {
@@ -489,18 +489,18 @@ final class CostReport
         $counterparty = $params['counterparty'] ?? $params['supplier'] ?? null;
 
         if ($counterparty !== null) {
-            $query->where('cost_entry.counterparty', $counterparty);
+            $query->where('item_transaction.counterparty', $counterparty);
         }
 
         // `whereDate()`, aldrig en rå kolumnjämförelse: i sqlite lagras
         // DATE-kolumner med en tidskomponent, och en datumgräns ska inte
         // bero på klockslaget när frågan körs (samma regel som issue 24).
         if (($params['from'] ?? null) !== null) {
-            $query->whereDate('cost_entry.incurred_on', '>=', $params['from']);
+            $query->whereDate('item_transaction.incurred_on', '>=', $params['from']);
         }
 
         if (($params['to'] ?? null) !== null) {
-            $query->whereDate('cost_entry.incurred_on', '<=', $params['to']);
+            $query->whereDate('item_transaction.incurred_on', '<=', $params['to']);
         }
 
         return $query;
@@ -519,9 +519,9 @@ final class CostReport
      */
     private function rowSet(): Builder
     {
-        return DB::table('cost_entry')
-            ->join('item', 'item.id', '=', 'cost_entry.item_id')
-            ->whereNull('cost_entry.deleted_at')
+        return DB::table('item_transaction')
+            ->join('item', 'item.id', '=', 'item_transaction.item_id')
+            ->whereNull('item_transaction.deleted_at')
             // Riktningen filtreras INTE här (ADR-0102 § Riktning 5): de fasta
             // summeringarna och rapporten räknar båda riktningarna, och de som
             // bara vill ha utgifter anropar `onlyExpenses()`.
@@ -570,7 +570,7 @@ final class CostReport
                 $itemIds = $scope->itemIds();
 
                 $query->orWhere(function (Builder $query) use ($containerId, $itemIds): void {
-                    $query->where('cost_entry.container_id', $containerId);
+                    $query->where('item_transaction.container_id', $containerId);
 
                     if ($itemIds !== null) {
                         $query->whereIn('item.id', $itemIds);
@@ -590,10 +590,10 @@ final class CostReport
     private function totals(Builder $base, string $mode = self::MODE_PLAIN): array
     {
         $rows = (clone $base)
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('cost_entry.currency')
-            ->orderBy('cost_entry.currency')
+            ->groupBy('item_transaction.currency')
+            ->orderBy('item_transaction.currency')
             ->get();
 
         return $this->formatCurrencyTotals($rows, $mode);
@@ -602,7 +602,7 @@ final class CostReport
     /**
      * Per item — rapportens `group_by=item` och de fasta summeringarnas
      * nedbrytning, samma kod (issue 91). Grupperingen är
-     * `cost_entry.item_id` över raderna i mängden, så en grupp är ett item
+     * `item_transaction.item_id` över raderna i mängden, så en grupp är ett item
      * som BÄR kostnadsrader och ingenting annat: ett item utan egna rader
      * finns inte i svaret, hur mycket som än hänger under det.
      *
@@ -623,9 +623,9 @@ final class CostReport
     {
         $rows = (clone $base)
             ->selectRaw('item.id AS item_id, item.ulid AS item_ulid, item.name AS item_name')
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('item.id', 'item.ulid', 'item.name', 'cost_entry.currency')
+            ->groupBy('item.id', 'item.ulid', 'item.name', 'item_transaction.currency')
             ->get();
 
         $buckets = [];
@@ -650,10 +650,10 @@ final class CostReport
     private function groupBySupplier(Builder $base, string $mode): array
     {
         $rows = (clone $base)
-            ->selectRaw('cost_entry.counterparty AS supplier')
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('item_transaction.counterparty AS supplier')
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('cost_entry.counterparty', 'cost_entry.currency')
+            ->groupBy('item_transaction.counterparty', 'item_transaction.currency')
             ->get();
 
         $buckets = [];
@@ -703,9 +703,9 @@ final class CostReport
     {
         $rows = (clone $base)
             ->selectRaw('item.category_id AS category_id')
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('item.category_id', 'cost_entry.currency')
+            ->groupBy('item.category_id', 'item_transaction.currency')
             ->get();
 
         $categories = DB::table('category')
@@ -790,9 +790,9 @@ final class CostReport
         $rows = (clone $base)
             ->leftJoinSub($liveTags, 'live_tag', 'live_tag.item_id', '=', 'item.id')
             ->selectRaw('live_tag.tag_id AS tag_id, live_tag.tag_ulid AS tag_ulid, live_tag.tag_name AS tag_name')
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('live_tag.tag_id', 'live_tag.tag_ulid', 'live_tag.tag_name', 'cost_entry.currency')
+            ->groupBy('live_tag.tag_id', 'live_tag.tag_ulid', 'live_tag.tag_name', 'item_transaction.currency')
             ->get();
 
         $buckets = [];
@@ -839,10 +839,10 @@ final class CostReport
         $length = $period === 'year' ? 4 : 7;
 
         $rows = (clone $base)
-            ->selectRaw("substr(cost_entry.incurred_on, 1, {$length}) AS period_key")
-            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw("substr(item_transaction.incurred_on, 1, {$length}) AS period_key")
+            ->selectRaw('item_transaction.currency AS currency')
             ->selectRaw($this->aggregateSql())
-            ->groupBy('period_key', 'cost_entry.currency')
+            ->groupBy('period_key', 'item_transaction.currency')
             ->orderBy('period_key')
             ->get();
 
@@ -975,17 +975,17 @@ final class CostReport
      */
     private function aggregateSql(): string
     {
-        $expense = CostEntry::KIND_EXPENSE;
-        $income = CostEntry::KIND_INCOME;
+        $expense = ItemTransaction::KIND_EXPENSE;
+        $income = ItemTransaction::KIND_INCOME;
 
-        return "SUM(CASE WHEN cost_entry.kind = '{$expense}' THEN cost_entry.amount ELSE 0 END) AS expense, "
-            ."SUM(CASE WHEN cost_entry.kind = '{$income}' THEN cost_entry.amount ELSE 0 END) AS income, "
-            ."SUM(CASE WHEN cost_entry.kind = '{$expense}' THEN 1 ELSE 0 END) AS expense_count, "
-            ."SUM(CASE WHEN cost_entry.kind = '{$income}' THEN 1 ELSE 0 END) AS income_count";
+        return "SUM(CASE WHEN item_transaction.kind = '{$expense}' THEN item_transaction.amount ELSE 0 END) AS expense, "
+            ."SUM(CASE WHEN item_transaction.kind = '{$income}' THEN item_transaction.amount ELSE 0 END) AS income, "
+            ."SUM(CASE WHEN item_transaction.kind = '{$expense}' THEN 1 ELSE 0 END) AS expense_count, "
+            ."SUM(CASE WHEN item_transaction.kind = '{$income}' THEN 1 ELSE 0 END) AS income_count";
     }
 
     private function onlyExpenses(Builder $query): Builder
     {
-        return $query->where('cost_entry.kind', CostEntry::KIND_EXPENSE);
+        return $query->where('item_transaction.kind', ItemTransaction::KIND_EXPENSE);
     }
 }

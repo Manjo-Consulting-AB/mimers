@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Category\ListCategories;
-use App\Actions\Cost\ListCostSuppliers;
 use App\Actions\Field\ListFields;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
@@ -26,6 +25,7 @@ use App\Actions\Item\UpdateItem;
 use App\Actions\Item\UpdateItemNotes;
 use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
+use App\Actions\Transaction\ListCostSuppliers;
 use App\Actions\Usage\CountFeatureUse;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Item\StoreItemRequest;
@@ -34,10 +34,10 @@ use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\AttachmentResource;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
-use App\Http\Resources\CostEntryResource;
 use App\Http\Resources\ItemFieldResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
+use App\Http\Resources\ItemTransactionResource;
 use App\Http\Resources\ItemVersionResource;
 use App\Http\Resources\LoanResource;
 use App\Http\Resources\ScheduleResource;
@@ -46,10 +46,10 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemField;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Tag;
 use App\Models\User;
@@ -1000,7 +1000,7 @@ class ItemController extends Controller
         // och `createdByAccount` laddas eager, så listan kostar ett konstant
         // antal frågor oavsett antal rader (issue 45a § Beslut 14).
         // Mjukraderade rader faller ut genom SoftDeletes' globala scope.
-        $costs = $item->costs()
+        $costs = $item->transactions()
             ->with('createdByAccount')
             ->orderByDesc('incurred_on')
             ->orderByDesc('id')
@@ -1023,7 +1023,7 @@ class ItemController extends Controller
         // att raden bär sitt items namn och ULID; containern hängs på för
         // hand nedan, så `can`-grindarna inte slår upp den per rad.
         $descendantCosts = $request->query('tab') === 'costs' && $includeChildren
-            ? CostEntry::query()
+            ? ItemTransaction::query()
                 ->whereIn('item_id', $resolveVisibleDescendants->handle($user, $item)->all())
                 ->with(['createdByAccount', 'item'])
                 ->orderByDesc('incurred_on')
@@ -1034,11 +1034,11 @@ class ItemController extends Controller
         // Summorna på *Costs* räknar det som VISAS (issue 1248 ·
         // [[ADR-0068 Itemets sida och skapandet]] § Uppföljning 2026-11-14
         // punkt 4): itemets egna rader, och ättlingarnas när växeln är på.
-        // Formen och regeln är App\Support\Cost\CostReport::totals() —
+        // Formen och regeln är App\Support\Transaction\CostReport::totals() —
         // `{currency, amount, count}` grupperat per valuta, aldrig en summa
         // över två — så talet här och talet på containerns kostnadsflik
         // räknas på samma sätt. `amount` är heltalet i minsta enhet, som
-        // CostEntryResource bär det.
+        // ItemTransactionResource bär det.
         //
         // Summan räknas ur SAMMA rader som propparna delar, aldrig ur en
         // egen fråga: en summa som inte stämmer med listan under sig är
@@ -1049,8 +1049,8 @@ class ItemController extends Controller
         $costTotals = $costs->concat($descendantCosts)
             ->groupBy('currency')
             ->map(function (Collection $rows, string $currency): array {
-                $expenses = $rows->where('kind', CostEntry::KIND_EXPENSE);
-                $income = (int) $rows->where('kind', CostEntry::KIND_INCOME)->sum('amount');
+                $expenses = $rows->where('kind', ItemTransaction::KIND_EXPENSE);
+                $income = (int) $rows->where('kind', ItemTransaction::KIND_INCOME)->sum('amount');
 
                 return [
                     'currency' => $currency,
@@ -1297,10 +1297,10 @@ class ItemController extends Controller
 
             // Kostnaderna (issue 168 § Beslut 3 · [[ADR-0050 Desktopdesignen]]
             // § 8). `costs` är itemets rader i App\Http\Resources\
-            // CostEntryResource — samma format och samma sortering som
+            // ItemTransactionResource — samma format och samma sortering som
             // `Api\CostEntryController::index()` svarar med, byggd ur samma
             // fråga som listan ovan.
-            'costs' => CostEntryResource::collection($costs)->resolve($request),
+            'costs' => ItemTransactionResource::collection($costs)->resolve($request),
 
             // Ättlingarnas kostnadsrader (issue 1248): bara på *Costs* och
             // bara med växeln på. Proppen finns då alltid — en tom lista är
@@ -1308,7 +1308,7 @@ class ItemController extends Controller
             // kostnader), medan en utelämnad nyckel betyder att frågan aldrig
             // ställdes.
             //
-            // Varje rad är CostEntryResource plus `item: {ulid, name}` och
+            // Varje rad är ItemTransactionResource plus `item: {ulid, name}` och
             // radens `can`. `item` ritar platsen och bygger radens adress —
             // *Change* och *Remove the row* går mot radens item (ADR-0068
             // § Uppföljning punkt 3) — och `can` är RADENS flaggor, prövade
@@ -1317,12 +1317,12 @@ class ItemController extends Controller
             ...($request->query('tab') === 'costs' && $includeChildren
                 ? [
                     'descendantCosts' => $descendantCosts
-                        ->map(function (CostEntry $cost) use ($user, $container, $request): array {
+                        ->map(function (ItemTransaction $cost) use ($user, $container, $request): array {
                             $rowItem = $cost->item;
                             $rowItem->setRelation('container', $container);
 
                             return [
-                                ...(new CostEntryResource($cost))->resolve($request),
+                                ...(new ItemTransactionResource($cost))->resolve($request),
                                 'item' => ['ulid' => $rowItem->ulid, 'name' => $rowItem->name],
                                 'can' => [
                                     'update' => Gate::forUser($user)->allows('update', $rowItem),
@@ -1349,7 +1349,7 @@ class ItemController extends Controller
             // ([[ADR-0037 Valutans arv]]). Fältet är förifyllt och
             // ändringsbart, inte dolt — ett värde som ändå står i datan får
             // inte vara osynligt för den som skriver raden. Servern fyller
-            // samma tomrum i App\Actions\Cost\CreateCostEntry när klienten
+            // samma tomrum i App\Actions\Transaction\CreateItemTransaction när klienten
             // inte skickar någon valuta, så förvalet och arvet är ETT värde
             // och inte två.
             //
@@ -1367,7 +1367,7 @@ class ItemController extends Controller
             // den ritas först när kostnadsformuläret öppnas, och en vanlig
             // sidladdning ska inte bära den — samma konstruktion som
             // `recentVisits` och `notifications` i App\Http\Middleware\
-            // HandleInertiaRequests. Uppslaget är App\Actions\Cost\
+            // HandleInertiaRequests. Uppslaget är App\Actions\Transaction\
             // ListCostSuppliers, samma action som `GET /api/containers/
             // {container}/costs/suppliers` svarar ur, så vyn och `/api` föreslår
             // bevisligen samma namn i samma ordning. Ingen `fetch` mot `/api`:

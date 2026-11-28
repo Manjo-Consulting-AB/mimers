@@ -2,8 +2,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 
@@ -25,13 +25,13 @@ use function Pest\Laravel\artisan;
  * `deleted` mjukraderar raden efter att den skapats — rapporten ska räkna
  * den ändå, i en egen kolumn.
  */
-function ogiltigValutaKostnad(Container $container, string $currency, int $amount, bool $deleted = false): CostEntry
+function ogiltigValutaKostnad(Container $container, string $currency, int $amount, bool $deleted = false): ItemTransaction
 {
     $item = Item::factory()->for($container, 'container')->create([
         'created_by_account_id' => $container->account_id,
     ]);
 
-    $entry = CostEntry::factory()->create([
+    $entry = ItemTransaction::factory()->create([
         'item_id' => $item->id,
         'container_id' => $container->id,
         'created_by_account_id' => $container->account_id,
@@ -55,7 +55,7 @@ function ogiltigValutaKostnad(Container $container, string $currency, int $amoun
 function ogiltigValutaRader(): array
 {
     return [
-        'cost_entry' => DB::table('cost_entry')->orderBy('id')->get()->toArray(),
+        'item_transaction' => DB::table('item_transaction')->orderBy('id')->get()->toArray(),
         'container' => DB::table('container')->orderBy('id')->get()->toArray(),
         'account' => DB::table('account')->orderBy('id')->get()->toArray(),
     ];
@@ -76,7 +76,7 @@ it('listar ABC och DEM med antal, mjukraderade och summa per kolumn och utelämn
     Container::factory()->for($owner, 'account')->create(['currency' => 'SEK']);
     Container::factory()->for($owner, 'account')->create(['currency' => null]);
 
-    // cost_entry: ABC 3 rader (varav 1 mjukraderad) med summan 1750, DEM 2
+    // item_transaction: ABC 3 rader (varav 1 mjukraderad) med summan 1750, DEM 2
     // rader med summan 750, SEK 1 rad som inte ska synas.
     ogiltigValutaKostnad($containerAbc, 'ABC', 1000);
     ogiltigValutaKostnad($containerAbc, 'ABC', 250);
@@ -89,7 +89,7 @@ it('listar ABC och DEM med antal, mjukraderade och summa per kolumn och utelämn
 
     $output = Artisan::output();
 
-    // cost_entry.currency: kod, rader, mjukraderade, summa.
+    // item_transaction.currency: kod, rader, mjukraderade, summa.
     expect($output)->toMatch('/^\|\s*ABC\s*\|\s*3\s*\|\s*1\s*\|\s*1750\s*\|$/m');
     expect($output)->toMatch('/^\|\s*DEM\s*\|\s*2\s*\|\s*0\s*\|\s*750\s*\|$/m');
 
@@ -129,7 +129,7 @@ it('skriver att alla koder är giltiga när inget är ogiltigt', function () {
 
     artisan('costs:report-invalid-currencies')
         ->expectsOutput('All currency codes are valid.')
-        ->doesntExpectOutputToContain('cost_entry.currency')
+        ->doesntExpectOutputToContain('item_transaction.currency')
         ->doesntExpectOutputToContain('container.currency')
         ->doesntExpectOutputToContain('account.currency')
         ->assertSuccessful();
@@ -160,7 +160,7 @@ it('listar små bokstäver som en ogiltig kod med egen rad', function () {
 
     $output = Artisan::output();
 
-    // cost_entry.currency: kod, rader, mjukraderade, summa.
+    // item_transaction.currency: kod, rader, mjukraderade, summa.
     expect($output)->toMatch('/^\|\s*sek\s*\|\s*1\s*\|\s*0\s*\|\s*400\s*\|$/m');
 
     // container.currency och account.currency: kod, rader, mjukraderade.

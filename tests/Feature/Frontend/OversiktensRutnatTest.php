@@ -161,7 +161,7 @@ it('ritar Costs med tomt läge utan kostnadsrader', function () {
     expect($vy)->toMatch(
         "~<UiEmptyState v-if=\"props\\.costs\\.totals\\.length === 0\">\\s*\\{\\{ t\\('container\\.overview\\.costs_empty'\\) \\}\\}\\s*</UiEmptyState>~s",
     )
-        ->toMatch('~<CostDonut\s+v-else\b~s');
+        ->toMatch('~<TransactionDonut\s+v-else\b~s');
     expect($vy)->not->toContain('v-if="props.costs.totals.length"');
 
     expect(Lang::get('ui.container.overview.costs_empty', [], 'en'))->toBe('No costs recorded yet.');

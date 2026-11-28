@@ -7,8 +7,8 @@ use App\Mail\NotificationMail;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\LegalHold;
 use App\Models\Notification;
 use App\Models\Plan;
@@ -214,7 +214,7 @@ it('steg 4 flyttar bilagor och rader i någon annans container till ägaren och 
     $item = nedItem($container, $gäst, 'Item-A');
     $bilaga = nedBilaga($item, $gäst, 700);
     $slängd = nedBilaga($item, $gäst, 300, ['deleted_at' => Carbon::parse('2026-08-01')]);
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'created_by_account_id' => $gäst->id,
         'billed_account_id' => $gäst->id,
         'description' => 'Reservdel',
@@ -228,7 +228,7 @@ it('steg 4 flyttar bilagor och rader i någon annans container till ägaren och 
 
     expect(Attachment::withTrashed()->whereKey([$bilaga->id, $slängd->id])->pluck('billed_account_id')->unique()->all())->toBe([$ägare->id])
         ->and($item->refresh()->billed_account_id)->toBe($ägare->id)
-        ->and(CostEntry::withTrashed()->find($kostnad->id)->billed_account_id)->toBe($ägare->id)
+        ->and(ItemTransaction::withTrashed()->find($kostnad->id)->billed_account_id)->toBe($ägare->id)
         ->and(nedFinns($item))->toBeTrue()
         ->and(DB::table('attachment')->whereIn('id', [$bilaga->id, $slängd->id])->count())->toBe(2);
 
@@ -315,7 +315,7 @@ it('steg 4 raderar inte ett item med en annan medlems bilaga eller kostnadsrad i
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $deras = nedBilaga($medBilaga, $medlem, 200);
-    $dinKostnad = CostEntry::factory()->for($medKostnad, 'item')->create([
+    $dinKostnad = ItemTransaction::factory()->for($medKostnad, 'item')->create([
         'created_by_account_id' => $medlem->id,
         'billed_account_id' => $medlem->id,
         'description' => 'Deras',
@@ -332,7 +332,7 @@ it('steg 4 raderar inte ett item med en annan medlems bilaga eller kostnadsrad i
         ->and(nedFinns($förälder))->toBeTrue()
         ->and(nedFinns($barn))->toBeTrue()
         ->and(Attachment::withTrashed()->whereKey($deras->id)->exists())->toBeTrue()
-        ->and(CostEntry::withTrashed()->whereKey($dinKostnad->id)->exists())->toBeTrue()
+        ->and(ItemTransaction::withTrashed()->whereKey($dinKostnad->id)->exists())->toBeTrue()
         ->and($gäst->refresh()->status)->toBe('active');
 
     $logg->shouldHaveReceived('warning')->once()->withArgs(

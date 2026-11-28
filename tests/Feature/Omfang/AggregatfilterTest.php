@@ -9,10 +9,10 @@ use App\Models\CalendarFeed;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Plan;
 use App\Models\Schedule;
@@ -35,7 +35,7 @@ use function Pest\Laravel\postJson;
 /*
  * Issue 74 · Session 2 — aggregaten: kostnadsrapporten, leverantörslistan,
  * todo-listan, exporten och ICS-feeden. Se [[ADR-0028 Åtkomst på itemnivå]]
- * § Konsekvenser, App\Support\Cost\CostReport::baseQuery(),
+ * § Konsekvenser, App\Support\Transaction\CostReport::baseQuery(),
  * App\Http\Controllers\Api\CostEntryController::suppliers(),
  * App\Models\ScheduleOccurrence::scopeTodoFor(),
  * App\Support\Export\ContainerExportBuilder::build() och
@@ -166,9 +166,9 @@ function aggregatProKonto(): array
 /**
  * En kostnadsrad direkt på itemet.
  */
-function aggregatKostnad(Item $item, array $attribut = []): CostEntry
+function aggregatKostnad(Item $item, array $attribut = []): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(array_merge([
+    return ItemTransaction::factory()->for($item, 'item')->create(array_merge([
         'created_by_user_id' => $item->created_by_user_id,
         'created_by_account_id' => $item->created_by_account_id,
     ], $attribut));
@@ -298,7 +298,7 @@ it('kostnadsrapporten summerar samma belopp som summan av kostnaderna i hennes e
     $listan->assertOk();
     $synligaUlider = collect($listan->json('data'))->pluck('ulid')->all();
 
-    $facit = (int) CostEntry::query()
+    $facit = (int) ItemTransaction::query()
         ->whereIn('item_id', Item::query()->whereIn('ulid', $synligaUlider)->pluck('id'))
         ->sum('amount');
 
@@ -464,8 +464,8 @@ it('leverantörslistan för ägaren är oförändrad — utan join mot item', fu
         ->toBe(['Båtvarvet', 'Skeppshandeln', 'Volvo Penta']);
 
     // Beslut 6: för ett OMFATTANDE omfång läggs ingen join till — den
-    // befintliga frågan mot bara `cost_entry` är billigare, och de två fallen
-    // är två grenar med flit. Frågan är den enda som rör `cost_entry`, så
+    // befintliga frågan mot bara `item_transaction` är billigare, och de två fallen
+    // är två grenar med flit. Frågan är den enda som rör `item_transaction`, så
     // SQL:en kan granskas direkt.
     DB::flushQueryLog();
     DB::enableQueryLog();
@@ -474,7 +474,7 @@ it('leverantörslistan för ägaren är oförändrad — utan join mot item', fu
     DB::disableQueryLog();
 
     // Drivrutinsglapp: SQLite citerar med ", MySQL/MariaDB med ` — mönstret tillåter båda.
-    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]cost_entry["`]/', $sql) === 1);
+    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]item_transaction["`]/', $sql) === 1);
     expect($supplierFrågan)->not->toBeNull();
     expect(str_contains(strtolower($supplierFrågan), ' join '))->toBeFalse();
 });
@@ -500,7 +500,7 @@ it('leverantörslistan för en omfångsbegränsad mottagare joins mot item', fun
     // Joinen MÅSTE finnas här — utan den läcker hela containerns
     // leverantörshistorik (issue 74 § Beslut 6).
     // Drivrutinsglapp: SQLite citerar med ", MySQL/MariaDB med ` — mönstret tillåter båda.
-    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]cost_entry["`]/', $sql) === 1);
+    $supplierFrågan = $logg->first(fn (string $sql): bool => preg_match('/from ["`]item_transaction["`]/', $sql) === 1);
     expect($supplierFrågan)->not->toBeNull();
     expect(str_contains(strtolower($supplierFrågan), ' join '))->toBeTrue();
 });

@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Cost\CostReportRequest;
+use App\Http\Requests\Transaction\CostReportRequest;
 use App\Models\Container;
-use App\Support\Cost\CostReport;
 use App\Support\Plan\Entitlements;
+use App\Support\Transaction\CostReport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\Gate;
  * 403 innan någon rad summeras.
  *
  * Kontrollern gör inget mer än grindarna: CostReportRequest bevisar
- * parametrarna, och App\Support\Cost\CostReport bygger grupper och totaler.
+ * parametrarna, och App\Support\Transaction\CostReport bygger grupper och totaler.
  * Inget räknande i kontrollern — M11 lade åtkomstfiltret på itemnivå på
  * exakt den här frågan, och den ändringen landade i Support-klassen
  * ([[ADR-0024 Tunna controllers och actions]]).

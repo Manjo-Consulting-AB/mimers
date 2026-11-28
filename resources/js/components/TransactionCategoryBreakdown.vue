@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { formatAmount } from './CostDonut.vue';
+import { formatAmount } from './TransactionDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -25,7 +25,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * stapellängden, som är en ritregel och ingen summa. Alla motorns grupper ritas
  * — att välja bort några hade varit att gömma ett svar användaren frågade efter.
  *
- * **Kategorin är ITEMETS** ([[ADR-0040 Underträdets summor]]): `cost_entry`
+ * **Kategorin är ITEMETS** ([[ADR-0040 Underträdets summor]]): `item_transaction`
  * har ingen kategorikolumn, och `group_by=category` grupperar på
  * `item.category_id`. Rader på items utan kategori kommer ur motorn med
  * `key: null`, och de ritas här som *Övrigt* — en grupp och inte ett fel. Den
@@ -40,7 +40,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * samma sak som text — namn och belopp, i serverns ordning — och den är också
  * grafens axel: motorns sortering är namn stigande med null-gruppen sist, så en
  * läsare känner igen raden och inte bara längden. En negativ rad (en
- * återbetalning) ritas inte som en stapel, av samma skäl som i CostTimeChart:
+ * återbetalning) ritas inte som en stapel, av samma skäl som i TransactionTimeChart:
  * en stapel med negativ längd är ingen stapel. Beloppet står kvar i listan.
  *
  * **Ingen sträng i JavaScript** (issue 52 · [[ADR-0013 Språk och i18n]]):

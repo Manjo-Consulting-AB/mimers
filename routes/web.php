@@ -29,7 +29,6 @@ use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTaskController;
 use App\Http\Controllers\ContainerTemplateController;
 use App\Http\Controllers\ContainerTrashController;
-use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DismissedTipController;
 use App\Http\Controllers\DocumentController;
@@ -48,6 +47,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemFieldController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ItemMoveController;
+use App\Http\Controllers\ItemTransactionController;
 use App\Http\Controllers\ItemVersionController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\Mcp\DisconnectAgentController;
@@ -1404,7 +1404,7 @@ Route::middleware('auth')->group(function () {
 
     /*
      * Issue 168 · Kostnadsraderna i webben — lägg till, ändra och ta bort en
-     * rad på itemet, se App\Http\Controllers\CostEntryController och
+     * rad på itemet, se App\Http\Controllers\ItemTransactionController och
      * [[ADR-0050 Desktopdesignen]] § 8.
      *
      * **Tre rutter och ingen sida** (Beslut 2). Listan — raderna och
@@ -1415,14 +1415,14 @@ Route::middleware('auth')->group(function () {
      *
      * **`scopeBindings()` på alla tre**, av samma skäl som varje annan nästlad
      * skrivning i filen (issue 9b § Beslut 1): `{item}` löses genom
-     * containerns `items()` och `{cost}` genom App\Models\Item::costs(), så en
+     * containerns `items()` och `{transaction}` genom App\Models\Item::transactions(), så en
      * item-ULID ur en annan container — eller en kostnad på ett annat item —
      * blir 404 i stället för ändrad. Det är hela skyddet, och samma form som
      * routes/api.php ger samma tre rutter (issue 45a § Beslut 7).
      *
-     * **Ingenting av `/api` byggs om.** `StoreCostEntryRequest` och
-     * `UpdateCostEntryRequest` delas rakt av, och `CostEntryResource` är
-     * samma resurs itemvyns props byggs ur. Logiken bor i App\Actions\Cost
+     * **Ingenting av `/api` byggs om.** `StoreItemTransactionRequest` och
+     * `UpdateItemTransactionRequest` delas rakt av, och `ItemTransactionResource` är
+     * samma resurs itemvyns props byggs ur. Logiken bor i App\Actions\Transaction
      * sedan issue 168, så de två ytorna skriver bevisligen samma rad.
      *
      * Grindarna är ITEMETS, en pinne per handling: `view` för listan (i
@@ -1434,15 +1434,15 @@ Route::middleware('auth')->group(function () {
      * läsaren stannar där hon var — med en flash-kod, mönstret från issue 51
      * § Beslut 5.
      */
-    Route::post('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'store'])
+    Route::post('/containers/{container}/items/{item}/costs', [ItemTransactionController::class, 'store'])
         ->scopeBindings()
         ->name('containers.items.costs.store');
 
-    Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update'])
+    Route::patch('/containers/{container}/items/{item}/costs/{transaction}', [ItemTransactionController::class, 'update'])
         ->scopeBindings()
         ->name('containers.items.costs.update');
 
-    Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy'])
+    Route::delete('/containers/{container}/items/{item}/costs/{transaction}', [ItemTransactionController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.costs.destroy');
 

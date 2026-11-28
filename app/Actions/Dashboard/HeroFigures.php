@@ -7,7 +7,7 @@ use App\Actions\Container\ListContainerSummaries;
 use App\Actions\Schedule\ListTodo;
 use App\Models\Container;
 use App\Models\User;
-use App\Support\Cost\CostReport;
+use App\Support\Transaction\CostReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 

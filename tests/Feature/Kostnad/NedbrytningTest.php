@@ -10,7 +10,7 @@ use function Pest\Laravel\getJson;
 
 /*
  * Issue 91 · Kostnaderna bryts ner per item — den fasta summeringen ur
- * issue 86 får sin indelning, se App\Support\Cost\CostReport::summary(),
+ * issue 86 får sin indelning, se App\Support\Transaction\CostReport::summary(),
  * CostReport::forItem() och [[ADR-0040 Underträdets summor]] § Beslut med
  * rättelsen i [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040.
  *
@@ -522,12 +522,12 @@ it('itemets summering löser upp omfånget en gång per request — konstant ant
     Carbon::setTestNow();
 });
 
-it('har varken lagt till eller tagit bort en kolumn i cost_entry', function () {
+it('har varken lagt till eller tagit bort en kolumn i item_transaction', function () {
     // Samma lista som tests/Feature/Kostnad/ValutansArvTest.php prövar, med
     // flit upprepad här: den kolumn issue 91 frestas att lägga till — en
     // kategori — är just den som hade gett mockupens fyra tårtbitar rakt av,
     // och `database/**` är uttalat orörd av issuen.
-    expect(Schema::getColumnListing('cost_entry'))->toEqualCanonicalizing([
+    expect(Schema::getColumnListing('item_transaction'))->toEqualCanonicalizing([
         'id',
         'ulid',
         'container_id',

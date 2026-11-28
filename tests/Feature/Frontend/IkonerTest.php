@@ -384,9 +384,9 @@ it('fäller en ny handskriven svg utanför undantagen', function () {
      */
     $undantag = [
         'components/UiIcon.vue',
-        'components/CostDonut.vue',
-        'components/CostTimeChart.vue',
-        'components/CostCategoryBreakdown.vue',
+        'components/TransactionDonut.vue',
+        'components/TransactionTimeChart.vue',
+        'components/TransactionCategoryBreakdown.vue',
         'components/ActivityTimeChart.vue',
         'components/ActivityTypeChart.vue',
         'components/StorageBar.vue',

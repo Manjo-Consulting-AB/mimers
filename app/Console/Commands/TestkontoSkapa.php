@@ -9,7 +9,6 @@ use App\Actions\Auth\CreatesUserWithPersonalAccount;
 use App\Actions\Category\CreateCategory;
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\SetContainerCover;
-use App\Actions\Cost\CreateCostEntry;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\LinkItems;
@@ -19,6 +18,7 @@ use App\Actions\Loan\CreateLoan;
 use App\Actions\Plan\GrantInternalPro;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Tag\CreateTag;
+use App\Actions\Transaction\CreateItemTransaction;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
@@ -556,7 +556,7 @@ class TestkontoSkapa extends Command
             'note' => 'Lånad till altanbygget.',
         ]));
 
-        $costs = app(CreateCostEntry::class);
+        $costs = app(CreateItemTransaction::class);
         $costs->handle($container, $diskmaskin, [
             'incurred_on' => $today->copy()->subDays(40)->toDateString(),
             'amount' => '6495.00',

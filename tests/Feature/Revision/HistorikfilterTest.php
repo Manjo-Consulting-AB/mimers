@@ -172,11 +172,11 @@ it('filtret på typ visar bara händelser med den subject_type', function () {
 
     [$konto, $ägare, $pärm] = historikfilterKontext();
 
-    $kostnad = historikfilterRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, subjectType: 'cost_entry');
+    $kostnad = historikfilterRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, subjectType: 'item_transaction');
     $lån = historikfilterRad($pärm, $konto, $ägare, AuditLog::ACTION_LOAN_CREATED, subjectType: 'loan');
 
     $proppar = historikfilterProps(
-        actingAs($ägare)->get(historikfilterUrl($pärm, ['type' => 'cost_entry']))->assertOk(),
+        actingAs($ägare)->get(historikfilterUrl($pärm, ['type' => 'item_transaction']))->assertOk(),
     );
 
     $rader = historikfilterRader($proppar['days']);
@@ -184,9 +184,9 @@ it('filtret på typ visar bara händelser med den subject_type', function () {
     expect($rader)->toHaveCount(1)
         ->and($rader[0]['ulid'])->toBe($kostnad->ulid)
         // Filtret så som servern tillämpade det — vyn ritar fälten ur det.
-        ->and($proppar['filter']['type'])->toBe('cost_entry')
+        ->and($proppar['filter']['type'])->toBe('item_transaction')
         // Och typen finns kvar som val, trots att den egna raden är borta.
-        ->and($proppar['options']['types'])->toBe(['cost_entry', 'loan']);
+        ->and($proppar['options']['types'])->toBe(['item_transaction', 'loan']);
 
     // Utan filter är båda raderna med.
     $alla = historikfilterProps(actingAs($ägare)->get(historikfilterUrl($pärm))->assertOk());
@@ -384,7 +384,7 @@ it('ett ogiltigt filter är ett formulärfel', function () {
         ->assertSessionHasErrors('type');
 
     // En giltig fråga är inget formulärfel — också när den inte ger några rader.
-    actingAs($ägare)->get(historikfilterUrl($pärm, ['type' => 'cost_entry', 'from' => '2026-05-10']))
+    actingAs($ägare)->get(historikfilterUrl($pärm, ['type' => 'item_transaction', 'from' => '2026-05-10']))
         ->assertOk()
         ->assertSessionHasNoErrors();
 });

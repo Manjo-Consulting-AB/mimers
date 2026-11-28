@@ -2,10 +2,10 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\User;
-use App\Support\Cost\Currencies;
+use App\Support\Transaction\Currencies;
 use Illuminate\Support\Facades\Lang;
 
 use function Pest\Laravel\actingAs;
@@ -18,7 +18,7 @@ use function Pest\Laravel\withoutVite;
  * Issue 1253 · Bara aktiva ISO 4217-koder, se [[ADR-0078 Valutor ur ISO
  * 4217]] § 1 och 3.
  *
- * Regeln är App\Rules\IsoCurrency, listan App\Support\Cost\Currencies, och
+ * Regeln är App\Rules\IsoCurrency, listan App\Support\Transaction\Currencies, och
  * den används av de fyra requesterna: kostnadens store och update, containerns
  * update och kontots update. Provet går genom ytorna — webbens formulär och
  * `/api` — och inte mot regeln direkt, för det som ska gälla är svaret en
@@ -115,7 +115,7 @@ it('godtar en aktiv kod och versaliserar den på kostnaden', function () {
     $svar->assertCreated();
 
     expect($svar->json('data.currency'))->toBe('EUR')
-        ->and(CostEntry::query()->firstOrFail()->currency)->toBe('EUR');
+        ->and(ItemTransaction::query()->firstOrFail()->currency)->toBe('EUR');
 });
 
 it('avvisar ABC, DEM och XAU på kostnaden i API:et med currency.invalid', function () {
@@ -132,7 +132,7 @@ it('avvisar ABC, DEM och XAU på kostnaden i API:et med currency.invalid', funct
             ->and($svar->json('error.data.fields.currency.0.code'))->toBe('currency.invalid');
     }
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 });
 
 it('avvisar ABC, DEM och XAU på kostnaden i webben', function () {
@@ -153,7 +153,7 @@ it('avvisar ABC, DEM och XAU på kostnaden i webben', function () {
             ->toBe(Lang::get('validation.iso_currency', [], 'en'));
     }
 
-    expect(CostEntry::query()->count())->toBe(0);
+    expect(ItemTransaction::query()->count())->toBe(0);
 });
 
 it('låter en befintlig rad med en kod utanför listan få ny beskrivning', function () {
@@ -163,7 +163,7 @@ it('låter en befintlig rad med en kod utanför listan få ny beskrivning', func
 
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'currency' => 'ABC',
         'description' => 'Gammal',
         'created_by_user_id' => $item->created_by_user_id,
@@ -187,7 +187,7 @@ it('kräver en giltig kod när beloppet ändras', function () {
 
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
 
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'currency' => 'ABC',
         'created_by_user_id' => $item->created_by_user_id,
         'created_by_account_id' => $container->account_id,

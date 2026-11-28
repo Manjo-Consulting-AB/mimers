@@ -3,11 +3,11 @@
 namespace App\Mcp\Tools;
 
 use App\Models\Agent;
-use App\Models\CostEntry;
+use App\Models\ItemTransaction;
 use App\Support\Agent\AgentGroup;
-use App\Support\Cost\MinorUnits;
 use App\Support\Mcp\Cursor;
 use App\Support\Mcp\ToolKind;
+use App\Support\Transaction\MinorUnits;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -48,7 +48,7 @@ class CostsList extends ReadsItems
         $limit = (int) ($args['limit'] ?? Cursor::DEFAULT_LIMIT);
         $after = Cursor::decode($args['cursor'] ?? null, 1)[0] ?? 0;
 
-        $rows = CostEntry::query()->expenses()->where('item_id', $item->id)
+        $rows = ItemTransaction::query()->expenses()->where('item_id', $item->id)
             ->where('id', '>', $after)
             ->orderBy('id')
             ->limit($limit + 1)
@@ -58,7 +58,7 @@ class CostsList extends ReadsItems
         $rows = $rows->take($limit);
 
         return Response::structured([
-            'costs' => $rows->map(fn (CostEntry $row): array => [
+            'costs' => $rows->map(fn (ItemTransaction $row): array => [
                 'ulid' => $row->ulid,
                 'incurred_on' => $row->incurred_on->toDateString(),
                 'amount' => MinorUnits::format((int) $row->amount, $row->currency),

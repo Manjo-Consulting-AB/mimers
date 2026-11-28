@@ -14,7 +14,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * valideringsfel ([[ADR-0020 Plattformsidentitet och frontendgräns]]
  * § Konsekvenser) — svaret på ett ogiltigt datum är en redirect tillbaka med
  * felet på fältet, inte API:ets `validation.failed`. Samma form som
- * App\Http\Requests\Cost\ContainerCostFilterRequest.
+ * App\Http\Requests\Transaction\ContainerCostFilterRequest.
  *
  * **Existensen prövas INTE, och det är Beslut 2.** Ett `exists`-krav på
  * `user` hade svarat olika på en användare som finns och en som inte gör det —

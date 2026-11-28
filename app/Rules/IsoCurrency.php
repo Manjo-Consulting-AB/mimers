@@ -2,7 +2,7 @@
 
 namespace App\Rules;
 
-use App\Support\Cost\Currencies;
+use App\Support\Transaction\Currencies;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
@@ -10,7 +10,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * Godkänner ett fältvärde när det är en aktiv ISO 4217-kod — se
  * [[ADR-0078 Valutor ur ISO 4217]] § 1 och issue 1253.
  *
- * Listan bor i App\Support\Cost\Currencies och ingen annanstans. Regeln prövar
+ * Listan bor i App\Support\Transaction\Currencies och ingen annanstans. Regeln prövar
  * medlemskap, aldrig formen: `alpha|size:3` hade släppt igenom `ABC`, `DEM`
  * och `XAU`, och det är precis de tre ADR:n stänger ute. Historiska koder och
  * fondkoder ingår inte i listan.

@@ -19,9 +19,9 @@ use App\Mcp\Tools\SchedulesDelete;
 use App\Models\Agent;
 use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\NotificationPreference;
@@ -106,7 +106,7 @@ it('raderar bilaga, schema och kostnadsrad genom appens actions', function () {
 
     $bilaga = papperskorgsBilaga($item, $agent->account, $anvandare);
     $schema = Schedule::factory()->create(['item_id' => $item->id, 'title' => 'Oljebyte']);
-    $kostnad = CostEntry::factory()->create([
+    $kostnad = ItemTransaction::factory()->create([
         'item_id' => $item->id,
         'container_id' => $container->id,
         'currency' => 'SEK',

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
-import CostEntryForm from './CostEntryForm.vue';
+import TransactionForm from './TransactionForm.vue';
 import CurrencyField from './CurrencyField.vue';
 import FormField from './FormField.vue';
 import IncludeChildrenSwitch from './IncludeChildrenSwitch.vue';
@@ -11,7 +11,7 @@ import UiConfirmDialog from './UiConfirmDialog.vue';
 import UiEmptyState from './UiEmptyState.vue';
 import UiInput from './UiInput.vue';
 import UiStat from './UiStat.vue';
-import { formatAmount, formatSignedAmount, unitPriceParts } from './CostDonut.vue';
+import { formatAmount, formatSignedAmount, unitPriceParts } from './TransactionDonut.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { useIncludeChildren } from '../composables/useIncludeChildren.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -21,9 +21,9 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * Kostnadsfliken på itemets detaljvy — se issue 168 § Beslut 3, 4 och 5 ·
  * [[ADR-0050 Desktopdesignen]] § 8.
  *
- * **Reglerna är API:ets, och de bor i App\Actions\Cost.** Rader och
+ * **Reglerna är API:ets, och de bor i App\Actions\Transaction.** Rader och
  * leverantörer kommer med detaljvyns props, och skrivningarna går mot
- * App\Http\Controllers\CostEntryController — samma tre actions som
+ * App\Http\Controllers\ItemTransactionController — samma tre actions som
  * `Api\CostEntryController` anropar. Den här filen formulerar ingen egen
  * regel: valutan, beloppet och leverantören prövas på servern, och ett
  * domänfel kommer tillbaka som ett fältfel.
@@ -40,19 +40,19 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * **Summorna räknar det som visas** (punkt 4). `costTotals` kommer
  * färdigsummerad ur ItemController::show() — en post per valuta, samma form
- * som App\Support\Cost\CostReport::totals() — och vyn ritar den utan att lägga
+ * som App\Support\Transaction\CostReport::totals() — och vyn ritar den utan att lägga
  * ihop något själv. En summa som räknades i vyn hade kunnat gå isär från
  * listan under sig, och två valutor summeras aldrig över.
  *
  * **En ättlings rad går mot radens eget item.** `url()` bygger adressen ur
  * radens `item` när den finns, och `rowCan()` läser radens `can` — servern
- * prövar samma grindar på nytt i CostEntryController. Formuläret för en NY
+ * prövar samma grindar på nytt i ItemTransactionController. Formuläret för en NY
  * kostnad gäller alltid itemet man står på (`props.itemUlid`): det som skapar
  * något nytt hör till platsen, det som ändrar en rad hör till raden.
  *
  * **Beloppet är heltalet i minsta enhet** ([[ADR-0016 Kostnadsregistrering]]
  * § Konsekvenser) och formateras först här, av `formatAmount` ur
- * CostDonut.vue — samma funktion som donuten och dashboardens bricka ritar
+ * TransactionDonut.vue — samma funktion som donuten och dashboardens bricka ritar
  * sina tal med, så samma summa inte kan se olika ut på två ytor. Talet skrivs
  * aldrig om här.
  *
@@ -64,8 +64,8 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * beloppet med en faktor 100 eller 1000.
  *
  * **Datumet är `<input type="date">`**, som skickar `Y-m-d` — exakt den form
- * `date`-regeln i den delade StoreCostEntryRequest tar emot. Serverns
- * `incurred_on` är redan `Y-m-d` (CostEntryResource), så förvalet och fältet
+ * `date`-regeln i den delade StoreItemTransactionRequest tar emot. Serverns
+ * `incurred_on` är redan `Y-m-d` (ItemTransactionResource), så förvalet och fältet
  * talar samma språk och vyn parsar inget datum själv.
  *
  * **Datumet kan förifyllas ur adressen** (Beslut 4): kostnadskroken
@@ -93,7 +93,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * **Fyra ytor, fyra pinnar.** `can.create` ritar formuläret, `can.update` och
  * `can.delete` ritar radåtgärderna. Alla är presentation: grinden i
- * App\Http\Controllers\CostEntryController prövas på nytt i varje skrivning,
+ * App\Http\Controllers\ItemTransactionController prövas på nytt i varje skrivning,
  * och en `read`-mottagare ser raderna men ingen skrivyta och får 403 om hon
  * postar ändå.
  *
@@ -103,7 +103,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 const props = defineProps({
     containerUlid: { type: String, required: true },
     itemUlid: { type: String, required: true },
-    /* Itemets rader ur App\Http\Resources\CostEntryResource, nyast först. */
+    /* Itemets rader ur App\Http\Resources\ItemTransactionResource, nyast först. */
     costs: { type: Array, required: true },
     /*
      * Ättlingarnas kostnadsrader (issue 1248 · [[ADR-0068 Itemets sida och
@@ -385,8 +385,8 @@ const visibleCosts = computed(() => {
  * huvudenhet, med valutans antal decimaler.
  *
  * Decimalerna kommer ur `Intl` och ur samma CLDR-siffror som `formatAmount`
- * i CostDonut.vue läser — ingen egen tabell byggs här, av samma skäl som
- * CostDonut avstår: en tabell i JavaScript hade varit en andra sanning om
+ * i TransactionDonut.vue läser — ingen egen tabell byggs här, av samma skäl som
+ * TransactionDonut avstår: en tabell i JavaScript hade varit en andra sanning om
  * vad en krona är. Omvandlingen är strängaritmetik och aldrig en division,
  * så ett belopp kan inte tappa ett öre på vägen in i fältet.
  *
@@ -412,7 +412,7 @@ function decimals(currency) {
             .resolvedOptions().maximumFractionDigits;
     } catch {
         // En kod `Intl` inte känner igen: två decimaler är ett mindre fel än
-        // ett fält som inte går att fylla i (samma val som CostDonut gör).
+        // ett fält som inte går att fylla i (samma val som TransactionDonut gör).
         return 2;
     }
 }
@@ -467,7 +467,7 @@ function cancelEdit() {
  *
  * **Beloppet och valutan följs åt.** Har någon av dem rörts skickas båda, och
  * servern tolkar det användaren skrev mot valutan i fältet — samma väg som
- * när en rad skapas. `UpdateCostEntryRequest` kräver paret med
+ * när en rad skapas. `UpdateItemTransactionRequest` kräver paret med
  * `required_with` åt båda hållen, så den ena utan den andra är inget giltigt
  * svar.
  *
@@ -575,11 +575,11 @@ function destroy(cost) {
         <!--
             Formuläret. Det ritas bara för den som får skapa: grinden är
             itemets `create`, samma pinne som App\Http\Controllers\
-            CostEntryController::store() prövar.
+            ItemTransactionController::store() prövar.
         -->
         <div v-if="can.create">
             <InlineCreate :open="createOpen" :label="t('item.show.add_cost')" :dirty="createDirty" @update:open="setOpen">
-                <CostEntryForm
+                <TransactionForm
                     :key="formKey"
                     :container-ulid="containerUlid"
                     :item-ulid="itemUlid"

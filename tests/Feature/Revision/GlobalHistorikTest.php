@@ -265,8 +265,8 @@ it('rader ur en container användaren inte når syns inte', function () {
     $främmandeKonto->users()->attach($främmande, ['role' => 'owner']);
     $främmandePärm = Container::factory()->for($främmandeKonto, 'account')->create();
 
-    $egen = globalhistorikRad($pärm, $konto, $ägare, subjectType: 'cost_entry');
-    globalhistorikRad($främmandePärm, $främmandeKonto, $främmande, subjectType: 'cost_entry');
+    $egen = globalhistorikRad($pärm, $konto, $ägare, subjectType: 'item_transaction');
+    globalhistorikRad($främmandePärm, $främmandeKonto, $främmande, subjectType: 'item_transaction');
     globalhistorikRad($främmandePärm, $främmandeKonto, $främmande, subjectType: 'loan');
 
     $proppar = globalhistorikProps($ägare);
@@ -449,14 +449,14 @@ it('user-, type- och datumfiltren verkar som på containerns flik', function () 
     $gäst = globalhistorikGast($pärm, 'Bo');
     $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
 
-    $träff = globalhistorikRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'cost_entry', Carbon::parse('2026-05-10 10:00:00'));
-    globalhistorikRad($vinden, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, null, 'cost_entry', Carbon::parse('2026-05-10 10:00:00'));
-    globalhistorikRad($pärm, $konto, $gäst, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'cost_entry', Carbon::parse('2026-05-10 10:00:00'));
-    globalhistorikRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'cost_entry', Carbon::parse('2026-05-12 10:00:00'));
+    $träff = globalhistorikRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'item_transaction', Carbon::parse('2026-05-10 10:00:00'));
+    globalhistorikRad($vinden, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, null, 'item_transaction', Carbon::parse('2026-05-10 10:00:00'));
+    globalhistorikRad($pärm, $konto, $gäst, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'item_transaction', Carbon::parse('2026-05-10 10:00:00'));
+    globalhistorikRad($pärm, $konto, $ägare, AuditLog::ACTION_COST_ENTRY_CREATED, $motorn, 'item_transaction', Carbon::parse('2026-05-12 10:00:00'));
 
     $proppar = globalhistorikProps($ägare, [
         'user' => $ägare->ulid,
-        'type' => 'cost_entry',
+        'type' => 'item_transaction',
         'item' => $motorn->ulid,
         'from' => '2026-05-10',
         'to' => '2026-05-10',
@@ -465,7 +465,7 @@ it('user-, type- och datumfiltren verkar som på containerns flik', function () 
     expect(globalhistorikUlids(globalhistorikRader($proppar['days'])))->toBe([$träff->ulid])
         ->and($proppar['filter'])->toBe([
             'container' => null,
-            'type' => 'cost_entry',
+            'type' => 'item_transaction',
             'user' => $ägare->ulid,
             'agent' => null,
             'item' => $motorn->ulid,
@@ -489,7 +489,7 @@ it('diagrammen räknar samma mängd som listan', function () {
 
     [$konto, $ägare, $pärm] = globalhistorikKontext();
 
-    globalhistorikRad($pärm, $konto, $ägare, subjectType: 'cost_entry', när: now()->subMinute());
+    globalhistorikRad($pärm, $konto, $ägare, subjectType: 'item_transaction', när: now()->subMinute());
     globalhistorikRad($pärm, $konto, $ägare, subjectType: 'loan');
     globalhistorikRad(null, $konto, null, AuditLog::ACTION_ACCOUNT_DELETED);
 

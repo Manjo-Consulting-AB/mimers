@@ -6,9 +6,9 @@ use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemField;
+use App\Models\ItemTransaction;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
@@ -276,7 +276,7 @@ it('en kostnadsrad skriver en rad med belopp och valuta men utan beskrivning och
     expect(json_decode($skapad->meta, true))->toBe(['amount' => 120050, 'currency' => 'SEK', 'kind' => 'expense', 'quantity' => null]);
     expect($skapad->meta)->not->toContain('Hemlig');
 
-    $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    $kostnad = ItemTransaction::query()->where('item_id', $item->id)->firstOrFail();
 
     // Ändringen: beloppet följer med som gammalt och nytt värde,
     // beskrivningen bara som namn.

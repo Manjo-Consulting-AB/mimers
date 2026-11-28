@@ -6,11 +6,11 @@ use App\Models\Attachment;
 use App\Models\CalendarFeed;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Export;
 use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\ItemTransaction;
 use App\Models\Loan;
 use App\Models\Notification as NotificationModel;
 use App\Models\ScheduleOccurrence;
@@ -352,7 +352,7 @@ function efterverkanFylltKonto(User $person): array
         'completed_by_account_id' => $konto->id,
     ]);
 
-    CostEntry::factory()->for($item, 'item')->create([
+    ItemTransaction::factory()->for($item, 'item')->create([
         'container_id' => $container->id,
         'created_by_user_id' => $person->id,
         'created_by_account_id' => $konto->id,

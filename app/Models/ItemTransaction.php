@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
-use Database\Factories\CostEntryFactory;
+use Database\Factories\ItemTransactionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,14 +14,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * En kostnadsrad på ett item — vad en sak har kostat, se
- * [[Items och organisation]] § cost_entry, [[ADR-0016 Kostnadsregistrering]]
+ * [[Items och organisation]] § item_transaction, [[ADR-0016 Kostnadsregistrering]]
  * och issue 45a.
  *
  * `amount` är medvetet UTESLUTEN ur `#[Fillable]` (§ Beslut 3): det som
  * kommer in är en STRÄNG i huvudenhet ("1200,50"), det som lagras är ett
  * heltal i minsta enhet (120050), och de två får aldrig råka bli samma
  * tilldelning. Kontrollern sätter `amount` explicit med resultatet från
- * App\Support\Cost\MinorUnits::parse().
+ * App\Support\Transaction\MinorUnits::parse().
  *
  * `container_id`, `item_id` och `created_by_*` är också utanför
  * `#[Fillable]` — de sätts explicit av kontrollern (itemets container och
@@ -29,19 +29,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * aldrig container (issue 21 § Beslut 3), så `container_id` kan
  * denormaliseras från itemet vid sparning.
  *
- * Tabellen heter `cost_entry`, inte Eloquents standardplural `cost_entries`.
+ * Tabellen heter `item_transaction`, inte Eloquents standardplural `cost_entries`.
  */
 #[Fillable(['kind', 'quantity', 'incurred_on', 'currency', 'description', 'counterparty'])]
 #[RouteKey('ulid')]
-class CostEntry extends Model
+class ItemTransaction extends Model
 {
-    /** @use HasFactory<CostEntryFactory> */
+    /** @use HasFactory<ItemTransactionFactory> */
     use HasFactory, HasUlid, SoftDeletes;
 
     /**
-     * Tabellen heter `cost_entry`, inte Eloquents standardplural `cost_entries`.
+     * Tabellen heter `item_transaction`, inte Eloquents standardplural `cost_entries`.
      */
-    protected $table = 'cost_entry';
+    protected $table = 'item_transaction';
 
     /** Riktningen: en utgift (förvalet) eller en intäkt, ADR-0102. */
     public const KIND_EXPENSE = 'expense';
@@ -69,8 +69,8 @@ class CostEntry extends Model
     /**
      * Bara utgifter (ADR-0102). Samma form som ContainerAccess::scopeValid().
      *
-     * @param  Builder<CostEntry>  $query
-     * @return Builder<CostEntry>
+     * @param  Builder<ItemTransaction>  $query
+     * @return Builder<ItemTransaction>
      */
     public function scopeExpenses(Builder $query): Builder
     {
@@ -80,8 +80,8 @@ class CostEntry extends Model
     /**
      * Bara intäkter (ADR-0102).
      *
-     * @param  Builder<CostEntry>  $query
-     * @return Builder<CostEntry>
+     * @param  Builder<ItemTransaction>  $query
+     * @return Builder<ItemTransaction>
      */
     public function scopeIncomes(Builder $query): Builder
     {
@@ -102,7 +102,7 @@ class CostEntry extends Model
 
     /**
      * Kontot posten tillskrivs — varvet, inte den anställde, samma regel som
-     * Item::createdByAccount(). Läses av CostEntryResource som
+     * Item::createdByAccount(). Läses av ItemTransactionResource som
      * `created_by_account`; `created_by_user` exponeras aldrig.
      *
      * @return BelongsTo<Account, $this>

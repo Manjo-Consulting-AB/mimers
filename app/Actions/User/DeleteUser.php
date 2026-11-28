@@ -70,7 +70,7 @@ use Illuminate\Support\Facades\DB;
  * 2. varje konto där personen är enda medlem raderas med DeleteAccount,
  * 3. personen lämnar övriga konton,
  * 4. författarkolumnerna mot `user` nollställs (ADR-0045 § Beslut 2): item,
- *    attachment, schedule_occurrence, cost_entry, container_access och
+ *    attachment, schedule_occurrence, item_transaction, container_access och
  *    export. Raderna är någon annans innehåll och står kvar, utan avsändare,
  * 5. personens egna rader raderas,
  * 5b. personens inbox raderas ([[ADR-0054 Inboxen]] § 9) — den är hennes
@@ -524,7 +524,7 @@ class DeleteUser
             'item' => 'created_by_user_id',
             'attachment' => 'uploaded_by_user_id',
             'schedule_occurrence' => 'completed_by_user_id',
-            'cost_entry' => 'created_by_user_id',
+            'item_transaction' => 'created_by_user_id',
             'container_access' => 'granted_by_user_id',
             'export' => 'requested_by_user_id',
         ] as $table => $column) {

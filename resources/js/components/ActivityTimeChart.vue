@@ -9,7 +9,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * [[ADR-0050 Desktopdesignen]] § 17 och docs/Design/Historik.png.
  *
  * **SVG för hand, inget diagrampaket** (Beslut 3). Staplarna är `<rect>` i en
- * `viewBox`, precis som CostTimeChart ritar kostnaderna över tid, och det
+ * `viewBox`, precis som TransactionTimeChart ritar kostnaderna över tid, och det
  * finns inget nytt npm-beroende att hålla uppdaterat.
  *
  * **Komponenten räknar ingenting.** Talen kommer färdigräknade ur
@@ -44,7 +44,7 @@ const locale = computed(() => page.props.locale);
 
 /*
  * Baslinjen ligger på 30, stapeln får som mest 26 enheter på höjden, och
- * datumet står under baslinjen — samma mått som CostTimeChart använder.
+ * datumet står under baslinjen — samma mått som TransactionTimeChart använder.
  */
 const BASELINE = 30;
 const MAX_HEIGHT = 26;

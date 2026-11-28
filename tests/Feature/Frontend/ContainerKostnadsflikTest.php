@@ -3,8 +3,8 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
@@ -19,9 +19,9 @@ use function Pest\Laravel\withoutVite;
  * Issue 175 · Containerns kostnadsflik — den fria delen, se
  * app/Http/Controllers/ContainerCostController.php,
  * app/Actions/Cost/ListContainerCosts.php,
- * App\Support\Cost\CostReport::yearForContainer(), routes/web.php,
+ * App\Support\Transaction\CostReport::yearForContainer(), routes/web.php,
  * resources/js/pages/Containers/Costs.vue,
- * resources/js/components/CostTable.vue och [[ADR-0050 Desktopdesignen]] § 9.
+ * resources/js/components/TransactionTable.vue och [[ADR-0050 Desktopdesignen]] § 9.
  *
  * Filen bevisar den fria halvan och gränsen mot Pro
  * ([[ADR-0038 Gränsen för Pro i kostnaderna]]: en fast summering är fri, allt
@@ -111,8 +111,8 @@ function kostnadsflikRad(
     string $valuta = 'SEK',
     ?string $leverantor = null,
     string $beskrivning = 'Impellerbyte',
-): CostEntry {
-    return CostEntry::factory()->for($item, 'item')->create([
+): ItemTransaction {
+    return ItemTransaction::factory()->for($item, 'item')->create([
         'amount' => $belopp,
         'currency' => $valuta,
         'incurred_on' => $datum,
@@ -319,7 +319,7 @@ it('en rad på ett item utanför omfånget visas inte och räknas inte', functio
 /*
  * Klart när: en rad på ett item i papperskorgen visas inte.
  *
- * Raden är inte raderad — itemet är — och `cost_entry.container_id` kan inte
+ * Raden är inte raderad — itemet är — och `item_transaction.container_id` kan inte
  * avgöra saken. Det är joinen mot `item` och dess `deleted_at` som gör det,
  * och den gäller både tabellen och talen: samma `whereNull` i
  * ListContainerCosts som i CostReport::rowSet().
@@ -599,6 +599,6 @@ it('svarar på sin rutt med containerns kostnadsflik', function () {
 
     // Tabellens rad är en länk till itemets flik, och vyn bygger adressen ur
     // båda ULID:na — samma adress som itemvyns egen flikrad bygger.
-    expect(File::get(resource_path('js/components/CostTable.vue')))
+    expect(File::get(resource_path('js/components/TransactionTable.vue')))
         ->toContain('?tab=costs');
 });

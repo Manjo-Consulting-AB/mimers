@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Container;
 
-use App\Support\Cost\Currencies;
+use App\Support\Transaction\Currencies;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,7 +16,7 @@ use Illuminate\Validation\Rule;
  * `required` — ett helt saknat fält är ett formfel, medan `[]` är svaret
  * "ingen markering".
  *
- * Varje kod prövas mot App\Support\Cost\Currencies::codes(), samma lista som
+ * Varje kod prövas mot App\Support\Transaction\Currencies::codes(), samma lista som
  * App\Rules\IsoCurrency läser (ADR-0078 § 1). Dubbletter nekas med `distinct`
  * i stället för att tystas bort: ett urval där samma valuta står två gånger
  * är en kropp som inte beskriver något, och databasens UNIQUE

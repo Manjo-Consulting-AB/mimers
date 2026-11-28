@@ -3,8 +3,8 @@
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
-use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Tag;
@@ -17,7 +17,7 @@ use function Pest\Laravel\postJson;
 
 /*
  * Issue 46 · Kostnadsrapporten — grupperingar och filter, se
- * App\Support\Cost\CostReport och [[Items och organisation]] §
+ * App\Support\Transaction\CostReport och [[Items och organisation]] §
  * Kostnadsrapporter. Grinden testas i RapportgrindTest.php; den här filen
  * håller sig till vad rapporten räknar: fem grupperingar på den
  * organisation användaren redan gjort, filter med OCH, summering per valuta
@@ -58,9 +58,9 @@ function rapportItem(Container $container, Account $account, User $user, array $
 /**
  * En kostnadsrad direkt på itemet, med samma skapare som itemet.
  */
-function rapportKostnad(Item $item, array $attribut = []): CostEntry
+function rapportKostnad(Item $item, array $attribut = []): ItemTransaction
 {
-    return CostEntry::factory()->for($item, 'item')->create(array_merge([
+    return ItemTransaction::factory()->for($item, 'item')->create(array_merge([
         'created_by_user_id' => $item->created_by_user_id,
         'created_by_account_id' => $item->created_by_account_id,
     ], $attribut));

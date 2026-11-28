@@ -21,7 +21,7 @@ use function Pest\Laravel\withoutVite;
  * använder den.
  *
  * **Tre ytor, fyra filer.** Ytorna är kostnaden, containern och kontot.
- * Kostnaden har två fält — det nya i CostEntryForm.vue och redigeringens i
+ * Kostnaden har två fält — det nya i TransactionForm.vue och redigeringens i
  * ItemCostSection.vue — och de delar komponenten. ItemCostSection.vue står
  * utanför issue 1253:s `In scope` och är deklarerad under `Utanför rutan:` i
  * PR:en.
@@ -49,7 +49,7 @@ function valutafaltKontext(): array
 it('använder CurrencyField på de tre valutaytorna', function () {
     // Kostnaden (ny rad och redigering), containern och kontot (profilsidan).
     foreach ([
-        'js/components/CostEntryForm.vue',
+        'js/components/TransactionForm.vue',
         'js/components/ItemCostSection.vue',
         'js/pages/Containers/Edit.vue',
         'js/pages/Settings/Profile.vue',

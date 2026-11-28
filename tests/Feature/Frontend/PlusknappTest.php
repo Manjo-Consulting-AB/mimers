@@ -178,7 +178,7 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
  * eller dokument* bär — menyn byter flik, den lämnar inte itemet.
  *
  * Grinden är itemets `create`, samma pinne som `ItemController::show()` ritar
- * raden ur och `CostEntryController::store()` prövar på nytt. En läsare får
+ * raden ur och `ItemTransactionController::store()` prövar på nytt. En läsare får
  * därför ingen meny alls, och alltså ingen rad: `create`-proppen är null.
  */
 it('har raden Kostnad som leder till fliken', function () {

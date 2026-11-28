@@ -1,14 +1,14 @@
 <?php
 
 use App\Exceptions\Api\ApiException;
-use App\Models\CostEntry;
-use App\Support\Cost\MinorUnits;
+use App\Models\ItemTransaction;
+use App\Support\Transaction\MinorUnits;
 
 use function Pest\Laravel\postJson;
 
 /*
  * Issue 45a · Beloppstolkningen: att läsa ett belopp ur en textruta utan att
- * tappa ett öre. Se App\Support\Cost\MinorUnits, config/kostnader.php och
+ * tappa ett öre. Se App\Support\Transaction\MinorUnits, config/kostnader.php och
  * issue 45a § Beslut 4–6.
  *
  * De första blocken anropar MinorUnits::parse() direkt — omvandlingen är ren
@@ -80,7 +80,7 @@ it('"1200,50" och "1200.50" med EUR lagras som 120050', function () {
     postJson($url, kostnadsbeloppKropp(['description' => 'Med punkt', 'amount' => '1200.50']), $headers)
         ->assertCreated();
 
-    $belopp = CostEntry::pluck('amount')->sort()->values();
+    $belopp = ItemTransaction::pluck('amount')->sort()->values();
     expect($belopp)->toHaveCount(2);
     expect($belopp[0])->toBe(120050);
     expect($belopp[1])->toBe(120050);
@@ -197,7 +197,7 @@ it('currency "eur" normaliseras till versaler och sparas som EUR', function () {
     $response->assertCreated();
     expect($response->json('data.currency'))->toBe('EUR');
 
-    $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
+    $rad = ItemTransaction::where('ulid', $response->json('data.ulid'))->first();
     expect($rad->currency)->toBe('EUR');
 });
 

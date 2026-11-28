@@ -12,9 +12,9 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\ContainerTemplate;
-use App\Models\CostEntry;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\ItemTransaction;
 use App\Models\Notification as NotificationModel;
 use App\Models\Plan;
 use App\Models\Schedule;
@@ -514,7 +514,7 @@ it('ett konto som skapat ett item, en kostnadsrad och bockat av en förekomst i 
         'created_by_account_id' => $konto->id,
     ]);
 
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
+    $kostnad = ItemTransaction::factory()->for($item, 'item')->create([
         'container_id' => $container->id,
         'created_by_user_id' => $medlem->id,
         'created_by_account_id' => $konto->id,

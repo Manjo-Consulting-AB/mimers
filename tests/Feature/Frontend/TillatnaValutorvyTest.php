@@ -109,7 +109,7 @@ it('ritar avsnittet efter ikonen och bilden', function () {
 });
 
 it('gör valutafältet till en väljare vid högst sex valutor och en sökruta annars', function () {
-    $kod = tillatnavyKod('components/CostEntryForm.vue');
+    $kod = tillatnavyKod('components/TransactionForm.vue');
 
     // Tröskeln räknas på det markerade urvalet, och ett tomt urval betyder
     // alla — då är fältet sökrutan utan begränsning.
