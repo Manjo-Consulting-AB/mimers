@@ -141,6 +141,18 @@ FILANDEL = frozenset((
 # den från ruttnamn (`containers.show`), felkoder (`agent.forbidden`),
 # kolumnnamn (`container.currency`) och språknycklar (`create.heading`) - alla
 # skrivs `x.y`, alla står redan i koden, och ingen av dem är en notistyp.
+# Retro M69-M99 (2026-11-28): fyra falska larm (PR #1547, #1550, #1556, #1605)
+# kom av att issuen själv använde `x.y` som felkod, ruttnamn eller kolumn.
+# Ett `x.y` är ingen ny notistyp när varje förekomst står i ett sådant
+# sammanhang: en rad med `"code"`, felkod, error code eller ordet code; en rad
+# med route('..'), rutt eller route; eller (tillägg, issue 1520) en rad om en
+# kolumn eller migration. En enda förekomst utan sammanhang håller typen kvar.
+FELKODSRAD = re.compile(r"\"code\"|felkod|error code|\bcode\b", re.IGNORECASE)
+RUTTNAMNSRAD = re.compile(r"route\(|\brutt|\broute", re.IGNORECASE)
+KOLUMNRAD = re.compile(r"\bkolumn|\bcolumn|\bmigration", re.IGNORECASE)
+# Issuen säger själv att det inte är en notistyp (issue 1582), eller använder
+# namnet som sista segment i en sökväg (`/help/context/container.sharing`).
+NEKARAD = re.compile(r"inte\s+(?:en\s+)?notistyp|not\s+(?:a\s+)?notification type", re.IGNORECASE)
 KALLKATALOGER = ("app", "routes", "database", "lang", "resources", "config")
 KALLANDELSER = (".php", ".js", ".ts", ".tsx", ".jsx", ".vue", ".json", ".css",
                 ".xml", ".yml", ".yaml", ".neon")
@@ -312,6 +324,19 @@ def kalltexten(rot: str = REPO_ROOT) -> str:
     return "\n".join(bitar)
 
 
+def _forklarad_av_sammanhang(namn: str, kropp: str, ruttnamn: set[str]) -> bool:
+    """Sant när varje rad som nämner `namn` ger det en annan roll än notistyp."""
+    # `user.totp_confirmed_at`: en tidsstämpelkolumn, aldrig en händelse (issue 1520).
+    if namn in ruttnamn or namn.endswith("_at"):
+        return True
+    rader = [rad for rad in kropp.splitlines() if f"`{namn}`" in rad or f"'{namn}'" in rad]
+    return bool(rader) and all(
+        FELKODSRAD.search(rad) or RUTTNAMNSRAD.search(rad)
+        or KOLUMNRAD.search(rad) or NEKARAD.search(rad) or f"/{namn}`" in rad
+        for rad in rader
+    )
+
+
 def nya_notistyper(kropp: str, rot: str = REPO_ROOT) -> list[str]:
     """Notistyperna issuen nämner som modellen inte har som `TYPE_`-konstant.
 
@@ -339,6 +364,14 @@ def nya_notistyper(kropp: str, rot: str = REPO_ROOT) -> list[str]:
     kandidater = [
         namn for namn in kandidater
         if talar_om_notiser or namn.split(".")[0] in rymder
+    ]
+    if not kandidater:
+        return []
+
+    ruttnamn = {r.namn for r in rutter(rot) if r.namn}
+    kandidater = [
+        namn for namn in kandidater
+        if not _forklarad_av_sammanhang(namn, kropp, ruttnamn)
     ]
     if not kandidater:
         return []
