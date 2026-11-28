@@ -1848,3 +1848,35 @@ if __name__ == "__main__":
             print(f"  - {namn}: {fel}")
         sys.exit(1)
 
+
+
+# --- PR-kroppen läses ur .pr-kropp.md, inte ur stdout (issue 1797) ---
+
+def test_summary_instruction_ber_om_kroppsfilen():
+    kalla = open(p.__file__, encoding="utf-8").read()
+    start = kalla.index("summary_instruction = (")
+    block = kalla[start:kalla.index("agent_summary = \"\"", start)]
+    assert "PR_KROPP_FIL" in block
+    assert p.PR_KROPP_FIL == ".pr-kropp.md"
+
+
+def test_kroppsfilen_gar_fore_stdout_och_tas_bort(tmp_path, capsys):
+    fil = tmp_path / p.PR_KROPP_FIL
+    fil.write_text("## Sammanfattning\n\nRent.\n", encoding="utf-8")
+    text = p.las_pr_kropp_fil(str(tmp_path), "## Sammanfattning\n\nRent.\n\nBevakningen gick ut.")
+    assert not fil.exists()
+    kropp = p.bygg_pr_kropp(7, text)
+    assert kropp.startswith("Closes #7\n\n## Sammanfattning\n\nRent.")
+    assert "Bevakningen" not in kropp
+
+
+def test_saknad_kroppsfil_faller_tillbaka_pa_stdout_och_loggar(tmp_path, capsys):
+    text = p.las_pr_kropp_fil(str(tmp_path), "## Sammanfattning\n\nFrån stdout.")
+    assert text == "## Sammanfattning\n\nFrån stdout."
+    assert "saknades" in capsys.readouterr().out
+
+
+def test_kroppsfil_utan_retrofalt_lagas():
+    kropp = p.bygg_pr_kropp(7, "## Sammanfattning\n\nBara det.")
+    assert kropp.startswith("Closes #7")
+    assert "Frågor och antaganden" in kropp and "Processnotering" in kropp

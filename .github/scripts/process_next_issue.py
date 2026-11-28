@@ -2130,6 +2130,38 @@ def vakta_retrofalten(pr_number, fore, cwd):
         print(f"  ⚠ Kunde inte vakta retro-fälten i PR-kroppen: {fel}. Fortsätter.")
 
 
+PR_KROPP_FIL = ".pr-kropp.md"
+
+
+def las_pr_kropp_fil(worktree_path, stdout_text):
+    """Returnerar texten bygg_pr_kropp() ska utgå från, och tar bort filen.
+
+    Byggaren körs med `claude -p --output-format text` och fortsätter svara på
+    notiser från sina bakgrundsbevakningar efter sammanfattningen; svaren
+    hamnade i PR-kroppen (#1547, #1790 m.fl.). Därför ber summary_instruction
+    om kroppen i PR_KROPP_FIL. Finns den används den och stdout förbigås; saknas
+    den (eller är tom) används stdout, med en rad i loggen.
+
+    Filen tas alltid bort så att den inte följer med i commiten och inte får
+    arbetsträdet att se ändrat ut för tomma-diff-kontrollen."""
+    sokvag = os.path.join(worktree_path, PR_KROPP_FIL)
+    text = ""
+    if os.path.isfile(sokvag):
+        try:
+            with open(sokvag, encoding="utf-8") as f:
+                text = f.read().strip()
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"!! Kunde inte läsa {PR_KROPP_FIL}: {e}")
+        try:
+            os.remove(sokvag)
+        except OSError:
+            pass
+    if text:
+        return text
+    print(f"!! {PR_KROPP_FIL} saknades eller var tom - PR-kroppen byggs från stdout.")
+    return stdout_text
+
+
 def bygg_pr_kropp(issue_num, agent_summary):
     """PR-kroppen: Closes-raden, modellens sammanfattning, och en synlig lucka
     där en obligatorisk rubrik saknas.
@@ -3066,7 +3098,10 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         "'## Processnotering' - en rad: vad kostade mer än det borde? Fel axel, "
         "för tunn läslista, otydlig omfångsruta, test som var svårt att skriva. "
         "'Inget.' är ett giltigt och vanligt svar, men skriv det aktivt. Det här "
-        "fältet är det enda som överlever sessionen; det läses vid milstolpsretro."
+        "fältet är det enda som överlever sessionen; det läses vid milstolpsretro.\n\n"
+        f"Skriv de tre rubrikerna till filen {PR_KROPP_FIL} i arbetsträdets rot "
+        "(den läses av kön som PR-beskrivning; committa den inte). Allt du "
+        "skriver i svaret efter det ignoreras."
     )
     agent_summary = ""
     bas_provad = False
@@ -3091,7 +3126,9 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"Analysera felet och korrigera projektkoden."
             )
 
-        agent_summary = anropa_byggare(BYGGARE, prompt, cwd=worktree_path)
+        # Filen läses och tas bort här, före alla git status-kontroller.
+        agent_summary = las_pr_kropp_fil(
+            worktree_path, anropa_byggare(BYGGARE, prompt, cwd=worktree_path))
         print(f"  Agentens sammanfattning (försök {attempt}):\n{agent_summary}")
 
         # Görs innan run_local_tests(): en agent som inte rörde en fil ger en
@@ -3177,7 +3214,8 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"Analysera problemet och genomför lösningen.{summary_instruction}"
             )
 
-            agent_summary = call_claude_direct(nasta, eskaleringsprompt, cwd=worktree_path)
+            agent_summary = las_pr_kropp_fil(
+                worktree_path, call_claude_direct(nasta, eskaleringsprompt, cwd=worktree_path))
             passed, test_output, _ = run_local_tests(cwd=worktree_path)
 
             if passed:
