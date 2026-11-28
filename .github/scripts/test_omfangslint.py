@@ -249,6 +249,84 @@ def test_notistypfil_out_of_scope_pekas_ut_sarskilt():
     assert len(rader) == 1 and "**Out of scope**" in rader[0], mekaniska
 
 
+# Retro M69-M99 (2026-11-28): fyra falska larm. Kropparna är riktiga issuer
+# (fixtures/), och provas mot en tom rot: i repot idag står namnen redan i
+# koden, vilket skulle dölja larmet provet finns för att fånga.
+def _tom_rot():
+    import tempfile
+    return tempfile.mkdtemp()
+
+
+def _notisrader(kropp, rot=None):
+    mekaniska, _, _, _ = l.analysera(kropp, rot or _tom_rot())
+    return [rad for rad in mekaniska if any(fil in rad for fil in l.NOTISTYP_FILER)]
+
+
+def test_falska_notislarm_ur_m69_m99_ger_inga_rader():
+    for nummer in (1520, 1523, 1534, 1582):
+        sokvag = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", f"issue-{nummer}.md")
+        with open(sokvag, encoding="utf-8") as f:
+            assert _notisrader(f.read()) == [], nummer
+
+
+def test_agent_example_utan_ratt_notisfil_ger_fortfarande_rad():
+    rader = _notisrader(NOTISTYP_KROPP)
+    assert any("NotificationTarget.php" in rad for rad in rader), rader
+
+
+def test_typ_pa_rad_med_felkod_ar_ingen_notistyp():
+    kropp = NOTISTYP_KROPP.replace("`agent.example` skickas en gång per användare",
+                                   "felkod `billing.failed` returneras vid avslag")
+    assert _notisrader(kropp) == []
+
+
+def test_route_help_context_ar_ingen_notistyp():
+    kropp = NOTISTYP_KROPP.replace("`agent.example` skickas en gång per användare",
+                                   "länken använder route('help.context') och `help.context`")
+    assert _notisrader(kropp) == []
+
+
+def test_typ_med_en_rad_utan_sammanhang_ger_rad_trots_felkodsrad():
+    kropp = NOTISTYP_KROPP.replace(
+        "- [ ] `agent.example` skickas en gång per användare",
+        "- [ ] `agent.example` skickas en gång per användare\n- [ ] felkod `agent.example` loggas",
+    )
+    assert _notisrader(kropp) != []
+
+
+TILLAGG_SAMMANHANG = [
+    "kolumnen `agent.example` finns redan",
+    "migration lägger `agent.example`",
+    "`agent.example` är inte en notistyp",
+    "tidsstämpeln `agent.example_at` sätts",
+    "tabellen `agent.example` finns",
+    "the table `agent.example` exists",
+    "`agent.example` är ingen ny notis",
+    "`agent.example` is not a notification",
+    "filen `app/agent.example/x.php` ändras",
+    "se `agent.example.md`",
+]
+
+
+def test_tillagg_stanger_bara_sin_egen_rad():
+    """Varje undantag utöver felkod/ruttnamn gäller bara raden det står på:
+    en äkta förekomst på en annan rad håller typen kvar."""
+    for sammanhang in TILLAGG_SAMMANHANG:
+        kropp = NOTISTYP_KROPP.replace(
+            "- [ ] `agent.example` skickas en gång per användare",
+            "- [ ] `agent.example` skickas en gång per användare\n- [ ] " + sammanhang,
+        )
+        assert any("NotificationTarget.php" in rad for rad in _notisrader(kropp)), sammanhang
+
+
+def test_regel_3_agent_deleted_och_versioning_skipped_ger_rader():
+    """#1422 (issue 1393) och #1448 (issue 1405), som kropparna såg ut före typerna."""
+    fix = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+    for nummer in (1393, 1405):
+        with open(os.path.join(fix, f"issue-{nummer}.md"), encoding="utf-8") as f:
+            assert _notisrader(f.read()) != [], nummer
+
+
 # =====================================================================
 # Den bedömande halvan
 # =====================================================================
