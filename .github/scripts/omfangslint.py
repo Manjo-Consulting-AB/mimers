@@ -606,6 +606,54 @@ def lasfynd(kropp: str, rot: str = REPO_ROOT) -> list[str]:
 
 PROV_PER_FIL = 10
 
+# Provet läser en hel katalog som text (`File::allFiles(resource_path('js'))`).
+# M69–M99-retron: 12 av 22 PR:er med prov utanför rutan föll på GenomgangTest.
+KATALOGLAESNING = re.compile(
+    r"(?:allFiles|glob|Finder::create\(\)->files\(\)->in|RecursiveDirectoryIterator)\(\s*"
+    r"(resource_path|app_path|base_path|database_path|lang_path)\(\s*(?:['\"]([^'\"]*)['\"])?"
+)
+KATALOGROT = {"resource_path": "resources", "app_path": "app", "database_path": "database",
+              "lang_path": "lang", "base_path": ""}
+
+
+def last_katalog(text: str) -> list[str]:
+    """Kataloger (relativt repots rot) som provtexten läser i sin helhet."""
+    kataloger = []
+    for funktion, arg in KATALOGLAESNING.findall(text):
+        arg = (arg or "").strip("/")
+        if "*" in arg:
+            arg = arg.rsplit("/", 1)[0] if "/" in arg.split("*")[0] else ""
+        katalog = "/".join(d for d in (KATALOGROT[funktion], arg) if d)
+        if katalog:  # base_path() utan underkatalog är hela repot: ingen vakt, bara brus
+            kataloger.append(katalog)
+    return kataloger
+
+
+def vaktprov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
+    """Prov under tests/ som läser en hel katalog som rymmer en fil i `In scope`.
+
+    Ett prov som redan står i rutan, eller som namnger en fil i rutan (då får
+    det raden från `foljande_prov`), ger ingen rad här. En rad per provfil.
+    """
+    konkreta = [m for m in innanfor if not any(t in m for t in "*?[") and not m.endswith("/")]
+    rader = []
+    for katalog, _, namn in os.walk(os.path.join(rot, o.PROVKATALOG)):
+        for n in namn:
+            if not n.endswith(".php"):
+                continue
+            fil = os.path.relpath(os.path.join(katalog, n), rot).replace(os.sep, "/")
+            if any(o.matchar(fil, m) for m in innanfor):
+                continue
+            with open(os.path.join(katalog, n), encoding="utf-8", errors="replace") as f:
+                text = f.read()
+            if o.prov_foljer_rutan(fil, innanfor, text):
+                continue
+            traff = sorted({k for k in last_katalog(text) for m in konkreta if m.startswith(k + "/")})
+            if traff:
+                rader.append((fil, f"- `{fil}` är ett vaktprov som läser hela `{'`, `'.join(traff)}` "
+                                   f"som text - kör det riktat före hela sviten"))
+    return [rad for _, rad in sorted(rader)]
+
 
 def foljande_prov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
     """Befintliga prov under tests/ som namnger en fil i `In scope`.
@@ -639,7 +687,7 @@ def foljande_prov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
     for traff, antal in per_fil.items():
         if antal > PROV_PER_FIL:
             rader.append((traff, f"- `{traff}` namnges av {antal} prov"))
-    return [rad for _, rad in sorted(rader)]
+    return [rad for _, rad in sorted(rader)] + vaktprov(innanfor, rot)
 
 
 RUBRIK = "### Omfångslinten"

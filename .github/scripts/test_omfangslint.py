@@ -478,6 +478,38 @@ def test_foljande_prov_pekar_ut_designsystemtest_for_flashmessage():
     assert any("tests/Feature/Frontend/DesignsystemTest.php" in rad for rad in rader), rader
 
 
+def test_vaktprov_som_laser_hela_katalogen_pekas_ut():
+    filer = {"tests/Feature/GTest.php": "foreach (File::allFiles(resource_path('js')) as $f) {}",
+             "tests/Feature/ATest.php": "File::allFiles(app_path())"}
+    with _prov_rot(filer) as rot:
+        rader = l.foljande_prov(["resources/js/components/CostTable.vue"], rot)
+    assert len(rader) == 1 and "tests/Feature/GTest.php" in rader[0] and "vaktprov" in rader[0], rader
+
+
+def test_vaktprov_i_rutan_eller_utan_traff_ger_ingen_rad():
+    filer = {"tests/Feature/GTest.php": "File::allFiles(resource_path('js'))"}
+    with _prov_rot(filer) as rot:
+        assert l.foljande_prov(["resources/js/X.vue", "tests/Feature/GTest.php"], rot) == []
+        assert l.foljande_prov(["app/Models/X.php", "lang/en/ui.php"], rot) == []
+
+
+def test_prov_som_namnger_filen_far_inte_ocksa_vaktrad():
+    filer = {"tests/Feature/GTest.php":
+             "File::get(resource_path('js/components/X.vue')); File::allFiles(resource_path('js'))"}
+    with _prov_rot(filer) as rot:
+        assert len(l.foljande_prov(["resources/js/components/X.vue"], rot)) == 1
+
+
+def test_costtable_ger_vaktrad_for_genomgang_och_ikoner():
+    rader = "\n".join(l.foljande_prov(["resources/js/components/CostTable.vue"], ROT))
+    assert "tests/Feature/Frontend/GenomgangTest.php" in rader, rader
+    assert "tests/Feature/Frontend/IkonerTest.php" in rader, rader
+
+
+def test_vaktprov_andrar_inte_avslutningskoden():
+    _kor_cli("### In scope\n```shell\nresources/js/components/CostTable.vue\n```\n")  # check=True
+
+
 def _kor_cli(kropp):
     import subprocess
     import tempfile
